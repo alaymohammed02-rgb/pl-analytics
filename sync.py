@@ -932,7 +932,7 @@ const PAGES=[['overview','Overview'],['players','Players'],['teams','Teams'],['m
 const PLAN={
  tactical:['Tactical Analysis','Formations, starting positions, build-up and defensive activity.','Needs lineup positions and event data. Not inspected yet.'],
  shots:['Shot Analysis','Shot map, shot table, xG per shot and outcome filters.','PitchAPI lists a shots endpoint, but its response has not been inspected in this app yet.'],
- passing:['Passing Analysis','Passing network, pass maps and pass completion by zone.','Pass maps need start and end coordinates for each pass. Not confirmed from the provider.'],
+ passing:['Passing Analysis','Pass maps and pass completion by zone.','Pass maps need start and end coordinates for each pass. Not confirmed from the provider.'],
  heatmaps:['Heatmaps','Player and team activity maps.','PitchAPI lists heatmap data, but the grid format has not been inspected yet.']};
 let CMP=[];
 const GH_REPO=()=>{try{const v=localStorage.getItem('gh_repo');if(v)return v}catch(e){}return location.hostname.split('.')[0]+'/'+(location.pathname.split('/')[1]||'')};
@@ -1223,6 +1223,587 @@ def main():
         log("النشر فشل. اقرأ رسالة الخطأ أعلاه (فيها الحل)، ثم أعد التشغيل.")
         return
     finish_pages(hub)
+
+
+# ============================================================================
+# إضافة (ADD-ON): PPDA + شبكة التمريرات (Passing) + خريطة الحرارة (Heatmaps)
+# الصق هذه الكتلة كما هي في آخر الملف، قبل السطرين:
+#     if __name__ == "__main__":
+#         main()
+# ما تغيّر أي سطر من كودك الأصلي: الإضافة تلفّ دوال موجودة (تستدعيها كما هي) وتضيف فوقها.
+# ============================================================================
+PROBE = False   # True = يطبع شكل ردود PitchAPI الحقيقية لمباراة واحدة ثم يتوقف (للتأكد من أسماء الحقول)
+EXTRA_INDEX = {}                 # يُملأ عند النشر: أسماء ملفات الإضافة لكل دوري (تدخل في data/index.json)
+_XGRID = {"l": 16, "w": 12}      # أبعاد شبكة الحرارة (PitchAPI: 16 × 12)
+
+
+def _g(o, *names):
+    """أول قيمة موجودة (attribute أو مفتاح dict) من الأسماء المعطاة، أو None."""
+    for n in names:
+        if o is None:
+            return None
+        v = o.get(n) if isinstance(o, dict) else getattr(o, n, None)
+        if v is not None:
+            return v
+    return None
+
+
+# ---------------- قاعدة البيانات: جداول جديدة فقط (لا نلمس الجداول القديمة) ----------------
+_orig_init_db = init_db
+
+def init_db():
+    _orig_init_db()
+    c = db()
+    c.executescript("""
+    CREATE TABLE IF NOT EXISTS extras(
+      league_id TEXT, match_id TEXT, status TEXT, fetched_at TEXT,
+      PRIMARY KEY(league_id, match_id));
+    CREATE TABLE IF NOT EXISTS team_adv(
+      league_id TEXT, match_id TEXT, team_id TEXT, team TEXT, side TEXT,
+      ppda REAL, opp REAL, da REAL, ch REAL, zone REAL, tk REAL, ic REAL,
+      PRIMARY KEY(league_id, match_id, team_id));
+    CREATE TABLE IF NOT EXISTS pass_stats(
+      league_id TEXT, match_id TEXT, player_id TEXT, player TEXT, team_id TEXT,
+      minutes REAL, passes REAL, acc REAL, prog REAL, prog_dist REAL, box REAL,
+      kp REAL, assists REAL, thru REAL, crs REAL, sw REAL,
+      PRIMARY KEY(league_id, match_id, player_id));
+    CREATE TABLE IF NOT EXISTS net(
+      league_id TEXT, match_id TEXT, team_id TEXT, team TEXT, side TEXT,
+      until_s REAL, central REAL, nodes TEXT, edges TEXT,
+      PRIMARY KEY(league_id, match_id, team_id));
+    CREATE TABLE IF NOT EXISTS heat(
+      league_id TEXT, match_id TEXT, kind TEXT, pkey TEXT, name TEXT, club TEXT,
+      side TEXT, actions REAL, cells TEXT,
+      PRIMARY KEY(league_id, match_id, kind, pkey));
+    """)
+    c.commit()
+    c.close()
+
+
+# ---------------- استخراج البيانات من ردود PitchAPI ----------------
+def _x_teams(r, adv):
+    """PPDA وما يلزمه لكل فريق (مباشرة من advanced، بدون أي حساب من عندنا)."""
+    out = []
+    for idx, t in enumerate(_g(adv, "teams") or []):
+        team = _g(t, "team")
+        name = _g(team, "name") or ""
+        side = "home" if name == r["home"] else ("away" if name == r["away"] else ("home" if idx == 0 else "away"))
+        d = _g(t, "defending")
+        zone = num(_g(d, "press_zone_fraction"))
+        if zone is None:
+            zone = num(_g(t, "press_zone_fraction"))
+        out.append(dict(tid=str(_g(team, "id") or name), team=name, side=side,
+                        ppda=num(_g(d, "ppda")), opp=num(_g(d, "opponent_passes")),
+                        da=num(_g(d, "defensive_actions")), ch=num(_g(d, "challenges")),
+                        zone=zone, tk=num(_g(d, "tackles")), ic=num(_g(d, "interceptions"))))
+    return out
+
+
+def _x_pass(res):
+    """عدّادات التمرير لكل لاعب (progressive / key / through / crosses ...)."""
+    out = []
+    for p in _g(res, "players") or []:
+        pl = _g(p, "player")
+        i = _g(pl, "id")
+        ps = _g(p, "passing")
+        if not i or ps is None or num(_g(ps, "passes")) is None:
+            continue
+        out.append(dict(pid=str(i), name=_g(pl, "name") or "Unknown player", tid=str(_g(p, "team_id") or ""),
+                        mi=num(_g(p, "minutes_played")), ps=num(_g(ps, "passes")),
+                        ac=num(_g(ps, "pass_accuracy")), pr=num(_g(ps, "progressive_passes")),
+                        pd=num(_g(ps, "progressive_pass_distance")), bx=num(_g(ps, "passes_into_box")),
+                        kp=num(_g(ps, "key_passes")), a=num(_g(ps, "assists")),
+                        tb=num(_g(ps, "through_balls")), cr=num(_g(ps, "crosses")),
+                        sw=num(_g(ps, "switches"))))
+    return out
+
+
+_EDGE_WARNED = []
+
+def _x_net(r, res):
+    """شبكة التمريرات: عقدة لكل لاعب (متوسط مكان بداية تمريراته) + ضلع لكل زوج لاعبين."""
+    out = []
+    for idx, t in enumerate(_g(res, "networks") or []):
+        team = _g(t, "team")
+        name = _g(team, "name") or ""
+        side = "home" if name == r["home"] else ("away" if name == r["away"] else ("home" if idx == 0 else "away"))
+        nodes = []
+        for nd in _g(t, "nodes") or []:
+            pl = _g(nd, "player")
+            nodes.append(dict(i=str(_g(pl, "id") or ""), n=_g(pl, "name") or "",
+                              x=num(_g(nd, "avg_x")), y=num(_g(nd, "avg_y")),
+                              p=num(_g(nd, "passes")), r=num(_g(nd, "passes_received")),
+                              d=num(_g(nd, "degree")), s=num(_g(nd, "strength")),
+                              b=num(_g(nd, "betweenness")), c=num(_g(nd, "clustering"))))
+        edges, es = [], _g(t, "edges") or []
+        for e in es:
+            a = _g(e, "from_player", "from_", "source", "frm", "from_node", "src")
+            b = _g(e, "to_player", "to", "to_", "target", "dst", "to_node")
+            ia, ib = _g(a, "id"), _g(b, "id")
+            if ia and ib:
+                edges.append(dict(a=str(ia), b=str(ib), p=num(_g(e, "passes")) or 0))
+        if es and not edges and not _EDGE_WARNED:
+            _EDGE_WARNED.append(1)
+            names = [f for f in dir(es[0]) if not f.startswith("_")]
+            log(f"  تنبيه: ما قدرت أقرأ طرفَي الضلع في شبكة التمريرات. الحقول الموجودة: {names}")
+        out.append(dict(tid=str(_g(team, "id") or name), team=name, side=side,
+                        until=num(_g(_g(t, "window"), "until_seconds")),
+                        central=num(_g(t, "centralization")), nodes=nodes, edges=edges))
+    return out
+
+
+def _x_cells(cells, gl, gw):
+    flat = []
+    for c in cells or []:
+        try:
+            if isinstance(c, (list, tuple)):
+                x, y, n = c[0], c[1], c[2]
+            else:
+                x, y, n = _g(c, "cell_x", "x"), _g(c, "cell_y", "y"), _g(c, "actions", "count", "n")
+            x, y, n = int(x), int(y), int(n)
+        except Exception:
+            continue
+        if 0 <= x < gl and 0 <= y < gw and n > 0:
+            flat += [x, y, n]
+    return flat
+
+
+def _x_heat(res):
+    """صفوف الحرارة: فريق + لاعب. cells = [x,y,عدد, x,y,عدد, ...] على شبكة 16×12."""
+    if res is None:
+        return []
+    grid = _g(res, "grid")
+    gl = int(num(_g(grid, "length")) or _XGRID["l"])
+    gw = int(num(_g(grid, "width")) or _XGRID["w"])
+    _XGRID["l"], _XGRID["w"] = gl, gw
+    out = []
+    for t in _g(res, "teams") or []:
+        team = _g(t, "team")
+        cells = _x_cells(_g(t, "cells"), gl, gw)
+        if cells:
+            out.append(dict(kind="team", key=str(_g(team, "id") or _g(team, "name") or ""),
+                            name=_g(team, "name") or "", club=_g(team, "name") or "",
+                            side=_g(t, "side"), actions=num(_g(t, "actions")), cells=cells))
+    for p in _g(res, "players") or []:
+        pl = _g(p, "player")
+        i = _g(pl, "id")
+        cells = _x_cells(_g(p, "cells"), gl, gw)
+        if i and cells:
+            out.append(dict(kind="player", key=str(i), name=_g(pl, "name") or "Unknown player",
+                            club=_g(_g(p, "team"), "name") or "", side=_g(p, "side"),
+                            actions=num(_g(p, "actions")), cells=cells))
+    return out
+
+
+# ---------------- المزامنة الإضافية (تشتغل بعد المزامنة الأصلية لكل دوري) ----------------
+def sync_extras(client, league_id, on_progress=None):
+    api_m = client.matches
+    has_heat = hasattr(api_m, "heatmaps")
+    if not has_heat:
+        log("  تنبيه: نسخة pitchapi عندك قديمة وما فيها heatmaps. شغّل: pip install -U pitchapi (الحرارة تتخطى مؤقتاً)")
+    rows = q("SELECT m.match_id, m.date, m.home, m.away, e.status, e.fetched_at FROM matches m "
+             "LEFT JOIN extras e ON e.league_id=m.league_id AND e.match_id=m.match_id "
+             "WHERE m.league_id=?", (league_id,))
+    todo = [r for r in rows if match_due(r)]
+    n_ok = sum(1 for r in rows if r["status"] == "ok")
+    log(f"  [إضافي: PPDA/شبكة/حرارة] مكتملة سابقاً: {n_ok} | المطلوب الآن: {len(todo)}")
+    hard = lambda e: e and e not in ("not_found", "plan")
+    for i, r in enumerate(todo, 1):
+        mid = r["match_id"]
+        adv, e1 = call(api_m.advanced, mid)
+        pls, e2 = call(api_m.advanced_players, mid)
+        net, e3 = call(api_m.advanced_network, mid)
+        hm, e4 = call(api_m.heatmaps, mid) if has_heat else (None, "sdk")
+        parts = dict(team=_x_teams(r, adv) if adv is not None else [],
+                     pas=_x_pass(pls) if pls is not None else [],
+                     net=_x_net(r, net) if net is not None else [],
+                     heat=_x_heat(hm))
+        errs = (e1, e2, e3, e4)
+        got = sum(1 for v in parts.values() if v)
+        for nm_, data, e in (("advanced", adv, e1), ("advanced_players", pls, e2),
+                             ("advanced_network", net, e3), ("heatmaps", hm, e4)):
+            key = {"advanced": "team", "advanced_players": "pas", "advanced_network": "net", "heatmaps": "heat"}[nm_]
+            if data is not None and not parts[key]:
+                log(f"    تنبيه: {nm_} رجّع رد لكن ما طلع منه صفوف (شكل الرد يختلف عن المتوقع؟)")
+        if got == 0:
+            status = "failed" if any(hard(e) for e in errs) else "no_data"
+        elif got == 4 and all(e is None for e in errs):
+            status = "ok"
+        else:
+            status = "partial"
+        t = now()
+        c = db()
+        L = league_id
+        if parts["team"]:
+            c.execute("DELETE FROM team_adv WHERE league_id=? AND match_id=?", (L, mid))
+            c.executemany("INSERT OR REPLACE INTO team_adv VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                          [(L, mid, x["tid"], x["team"], x["side"], x["ppda"], x["opp"], x["da"], x["ch"],
+                            x["zone"], x["tk"], x["ic"]) for x in parts["team"]])
+        if parts["pas"]:
+            c.execute("DELETE FROM pass_stats WHERE league_id=? AND match_id=?", (L, mid))
+            c.executemany("INSERT OR REPLACE INTO pass_stats VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                          [(L, mid, x["pid"], x["name"], x["tid"], x["mi"], x["ps"], x["ac"], x["pr"], x["pd"],
+                            x["bx"], x["kp"], x["a"], x["tb"], x["cr"], x["sw"]) for x in parts["pas"]])
+        if parts["net"]:
+            c.execute("DELETE FROM net WHERE league_id=? AND match_id=?", (L, mid))
+            c.executemany("INSERT OR REPLACE INTO net VALUES(?,?,?,?,?,?,?,?,?)",
+                          [(L, mid, x["tid"], x["team"], x["side"], x["until"], x["central"],
+                            json.dumps(x["nodes"], ensure_ascii=False), json.dumps(x["edges"], ensure_ascii=False))
+                           for x in parts["net"]])
+        if parts["heat"]:
+            c.execute("DELETE FROM heat WHERE league_id=? AND match_id=?", (L, mid))
+            c.executemany("INSERT OR REPLACE INTO heat VALUES(?,?,?,?,?,?,?,?,?)",
+                          [(L, mid, x["kind"], x["key"], x["name"], x["club"], x["side"], x["actions"],
+                            json.dumps(x["cells"])) for x in parts["heat"]])
+        c.execute("INSERT OR REPLACE INTO extras VALUES(?,?,?,?)", (L, mid, status, t))
+        c.commit()
+        c.close()
+        log(f"  [{i}/{len(todo)}] {r['home']} vs {r['away']} -> {status} "
+            f"(ppda {len(parts['team'])} | pass {len(parts['pas'])} | net {len(parts['net'])} | heat {len(parts['heat'])})")
+        if on_progress and i % PUBLISH_EVERY == 0 and i < len(todo):
+            on_progress()
+        time.sleep(REQUEST_DELAY)
+
+
+_orig_sync_league = sync_league
+
+def sync_league(client, league_id, on_progress=None):
+    ok = _orig_sync_league(client, league_id, on_progress)
+    if ok:
+        try:
+            sync_extras(client, league_id, on_progress)
+        except Exception as e:      # أي خطأ في الإضافة ما يوقف المزامنة الأصلية
+            log(f"  خطأ في المزامنة الإضافية ({type(e).__name__}: {e}) — المزامنة الأصلية ما تأثرت.")
+    return ok
+
+
+# ---------------- التصدير (ملفات منفصلة، ما نلمس ملفات الدوريات الأصلية) ----------------
+def _x_round(d, keys):
+    for k in keys:
+        if d.get(k) is not None:
+            d[k] = round(d[k], 4)
+    return d
+
+
+def build_adv_payload(L):
+    ex = q("SELECT e.match_id i, e.status t, e.fetched_at f, "
+           "(SELECT COUNT(*) FROM team_adv a WHERE a.league_id=e.league_id AND a.match_id=e.match_id) p, "
+           "(SELECT COUNT(*) FROM heat h WHERE h.league_id=e.league_id AND h.match_id=e.match_id) h, "
+           "(SELECT COUNT(*) FROM net n WHERE n.league_id=e.league_id AND n.match_id=e.match_id) n, "
+           "(SELECT COUNT(*) FROM pass_stats s WHERE s.league_id=e.league_id AND s.match_id=e.match_id) k "
+           "FROM extras e WHERE e.league_id=? ORDER BY e.match_id", (L,))
+    team = [_x_round(r, ("pp", "op", "da", "ch", "z", "tk", "ic")) for r in q(
+        "SELECT match_id m, team_id i, team n, side s, ppda pp, opp op, da, ch, zone z, tk, ic "
+        "FROM team_adv WHERE league_id=? ORDER BY match_id, side, team_id", (L,))]
+    pas = [_x_round(r, ("mi", "ps", "ac", "pr", "pd", "bx", "kp", "as", "tb", "cr", "sw")) for r in q(
+        "SELECT match_id m, player_id i, player n, team_id t, minutes mi, passes ps, acc ac, prog pr, "
+        "prog_dist pd, box bx, kp, assists \"as\", thru tb, crs cr, sw "
+        "FROM pass_stats WHERE league_id=? ORDER BY match_id, team_id, player_id", (L,))]
+    nets = []
+    for r in q("SELECT match_id m, team_id i, team n, side s, until_s u, central cn, nodes, edges "
+               "FROM net WHERE league_id=? ORDER BY match_id, side, team_id", (L,)):
+        r["nodes"] = [_x_round(n, ("x", "y", "b", "c")) for n in json.loads(r["nodes"])]
+        r["edges"] = json.loads(r["edges"])
+        nets.append(_x_round(r, ("u", "cn")))
+    return {"ex": ex, "team": team, "pass": pas, "net": nets}
+
+
+def build_heat_payload(L):
+    rows = []
+    for r in q("SELECT match_id m, kind t, pkey k, name n, club c, side s, actions a, cells h "
+               "FROM heat WHERE league_id=? ORDER BY match_id, kind, pkey", (L,)):
+        r["t"] = "t" if r["t"] == "team" else "p"
+        r["h"] = json.loads(r["h"])
+        rows.append(r)
+    return dict(grid=dict(_XGRID), rows=rows)
+
+
+def publish_extras(metas):
+    for lg in metas:
+        L = lg["id"]
+        try:
+            if not league_has_data(L) or not q("SELECT 1 FROM extras WHERE league_id=? LIMIT 1", (L,)):
+                continue
+            adv = build_adv_payload(L)
+            blob = json.dumps(adv, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            entry = dict(adv_file=safe_name(L) + "_adv.json")
+            gh_put(_x_hub, f"data/{entry['adv_file']}", blob, f"Update {lg['name']} advanced")
+            last = q("SELECT MAX(fetched_at) t FROM extras WHERE league_id=?", (L,), True)["t"]
+            entry["adv_v"] = last
+            heat = build_heat_payload(L)
+            if heat["rows"]:
+                entry["heat_file"] = safe_name(L) + "_heat.json"
+                gh_put(_x_hub, f"data/{entry['heat_file']}",
+                       json.dumps(heat, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
+                       f"Update {lg['name']} heatmaps")
+            EXTRA_INDEX[L] = entry
+        except Exception as e:
+            log(f"  تعذر نشر ملفات الإضافة لـ {lg.get('name')}: {e}")
+
+
+_x_hub = None
+_orig_publish = publish
+
+def publish(hub, metas, final=False):
+    global _x_hub
+    _x_hub = hub
+    publish_extras(metas)
+    return _orig_publish(hub, metas, final)
+
+
+_orig_gh_put = gh_put
+
+def gh_put(hub, path, content, message):
+    """نفس الدالة الأصلية، لكن data/index.json يُضاف له أسماء ملفات الإضافة قبل الرفع."""
+    if path == "data/index.json" and EXTRA_INDEX:
+        try:
+            d = json.loads(content.decode("utf-8"))
+            for lg in d.get("leagues", []):
+                lg.update(EXTRA_INDEX.get(lg["id"], {}))
+            content = json.dumps(d, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        except Exception as e:
+            log(f"  تنبيه: ما قدرت أضيف بيانات الإضافة للفهرس: {e}")
+    return _orig_gh_put(hub, path, content, message)
+
+
+# ---------------- الاستعادة من GitHub (حتى لا نعيد جلب ما اكتمل) ----------------
+def restore_extras(L, adv, heat):
+    c = db()
+    for e in (adv or {}).get("ex", []):
+        c.execute("INSERT OR REPLACE INTO extras VALUES(?,?,?,?)", (L, e["i"], e["t"], e.get("f")))
+    for x in (adv or {}).get("team", []):
+        c.execute("INSERT OR REPLACE INTO team_adv VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                  (L, x["m"], x["i"], x["n"], x["s"], x["pp"], x["op"], x["da"], x["ch"], x["z"], x["tk"], x["ic"]))
+    for x in (adv or {}).get("pass", []):
+        c.execute("INSERT OR REPLACE INTO pass_stats VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                  (L, x["m"], x["i"], x["n"], x["t"], x["mi"], x["ps"], x["ac"], x["pr"], x["pd"], x["bx"],
+                   x["kp"], x["as"], x["tb"], x["cr"], x["sw"]))
+    for x in (adv or {}).get("net", []):
+        c.execute("INSERT OR REPLACE INTO net VALUES(?,?,?,?,?,?,?,?,?)",
+                  (L, x["m"], x["i"], x["n"], x["s"], x["u"], x["cn"], json.dumps(x["nodes"]), json.dumps(x["edges"])))
+    for x in (heat or {}).get("rows", []):
+        c.execute("INSERT OR REPLACE INTO heat VALUES(?,?,?,?,?,?,?,?,?)",
+                  (L, x["m"], "team" if x["t"] == "t" else "player", x["k"], x["n"], x["c"], x["s"], x["a"],
+                   json.dumps(x["h"])))
+    c.commit()
+    c.close()
+    g = (heat or {}).get("grid")
+    if g:
+        _XGRID.update(g)
+
+
+_orig_gh_restore = gh_restore
+
+def gh_restore(hub, metas):
+    n = _orig_gh_restore(hub, metas)
+    for lg in metas:
+        try:
+            if q("SELECT 1 FROM extras WHERE league_id=? LIMIT 1", (lg["id"],)):
+                continue
+            adv = gh_get_json(hub, f"data/{safe_name(lg['id'])}_adv.json")
+            if adv:
+                restore_extras(lg["id"], adv, gh_get_json(hub, f"data/{safe_name(lg['id'])}_heat.json"))
+        except Exception as e:
+            log(f"  تعذر استعادة بيانات الإضافة لـ {lg.get('name')}: {type(e).__name__}")
+    return n
+
+
+# ---------------- الواجهة: تعديلات صغيرة على INDEX (كل تعديل يتحقق أن النص الأصلي موجود مرة واحدة) ----------------
+_X_CSS = (".pitch{width:100%;max-width:840px;display:block;border-radius:8px;margin:6px 0}"
+          ".card b{color:var(--tx)}")
+
+_X_JS = r'''/* ===== Addon: Passing network / Heatmaps / PPDA (reads data/*_adv.json and data/*_heat.json) ===== */
+let ADV=null,HEAT=null;
+const lgMeta=()=>ALL.leagues.find(l=>l.id===D.id)||{};
+async function loadJson(file,v){const r=await fetch('data/'+file+'?v='+encodeURIComponent(v||ALL.generated||''));if(!r.ok)throw new Error(file+' (HTTP '+r.status+')');return r.json()}
+async function loadAdv(){if(ADV)return ADV;const m=lgMeta();if(!m.adv_file)return null;const a=await loadJson(m.adv_file,m.adv_v);a.exm=new Map((a.ex||[]).map(e=>[e.i,e]));ADV=a;return a}
+async function loadHeat(){if(HEAT)return HEAT;const m=lgMeta();if(!m.heat_file)return null;HEAT=await loadJson(m.heat_file,m.adv_v);return HEAT}
+const exTag=(m,k)=>{if(!ADV)return tag('ni');const e=ADV.exm.get(m.match_id);return tag(e&&e[k]>0?'available':'missing')};
+const mlabel=id=>{const m=D.matches.find(x=>x.match_id===id);return m?m.date.slice(0,10)+'  '+m.home+' '+m.score+' '+m.away:id};
+const opts=(arr,sel)=>arr.map(([v,t])=>`<option value="${esc(v)}" ${v===sel?'selected':''}>${esc(t)}</option>`).join('');
+const PITCH='<rect x="-2" y="-2" width="109" height="73" fill="#12301f"/><g fill="none" stroke="#4d8f6b" stroke-width=".35"><rect x="0" y="0" width="105" height="68"/><line x1="52.5" y1="0" x2="52.5" y2="68"/><circle cx="52.5" cy="34" r="9.15"/><rect x="0" y="13.84" width="16.5" height="40.32"/><rect x="88.5" y="13.84" width="16.5" height="40.32"/><rect x="0" y="24.84" width="5.5" height="18.32"/><rect x="99.5" y="24.84" width="5.5" height="18.32"/><rect x="-1.5" y="30.34" width="1.5" height="7.32"/><rect x="105" y="30.34" width="1.5" height="7.32"/></g><circle cx="11" cy="34" r=".45" fill="#4d8f6b"/><circle cx="94" cy="34" r=".45" fill="#4d8f6b"/><circle cx="52.5" cy="34" r=".45" fill="#4d8f6b"/><text x="52.5" y="70" text-anchor="middle" font-size="2.4" fill="#8a9bb0">Attack direction →</text>';
+const pitchSvg=(inner,defs)=>`<svg class="pitch" viewBox="-2 -2 109 74">${defs||''}${PITCH}${inner}</svg>`;
+const noData=(el,msg)=>{el.innerHTML+=`<div class="empty">${msg}</div>`};
+
+/* ---------- Heatmaps ---------- */
+const hcol=t=>`hsl(${Math.round((1-t)*210)},85%,52%)`;
+R.heatmaps=async function(el){
+ el.innerHTML='<h2>Heatmaps</h2>';
+ let H=null;try{H=await loadHeat()}catch(e){noData(el,'Could not load heatmap data: '+esc(e.message));return}
+ if(!H||!H.rows||!H.rows.length){noData(el,'No heatmap data for this league yet. It appears after the next synchronization. PitchAPI returns no heatmap for matches it never rated.');return}
+ const GL=H.grid.l,GW=H.grid.w,have=[...new Set(H.rows.map(r=>r.m))];
+ const ms=D.matches.filter(m=>have.includes(m.match_id)).sort(byDate);
+ el.innerHTML+=`<div class="mu" style="margin-bottom:8px">${have.length} of ${D.matches.length} matches have heatmap data.</div>
+ <div class="ctl"><select id="hm">${opts([['','Whole season (sum of matches)'],...ms.map(m=>[m.match_id,mlabel(m.match_id)])],'')}</select><select id="ht"></select><select id="hp"></select></div><div id="hout"></div>`;
+ const scope=()=>H.rows.filter(r=>!$('#hm').value||r.m===$('#hm').value);
+ const club=r=>r.t==='t'?r.n:r.c;
+ const draw=()=>{
+  const t=$('#ht').value,p=$('#hp').value,out=$('#hout');
+  const rows=scope().filter(r=>club(r)===t&&(p?(r.t==='p'&&r.k===p):r.t==='t'));
+  if(!rows.length){out.innerHTML='<div class="empty">No heatmap data for this selection.</div>';return}
+  const acc=new Array(GL*GW).fill(0);let total=0;
+  rows.forEach(r=>{const h=r.h||[];for(let i=0;i+2<h.length;i+=3){const x=h[i],y=h[i+1],n=h[i+2];if(x>=0&&x<GL&&y>=0&&y<GW&&n>0){acc[y*GL+x]+=n;total+=n}}});
+  const mx=Math.max(...acc);
+  if(!(mx>0)){out.innerHTML='<div class="empty">The provider returned an empty grid for this selection.</div>';return}
+  const cw=105/GL,ch=68/GW;let g='';
+  acc.forEach((n,i)=>{if(!n)return;const x=i%GL,y=Math.floor(i/GL),tt=n/mx;g+=`<rect x="${(x*cw).toFixed(3)}" y="${(y*ch).toFixed(3)}" width="${cw.toFixed(3)}" height="${ch.toFixed(3)}" fill="${hcol(tt)}" fill-opacity="${(.25+.65*tt).toFixed(2)}"><title>${n} actions</title></rect>`});
+  const nm=new Set(rows.map(r=>r.m)).size;
+  out.innerHTML=`<div class="mu" style="margin-bottom:6px">${nm} match${nm===1?'':'es'} · ${total} actions · ${acc.filter(Boolean).length} active cells</div>`+pitchSvg(g)+
+  `<p class="mu" style="font-size:12px">Counts of on-the-ball actions binned by PitchAPI on a ${GL}×${GW} grid (not raw coordinates). Each team attacks to the right. Totals are raw counts, not per-90, so substitutes look thinner than starters.</p>`};
+ const fillPlayers=()=>{const old=$('#hp').value,t=$('#ht').value,seen=new Map();
+  scope().filter(r=>r.t==='p'&&club(r)===t).forEach(r=>{if(!seen.has(r.k))seen.set(r.k,r.n)});
+  const p=[...seen.entries()].sort((a,b)=>String(a[1]).localeCompare(String(b[1])));
+  $('#hp').innerHTML=opts([['','Whole team'],...p],seen.has(old)?old:'');draw()};
+ const fillTeams=()=>{const old=$('#ht').value,t=[...new Set(scope().map(club))].filter(Boolean).sort();
+  $('#ht').innerHTML=opts(t.map(x=>[x,x]),t.includes(old)?old:t[0]);fillPlayers()};
+ $('#hm').onchange=fillTeams;$('#ht').onchange=fillPlayers;$('#hp').onchange=draw;
+ fillTeams();
+};
+
+/* ---------- Passing: pass network + pass-category counts ---------- */
+const PF=[['','All players (sort by passes)'],['pr','Progressive passes'],['kp','Key passes'],['tb','Through balls'],['cr','Crosses'],['bx','Passes into box'],['sw','Switches'],['as','Assists']];
+let NETCUR=null;
+const nodeName=n=>String(n||'').split(' ').pop();
+function netSel(kind,i){
+ const r=NETCUR,box=$('#ndet');if(!r||!box)return;
+ const na=id=>{const n=r.nodes.find(x=>x.i===id);return n?n.n:id};
+ if(kind==='n'){const n=r.nodes[i];
+  box.innerHTML=`<b>${esc(n.n)}</b><div class="mu">Passes played ${n.p==null?'N/A':n.p} · received ${n.r==null?'N/A':n.r} · partners ${n.d==null?'N/A':n.d} · strength ${n.s==null?'N/A':n.s}<br>Betweenness ${f(n.b)} · clustering ${f(n.c)}<br>Average pass origin: x ${f(n.x,1)} m, y ${f(n.y,1)} m</div>`}
+ else{const e=r.edges[i];box.innerHTML=`<b>${esc(na(e.a))} → ${esc(na(e.b))}</b><div class="mu">${e.p} passes (receiver inferred from the next action by the same team)</div>`}
+}
+R.passing=async function(el){
+ el.innerHTML='<h2>Passing</h2><div class="card mu" style="font-size:13px"><b>What PitchAPI provides:</b> a pass network per team (player positions = average origin of completed passes, links = number of passes between two players) and per-player pass counts by category. <b>Not provided:</b> individual passes with start/end coordinates, pass success per pass, and xT per pass, so a pass-by-pass map cannot be drawn and no pass xT is shown.</div>';
+ let A=null;try{A=await loadAdv()}catch(e){noData(el,'Could not load passing data: '+esc(e.message));return}
+ const nets=A?(A.net||[]):[];
+ if(!nets.length){noData(el,'No pass-network data for this league yet. It appears after the next synchronization.');return}
+ const have=[...new Set(nets.map(n=>n.m))],ms=D.matches.filter(m=>have.includes(m.match_id)).sort(byDate);
+ el.innerHTML+=`<div class="ctl"><select id="nm">${opts(ms.map(m=>[m.match_id,mlabel(m.match_id)]),ms[0]?ms[0].match_id:'')}</select><select id="nt"></select><input id="nmin" type="number" min="1" value="3" style="width:120px" placeholder="Min passes"><select id="nf">${opts(PF,'')}</select></div><div id="nout"></div>`;
+ const draw=()=>{
+  const out=$('#nout'),mid=$('#nm').value,tid=$('#nt').value;
+  const row=nets.find(n=>n.m===mid&&n.i===tid);NETCUR=row||null;
+  if(!row){out.innerHTML='<div class="empty">No pass network for this selection.</div>';return}
+  const min=Math.max(1,num($('#nmin').value)||1),by={};
+  row.nodes.forEach((n,i)=>{if(n.x!=null&&n.y!=null)by[n.i]={n,i,r:1.2+Math.sqrt(n.p||0)*.35}});
+  let g='';
+  row.edges.forEach((e,i)=>{const a=by[e.a],b=by[e.b];if(!a||!b||e.p<min)return;
+   const dx=b.n.x-a.n.x,dy=b.n.y-a.n.y,L=Math.hypot(dx,dy);if(L<1)return;
+   const ux=dx/L,uy=dy/L,px=-uy*.8,py=ux*.8,x1=a.n.x+ux*a.r+px,y1=a.n.y+uy*a.r+py,x2=b.n.x-ux*(b.r+.6)+px,y2=b.n.y-uy*(b.r+.6)+py,w=Math.min(2.4,.25+e.p*.1);
+   g+=`<g onclick="netSel('e',${i})" style="cursor:pointer"><line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke="#8a9bb0" stroke-opacity=".7" stroke-width="${w.toFixed(2)}" marker-end="url(#ah)"/><line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke="transparent" stroke-width="3"/><title>${esc(a.n.n)} → ${esc(b.n.n)}: ${e.p}</title></g>`});
+  Object.values(by).forEach(o=>{g+=`<g onclick="netSel('n',${o.i})" style="cursor:pointer"><circle cx="${o.n.x}" cy="${o.n.y}" r="${o.r.toFixed(2)}" fill="#5aa9e6" fill-opacity=".9" stroke="#e8eef5" stroke-width=".3"/><text x="${o.n.x}" y="${(o.n.y-o.r-.7).toFixed(2)}" text-anchor="middle" font-size="2.2" fill="#e8eef5">${esc(nodeName(o.n.n))}</text></g>`});
+  const defs='<defs><marker id="ah" viewBox="0 0 4 4" refX="3" refY="2" markerWidth="2" markerHeight="2" orient="auto"><path d="M0 0L4 2L0 4z" fill="#8a9bb0"/></marker></defs>';
+  const cat=$('#nf').value;
+  let pr=(A.pass||[]).filter(r=>r.m===mid&&r.t===tid);
+  const sk=cat||'ps';if(cat)pr=pr.filter(r=>(r[cat]||0)>0);pr.sort((a,b)=>(b[sk]||0)-(a[sk]||0));
+  const cell=v=>v==null?'N/A':f(v,v%1?1:0);
+  out.innerHTML=`<div class="mu" style="margin-bottom:6px">Positions = average origin of completed passes (starting eleven until the first substitution${row.u?', '+Math.round(row.u/60)+' min':''}). Showing links with at least ${min} passes. Tap a player or a link.</div>`+pitchSvg(g,defs)+`<div class="card" id="ndet" style="font-size:13px">Tap a player or a link for details.</div>`+
+  `<h3>Pass categories (counts per player, this match)</h3>`+tbl([['Player'],['Min',1],['Passes',1],['Acc %',1],['Progr.',1],['Into box',1],['Key',1],['Assists',1],['Through',1],['Crosses',1],['Switches',1]],pr.map(r=>[esc(r.n),cell(r.mi),cell(r.ps),cell(r.ac),cell(r.pr),cell(r.bx),cell(r.kp),cell(r.as),cell(r.tb),cell(r.cr),cell(r.sw)]))};
+ const fillTeams=()=>{const old=$('#nt').value,t=nets.filter(n=>n.m===$('#nm').value);
+  $('#nt').innerHTML=opts(t.map(n=>[n.i,n.n]),t.some(n=>n.i===old)?old:(t[0]?t[0].i:''));draw()};
+ $('#nm').onchange=fillTeams;$('#nt').onchange=draw;$('#nmin').oninput=draw;$('#nf').onchange=draw;
+ fillTeams();
+};
+
+/* ---------- PPDA ---------- */
+R.ppda=async function(el){
+ el.innerHTML='<h2>PPDA</h2><div class="card mu" style="font-size:13px"><b>Definition (PitchAPI):</b> PPDA = opponent passes attempted ÷ defensive actions by the pressing team (fouls, tackles, interceptions, challenges, blocked passes), both counted only in the pressing zone, i.e. outside the pressing team\'s own defensive third. Clearances and shot blocks are excluded. Lower means more intense pressing. Values come from PitchAPI; nothing is estimated here.</div>';
+ let A=null;try{A=await loadAdv()}catch(e){noData(el,'Could not load PPDA data: '+esc(e.message));return}
+ const T=A?(A.team||[]):[];
+ if(!T.length){noData(el,'No PPDA data for this league yet. It appears after the next synchronization. PitchAPI returns no analytics for matches it never rated.');return}
+ const g=new Map();
+ T.forEach(r=>{let t=g.get(r.n);if(!t){t={n:r.n,m:0,op:0,da:0,pps:[]};g.set(r.n,t)}
+  t.m++;if(r.op!=null&&r.da!=null&&r.da>0){t.op+=r.op;t.da+=r.da}if(r.pp!=null)t.pps.push(r.pp)});
+ const S=[...g.values()].map(t=>({n:t.n,m:t.m,w:t.da>0?t.op/t.da:null,a:t.pps.length?t.pps.reduce((x,y)=>x+y,0)/t.pps.length:null})).sort((a,b)=>(a.w??1e9)-(b.w??1e9));
+ const missing=D.matches.length-new Set(T.map(r=>r.m)).size;
+ const teams=[...g.keys()].sort(),hasZ=T.some(r=>r.z!=null);
+ el.innerHTML+=`<h3>Teams — season</h3>`+tbl([['#',1],['Team'],['Matches',1],['PPDA (Σ passes ÷ Σ actions)',1],['Avg of match PPDA',1]],S.map((s,i)=>[i+1,esc(s.n),s.m,f(s.w,2),f(s.a,2)]))+
+ `<div class="mu" style="font-size:12px;margin-top:6px">Season PPDA = total opponent passes ÷ total defensive actions over the matches with data (not an average of ratios). ${missing>0?missing+' of '+D.matches.length+' matches have no PPDA data.':''}</div>
+ <h3>By match</h3><div class="ctl"><select id="pt">${opts([['','All teams'],...teams.map(x=>[x,x])],'')}</select></div><div id="pout"></div>`;
+ const draw=()=>{const t=$('#pt').value,mm=new Map(D.matches.map(m=>[m.match_id,m]));
+  const rows=T.filter(r=>!t||r.n===t).sort((a,b)=>String((mm.get(b.m)||{}).date).localeCompare(String((mm.get(a.m)||{}).date)));
+  $('#pout').innerHTML=tbl([['Date'],['Match'],['Team'],['PPDA',1],['Opp. passes',1],['Def. actions',1],['Check op÷da',1]].concat(hasZ?[['Zone',1]]:[]),
+   rows.map(r=>{const m=mm.get(r.m)||{match_id:r.m,home:'',away:'',score:'',date:''},c=(r.op!=null&&r.da>0)?r.op/r.da:null,bad=c!=null&&r.pp!=null&&Math.abs(c-r.pp)>.02*c+.01;
+    return [esc(String(m.date).slice(0,10)),mlink(m),esc(r.n),f(r.pp,2),r.op==null?'N/A':r.op,r.da==null?'N/A':r.da,f(c,2)+(bad?' ⚠':'')].concat(hasZ?[f(r.z,2)]:[])}))};
+ $('#pt').onchange=draw;draw();
+};
+'''
+
+
+def _x_patch_index(html):
+    def sub(h, old, new):
+        if h.count(old) != 1:
+            log(f"  تنبيه (إضافة): ما لقيت نقطة التعديل بدقة، تخطيتها: {old[:50]}")
+            return h
+        return h.replace(old, new)
+    h = html
+    h = sub(h, ".chart{width:100%;height:140px}.mu{color:var(--mu)}",
+            ".chart{width:100%;height:140px}.mu{color:var(--mu)}" + _X_CSS)
+    h = sub(h, "['passing','Passing'],", "['passing','Passing'],['ppda','PPDA'],")
+    h = sub(h, "AGGC=null;try{localStorage.setItem('league',D.id)}catch(e){}",
+            "AGGC=null;ADV=null;HEAT=null;try{localStorage.setItem('league',D.id)}catch(e){}")
+    h = sub(h, "async function route(){", _X_JS + "\nasync function route(){")
+    h = sub(h, "if(PLAN[pg]){", "if(PLAN[pg]&&!R[pg]){")
+    h = sub(h, "const r=await api('/api/availability');",
+            "try{await loadAdv()}catch(e){}const r=await api('/api/availability');")
+    h = sub(h, "tag('ni'),tag('ni'),tag('ni'),tag('ni')]))}",
+            "tag('ni'),exTag(m,'h'),exTag(m,'n'),tag('ni')]))}")
+    return h
+
+
+INDEX = _x_patch_index(INDEX)
+
+
+# ---------------- وضع الفحص: يطبع شكل الردود الحقيقية ----------------
+def _x_describe(o, name="root", depth=0, maxd=4):
+    import dataclasses
+    pad = "  " * depth
+    if o is None or isinstance(o, (str, int, float, bool)):
+        log(f"{pad}{name}: {type(o).__name__} = {str(o)[:40]}")
+    elif isinstance(o, (list, tuple)):
+        log(f"{pad}{name}: list[{len(o)}]")
+        if o and depth < maxd:
+            _x_describe(o[0], "[0]", depth + 1, maxd)
+    else:
+        if isinstance(o, dict):
+            names = list(o.keys())
+        elif dataclasses.is_dataclass(o):
+            names = [f.name for f in dataclasses.fields(o)]
+        else:
+            names = [k for k in dir(o) if not k.startswith("_") and not callable(getattr(o, k, None))]
+        log(f"{pad}{name}: {type(o).__name__}")
+        if depth < maxd:
+            for k in names:
+                _x_describe(_g(o, k), k, depth + 1, maxd)
+
+
+def probe_api(pit_key):
+    with PitchAPI(api_key=pit_key) as client:
+        res, err = call(lambda: client.leagues.matches("l_4WFCIZ", season=None, status="played"))
+        if res is None or not list(res.matches):
+            log("ما قدرت أجلب مباراة للفحص:", err)
+            return
+        mid = list(res.matches)[0].id
+        log(f"فحص المباراة {mid}")
+        for nm_ in ("advanced", "advanced_network", "heatmaps"):
+            fn = getattr(client.matches, nm_, None)
+            log("\n" + "=" * 40 + f"\n{nm_}")
+            if fn is None:
+                log("  غير موجودة في نسخة pitchapi هذي — شغّل pip install -U pitchapi")
+                continue
+            r_, e_ = call(fn, mid)
+            if r_ is None:
+                log("  لا يوجد رد:", e_)
+            else:
+                _x_describe(r_)
+        log("\nانسخ كل هذا الناتج وأرسله لي لنتأكد من أسماء الحقول.")
+
+
+_orig_main = main
+
+def main():
+    if PROBE and os.environ.get("GITHUB_ACTIONS") != "true":
+        return probe_api(get_secret("PITCHAPI_KEY", "PitchAPI key: "))
+    return _orig_main()
+# ======================== نهاية الإضافة ========================
 
 
 if __name__ == "__main__":
