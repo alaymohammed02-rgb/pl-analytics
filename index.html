@@ -26,7 +26,7 @@ button:disabled{opacity:.5}
 .tag{display:inline-block;padding:2px 8px;border-radius:99px;font-size:12px;border:1px solid var(--ln)}
 .available,.ok{color:var(--g)}.partial{color:var(--a)}.missing,.failed,.no_data{color:var(--r)}.ni,.pending{color:var(--mu)}
 .empty{border:1px dashed var(--ln);border-radius:10px;padding:18px;color:var(--mu)}
-.chart{width:100%;height:140px}.mu{color:var(--mu)}
+.chart{width:100%;height:140px}.mu{color:var(--mu)}.pitch{width:100%;max-width:840px;display:block;border-radius:8px;margin:6px 0}.card b{color:var(--tx)}
 </style></head><body>
 <header><div class="top"><b>PL Analytics</b><span id="lg">Loading…</span></div><nav id="nav"></nav></header>
 <main id="app"></main>
@@ -48,7 +48,7 @@ async function setLeague(id){
  D={id:meta.id,name:meta.name,
   matches:L.matches.map(m=>({match_id:String(m.i),date:m.d||'',home:m.h,away:m.a,score:m.s,status:m.t||'pending',fetched_at:m.f})),
   stats:L.stats.map(s=>({match_id:String(s.m),key:String(s.k),player_id:s.i,player:s.p,club:s.c,pos:s.o,xt:s.xt,xg:s.xg,xg_faced:s.xf,minutes:s.mi}))};
- AGGC=null;try{localStorage.setItem('league',D.id)}catch(e){}
+ AGGC=null;ADV=null;HEAT=null;try{localStorage.setItem('league',D.id)}catch(e){}
 }
 function head(){
  const one=ALL.leagues.length<2;
@@ -136,11 +136,11 @@ async function api(p){
 }
 
 /* ---------- الصفحات ---------- */
-const PAGES=[['overview','Overview'],['players','Players'],['teams','Teams'],['matches','Matches'],['compare','Compare'],['tactical','Tactical'],['shots','Shots'],['passing','Passing'],['heatmaps','Heatmaps'],['rankings','Rankings'],['data','Data Availability'],['settings','Settings']];
+const PAGES=[['overview','Overview'],['players','Players'],['teams','Teams'],['matches','Matches'],['compare','Compare'],['tactical','Tactical'],['shots','Shots'],['passing','Passing'],['ppda','PPDA'],['heatmaps','Heatmaps'],['rankings','Rankings'],['data','Data Availability'],['settings','Settings']];
 const PLAN={
  tactical:['Tactical Analysis','Formations, starting positions, build-up and defensive activity.','Needs lineup positions and event data. Not inspected yet.'],
  shots:['Shot Analysis','Shot map, shot table, xG per shot and outcome filters.','PitchAPI lists a shots endpoint, but its response has not been inspected in this app yet.'],
- passing:['Passing Analysis','Passing network, pass maps and pass completion by zone.','Pass maps need start and end coordinates for each pass. Not confirmed from the provider.'],
+ passing:['Passing Analysis','Pass maps and pass completion by zone.','Pass maps need start and end coordinates for each pass. Not confirmed from the provider.'],
  heatmaps:['Heatmaps','Player and team activity maps.','PitchAPI lists heatmap data, but the grid format has not been inspected yet.']};
 let CMP=[];
 const GH_REPO=()=>{try{const v=localStorage.getItem('gh_repo');if(v)return v}catch(e){}return location.hostname.split('.')[0]+'/'+(location.pathname.split('/')[1]||'')};
@@ -264,17 +264,131 @@ const R={
   showRun(false);
  },
  async data(el){
-  const r=await api('/api/availability');
+  try{await loadAdv()}catch(e){}const r=await api('/api/availability');
   el.innerHTML=`<h2>Data Availability</h2><div class="mu" style="margin-bottom:8px">Stable player ID found on ${r.id_pct==null?'N/A':r.id_pct.toFixed(0)+'%'} of player rows. Rows without an ID are matched by name.</div>`+
   tbl([['Date'],['Match'],['Sync'],['xT'],['xG'],['Minutes'],['Shots'],['Heatmap'],['Passing network'],['Lineups']],
-   r.rows.map(m=>[esc(m.date.slice(0,10)),esc(m.home+' v '+m.away),tag(m.status),tag(m.xt),tag(m.xg),tag(m.mi),tag('ni'),tag('ni'),tag('ni'),tag('ni')]))}
+   r.rows.map(m=>[esc(m.date.slice(0,10)),esc(m.home+' v '+m.away),tag(m.status),tag(m.xt),tag(m.xg),tag(m.mi),tag('ni'),exTag(m,'h'),exTag(m,'n'),tag('ni')]))}
 };
+/* ===== Addon: Passing network / Heatmaps / PPDA (reads data/*_adv.json and data/*_heat.json) ===== */
+let ADV=null,HEAT=null;
+const lgMeta=()=>ALL.leagues.find(l=>l.id===D.id)||{};
+async function loadJson(file,v){const r=await fetch('data/'+file+'?v='+encodeURIComponent(v||ALL.generated||''));if(!r.ok)throw new Error(file+' (HTTP '+r.status+')');return r.json()}
+async function loadAdv(){if(ADV)return ADV;const m=lgMeta();if(!m.adv_file)return null;const a=await loadJson(m.adv_file,m.adv_v);a.exm=new Map((a.ex||[]).map(e=>[e.i,e]));ADV=a;return a}
+async function loadHeat(){if(HEAT)return HEAT;const m=lgMeta();if(!m.heat_file)return null;HEAT=await loadJson(m.heat_file,m.adv_v);return HEAT}
+const exTag=(m,k)=>{if(!ADV)return tag('ni');const e=ADV.exm.get(m.match_id);return tag(e&&e[k]>0?'available':'missing')};
+const mlabel=id=>{const m=D.matches.find(x=>x.match_id===id);return m?m.date.slice(0,10)+'  '+m.home+' '+m.score+' '+m.away:id};
+const opts=(arr,sel)=>arr.map(([v,t])=>`<option value="${esc(v)}" ${v===sel?'selected':''}>${esc(t)}</option>`).join('');
+const PITCH='<rect x="-2" y="-2" width="109" height="73" fill="#12301f"/><g fill="none" stroke="#4d8f6b" stroke-width=".35"><rect x="0" y="0" width="105" height="68"/><line x1="52.5" y1="0" x2="52.5" y2="68"/><circle cx="52.5" cy="34" r="9.15"/><rect x="0" y="13.84" width="16.5" height="40.32"/><rect x="88.5" y="13.84" width="16.5" height="40.32"/><rect x="0" y="24.84" width="5.5" height="18.32"/><rect x="99.5" y="24.84" width="5.5" height="18.32"/><rect x="-1.5" y="30.34" width="1.5" height="7.32"/><rect x="105" y="30.34" width="1.5" height="7.32"/></g><circle cx="11" cy="34" r=".45" fill="#4d8f6b"/><circle cx="94" cy="34" r=".45" fill="#4d8f6b"/><circle cx="52.5" cy="34" r=".45" fill="#4d8f6b"/><text x="52.5" y="70" text-anchor="middle" font-size="2.4" fill="#8a9bb0">Attack direction →</text>';
+const pitchSvg=(inner,defs)=>`<svg class="pitch" viewBox="-2 -2 109 74">${defs||''}${PITCH}${inner}</svg>`;
+const noData=(el,msg)=>{el.innerHTML+=`<div class="empty">${msg}</div>`};
+
+/* ---------- Heatmaps ---------- */
+const hcol=t=>`hsl(${Math.round((1-t)*210)},85%,52%)`;
+R.heatmaps=async function(el){
+ el.innerHTML='<h2>Heatmaps</h2>';
+ let H=null;try{H=await loadHeat()}catch(e){noData(el,'Could not load heatmap data: '+esc(e.message));return}
+ if(!H||!H.rows||!H.rows.length){noData(el,'No heatmap data for this league yet. It appears after the next synchronization. PitchAPI returns no heatmap for matches it never rated.');return}
+ const GL=H.grid.l,GW=H.grid.w,have=[...new Set(H.rows.map(r=>r.m))];
+ const ms=D.matches.filter(m=>have.includes(m.match_id)).sort(byDate);
+ el.innerHTML+=`<div class="mu" style="margin-bottom:8px">${have.length} of ${D.matches.length} matches have heatmap data.</div>
+ <div class="ctl"><select id="hm">${opts([['','Whole season (sum of matches)'],...ms.map(m=>[m.match_id,mlabel(m.match_id)])],'')}</select><select id="ht"></select><select id="hp"></select></div><div id="hout"></div>`;
+ const scope=()=>H.rows.filter(r=>!$('#hm').value||r.m===$('#hm').value);
+ const club=r=>r.t==='t'?r.n:r.c;
+ const draw=()=>{
+  const t=$('#ht').value,p=$('#hp').value,out=$('#hout');
+  const rows=scope().filter(r=>club(r)===t&&(p?(r.t==='p'&&r.k===p):r.t==='t'));
+  if(!rows.length){out.innerHTML='<div class="empty">No heatmap data for this selection.</div>';return}
+  const acc=new Array(GL*GW).fill(0);let total=0;
+  rows.forEach(r=>{const h=r.h||[];for(let i=0;i+2<h.length;i+=3){const x=h[i],y=h[i+1],n=h[i+2];if(x>=0&&x<GL&&y>=0&&y<GW&&n>0){acc[y*GL+x]+=n;total+=n}}});
+  const mx=Math.max(...acc);
+  if(!(mx>0)){out.innerHTML='<div class="empty">The provider returned an empty grid for this selection.</div>';return}
+  const cw=105/GL,ch=68/GW;let g='';
+  acc.forEach((n,i)=>{if(!n)return;const x=i%GL,y=Math.floor(i/GL),tt=n/mx;g+=`<rect x="${(x*cw).toFixed(3)}" y="${(y*ch).toFixed(3)}" width="${cw.toFixed(3)}" height="${ch.toFixed(3)}" fill="${hcol(tt)}" fill-opacity="${(.25+.65*tt).toFixed(2)}"><title>${n} actions</title></rect>`});
+  const nm=new Set(rows.map(r=>r.m)).size;
+  out.innerHTML=`<div class="mu" style="margin-bottom:6px">${nm} match${nm===1?'':'es'} · ${total} actions · ${acc.filter(Boolean).length} active cells</div>`+pitchSvg(g)+
+  `<p class="mu" style="font-size:12px">Counts of on-the-ball actions binned by PitchAPI on a ${GL}×${GW} grid (not raw coordinates). Each team attacks to the right. Totals are raw counts, not per-90, so substitutes look thinner than starters.</p>`};
+ const fillPlayers=()=>{const old=$('#hp').value,t=$('#ht').value,seen=new Map();
+  scope().filter(r=>r.t==='p'&&club(r)===t).forEach(r=>{if(!seen.has(r.k))seen.set(r.k,r.n)});
+  const p=[...seen.entries()].sort((a,b)=>String(a[1]).localeCompare(String(b[1])));
+  $('#hp').innerHTML=opts([['','Whole team'],...p],seen.has(old)?old:'');draw()};
+ const fillTeams=()=>{const old=$('#ht').value,t=[...new Set(scope().map(club))].filter(Boolean).sort();
+  $('#ht').innerHTML=opts(t.map(x=>[x,x]),t.includes(old)?old:t[0]);fillPlayers()};
+ $('#hm').onchange=fillTeams;$('#ht').onchange=fillPlayers;$('#hp').onchange=draw;
+ fillTeams();
+};
+
+/* ---------- Passing: pass network + pass-category counts ---------- */
+const PF=[['','All players (sort by passes)'],['pr','Progressive passes'],['kp','Key passes'],['tb','Through balls'],['cr','Crosses'],['bx','Passes into box'],['sw','Switches'],['as','Assists']];
+let NETCUR=null;
+const nodeName=n=>String(n||'').split(' ').pop();
+function netSel(kind,i){
+ const r=NETCUR,box=$('#ndet');if(!r||!box)return;
+ const na=id=>{const n=r.nodes.find(x=>x.i===id);return n?n.n:id};
+ if(kind==='n'){const n=r.nodes[i];
+  box.innerHTML=`<b>${esc(n.n)}</b><div class="mu">Passes played ${n.p==null?'N/A':n.p} · received ${n.r==null?'N/A':n.r} · partners ${n.d==null?'N/A':n.d} · strength ${n.s==null?'N/A':n.s}<br>Betweenness ${f(n.b)} · clustering ${f(n.c)}<br>Average pass origin: x ${f(n.x,1)} m, y ${f(n.y,1)} m</div>`}
+ else{const e=r.edges[i];box.innerHTML=`<b>${esc(na(e.a))} → ${esc(na(e.b))}</b><div class="mu">${e.p} passes (receiver inferred from the next action by the same team)</div>`}
+}
+R.passing=async function(el){
+ el.innerHTML='<h2>Passing</h2><div class="card mu" style="font-size:13px"><b>What PitchAPI provides:</b> a pass network per team (player positions = average origin of completed passes, links = number of passes between two players) and per-player pass counts by category. <b>Not provided:</b> individual passes with start/end coordinates, pass success per pass, and xT per pass, so a pass-by-pass map cannot be drawn and no pass xT is shown.</div>';
+ let A=null;try{A=await loadAdv()}catch(e){noData(el,'Could not load passing data: '+esc(e.message));return}
+ const nets=A?(A.net||[]):[];
+ if(!nets.length){noData(el,'No pass-network data for this league yet. It appears after the next synchronization.');return}
+ const have=[...new Set(nets.map(n=>n.m))],ms=D.matches.filter(m=>have.includes(m.match_id)).sort(byDate);
+ el.innerHTML+=`<div class="ctl"><select id="nm">${opts(ms.map(m=>[m.match_id,mlabel(m.match_id)]),ms[0]?ms[0].match_id:'')}</select><select id="nt"></select><input id="nmin" type="number" min="1" value="3" style="width:120px" placeholder="Min passes"><select id="nf">${opts(PF,'')}</select></div><div id="nout"></div>`;
+ const draw=()=>{
+  const out=$('#nout'),mid=$('#nm').value,tid=$('#nt').value;
+  const row=nets.find(n=>n.m===mid&&n.i===tid);NETCUR=row||null;
+  if(!row){out.innerHTML='<div class="empty">No pass network for this selection.</div>';return}
+  const min=Math.max(1,num($('#nmin').value)||1),by={};
+  row.nodes.forEach((n,i)=>{if(n.x!=null&&n.y!=null)by[n.i]={n,i,r:1.2+Math.sqrt(n.p||0)*.35}});
+  let g='';
+  row.edges.forEach((e,i)=>{const a=by[e.a],b=by[e.b];if(!a||!b||e.p<min)return;
+   const dx=b.n.x-a.n.x,dy=b.n.y-a.n.y,L=Math.hypot(dx,dy);if(L<1)return;
+   const ux=dx/L,uy=dy/L,px=-uy*.8,py=ux*.8,x1=a.n.x+ux*a.r+px,y1=a.n.y+uy*a.r+py,x2=b.n.x-ux*(b.r+.6)+px,y2=b.n.y-uy*(b.r+.6)+py,w=Math.min(2.4,.25+e.p*.1);
+   g+=`<g onclick="netSel('e',${i})" style="cursor:pointer"><line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke="#8a9bb0" stroke-opacity=".7" stroke-width="${w.toFixed(2)}" marker-end="url(#ah)"/><line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke="transparent" stroke-width="3"/><title>${esc(a.n.n)} → ${esc(b.n.n)}: ${e.p}</title></g>`});
+  Object.values(by).forEach(o=>{g+=`<g onclick="netSel('n',${o.i})" style="cursor:pointer"><circle cx="${o.n.x}" cy="${o.n.y}" r="${o.r.toFixed(2)}" fill="#5aa9e6" fill-opacity=".9" stroke="#e8eef5" stroke-width=".3"/><text x="${o.n.x}" y="${(o.n.y-o.r-.7).toFixed(2)}" text-anchor="middle" font-size="2.2" fill="#e8eef5">${esc(nodeName(o.n.n))}</text></g>`});
+  const defs='<defs><marker id="ah" viewBox="0 0 4 4" refX="3" refY="2" markerWidth="2" markerHeight="2" orient="auto"><path d="M0 0L4 2L0 4z" fill="#8a9bb0"/></marker></defs>';
+  const cat=$('#nf').value;
+  let pr=(A.pass||[]).filter(r=>r.m===mid&&r.t===tid);
+  const sk=cat||'ps';if(cat)pr=pr.filter(r=>(r[cat]||0)>0);pr.sort((a,b)=>(b[sk]||0)-(a[sk]||0));
+  const cell=v=>v==null?'N/A':f(v,v%1?1:0);
+  out.innerHTML=`<div class="mu" style="margin-bottom:6px">Positions = average origin of completed passes (starting eleven until the first substitution${row.u?', '+Math.round(row.u/60)+' min':''}). Showing links with at least ${min} passes. Tap a player or a link.</div>`+pitchSvg(g,defs)+`<div class="card" id="ndet" style="font-size:13px">Tap a player or a link for details.</div>`+
+  `<h3>Pass categories (counts per player, this match)</h3>`+tbl([['Player'],['Min',1],['Passes',1],['Acc %',1],['Progr.',1],['Into box',1],['Key',1],['Assists',1],['Through',1],['Crosses',1],['Switches',1]],pr.map(r=>[esc(r.n),cell(r.mi),cell(r.ps),cell(r.ac),cell(r.pr),cell(r.bx),cell(r.kp),cell(r.as),cell(r.tb),cell(r.cr),cell(r.sw)]))};
+ const fillTeams=()=>{const old=$('#nt').value,t=nets.filter(n=>n.m===$('#nm').value);
+  $('#nt').innerHTML=opts(t.map(n=>[n.i,n.n]),t.some(n=>n.i===old)?old:(t[0]?t[0].i:''));draw()};
+ $('#nm').onchange=fillTeams;$('#nt').onchange=draw;$('#nmin').oninput=draw;$('#nf').onchange=draw;
+ fillTeams();
+};
+
+/* ---------- PPDA ---------- */
+R.ppda=async function(el){
+ el.innerHTML='<h2>PPDA</h2><div class="card mu" style="font-size:13px"><b>Definition (PitchAPI):</b> PPDA = opponent passes attempted ÷ defensive actions by the pressing team (fouls, tackles, interceptions, challenges, blocked passes), both counted only in the pressing zone, i.e. outside the pressing team\'s own defensive third. Clearances and shot blocks are excluded. Lower means more intense pressing. Values come from PitchAPI; nothing is estimated here.</div>';
+ let A=null;try{A=await loadAdv()}catch(e){noData(el,'Could not load PPDA data: '+esc(e.message));return}
+ const T=A?(A.team||[]):[];
+ if(!T.length){noData(el,'No PPDA data for this league yet. It appears after the next synchronization. PitchAPI returns no analytics for matches it never rated.');return}
+ const g=new Map();
+ T.forEach(r=>{let t=g.get(r.n);if(!t){t={n:r.n,m:0,op:0,da:0,pps:[]};g.set(r.n,t)}
+  t.m++;if(r.op!=null&&r.da!=null&&r.da>0){t.op+=r.op;t.da+=r.da}if(r.pp!=null)t.pps.push(r.pp)});
+ const S=[...g.values()].map(t=>({n:t.n,m:t.m,w:t.da>0?t.op/t.da:null,a:t.pps.length?t.pps.reduce((x,y)=>x+y,0)/t.pps.length:null})).sort((a,b)=>(a.w??1e9)-(b.w??1e9));
+ const missing=D.matches.length-new Set(T.map(r=>r.m)).size;
+ const teams=[...g.keys()].sort(),hasZ=T.some(r=>r.z!=null);
+ el.innerHTML+=`<h3>Teams — season</h3>`+tbl([['#',1],['Team'],['Matches',1],['PPDA (Σ passes ÷ Σ actions)',1],['Avg of match PPDA',1]],S.map((s,i)=>[i+1,esc(s.n),s.m,f(s.w,2),f(s.a,2)]))+
+ `<div class="mu" style="font-size:12px;margin-top:6px">Season PPDA = total opponent passes ÷ total defensive actions over the matches with data (not an average of ratios). ${missing>0?missing+' of '+D.matches.length+' matches have no PPDA data.':''}</div>
+ <h3>By match</h3><div class="ctl"><select id="pt">${opts([['','All teams'],...teams.map(x=>[x,x])],'')}</select></div><div id="pout"></div>`;
+ const draw=()=>{const t=$('#pt').value,mm=new Map(D.matches.map(m=>[m.match_id,m]));
+  const rows=T.filter(r=>!t||r.n===t).sort((a,b)=>String((mm.get(b.m)||{}).date).localeCompare(String((mm.get(a.m)||{}).date)));
+  $('#pout').innerHTML=tbl([['Date'],['Match'],['Team'],['PPDA',1],['Opp. passes',1],['Def. actions',1],['Check op÷da',1]].concat(hasZ?[['Zone',1]]:[]),
+   rows.map(r=>{const m=mm.get(r.m)||{match_id:r.m,home:'',away:'',score:'',date:''},c=(r.op!=null&&r.da>0)?r.op/r.da:null,bad=c!=null&&r.pp!=null&&Math.abs(c-r.pp)>.02*c+.01;
+    return [esc(String(m.date).slice(0,10)),mlink(m),esc(r.n),f(r.pp,2),r.op==null?'N/A':r.op,r.da==null?'N/A':r.da,f(c,2)+(bad?' ⚠':'')].concat(hasZ?[f(r.z,2)]:[])}))};
+ $('#pt').onchange=draw;draw();
+};
+
 async function route(){
  const [,pg='overview',arg='']=(location.hash||'#/overview').split('/');
  $('#nav').innerHTML=PAGES.map(([k,n])=>`<a href="#/${k}" class="${k===pg||(pg==='match'&&k==='matches')||(pg==='player'&&k==='players')?'on':''}">${n}</a>`).join('');
  const el=$('#app');el.innerHTML='<div class="empty">Loading…</div>';
  try{
-  if(PLAN[pg]){const p=PLAN[pg];el.innerHTML=`<h2>${p[0]}</h2><div class="card">${tag('ni')}<p>${p[1]}</p><p class="mu">${p[2]} Nothing is drawn until real data is connected.</p></div>`;return}
+  if(PLAN[pg]&&!R[pg]){const p=PLAN[pg];el.innerHTML=`<h2>${p[0]}</h2><div class="card">${tag('ni')}<p>${p[1]}</p><p class="mu">${p[2]} Nothing is drawn until real data is connected.</p></div>`;return}
   await (R[pg]||R.overview)(el,arg)
  }catch(e){el.innerHTML=`<div class="empty">Could not load this page: ${esc(e.message)}</div>`}}
 
