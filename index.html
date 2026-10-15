@@ -1,0 +1,241 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PL Analytics</title>
+<style>
+:root{--bg:#0d1520;--sf:#152130;--ln:#25374d;--tx:#e8eef5;--mu:#8a9bb0;--g:#4cc38a;--b:#5aa9e6;--a:#e9b44c;--r:#e5646b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--ln)}
+.top{display:flex;justify-content:space-between;align-items:center;padding:10px 14px 4px;gap:10px}
+.top b{font-size:17px}.top span{color:var(--mu);font-size:13px}
+nav{display:flex;gap:4px;overflow-x:auto;padding:4px 10px 8px}
+nav a{white-space:nowrap;color:var(--mu);text-decoration:none;padding:8px 12px;border-radius:8px;min-height:40px}
+nav a.on{background:var(--sf);color:var(--tx);box-shadow:inset 0 -2px var(--g)}
+main{max-width:1100px;margin:0 auto;padding:14px}
+h2{margin:6px 0 12px;font-size:20px}h3{margin:18px 0 8px;font-size:15px;color:var(--mu);font-weight:600}
+.card{background:var(--sf);border:1px solid var(--ln);border-radius:10px;padding:12px;margin-bottom:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.kpi{background:var(--sf);border:1px solid var(--ln);border-radius:10px;padding:10px}.kpi b{display:block;font-size:22px}.kpi span{color:var(--mu);font-size:12px}
+.wrap{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--ln);white-space:nowrap}th{color:var(--mu);font-weight:600}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+a{color:var(--b)}.bar{height:6px;background:var(--b);border-radius:3px}
+.ctl{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+input,select,button{background:var(--sf);color:var(--tx);border:1px solid var(--ln);border-radius:8px;padding:10px;font:inherit;min-height:42px}
+button{cursor:pointer;background:var(--g);color:#06210f;border:0;font-weight:600}button.s{background:var(--sf);color:var(--tx);border:1px solid var(--ln)}
+button:disabled{opacity:.5}
+.tag{display:inline-block;padding:2px 8px;border-radius:99px;font-size:12px;border:1px solid var(--ln)}
+.available,.ok{color:var(--g)}.partial{color:var(--a)}.missing,.failed,.no_data{color:var(--r)}.ni,.pending{color:var(--mu)}
+.empty{border:1px dashed var(--ln);border-radius:10px;padding:18px;color:var(--mu)}
+.chart{width:100%;height:140px}.mu{color:var(--mu)}
+</style></head><body>
+<header><div class="top"><b>PL Analytics</b><span id="lg">Loading…</span></div><nav id="nav"></nav></header>
+<main id="app"></main>
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const f=(v,d=3)=>v==null?'N/A':Number(v).toFixed(d);
+const num=v=>{if(v==null||v==='')return null;const x=Number(v);return isNaN(x)?null:x};
+const byDate=(a,b)=>String(b.date).localeCompare(String(a.date));
+const NEG=-1e18;
+
+/* ---------- البيانات (من data.json) ---------- */
+let ALL=null,D=null,AGGC=null;
+function setLeague(id){
+ const L=ALL.leagues.find(l=>l.id===id)||ALL.leagues[0];
+ D={id:L.id,name:L.name,
+  matches:L.matches.map(m=>({match_id:String(m.i),date:m.d||'',home:m.h,away:m.a,score:m.s,status:m.t||'pending',fetched_at:m.f})),
+  stats:L.stats.map(s=>({match_id:String(s.m),key:String(s.k),player_id:s.i,player:s.p,club:s.c,pos:s.o,xt:s.xt,xg:s.xg,xg_faced:s.xf,minutes:s.mi}))};
+ AGGC=null;try{localStorage.setItem('league',D.id)}catch(e){}
+}
+function head(){
+ const one=ALL.leagues.length<2;
+ $('#lg').innerHTML=(one?esc(D.name):`<select id="lgpick" style="min-height:32px;padding:4px 8px">${ALL.leagues.map(l=>`<option value="${esc(l.id)}" ${l.id===D.id?'selected':''}>${esc(l.name)}</option>`).join('')}</select>`)+' · current season';
+ const p=$('#lgpick');if(p)p.onchange=()=>{setLeague(p.value);route()};
+}
+function agg(){
+ if(AGGC)return AGGC;
+ const g=new Map(),add=(r,k,v)=>{if(v!=null)r[k]=(r[k]??0)+v};
+ for(const s of D.stats){
+  const id=s.key+'||'+s.club;let r=g.get(id);
+  if(!r){r={key:s.key,player:s.player,player_id:s.player_id,club:s.club,pos:null,games:0,minutes:null,xt:null,xg:null,xgf:null,_n:{xt:0,xg:0,xgf:0},_d:{xt:0,xg:0,xgf:0}};g.set(id,r)}
+  r.games++;
+  if(s.pos&&(!r.pos||s.pos>r.pos))r.pos=s.pos;
+  if(s.player_id&&!r.player_id)r.player_id=s.player_id;
+  add(r,'minutes',s.minutes);add(r,'xt',s.xt);add(r,'xg',s.xg);add(r,'xgf',s.xg_faced);
+  if(s.minutes!=null){
+   for(const [k,v] of [['xt',s.xt],['xg',s.xg],['xgf',s.xg_faced]]){if(v!=null){r._n[k]+=v;r._d[k]+=s.minutes}}
+  }
+ }
+ AGGC=[...g.values()].map(r=>{
+  for(const k of ['xt','xg','xgf'])r[k+'90']=r._d[k]>0?r._n[k]/r._d[k]*90:null;
+  delete r._n;delete r._d;return r});
+ return AGGC;
+}
+function overview(){
+ const st={};D.matches.forEach(m=>st[m.status]=(st[m.status]||0)+1);
+ const rows=agg(),top=k=>rows.filter(r=>r[k]!=null).sort((a,b)=>b[k]-a[k]).slice(0,5);
+ return {status:st,matches:D.matches.length,players:new Set(rows.map(r=>r.key)).size,
+  teams:new Set(rows.filter(r=>r.club!=='Unknown').map(r=>r.club)).size,
+  last_sync:ALL.generated,top_xt:top('xt'),top_xg:top('xg'),
+  recent:[...D.matches].sort(byDate).slice(0,8)};
+}
+function rankings(a){
+ const metric=['xt','xg','xgf'].includes(a.metric)?a.metric:'xt';
+ const p90=a.per90==='1',mn=num(a.min)||0,col=metric+(p90?'90':'');
+ let rows=agg();const total=rows.length,s=(a.q||'').toLowerCase().trim();
+ const teams=[...new Set(rows.map(r=>r.club).filter(Boolean))].sort();
+ rows=rows.filter(r=>(!s||r.player.toLowerCase().includes(s))&&(!a.team||r.club===a.team)&&(!a.pos||r.pos===a.pos)&&(mn<=0||(r.minutes||0)>=mn));
+ rows=rows.filter(r=>r[col]!=null).sort((x,y)=>y[col]-x[col]);
+ return {rows:rows.slice(0,Math.floor(num(a.limit))||100),shown:rows.length,total,teams,col};
+}
+function teamsPage(){
+ const g=new Map();
+ for(const s of D.stats){
+  if(s.club==='Unknown')continue;
+  let t=g.get(s.club);if(!t){t={club:s.club,ms:new Set(),ps:new Set(),xt:null,xg:null};g.set(s.club,t)}
+  t.ms.add(s.match_id);t.ps.add(s.key);
+  if(s.xt!=null)t.xt=(t.xt??0)+s.xt;if(s.xg!=null)t.xg=(t.xg??0)+s.xg;
+ }
+ return {rows:[...g.values()].map(t=>({club:t.club,matches:t.ms.size,players:t.ps.size,xt:t.xt,xg:t.xg})).sort((a,b)=>(b.xt??NEG)-(a.xt??NEG))};
+}
+function matchPage(id){
+ return {match:D.matches.find(x=>x.match_id===id)||null,
+  rows:D.stats.filter(s=>s.match_id===id).sort((a,b)=>(b.xt??NEG)-(a.xt??NEG))};
+}
+function playerPage(a){
+ const mm=new Map(D.matches.map(m=>[m.match_id,m]));
+ return {rows:D.stats.filter(s=>s.key===a.key&&s.club===a.club).map(s=>{const m=mm.get(s.match_id)||{};
+  return {...s,date:m.date||'',home:m.home||'',away:m.away||'',score:m.score||''}}).sort((x,y)=>x.date.localeCompare(y.date))};
+}
+function availability(){
+ const by=new Map();
+ for(const s of D.stats){let b=by.get(s.match_id);if(!b){b={n:0,xt:0,xg:0,mi:0};by.set(s.match_id,b)}
+  b.n++;if(s.xt!=null)b.xt++;if(s.xg!=null)b.xg++;if(s.minutes!=null)b.mi++}
+ const st=(c,n)=>(!n||!c)?'missing':(c===n?'available':'partial');
+ const rows=[...D.matches].sort(byDate).map(m=>{const b=by.get(m.match_id)||{n:0,xt:0,xg:0,mi:0};
+  return {...m,n:b.n,xt:st(b.xt,b.n),xg:st(b.xg,b.n),mi:st(b.mi,b.n)}});
+ const n=D.stats.length,i=D.stats.filter(s=>s.player_id).length;
+ return {rows,id_pct:n?100*i/n:null};
+}
+async function api(p){
+ const u=new URL(p,'http://x'),a=Object.fromEntries(u.searchParams),path=u.pathname;
+ if(path==='/api/overview')return overview();
+ if(path==='/api/rankings')return rankings(a);
+ if(path==='/api/teams')return teamsPage();
+ if(path==='/api/matches')return {rows:[...D.matches].sort(byDate)};
+ if(path.startsWith('/api/match/'))return matchPage(decodeURIComponent(path.slice(11)));
+ if(path==='/api/player')return playerPage(a);
+ if(path==='/api/availability')return availability();
+ throw new Error('Unknown endpoint '+p);
+}
+
+/* ---------- الصفحات ---------- */
+const PAGES=[['overview','Overview'],['players','Players'],['teams','Teams'],['matches','Matches'],['compare','Compare'],['tactical','Tactical'],['shots','Shots'],['passing','Passing'],['heatmaps','Heatmaps'],['rankings','Rankings'],['data','Data Availability']];
+const PLAN={
+ tactical:['Tactical Analysis','Formations, starting positions, build-up and defensive activity.','Needs lineup positions and event data. Not inspected yet.'],
+ shots:['Shot Analysis','Shot map, shot table, xG per shot and outcome filters.','PitchAPI lists a shots endpoint, but its response has not been inspected in this app yet.'],
+ passing:['Passing Analysis','Passing network, pass maps and pass completion by zone.','Pass maps need start and end coordinates for each pass. Not confirmed from the provider.'],
+ heatmaps:['Heatmaps','Player and team activity maps.','PitchAPI lists heatmap data, but the grid format has not been inspected yet.']};
+let CMP=[];
+const tag=s=>`<span class="tag ${s}">${({ok:'Complete',partial:'Partial',no_data:'No data',failed:'Failed',pending:'Not checked',available:'Available',missing:'Missing',ni:'Not yet integrated'})[s]||s}</span>`;
+const tbl=(h,rows)=>rows.length?`<div class="wrap"><table><tr>${h.map(x=>`<th class="${x[1]?'n':''}">${x[0]}</th>`).join('')}</tr>${rows.map(r=>`<tr>${r.map((c,i)=>`<td class="${h[i][1]?'n':''}">${c}</td>`).join('')}</tr>`).join('')}</table></div>`:'<div class="empty">No data yet. Run the Colab cell to update the data.</div>';
+const mlink=m=>`<a href="#/match/${esc(m.match_id)}">${esc(m.home)} ${esc(m.score)} ${esc(m.away)}</a>`;
+function bars(vals,labels,title){
+ const v=vals.filter(x=>x!=null);if(!v.length)return `<div class="empty">${title}: no data</div>`;
+ const w=Math.max(10,Math.min(26,560/vals.length)),H=110,lo=Math.min(0,...v),hi=Math.max(0,...v),sc=x=>H*(hi-x)/((hi-lo)||1),y0=sc(0);
+ let s=`<div class="mu">${title} per match</div><svg class="chart" viewBox="0 0 ${vals.length*w+6} ${H+6}" preserveAspectRatio="none">`;
+ vals.forEach((x,i)=>{if(x==null)return;const y=sc(x);s+=`<rect x="${i*w+3}" y="${Math.min(y,y0)}" width="${w-3}" height="${Math.max(1,Math.abs(y-y0))}" fill="${x<0?'#e5646b':'#5aa9e6'}"><title>${esc(labels[i])}: ${f(x)}</title></rect>`});
+ return s+'</svg>'}
+async function rankView(el,d){
+ el.innerHTML=`<div class="ctl"><input id="q" placeholder="Search player" value=""><select id="team"><option value="">All teams</option></select>
+ <select id="pos"><option value="">All positions</option><option>GK</option><option>DF</option><option>MF</option><option>FW</option></select>
+ <select id="metric"><option value="xt">xT</option><option value="xg">xG</option><option value="xgf">xG faced (GK)</option></select>
+ <label class="mu" style="align-self:center"><input type="checkbox" id="p90" ${d.p90?'checked':''} style="min-height:0"> per 90</label>
+ <input id="min" type="number" placeholder="Min minutes" value="${d.min}" style="width:130px"></div><div id="out"></div>`;
+ let teamsDone=false;
+ const load=async()=>{
+  const p=new URLSearchParams({q:$('#q').value,team:$('#team').value,pos:$('#pos').value,metric:$('#metric').value,per90:$('#p90').checked?'1':'0',min:$('#min').value,limit:200});
+  const r=await api('/api/rankings?'+p);
+  if(!teamsDone){$('#team').innerHTML='<option value="">All teams</option>'+r.teams.map(t=>`<option>${esc(t)}</option>`).join('');teamsDone=true}
+  $('#out').innerHTML=`<div class="mu" style="margin-bottom:8px">${r.shown} of ${r.total} players match. Sorted by ${esc(r.col)}.${$('#p90').checked?' Per-90 uses only matches that have minutes.':''}</div>`+
+  tbl([['#',1],['Player'],['Club'],['Pos'],['Games',1],['Min',1],['xT',1],['xT/90',1],['xG',1],['xG/90',1],['xG faced',1],['']],
+   r.rows.map((x,i)=>[i+1,`<a href="#/player/${encodeURIComponent(x.key+'||'+x.club)}">${esc(x.player)}</a>`,esc(x.club),x.pos||'N/A',x.games,x.minutes==null?'N/A':Math.round(x.minutes),f(x.xt),f(x.xt90),f(x.xg),f(x.xg90),f(x.xgf),
+   `<button class="s" onclick="addCmp('${encodeURIComponent(x.key+'||'+x.club)}')">+</button>`]))};
+ ['q','team','pos','metric','p90','min'].forEach(i=>$('#'+i).addEventListener(i==='q'||i==='min'?'input':'change',load));
+ await load()}
+function addCmp(k){if(!CMP.includes(k)&&CMP.length<5)CMP.push(k);alert('Added to Compare ('+CMP.length+')')}
+const R={
+ async overview(el){
+  const o=await api('/api/overview'),s=o.status;
+  const top=(a,k)=>tbl([['Player'],['Club'],[k,1]],a.map(x=>[esc(x.player),esc(x.club),f(x[k.toLowerCase()])]));
+  el.innerHTML=`<h2>Overview — current season</h2><div class="grid">
+  <div class="kpi"><b>${o.matches}</b><span>Matches played</span></div>
+  <div class="kpi"><b>${s.ok||0}</b><span>Fully analysed</span></div>
+  <div class="kpi"><b>${(s.partial||0)+(s.no_data||0)+(s.failed||0)}</b><span>Partial, empty or failed</span></div>
+  <div class="kpi"><b>${o.players}</b><span>Players with data</span></div>
+  <div class="kpi"><b>${o.teams}</b><span>Teams with data</span></div>
+  <div class="kpi"><b style="font-size:14px">${esc(o.last_sync||'Never')}</b><span>Data updated (UTC)</span></div></div>
+  <h3>Top xT</h3>${top(o.top_xt,'xT')}<h3>Top xG</h3>${top(o.top_xg,'xG')}
+  <h3>Recent matches</h3>${tbl([['Date'],['Match'],['Status']],o.recent.map(m=>[esc(m.date.slice(0,10)),mlink(m),tag(m.status)]))}`},
+ players:el=>{el.innerHTML='<h2>Players</h2><div id="rv"></div>';return rankView($('#rv'),{p90:false,min:''})},
+ rankings:el=>{el.innerHTML='<h2>Rankings</h2><div id="rv"></div>';return rankView($('#rv'),{p90:true,min:270})},
+ async teams(el){
+  const r=await api('/api/teams');
+  el.innerHTML='<h2>Teams</h2><div class="mu" style="margin-bottom:8px">Team xT and xG are sums of player values from the provider.</div>'+
+  tbl([['Team'],['Matches',1],['Players',1],['xT',1],['xG',1]],r.rows.map(x=>[esc(x.club),x.matches,x.players,f(x.xt),f(x.xg)]))},
+ async matches(el){
+  const r=await api('/api/matches');
+  el.innerHTML='<h2>Matches</h2>'+tbl([['Date'],['Match'],['Data']],r.rows.map(m=>[esc(m.date.slice(0,10)),mlink(m),tag(m.status)]))},
+ async match(el,id){
+  const r=await api('/api/match/'+encodeURIComponent(id));if(!r.match){el.innerHTML='<div class="empty">Match not found.</div>';return}
+  const m=r.match;
+  el.innerHTML=`<h2>${esc(m.home)} ${esc(m.score)} ${esc(m.away)}</h2><div class="mu">${esc(m.date)} ${tag(m.status)}</div><h3>Player metrics</h3>`+
+  tbl([['Player'],['Club'],['Pos'],['Min',1],['xT',1],['xG',1],['xG faced',1]],r.rows.map(x=>[esc(x.player),esc(x.club),x.pos||'N/A',x.minutes==null?'N/A':Math.round(x.minutes),f(x.xt),f(x.xg),f(x.xg_faced)]))+
+  `<h3>Other tabs</h3><div class="empty">Lineups, shot map, heatmaps, passing network and events: ${tag('ni')}</div>`},
+ async player(el,arg){
+  const [key,club]=decodeURIComponent(arg).split('||');
+  const r=await api('/api/player?key='+encodeURIComponent(key)+'&club='+encodeURIComponent(club));
+  if(!r.rows.length){el.innerHTML='<div class="empty">Player not found.</div>';return}
+  const L=r.rows.map(x=>x.date.slice(0,10)+' '+x.home+' '+x.score+' '+x.away);
+  el.innerHTML=`<h2>${esc(r.rows[0].player)}</h2><div class="mu">${esc(club)} · ${r.rows[0].pos||'position N/A'}</div>
+  <div class="card">${bars(r.rows.map(x=>x.xt),L,'xT')}</div><div class="card">${bars(r.rows.map(x=>x.xg),L,'xG')}</div>
+  <h3>Match by match</h3>`+tbl([['Date'],['Match'],['Min',1],['xT',1],['xG',1]],r.rows.map(x=>[esc(x.date.slice(0,10)),mlink(x),x.minutes==null?'N/A':Math.round(x.minutes),f(x.xt),f(x.xg)]))+
+  `<h3>Other sections</h3><div class="empty">Shot map, heatmap, passing involvement, radar: ${tag('ni')}</div>`},
+ async compare(el){
+  el.innerHTML='<h2>Compare</h2>';
+  if(!CMP.length){el.innerHTML+='<div class="empty">Open Players and press + next to 2 or more players.</div>';return}
+  const r=await api('/api/rankings?metric=xt&limit=100000');
+  const rows=CMP.map(k=>r.rows.find(x=>encodeURIComponent(x.key+'||'+x.club)===k)).filter(Boolean);
+  const M=[['Team','club'],['Position','pos'],['Games','games'],['Minutes','minutes'],['xT','xt'],['xT/90','xt90'],['xG','xg'],['xG/90','xg90']];
+  el.innerHTML+=`<div class="wrap"><table><tr><th></th>${rows.map(x=>`<th>${esc(x.player)}</th>`).join('')}</tr>${M.map(([n,k])=>`<tr><td class="mu">${n}</td>${rows.map(x=>`<td>${k==='club'||k==='pos'?esc(x[k]||'N/A'):k==='games'||k==='minutes'?(x[k]==null?'N/A':Math.round(x[k])):f(x[k])}</td>`).join('')}</tr>`).join('')}</table></div>
+  <p class="mu">N/A means the provider gave no value. It is never shown as zero.</p><button class="s" onclick="CMP=[];route()">Clear list</button>`},
+ async data(el){
+  const r=await api('/api/availability');
+  el.innerHTML=`<h2>Data Availability</h2><div class="mu" style="margin-bottom:8px">Stable player ID found on ${r.id_pct==null?'N/A':r.id_pct.toFixed(0)+'%'} of player rows. Rows without an ID are matched by name.</div>`+
+  tbl([['Date'],['Match'],['Sync'],['xT'],['xG'],['Minutes'],['Shots'],['Heatmap'],['Passing network'],['Lineups']],
+   r.rows.map(m=>[esc(m.date.slice(0,10)),esc(m.home+' v '+m.away),tag(m.status),tag(m.xt),tag(m.xg),tag(m.mi),tag('ni'),tag('ni'),tag('ni'),tag('ni')]))}
+};
+async function route(){
+ const [,pg='overview',arg='']=(location.hash||'#/overview').split('/');
+ $('#nav').innerHTML=PAGES.map(([k,n])=>`<a href="#/${k}" class="${k===pg||(pg==='match'&&k==='matches')||(pg==='player'&&k==='players')?'on':''}">${n}</a>`).join('');
+ const el=$('#app');el.innerHTML='<div class="empty">Loading…</div>';
+ try{
+  if(PLAN[pg]){const p=PLAN[pg];el.innerHTML=`<h2>${p[0]}</h2><div class="card">${tag('ni')}<p>${p[1]}</p><p class="mu">${p[2]} Nothing is drawn until real data is connected.</p></div>`;return}
+  await (R[pg]||R.overview)(el,arg)
+ }catch(e){el.innerHTML=`<div class="empty">Could not load this page: ${esc(e.message)}</div>`}}
+
+/* ---------- التشغيل ---------- */
+(async()=>{
+ try{
+  const r=await fetch('data.json?'+Date.now());
+  if(!r.ok)throw new Error('data.json not found (HTTP '+r.status+')');
+  ALL=await r.json();
+  if(!ALL.leagues||!ALL.leagues.length)throw new Error('data.json has no leagues');
+  let saved=null;try{saved=localStorage.getItem('league')}catch(e){}
+  setLeague(saved||ALL.leagues[0].id);head();
+  window.onhashchange=route;route();
+ }catch(e){
+  $('#lg').textContent='';
+  $('#app').innerHTML=`<div class="empty">No data yet. Run the Colab cell first, then reload this page.<br><span class="mu">${esc(e.message)}</span></div>`}
+})();
+</script></body></html>
