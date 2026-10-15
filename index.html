@@ -40,17 +40,23 @@ const NEG=-1e18;
 
 /* ---------- البيانات (من data.json) ---------- */
 let ALL=null,D=null,AGGC=null;
-function setLeague(id){
- const L=ALL.leagues.find(l=>l.id===id)||ALL.leagues[0];
- D={id:L.id,name:L.name,
+async function setLeague(id){
+ const meta=ALL.leagues.find(l=>l.id===id)||ALL.leagues[0];
+ const r=await fetch('data/'+meta.file+'?v='+encodeURIComponent(ALL.generated||Date.now()));
+ if(!r.ok)throw new Error('league file not found (HTTP '+r.status+')');
+ const L=await r.json();
+ D={id:meta.id,name:meta.name,
   matches:L.matches.map(m=>({match_id:String(m.i),date:m.d||'',home:m.h,away:m.a,score:m.s,status:m.t||'pending',fetched_at:m.f})),
   stats:L.stats.map(s=>({match_id:String(s.m),key:String(s.k),player_id:s.i,player:s.p,club:s.c,pos:s.o,xt:s.xt,xg:s.xg,xg_faced:s.xf,minutes:s.mi}))};
  AGGC=null;try{localStorage.setItem('league',D.id)}catch(e){}
 }
 function head(){
  const one=ALL.leagues.length<2;
- $('#lg').innerHTML=(one?esc(D.name):`<select id="lgpick" style="min-height:32px;padding:4px 8px">${ALL.leagues.map(l=>`<option value="${esc(l.id)}" ${l.id===D.id?'selected':''}>${esc(l.name)}</option>`).join('')}</select>`)+' · current season';
- const p=$('#lgpick');if(p)p.onchange=()=>{setLeague(p.value);route()};
+ $('#lg').innerHTML=(one?esc(D.name):`<select id="lgpick" style="min-height:32px;padding:4px 8px;max-width:200px">${ALL.leagues.map(l=>`<option value="${esc(l.id)}" ${l.id===D.id?'selected':''}>${esc(l.name)}</option>`).join('')}</select>`)+' · current season';
+ const p=$('#lgpick');
+ if(p)p.onchange=async()=>{
+  $('#app').innerHTML='<div class="empty">Loading league…</div>';
+  try{await setLeague(p.value);CMP=[];route()}catch(e){$('#app').innerHTML=`<div class="empty">${esc(e.message)}</div>`}};
 }
 function agg(){
  if(AGGC)return AGGC;
@@ -130,13 +136,23 @@ async function api(p){
 }
 
 /* ---------- الصفحات ---------- */
-const PAGES=[['overview','Overview'],['players','Players'],['teams','Teams'],['matches','Matches'],['compare','Compare'],['tactical','Tactical'],['shots','Shots'],['passing','Passing'],['heatmaps','Heatmaps'],['rankings','Rankings'],['data','Data Availability']];
+const PAGES=[['overview','Overview'],['players','Players'],['teams','Teams'],['matches','Matches'],['compare','Compare'],['tactical','Tactical'],['shots','Shots'],['passing','Passing'],['heatmaps','Heatmaps'],['rankings','Rankings'],['data','Data Availability'],['settings','Settings']];
 const PLAN={
  tactical:['Tactical Analysis','Formations, starting positions, build-up and defensive activity.','Needs lineup positions and event data. Not inspected yet.'],
  shots:['Shot Analysis','Shot map, shot table, xG per shot and outcome filters.','PitchAPI lists a shots endpoint, but its response has not been inspected in this app yet.'],
  passing:['Passing Analysis','Passing network, pass maps and pass completion by zone.','Pass maps need start and end coordinates for each pass. Not confirmed from the provider.'],
  heatmaps:['Heatmaps','Player and team activity maps.','PitchAPI lists heatmap data, but the grid format has not been inspected yet.']};
 let CMP=[];
+const GH_REPO=()=>{try{const v=localStorage.getItem('gh_repo');if(v)return v}catch(e){}return location.hostname.split('.')[0]+'/'+(location.pathname.split('/')[1]||'')};
+const ghTok=()=>{try{return localStorage.getItem('gh_token')||''}catch(e){return ''}};
+const ghApi=(path,opt={})=>{const t=ghTok();return fetch('https://api.github.com'+path,{...opt,headers:{'Accept':'application/vnd.github+json',...(t?{'Authorization':'Bearer '+t}:{}),...(opt.headers||{})}})};
+async function reloadData(){
+ const r=await fetch('data/index.json?'+Date.now());
+ if(!r.ok)throw new Error('index.json HTTP '+r.status);
+ ALL=await r.json();
+ await setLeague(D?D.id:ALL.leagues[0].id);
+ head();
+}
 const tag=s=>`<span class="tag ${s}">${({ok:'Complete',partial:'Partial',no_data:'No data',failed:'Failed',pending:'Not checked',available:'Available',missing:'Missing',ni:'Not yet integrated'})[s]||s}</span>`;
 const tbl=(h,rows)=>rows.length?`<div class="wrap"><table><tr>${h.map(x=>`<th class="${x[1]?'n':''}">${x[0]}</th>`).join('')}</tr>${rows.map(r=>`<tr>${r.map((c,i)=>`<td class="${h[i][1]?'n':''}">${c}</td>`).join('')}</tr>`).join('')}</table></div>`:'<div class="empty">No data yet. Run the Colab cell to update the data.</div>';
 const mlink=m=>`<a href="#/match/${esc(m.match_id)}">${esc(m.home)} ${esc(m.score)} ${esc(m.away)}</a>`;
@@ -209,6 +225,44 @@ const R={
   const M=[['Team','club'],['Position','pos'],['Games','games'],['Minutes','minutes'],['xT','xt'],['xT/90','xt90'],['xG','xg'],['xG/90','xg90']];
   el.innerHTML+=`<div class="wrap"><table><tr><th></th>${rows.map(x=>`<th>${esc(x.player)}</th>`).join('')}</tr>${M.map(([n,k])=>`<tr><td class="mu">${n}</td>${rows.map(x=>`<td>${k==='club'||k==='pos'?esc(x[k]||'N/A'):k==='games'||k==='minutes'?(x[k]==null?'N/A':Math.round(x[k])):f(x[k])}</td>`).join('')}</tr>`).join('')}</table></div>
   <p class="mu">N/A means the provider gave no value. It is never shown as zero.</p><button class="s" onclick="CMP=[];route()">Clear list</button>`},
+ async settings(el){
+  el.innerHTML=`<h2>Settings</h2>
+  <div class="card"><h3>Leagues</h3>${tbl([['League'],['Country'],['Matches',1],['Analysed',1]],ALL.leagues.map(l=>[esc(l.name),esc(l.country||''),l.matches??'',l.ok??'']))}
+  <div class="mu" style="margin-top:8px">Data updated (UTC): ${esc(ALL.generated||'N/A')}</div></div>
+  <div class="card"><h3>Synchronize</h3>
+  <p class="mu">Fetches new matches from PitchAPI and refreshes this site. It also runs automatically on a schedule.</p>
+  <div class="ctl"><input id="ghrepo" value="${esc(GH_REPO())}" placeholder="owner/repo" style="flex:1;min-width:180px"></div>
+  <div class="ctl"><input id="ghtok" type="password" placeholder="GitHub token (kept on this device only)" value="${ghTok()?'••••••••':''}" style="flex:1;min-width:180px"><button class="s" id="svtok">Save</button><button class="s" id="cltok">Clear</button></div>
+  <p class="mu" style="font-size:12px">Create a fine-grained token for this repository only, with the permission Actions: Read and write. It is stored in this browser and only sent to GitHub.</p>
+  <div class="ctl"><button id="sy">Synchronize now</button><button class="s" id="rl">Reload data</button></div><div id="ss" class="mu"></div></div>`;
+  const msg=t=>{const e=$('#ss');if(e)e.textContent=t};
+  const repo=()=>((($('#ghrepo')||{}).value)||GH_REPO()).trim();
+  $('#svtok').onclick=()=>{try{const v=$('#ghtok').value.trim();if(v&&!v.startsWith('•'))localStorage.setItem('gh_token',v);localStorage.setItem('gh_repo',repo());msg('Saved on this device.')}catch(e){msg('Could not save: '+e.message)}};
+  $('#cltok').onclick=()=>{try{localStorage.removeItem('gh_token')}catch(e){}$('#ghtok').value='';msg('Token removed from this device.')};
+  const showRun=async(follow)=>{
+   const r=await ghApi(`/repos/${repo()}/actions/workflows/sync.yml/runs?per_page=1`);
+   if(!r.ok){msg('Could not read sync status (HTTP '+r.status+').');return}
+   const run=((await r.json()).workflow_runs||[])[0];
+   if(!run){msg('No sync has run yet.');return}
+   const when=(run.created_at||'').replace('T',' ').replace('Z',' UTC');
+   if(run.status!=='completed'){msg('Sync running ('+run.status+') · started '+when);if(follow&&$('#ss'))setTimeout(()=>showRun(true),15000);return}
+   msg(run.conclusion==='success'?'Last sync finished OK · '+when+'. If you just ran it, wait about a minute, then press Reload data.':'Last sync '+run.conclusion+' · '+when+'. Open the Actions tab of the repository to see why.');
+  };
+  $('#sy').onclick=async()=>{
+   if(!ghTok()){msg('Save a GitHub token first.');return}
+   $('#sy').disabled=true;
+   try{
+    const info=await (await ghApi('/repos/'+repo())).json();
+    const r=await ghApi(`/repos/${repo()}/actions/workflows/sync.yml/dispatches`,{method:'POST',body:JSON.stringify({ref:info.default_branch||'main'})});
+    if(r.status===204){msg('Sync started…');setTimeout(()=>showRun(true),4000)}
+    else if(r.status===404)msg('Not found (404): check the repository name, or the token has no access to it.');
+    else if(r.status===403||r.status===401)msg('Token not allowed ('+r.status+'): it needs Actions: Read and write on this repository.');
+    else msg('GitHub answered '+r.status+'.');
+   }catch(e){msg('Failed: '+e.message)}
+   $('#sy').disabled=false};
+  $('#rl').onclick=async()=>{try{msg('Reloading…');await reloadData();msg('Data reloaded.')}catch(e){msg('Reload failed: '+e.message)}};
+  showRun(false);
+ },
  async data(el){
   const r=await api('/api/availability');
   el.innerHTML=`<h2>Data Availability</h2><div class="mu" style="margin-bottom:8px">Stable player ID found on ${r.id_pct==null?'N/A':r.id_pct.toFixed(0)+'%'} of player rows. Rows without an ID are matched by name.</div>`+
@@ -227,15 +281,15 @@ async function route(){
 /* ---------- التشغيل ---------- */
 (async()=>{
  try{
-  const r=await fetch('data.json?'+Date.now());
-  if(!r.ok)throw new Error('data.json not found (HTTP '+r.status+')');
+  const r=await fetch('data/index.json?'+Date.now());
+  if(!r.ok)throw new Error('data/index.json not found (HTTP '+r.status+')');
   ALL=await r.json();
-  if(!ALL.leagues||!ALL.leagues.length)throw new Error('data.json has no leagues');
+  if(!ALL.leagues||!ALL.leagues.length)throw new Error('no leagues in index.json');
   let saved=null;try{saved=localStorage.getItem('league')}catch(e){}
-  setLeague(saved||ALL.leagues[0].id);head();
+  await setLeague(saved||ALL.leagues[0].id);head();
   window.onhashchange=route;route();
  }catch(e){
   $('#lg').textContent='';
-  $('#app').innerHTML=`<div class="empty">No data yet. Run the Colab cell first, then reload this page.<br><span class="mu">${esc(e.message)}</span></div>`}
+  $('#app').innerHTML=`<div class="empty">No data yet. Run the Colab cell once (it starts the first sync), then reload this page.<br><span class="mu">${esc(e.message)}</span></div>`}
 })();
 </script></body></html>
