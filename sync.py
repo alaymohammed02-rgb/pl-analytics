@@ -603,6 +603,7 @@ def gh_restore(hub, metas):
                 log(f"  تعذر استعادة البيانات القديمة: {type(e).__name__}")
     return n
 
+# ===== نهاية الجزء 1 من 4 — كمّل الصق الجزء 2 تحت هذا السطر مباشرة =====
 def gh_enable_pages(hub):
     r = requests.post(f"{GH}/repos/{hub['repo']}/pages", timeout=30,
                       headers=gh_headers(hub["token"]),
@@ -1086,6 +1087,7 @@ async function route(){
 })();
 </script></body></html>"""
 
+# ===== نهاية الجزء 2 من 4 — كمّل الصق الجزء 3 تحت هذا السطر مباشرة =====
 # ---------------- التشغيل ----------------
 def get_secret(name, prompt):
     v = os.environ.get(name)
@@ -1320,6 +1322,29 @@ def _x_pass(res):
 
 _EDGE_WARNED = []
 
+def _x_names(o):
+    import dataclasses
+    if isinstance(o, dict):
+        return list(o.keys())
+    if dataclasses.is_dataclass(o):
+        return [f.name for f in dataclasses.fields(o)]
+    return [k for k in dir(o) if not k.startswith("_") and not callable(getattr(o, k, None))]
+
+def _x_ends(e):
+    """طرفا الضلع (من → إلى). الـAPI يسميهما from / to، والـSDK لازم يغيّر الاسم لأن from كلمة محجوزة."""
+    a = _g(e, "from_player", "from_", "source", "frm", "from_node", "src")
+    b = _g(e, "to_player", "to", "to_", "target", "dst", "to_node")
+    ia = a if isinstance(a, str) else _g(a, "id")
+    ib = b if isinstance(b, str) else _g(b, "id")
+    if ia and ib:
+        return ia, ib
+    names = _x_names(e)
+    fa = [n for n in names if re.match(r"^(from|src|source|frm)(_|$)", n.lower())]
+    fb = [n for n in names if re.match(r"^(to|target|dst|dest|destination)(_|$)", n.lower())]
+    a = _g(e, *fa) if fa else None
+    b = _g(e, *fb) if fb else None
+    return (a if isinstance(a, str) else _g(a, "id")), (b if isinstance(b, str) else _g(b, "id"))
+
 def _x_net(r, res):
     """شبكة التمريرات: عقدة لكل لاعب (متوسط مكان بداية تمريراته) + ضلع لكل زوج لاعبين."""
     out = []
@@ -1337,9 +1362,7 @@ def _x_net(r, res):
                               b=num(_g(nd, "betweenness")), c=num(_g(nd, "clustering"))))
         edges, es = [], _g(t, "edges") or []
         for e in es:
-            a = _g(e, "from_player", "from_", "source", "frm", "from_node", "src")
-            b = _g(e, "to_player", "to", "to_", "target", "dst", "to_node")
-            ia, ib = _g(a, "id"), _g(b, "id")
+            ia, ib = _x_ends(e)
             if ia and ib:
                 edges.append(dict(a=str(ia), b=str(ib), p=num(_g(e, "passes")) or 0))
         if es and not edges and not _EDGE_WARNED:
@@ -1368,11 +1391,22 @@ def _x_cells(cells, gl, gw):
     return flat
 
 
-def _x_heat(res):
-    """صفوف الحرارة: فريق + لاعب. cells = [x,y,عدد, x,y,عدد, ...] على شبكة 16×12."""
+_FRAME_WARNED = []
+
+def _x_heat(res, frame="acting_ltr"):
+    """صفوف الحرارة: فريق + لاعب. cells = [x,y,عدد, x,y,عدد, ...] على شبكة 16×12.
+    frame="acting_ltr": كل فريق يهاجم نحو cell_x=15 (للاعبين والفرق).
+    frame="home_ltr": فريقان فقط على ملعب مشترك (الخارج مقلوب من السيرفر)، يُحفظ باسم kind="hteam"."""
     if res is None:
         return []
     grid = _g(res, "grid")
+    got = _g(grid, "frame")
+    if got and got != frame:
+        log(f"  تنبيه: heatmaps رجّع frame={got} بدل {frame} — تجاهلته حتى ما تنعرض الاتجاهات غلط")
+        return []
+    if not got and not _FRAME_WARNED:
+        _FRAME_WARNED.append(1)
+        log("  تنبيه: رد heatmaps ما فيه grid.frame — افترضت أنه acting_ltr (الافتراضي في التوثيق)")
     gl = int(num(_g(grid, "length")) or _XGRID["l"])
     gw = int(num(_g(grid, "width")) or _XGRID["w"])
     _XGRID["l"], _XGRID["w"] = gl, gw
@@ -1381,10 +1415,10 @@ def _x_heat(res):
         team = _g(t, "team")
         cells = _x_cells(_g(t, "cells"), gl, gw)
         if cells:
-            out.append(dict(kind="team", key=str(_g(team, "id") or _g(team, "name") or ""),
+            out.append(dict(kind="team" if frame == "acting_ltr" else "hteam", key=str(_g(team, "id") or _g(team, "name") or ""),
                             name=_g(team, "name") or "", club=_g(team, "name") or "",
                             side=_g(t, "side"), actions=num(_g(t, "actions")), cells=cells))
-    for p in _g(res, "players") or []:
+    for p in (_g(res, "players") or []) if frame == "acting_ltr" else []:
         pl = _g(p, "player")
         i = _g(pl, "id")
         cells = _x_cells(_g(p, "cells"), gl, gw)
@@ -1465,6 +1499,41 @@ def sync_extras(client, league_id, on_progress=None):
         time.sleep(REQUEST_DELAY)
 
 
+def sync_home_frame(client, league_id):
+    """يجلب شبكة الفريقين على ملعب مشترك (frame=home_ltr) للمباريات اللي ما عندها (يشمل المباريات القديمة)."""
+    api_m = client.matches
+    if not hasattr(api_m, "heatmaps"):
+        return
+    todo = q("SELECT DISTINCT h.match_id FROM heat h WHERE h.league_id=? AND h.kind='team' AND NOT EXISTS "
+             "(SELECT 1 FROM heat x WHERE x.league_id=h.league_id AND x.match_id=h.match_id AND x.kind='hteam') "
+             "ORDER BY h.match_id", (league_id,))
+    if not todo:
+        return
+    log(f"  [إضافي: حرارة الفريقين على ملعب مشترك] المطلوب: {len(todo)}")
+    for i, r in enumerate(todo, 1):
+        mid = r["match_id"]
+        hm, e = call(api_m.heatmaps, mid, "home_ltr")
+        if hm is None:
+            if e and e not in ("not_found", "plan"):
+                log(f"    توقفت ({e}) — تكمل في المزامنة القادمة")
+                return
+            continue
+        got = _g(_g(hm, "grid"), "frame")
+        if got != "home_ltr":
+            log(f"    تنبيه: طلبت frame=home_ltr ورجع {got} — ما حفظت شي (الإصدار أو المعامل غلط)")
+            return
+        rows = _x_heat(hm, "home_ltr")
+        if not rows:
+            continue
+        c = db()
+        c.executemany("INSERT OR REPLACE INTO heat VALUES(?,?,?,?,?,?,?,?,?)",
+                      [(league_id, mid, x["kind"], x["key"], x["name"], x["club"], x["side"], x["actions"],
+                        json.dumps(x["cells"])) for x in rows])
+        c.commit()
+        c.close()
+        time.sleep(REQUEST_DELAY)
+
+
 _orig_sync_league = sync_league
 
 def sync_league(client, league_id, on_progress=None):
@@ -1472,6 +1541,7 @@ def sync_league(client, league_id, on_progress=None):
     if ok:
         try:
             sync_extras(client, league_id, on_progress)
+            sync_home_frame(client, league_id)
         except Exception as e:      # أي خطأ في الإضافة ما يوقف المزامنة الأصلية
             log(f"  خطأ في المزامنة الإضافية ({type(e).__name__}: {e}) — المزامنة الأصلية ما تأثرت.")
     return ok
@@ -1512,7 +1582,7 @@ def build_heat_payload(L):
     rows = []
     for r in q("SELECT match_id m, kind t, pkey k, name n, club c, side s, actions a, cells h "
                "FROM heat WHERE league_id=? ORDER BY match_id, kind, pkey", (L,)):
-        r["t"] = "t" if r["t"] == "team" else "p"
+        r["t"] = {"team": "t", "hteam": "h"}.get(r["t"], "p")
         r["h"] = json.loads(r["h"])
         rows.append(r)
     return dict(grid=dict(_XGRID), rows=rows)
@@ -1583,7 +1653,7 @@ def restore_extras(L, adv, heat):
                   (L, x["m"], x["i"], x["n"], x["s"], x["u"], x["cn"], json.dumps(x["nodes"]), json.dumps(x["edges"])))
     for x in (heat or {}).get("rows", []):
         c.execute("INSERT OR REPLACE INTO heat VALUES(?,?,?,?,?,?,?,?,?)",
-                  (L, x["m"], "team" if x["t"] == "t" else "player", x["k"], x["n"], x["c"], x["s"], x["a"],
+                  (L, x["m"], {"t": "team", "h": "hteam"}.get(x["t"], "player"), x["k"], x["n"], x["c"], x["s"], x["a"],
                    json.dumps(x["h"])))
     c.commit()
     c.close()
@@ -1591,7 +1661,7 @@ def restore_extras(L, adv, heat):
     if g:
         _XGRID.update(g)
 
-
+# ===== نهاية الجزء 3 من 4 — كمّل الصق الجزء 4 تحت هذا السطر مباشرة =====
 _orig_gh_restore = gh_restore
 
 def gh_restore(hub, metas):
@@ -1621,49 +1691,96 @@ async function loadHeat(){if(HEAT)return HEAT;const m=lgMeta();if(!m.heat_file)r
 const exTag=(m,k)=>{if(!ADV)return tag('ni');const e=ADV.exm.get(m.match_id);return tag(e&&e[k]>0?'available':'missing')};
 const mlabel=id=>{const m=D.matches.find(x=>x.match_id===id);return m?m.date.slice(0,10)+'  '+m.home+' '+m.score+' '+m.away:id};
 const opts=(arr,sel)=>arr.map(([v,t])=>`<option value="${esc(v)}" ${v===sel?'selected':''}>${esc(t)}</option>`).join('');
-const PITCH='<rect x="-2" y="-2" width="109" height="73" fill="#12301f"/><g fill="none" stroke="#4d8f6b" stroke-width=".35"><rect x="0" y="0" width="105" height="68"/><line x1="52.5" y1="0" x2="52.5" y2="68"/><circle cx="52.5" cy="34" r="9.15"/><rect x="0" y="13.84" width="16.5" height="40.32"/><rect x="88.5" y="13.84" width="16.5" height="40.32"/><rect x="0" y="24.84" width="5.5" height="18.32"/><rect x="99.5" y="24.84" width="5.5" height="18.32"/><rect x="-1.5" y="30.34" width="1.5" height="7.32"/><rect x="105" y="30.34" width="1.5" height="7.32"/></g><circle cx="11" cy="34" r=".45" fill="#4d8f6b"/><circle cx="94" cy="34" r=".45" fill="#4d8f6b"/><circle cx="52.5" cy="34" r=".45" fill="#4d8f6b"/><text x="52.5" y="70" text-anchor="middle" font-size="2.4" fill="#8a9bb0">Attack direction →</text>';
-const pitchSvg=(inner,defs)=>`<svg class="pitch" viewBox="-2 -2 109 74">${defs||''}${PITCH}${inner}</svg>`;
+const PITCH_BG='<rect x="-2" y="-2" width="109" height="73" fill="#12301f"/>';
+const pitchLines=(c,o)=>`<g fill="none" stroke="${c}" stroke-opacity="${o}" stroke-width=".35"><rect x="0" y="0" width="105" height="68"/><line x1="52.5" y1="0" x2="52.5" y2="68"/><circle cx="52.5" cy="34" r="9.15"/><rect x="0" y="13.84" width="16.5" height="40.32"/><rect x="88.5" y="13.84" width="16.5" height="40.32"/><rect x="0" y="24.84" width="5.5" height="18.32"/><rect x="99.5" y="24.84" width="5.5" height="18.32"/><rect x="-1.5" y="30.34" width="1.5" height="7.32"/><rect x="105" y="30.34" width="1.5" height="7.32"/></g><g fill="${c}" fill-opacity="${o}"><circle cx="11" cy="34" r=".45"/><circle cx="94" cy="34" r=".45"/><circle cx="52.5" cy="34" r=".45"/></g>`;
+/* under = drawn beneath the pitch markings (heat cells); inner = drawn above them (network). bright = lighter markings so they stay visible over heat */
+const pitchSvg=(inner,defs,under,dir,bright)=>`<svg class="pitch" viewBox="-2 -2 109 74">${defs||''}${PITCH_BG}${under||''}${bright?pitchLines('#e8eef5','.55'):pitchLines('#4d8f6b','1')}${inner||''}<text x="52.5" y="70" text-anchor="middle" font-size="2.4" fill="#8a9bb0">${dir==='l'?'← Attack direction':'Attack direction →'}</text></svg>`;
 const noData=(el,msg)=>{el.innerHTML+=`<div class="empty">${msg}</div>`};
 
 /* ---------- Heatmaps ---------- */
-const hcol=t=>`hsl(${Math.round((1-t)*210)},85%,52%)`;
+const HSTOPS=[[255,230,109],[255,140,66],[229,36,43]];
+const hcol=t=>{const x=Math.max(0,Math.min(1,t))*2,i=Math.min(1,Math.floor(x)),u=x-i,a=HSTOPS[i],b=HSTOPS[i+1];return 'rgb('+a.map((v,k)=>Math.round(v+(b[k]-v)*u)).join(',')+')'};
+const hopa=t=>(.45+.4*t).toFixed(2);
+/* sums the raw PitchAPI counts of the given rows (always rows of ONE match) into a dense GL x GW array; absent cells stay 0 */
+function heatCells(rows,GL,GW){
+ const acc=new Array(GL*GW).fill(0);let total=0;
+ rows.forEach(r=>{const h=r.h||[];for(let i=0;i+2<h.length;i+=3){const x=h[i],y=h[i+1],n=h[i+2];if(x>=0&&x<GL&&y>=0&&y<GW&&n>0){acc[y*GL+x]+=n;total+=n}}});
+ return {acc,total,max:Math.max(0,...acc),active:acc.filter(Boolean).length};
+}
+/* cell (cx,cy) covers x=[cx*105/GL,(cx+1)*105/GL] and y=[cy*68/GW,(cy+1)*68/GW] metres, so the grid fills the pitch exactly */
+function heatRects(c,GL,GW,max){
+ const cw=105/GL,ch=68/GW;let g='';
+ c.acc.forEach((n,i)=>{if(!n)return;const x=i%GL,y=Math.floor(i/GL),t=n/max;
+  g+=`<rect x="${(x*cw).toFixed(3)}" y="${(y*ch).toFixed(3)}" width="${cw.toFixed(3)}" height="${ch.toFixed(3)}" fill="${hcol(t)}" fill-opacity="${hopa(t)}"><title>cell ${x},${y}: ${n} actions</title></rect>`});
+ return g;
+}
+const heatSvg=(c,GL,GW,max,dir)=>pitchSvg('',null,heatRects(c,GL,GW,max),dir,true);
+const heatLegend=max=>`<div style="max-width:420px;margin:4px 0 8px"><div style="height:8px;border-radius:4px;background:linear-gradient(90deg,${hcol(0)},${hcol(.5)},${hcol(1)})"></div><div class="mu" style="display:flex;justify-content:space-between;font-size:12px"><span>1 action</span><span>${max} actions in one cell</span></div></div>`;
 R.heatmaps=async function(el){
  el.innerHTML='<h2>Heatmaps</h2>';
  let H=null;try{H=await loadHeat()}catch(e){noData(el,'Could not load heatmap data: '+esc(e.message));return}
  if(!H||!H.rows||!H.rows.length){noData(el,'No heatmap data for this league yet. It appears after the next synchronization. PitchAPI returns no heatmap for matches it never rated.');return}
  const GL=H.grid.l,GW=H.grid.w,have=[...new Set(H.rows.map(r=>r.m))];
  const ms=D.matches.filter(m=>have.includes(m.match_id)).sort(byDate);
- el.innerHTML+=`<div class="mu" style="margin-bottom:8px">${have.length} of ${D.matches.length} matches have heatmap data.</div>
- <div class="ctl"><select id="hm">${opts([['','Whole season (sum of matches)'],...ms.map(m=>[m.match_id,mlabel(m.match_id)])],'')}</select><select id="ht"></select><select id="hp"></select></div><div id="hout"></div>`;
- const scope=()=>H.rows.filter(r=>!$('#hm').value||r.m===$('#hm').value);
+ el.innerHTML+=`<div class="mu" style="margin-bottom:8px">Match-level heatmaps: PitchAPI provides no season heatmap. ${have.length} of ${D.matches.length} matches have data.</div>
+ <div class="ctl"><select id="hm">${opts(ms.map(m=>[m.match_id,mlabel(m.match_id)]),ms[0]?ms[0].match_id:'')}</select><select id="hv">${opts([['p','Team or player (each attacks →)'],['b','Both teams on one pitch']],'p')}</select><select id="ht"></select><select id="hp"></select></div><div id="hout"></div>`;
+ const scope=()=>H.rows.filter(r=>r.m===$('#hm').value&&r.t!=='h');
  const club=r=>r.t==='t'?r.n:r.c;
+ const NOTE=`<p class="mu" style="font-size:12px">Counts of on-the-ball actions binned by PitchAPI on a ${GL}×${GW} grid (not raw coordinates); empty cells had no recorded action. Raw match totals, not per-90, so a substitute looks thinner because of minutes. The vertical axis follows the provider's y axis (which touchline is at the top is not documented).</p>`;
  const draw=()=>{
-  const t=$('#ht').value,p=$('#hp').value,out=$('#hout');
+  const out=$('#hout'),mid=$('#hm').value,view=$('#hv').value;
+  $('#ht').disabled=$('#hp').disabled=view==='b';
+  if(view==='b'){
+   const hr=H.rows.filter(r=>r.m===mid&&r.t==='h').sort((a,b)=>(a.s==='away'?1:0)-(b.s==='away'?1:0));
+   if(!hr.length){out.innerHTML='<div class="empty">The shared match-frame grid (home_ltr) is not available for this match yet. It is fetched on the next synchronization.</div>';return}
+   const cs=hr.map(r=>heatCells([r],GL,GW)),mx=Math.max(0,...cs.map(c=>c.max));
+   if(!(mx>0)){out.innerHTML='<div class="empty">The provider returned an empty grid for this match.</div>';return}
+   out.innerHTML=`<div class="mu" style="margin-bottom:4px">Both teams in PitchAPI's home_ltr frame: the home side attacks to the right, the away side to the left (already turned by the server). One colour scale for both pitches.</div>`+heatLegend(mx)+
+    hr.map((r,i)=>`<h3>${esc(r.n)} — ${r.s==='away'?'away, attacks ←':'home, attacks →'} · ${cs[i].total} actions</h3>`+heatSvg(cs[i],GL,GW,mx,r.s==='away'?'l':'r')).join('')+NOTE;
+   return}
+  const t=$('#ht').value,p=$('#hp').value;
   const rows=scope().filter(r=>club(r)===t&&(p?(r.t==='p'&&r.k===p):r.t==='t'));
   if(!rows.length){out.innerHTML='<div class="empty">No heatmap data for this selection.</div>';return}
-  const acc=new Array(GL*GW).fill(0);let total=0;
-  rows.forEach(r=>{const h=r.h||[];for(let i=0;i+2<h.length;i+=3){const x=h[i],y=h[i+1],n=h[i+2];if(x>=0&&x<GL&&y>=0&&y<GW&&n>0){acc[y*GL+x]+=n;total+=n}}});
-  const mx=Math.max(...acc);
-  if(!(mx>0)){out.innerHTML='<div class="empty">The provider returned an empty grid for this selection.</div>';return}
-  const cw=105/GL,ch=68/GW;let g='';
-  acc.forEach((n,i)=>{if(!n)return;const x=i%GL,y=Math.floor(i/GL),tt=n/mx;g+=`<rect x="${(x*cw).toFixed(3)}" y="${(y*ch).toFixed(3)}" width="${cw.toFixed(3)}" height="${ch.toFixed(3)}" fill="${hcol(tt)}" fill-opacity="${(.25+.65*tt).toFixed(2)}"><title>${n} actions</title></rect>`});
-  const nm=new Set(rows.map(r=>r.m)).size;
-  out.innerHTML=`<div class="mu" style="margin-bottom:6px">${nm} match${nm===1?'':'es'} · ${total} actions · ${acc.filter(Boolean).length} active cells</div>`+pitchSvg(g)+
-  `<p class="mu" style="font-size:12px">Counts of on-the-ball actions binned by PitchAPI on a ${GL}×${GW} grid (not raw coordinates). Each team attacks to the right. Totals are raw counts, not per-90, so substitutes look thinner than starters.</p>`};
+  const c=heatCells(rows,GL,GW);
+  if(!(c.max>0)){out.innerHTML='<div class="empty">The provider returned an empty grid for this selection.</div>';return}
+  out.innerHTML=`<div class="mu" style="margin-bottom:4px">${esc(p?rows[0].n:t)} · ${c.total} actions · ${c.active} of ${GL*GW} cells active. Attacking frame (acting_ltr): cell 0 = own goal line, cell ${GL-1} = opponent's, so this team attacks to the right.</div>`+heatLegend(c.max)+heatSvg(c,GL,GW,c.max,'r')+NOTE};
  const fillPlayers=()=>{const old=$('#hp').value,t=$('#ht').value,seen=new Map();
-  scope().filter(r=>r.t==='p'&&club(r)===t).forEach(r=>{if(!seen.has(r.k))seen.set(r.k,r.n)});
-  const p=[...seen.entries()].sort((a,b)=>String(a[1]).localeCompare(String(b[1])));
+  scope().filter(r=>r.t==='p'&&club(r)===t).forEach(r=>{if(!seen.has(r.k))seen.set(r.k,{n:r.n,a:r.a||0})});
+  const p=[...seen.entries()].sort((a,b)=>b[1].a-a[1].a).map(([k,v])=>[k,v.n+' · '+v.a]);
   $('#hp').innerHTML=opts([['','Whole team'],...p],seen.has(old)?old:'');draw()};
  const fillTeams=()=>{const old=$('#ht').value,t=[...new Set(scope().map(club))].filter(Boolean).sort();
   $('#ht').innerHTML=opts(t.map(x=>[x,x]),t.includes(old)?old:t[0]);fillPlayers()};
- $('#hm').onchange=fillTeams;$('#ht').onchange=fillPlayers;$('#hp').onchange=draw;
+ $('#hm').onchange=fillTeams;$('#hv').onchange=draw;$('#ht').onchange=fillPlayers;$('#hp').onchange=draw;
  fillTeams();
 };
 
 /* ---------- Passing: pass network + pass-category counts ---------- */
 const PF=[['','All players (sort by passes)'],['pr','Progressive passes'],['kp','Key passes'],['tb','Through balls'],['cr','Crosses'],['bx','Passes into box'],['sw','Switches'],['as','Assists']];
 let NETCUR=null;
-const nodeName=n=>String(n||'').split(' ').pop();
+const PART=new Set(['de','van','von','da','di','dos','do','del','della','der','den','le','la','el','al','bin','ten','ter']);
+/* "K. De Bruyne" -> "De Bruyne", "Erling Haaland" -> "Haaland", "Virgil van Dijk" -> "van Dijk" */
+const nodeName=n=>{let t=String(n||'').trim().split(/\s+/).filter(Boolean);if(t.length>1&&/^[A-Z]\.?$/.test(t[0]))t=t.slice(1);
+ if(t.length<2)return t.join(' ');const p=t[t.length-2];return (p===p.toLowerCase()||PART.has(p.toLowerCase()))?t.slice(-2).join(' '):t[t.length-1]};
+const LFS=3,LCW=LFS*.56;
+/* Chooses a label position for every node WITHOUT moving any node: tries above / below / right / left / farther, takes the first free one */
+function placeLabels(items){
+ const circ=items.map(o=>({x0:o.x-o.r,x1:o.x+o.r,y0:o.y-o.r,y1:o.y+o.r})),placed=[],out=[];
+ const hit=(a,b)=>a.x0<b.x1&&a.x1>b.x0&&a.y0<b.y1&&a.y1>b.y0;
+ items.map((o,i)=>i).sort((a,b)=>items[b].r-items[a].r).forEach(i=>{
+  const o=items[i],w=o.t.length*LCW;
+  const cand=[['middle',o.x,o.y-o.r-.9],['middle',o.x,o.y+o.r+LFS+.2],['start',o.x+o.r+.9,o.y+LFS*.35],['end',o.x-o.r-.9,o.y+LFS*.35],['middle',o.x,o.y-o.r-LFS-1.9],['middle',o.x,o.y+o.r+2*LFS+1.3]];
+  let best=null;
+  for(const [a,x,y] of cand){
+   const x0=a==='middle'?x-w/2:(a==='start'?x:x-w),bx={x0,x1:x0+w,y0:y-LFS*.85,y1:y+LFS*.25};
+   let s=0;placed.forEach(p=>{if(hit(bx,p))s++});circ.forEach((k,j)=>{if(j!==i&&hit(bx,k))s++});
+   if(bx.x0<-1||bx.x1>106||bx.y0<-1||bx.y1>69)s+=2;
+   if(!best||s<best.s)best={a,x,y,bx,s};
+   if(s===0)break;
+  }
+  placed.push(best.bx);out[i]={x:best.x,y:best.y,a:best.a,s:best.s,bx:best.bx};
+ });
+ return out;
+}
 function netSel(kind,i){
  const r=NETCUR,box=$('#ndet');if(!r||!box)return;
  const na=id=>{const n=r.nodes.find(x=>x.i===id);return n?n.n:id};
@@ -1682,20 +1799,30 @@ R.passing=async function(el){
   const out=$('#nout'),mid=$('#nm').value,tid=$('#nt').value;
   const row=nets.find(n=>n.m===mid&&n.i===tid);NETCUR=row||null;
   if(!row){out.innerHTML='<div class="empty">No pass network for this selection.</div>';return}
-  const min=Math.max(1,num($('#nmin').value)||1),by={};
-  row.nodes.forEach((n,i)=>{if(n.x!=null&&n.y!=null)by[n.i]={n,i,r:1.2+Math.sqrt(n.p||0)*.35}});
-  let g='';
-  row.edges.forEach((e,i)=>{const a=by[e.a],b=by[e.b];if(!a||!b||e.p<min)return;
+  const min=Math.max(1,num($('#nmin').value)||1),by={},undrawn=[];
+  row.nodes.forEach((n,i)=>{
+   if(n.x==null||n.y==null)undrawn.push(n.n+' (no completed pass origin)');
+   else if(n.x<0||n.x>105||n.y<0||n.y>68)undrawn.push(n.n+' (coordinates outside the pitch)');
+   else by[n.i]={n,i,r:1.2+Math.sqrt(n.p||0)*.35}});
+  let maxP=0;row.edges.forEach(e=>{if(by[e.a]&&by[e.b])maxP=Math.max(maxP,e.p)});
+  const seen=new Set();let dups=0,shown=0,g='';
+  row.edges.forEach((e,i)=>{const a=by[e.a],b=by[e.b];if(!a||!b)return;
+   const k=e.a+'>'+e.b;if(seen.has(k)){dups++;return}seen.add(k);if(e.p<min)return;
    const dx=b.n.x-a.n.x,dy=b.n.y-a.n.y,L=Math.hypot(dx,dy);if(L<1)return;
-   const ux=dx/L,uy=dy/L,px=-uy*.8,py=ux*.8,x1=a.n.x+ux*a.r+px,y1=a.n.y+uy*a.r+py,x2=b.n.x-ux*(b.r+.6)+px,y2=b.n.y-uy*(b.r+.6)+py,w=Math.min(2.4,.25+e.p*.1);
-   g+=`<g onclick="netSel('e',${i})" style="cursor:pointer"><line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke="#8a9bb0" stroke-opacity=".7" stroke-width="${w.toFixed(2)}" marker-end="url(#ah)"/><line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke="transparent" stroke-width="3"/><title>${esc(a.n.n)} → ${esc(b.n.n)}: ${e.p}</title></g>`});
-  Object.values(by).forEach(o=>{g+=`<g onclick="netSel('n',${o.i})" style="cursor:pointer"><circle cx="${o.n.x}" cy="${o.n.y}" r="${o.r.toFixed(2)}" fill="#5aa9e6" fill-opacity=".9" stroke="#e8eef5" stroke-width=".3"/><text x="${o.n.x}" y="${(o.n.y-o.r-.7).toFixed(2)}" text-anchor="middle" font-size="2.2" fill="#e8eef5">${esc(nodeName(o.n.n))}</text></g>`});
+   const ux=dx/L,uy=dy/L,px=-uy*.8,py=ux*.8,x1=a.n.x+ux*a.r+px,y1=a.n.y+uy*a.r+py,x2=b.n.x-ux*(b.r+.6)+px,y2=b.n.y-uy*(b.r+.6)+py;
+   const w=Math.max(.25,3*e.p/maxP),op=(.35+.5*e.p/maxP).toFixed(2);shown++;
+   g+=`<g onclick="netSel('e',${i})" style="cursor:pointer"><line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke="#8a9bb0" stroke-opacity="${op}" stroke-width="${w.toFixed(2)}" marker-end="url(#ah)"/><line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke="transparent" stroke-width="3"/><title>${esc(a.n.n)} → ${esc(b.n.n)}: ${e.p} passes</title></g>`});
+  const nl=Object.values(by),lp=placeLabels(nl.map(o=>({x:o.n.x,y:o.n.y,r:o.r,t:nodeName(o.n.n)})));
+  nl.forEach(o=>{g+=`<g onclick="netSel('n',${o.i})" style="cursor:pointer"><circle cx="${o.n.x}" cy="${o.n.y}" r="${o.r.toFixed(2)}" fill="#5aa9e6" fill-opacity=".9" stroke="#e8eef5" stroke-width=".3"/><title>${esc(o.n.n)}: ${o.n.p==null?'N/A':o.n.p} passes played, average pass origin (${f(o.n.x,1)}, ${f(o.n.y,1)}) m</title></g>`});
+  nl.forEach((o,j)=>{const l=lp[j];g+=`<text x="${l.x.toFixed(2)}" y="${l.y.toFixed(2)}" text-anchor="${l.a}" font-size="${LFS}" fill="#e8eef5" stroke="#0d1520" stroke-width=".8" paint-order="stroke" stroke-linejoin="round" style="pointer-events:none">${esc(nodeName(o.n.n))}</text>`});
   const defs='<defs><marker id="ah" viewBox="0 0 4 4" refX="3" refY="2" markerWidth="2" markerHeight="2" orient="auto"><path d="M0 0L4 2L0 4z" fill="#8a9bb0"/></marker></defs>';
+  const win=row.u?`starting eleven until the team's first substitution (about minute ${Math.round(row.u/60)}). Passes after that are not included, so this is not the whole match.`:`PitchAPI documents it as the starting eleven until the team's first substitution; the end time was not reported for this match.`;
   const cat=$('#nf').value;
   let pr=(A.pass||[]).filter(r=>r.m===mid&&r.t===tid);
   const sk=cat||'ps';if(cat)pr=pr.filter(r=>(r[cat]||0)>0);pr.sort((a,b)=>(b[sk]||0)-(a[sk]||0));
   const cell=v=>v==null?'N/A':f(v,v%1?1:0);
-  out.innerHTML=`<div class="mu" style="margin-bottom:6px">Positions = average origin of completed passes (starting eleven until the first substitution${row.u?', '+Math.round(row.u/60)+' min':''}). Showing links with at least ${min} passes. Tap a player or a link.</div>`+pitchSvg(g,defs)+`<div class="card" id="ndet" style="font-size:13px">Tap a player or a link for details.</div>`+
+  out.innerHTML=`<div class="card" style="font-size:13px"><b>Observation window:</b> ${win}<div class="mu" style="margin-top:4px">Node position = average origin of that player's completed passes in the window (not their average position). Node size = passes played. Line width is proportional to the passes between the two players (thickest drawn: ${maxP}); the arrow points from passer to receiver. Receivers are inferred, so a pass with no resolved receiver is in the node total but has no link.</div></div>`+
+  `<div class="mu" style="margin-bottom:6px">${row.edges.length?`Showing ${shown} of ${row.edges.length} links (at least ${min} passes).${dups?' '+dups+' duplicate row(s) ignored.':''}`:'No links available for this team (none provided, or the response fields could not be read).'} Tap a player or a link.${undrawn.length?'<br>Not drawn: '+undrawn.map(esc).join('; ')+'.':''}</div>`+pitchSvg(g,defs)+`<div class="card" id="ndet" style="font-size:13px">Tap a player or a link for details.</div>`+
   `<h3>Pass categories (counts per player, this match)</h3>`+tbl([['Player'],['Min',1],['Passes',1],['Acc %',1],['Progr.',1],['Into box',1],['Key',1],['Assists',1],['Through',1],['Crosses',1],['Switches',1]],pr.map(r=>[esc(r.n),cell(r.mi),cell(r.ps),cell(r.ac),cell(r.pr),cell(r.bx),cell(r.kp),cell(r.as),cell(r.tb),cell(r.cr),cell(r.sw)]))};
  const fillTeams=()=>{const old=$('#nt').value,t=nets.filter(n=>n.m===$('#nm').value);
   $('#nt').innerHTML=opts(t.map(n=>[n.i,n.n]),t.some(n=>n.i===old)?old:(t[0]?t[0].i:''));draw()};
