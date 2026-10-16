@@ -1696,6 +1696,10 @@ const pitchLines=(c,o)=>`<g fill="none" stroke="${c}" stroke-opacity="${o}" stro
 /* under = drawn beneath the pitch markings (heat cells); inner = drawn above them (network). bright = lighter markings so they stay visible over heat */
 const pitchSvg=(inner,defs,under,dir,bright)=>`<svg class="pitch" viewBox="-2 -2 109 74">${defs||''}${PITCH_BG}${under||''}${bright?pitchLines('#e8eef5','.55'):pitchLines('#4d8f6b','1')}${inner||''}<text x="52.5" y="70" text-anchor="middle" font-size="2.4" fill="#8a9bb0">${dir==='l'?'← Attack direction':'Attack direction →'}</text></svg>`;
 const noData=(el,msg)=>{el.innerHTML+=`<div class="empty">${msg}</div>`};
+/* Left/right: the team's left flank is drawn at the TOP when it attacks to the right (the usual match view). The provider does not document which touchline y=0 is, so this is a switch, remembered on this device. */
+const flipOn=()=>{try{const v=localStorage.getItem('flipy');return v===null?true:v==='1'}catch(e){return true}};
+const flipSet=v=>{try{localStorage.setItem('flipy',v?'1':'0')}catch(e){}};
+const flipBox=()=>`<label class="mu" style="align-self:center"><input type="checkbox" id="fl" ${flipOn()?'checked':''} style="min-height:0"> Flip left/right</label>`;
 
 /* ---------- Heatmaps ---------- */
 const HSTOPS=[[255,230,109],[255,140,66],[229,36,43]];
@@ -1708,13 +1712,13 @@ function heatCells(rows,GL,GW){
  return {acc,total,max:Math.max(0,...acc),active:acc.filter(Boolean).length};
 }
 /* cell (cx,cy) covers x=[cx*105/GL,(cx+1)*105/GL] and y=[cy*68/GW,(cy+1)*68/GW] metres, so the grid fills the pitch exactly */
-function heatRects(c,GL,GW,max){
+function heatRects(c,GL,GW,max,flip){
  const cw=105/GL,ch=68/GW;let g='';
- c.acc.forEach((n,i)=>{if(!n)return;const x=i%GL,y=Math.floor(i/GL),t=n/max;
-  g+=`<rect x="${(x*cw).toFixed(3)}" y="${(y*ch).toFixed(3)}" width="${cw.toFixed(3)}" height="${ch.toFixed(3)}" fill="${hcol(t)}" fill-opacity="${hopa(t)}"><title>cell ${x},${y}: ${n} actions</title></rect>`});
+ c.acc.forEach((n,i)=>{if(!n)return;const x=i%GL,y=Math.floor(i/GL),t=n/max,yy=flip?GW-1-y:y;
+  g+=`<rect x="${(x*cw).toFixed(3)}" y="${(yy*ch).toFixed(3)}" width="${cw.toFixed(3)}" height="${ch.toFixed(3)}" fill="${hcol(t)}" fill-opacity="${hopa(t)}"><title>cell ${x},${y}: ${n} actions</title></rect>`});
  return g;
 }
-const heatSvg=(c,GL,GW,max,dir)=>pitchSvg('',null,heatRects(c,GL,GW,max),dir,true);
+const heatSvg=(c,GL,GW,max,dir,flip)=>pitchSvg('',null,heatRects(c,GL,GW,max,flip),dir,true);
 const heatLegend=max=>`<div style="max-width:420px;margin:4px 0 8px"><div style="height:8px;border-radius:4px;background:linear-gradient(90deg,${hcol(0)},${hcol(.5)},${hcol(1)})"></div><div class="mu" style="display:flex;justify-content:space-between;font-size:12px"><span>1 action</span><span>${max} actions in one cell</span></div></div>`;
 R.heatmaps=async function(el){
  el.innerHTML='<h2>Heatmaps</h2>';
@@ -1723,12 +1727,12 @@ R.heatmaps=async function(el){
  const GL=H.grid.l,GW=H.grid.w,have=[...new Set(H.rows.map(r=>r.m))];
  const ms=D.matches.filter(m=>have.includes(m.match_id)).sort(byDate);
  el.innerHTML+=`<div class="mu" style="margin-bottom:8px">Match-level heatmaps: PitchAPI provides no season heatmap. ${have.length} of ${D.matches.length} matches have data.</div>
- <div class="ctl"><select id="hm">${opts(ms.map(m=>[m.match_id,mlabel(m.match_id)]),ms[0]?ms[0].match_id:'')}</select><select id="hv">${opts([['p','Team or player (each attacks →)'],['b','Both teams on one pitch']],'p')}</select><select id="ht"></select><select id="hp"></select></div><div id="hout"></div>`;
+ <div class="ctl"><select id="hm">${opts(ms.map(m=>[m.match_id,mlabel(m.match_id)]),ms[0]?ms[0].match_id:'')}</select><select id="hv">${opts([['p','Team or player (each attacks →)'],['b','Both teams on one pitch']],'p')}</select><select id="ht"></select><select id="hp"></select>${flipBox()}</div><div id="hout"></div>`;
  const scope=()=>H.rows.filter(r=>r.m===$('#hm').value&&r.t!=='h');
  const club=r=>r.t==='t'?r.n:r.c;
- const NOTE=`<p class="mu" style="font-size:12px">Counts of on-the-ball actions binned by PitchAPI on a ${GL}×${GW} grid (not raw coordinates); empty cells had no recorded action. Raw match totals, not per-90, so a substitute looks thinner because of minutes. The vertical axis follows the provider's y axis (which touchline is at the top is not documented).</p>`;
+ const NOTE=`<p class="mu" style="font-size:12px">Counts of on-the-ball actions binned by PitchAPI on a ${GL}×${GW} grid (not raw coordinates); empty cells had no recorded action. Raw match totals, not per-90, so a substitute looks thinner because of minutes. Left/right: the team's left flank is at the top when it attacks to the right; PitchAPI does not document which touchline is y=0, so untick "Flip left/right" if a player you know looks mirrored.</p>`;
  const draw=()=>{
-  const out=$('#hout'),mid=$('#hm').value,view=$('#hv').value;
+  const out=$('#hout'),mid=$('#hm').value,view=$('#hv').value,flip=$('#fl').checked;
   $('#ht').disabled=$('#hp').disabled=view==='b';
   if(view==='b'){
    const hr=H.rows.filter(r=>r.m===mid&&r.t==='h').sort((a,b)=>(a.s==='away'?1:0)-(b.s==='away'?1:0));
@@ -1736,21 +1740,21 @@ R.heatmaps=async function(el){
    const cs=hr.map(r=>heatCells([r],GL,GW)),mx=Math.max(0,...cs.map(c=>c.max));
    if(!(mx>0)){out.innerHTML='<div class="empty">The provider returned an empty grid for this match.</div>';return}
    out.innerHTML=`<div class="mu" style="margin-bottom:4px">Both teams in PitchAPI's home_ltr frame: the home side attacks to the right, the away side to the left (already turned by the server). One colour scale for both pitches.</div>`+heatLegend(mx)+
-    hr.map((r,i)=>`<h3>${esc(r.n)} — ${r.s==='away'?'away, attacks ←':'home, attacks →'} · ${cs[i].total} actions</h3>`+heatSvg(cs[i],GL,GW,mx,r.s==='away'?'l':'r')).join('')+NOTE;
+    hr.map((r,i)=>`<h3>${esc(r.n)} — ${r.s==='away'?'away, attacks ←':'home, attacks →'} · ${cs[i].total} actions</h3>`+heatSvg(cs[i],GL,GW,mx,r.s==='away'?'l':'r',flip)).join('')+NOTE;
    return}
   const t=$('#ht').value,p=$('#hp').value;
   const rows=scope().filter(r=>club(r)===t&&(p?(r.t==='p'&&r.k===p):r.t==='t'));
   if(!rows.length){out.innerHTML='<div class="empty">No heatmap data for this selection.</div>';return}
   const c=heatCells(rows,GL,GW);
   if(!(c.max>0)){out.innerHTML='<div class="empty">The provider returned an empty grid for this selection.</div>';return}
-  out.innerHTML=`<div class="mu" style="margin-bottom:4px">${esc(p?rows[0].n:t)} · ${c.total} actions · ${c.active} of ${GL*GW} cells active. Attacking frame (acting_ltr): cell 0 = own goal line, cell ${GL-1} = opponent's, so this team attacks to the right.</div>`+heatLegend(c.max)+heatSvg(c,GL,GW,c.max,'r')+NOTE};
+  out.innerHTML=`<div class="mu" style="margin-bottom:4px">${esc(p?rows[0].n:t)} · ${c.total} actions · ${c.active} of ${GL*GW} cells active. Attacking frame (acting_ltr): cell 0 = own goal line, cell ${GL-1} = opponent's, so this team attacks to the right.</div>`+heatLegend(c.max)+heatSvg(c,GL,GW,c.max,'r',flip)+NOTE};
  const fillPlayers=()=>{const old=$('#hp').value,t=$('#ht').value,seen=new Map();
   scope().filter(r=>r.t==='p'&&club(r)===t).forEach(r=>{if(!seen.has(r.k))seen.set(r.k,{n:r.n,a:r.a||0})});
   const p=[...seen.entries()].sort((a,b)=>b[1].a-a[1].a).map(([k,v])=>[k,v.n+' · '+v.a]);
   $('#hp').innerHTML=opts([['','Whole team'],...p],seen.has(old)?old:'');draw()};
  const fillTeams=()=>{const old=$('#ht').value,t=[...new Set(scope().map(club))].filter(Boolean).sort();
   $('#ht').innerHTML=opts(t.map(x=>[x,x]),t.includes(old)?old:t[0]);fillPlayers()};
- $('#hm').onchange=fillTeams;$('#hv').onchange=draw;$('#ht').onchange=fillPlayers;$('#hp').onchange=draw;
+ $('#fl').onchange=()=>{flipSet($('#fl').checked);draw()};$('#hm').onchange=fillTeams;$('#hv').onchange=draw;$('#ht').onchange=fillPlayers;$('#hp').onchange=draw;
  fillTeams();
 };
 
@@ -1794,26 +1798,26 @@ R.passing=async function(el){
  const nets=A?(A.net||[]):[];
  if(!nets.length){noData(el,'No pass-network data for this league yet. It appears after the next synchronization.');return}
  const have=[...new Set(nets.map(n=>n.m))],ms=D.matches.filter(m=>have.includes(m.match_id)).sort(byDate);
- el.innerHTML+=`<div class="ctl"><select id="nm">${opts(ms.map(m=>[m.match_id,mlabel(m.match_id)]),ms[0]?ms[0].match_id:'')}</select><select id="nt"></select><input id="nmin" type="number" min="1" value="3" style="width:120px" placeholder="Min passes"><select id="nf">${opts(PF,'')}</select></div><div id="nout"></div>`;
+ el.innerHTML+=`<div class="ctl"><select id="nm">${opts(ms.map(m=>[m.match_id,mlabel(m.match_id)]),ms[0]?ms[0].match_id:'')}</select><select id="nt"></select><input id="nmin" type="number" min="1" value="3" style="width:120px" placeholder="Min passes"><select id="nf">${opts(PF,'')}</select>${flipBox()}</div><div id="nout"></div>`;
  const draw=()=>{
   const out=$('#nout'),mid=$('#nm').value,tid=$('#nt').value;
   const row=nets.find(n=>n.m===mid&&n.i===tid);NETCUR=row||null;
   if(!row){out.innerHTML='<div class="empty">No pass network for this selection.</div>';return}
-  const min=Math.max(1,num($('#nmin').value)||1),by={},undrawn=[];
+  const min=Math.max(1,num($('#nmin').value)||1),by={},undrawn=[],flip=$('#fl').checked;
   row.nodes.forEach((n,i)=>{
    if(n.x==null||n.y==null)undrawn.push(n.n+' (no completed pass origin)');
    else if(n.x<0||n.x>105||n.y<0||n.y>68)undrawn.push(n.n+' (coordinates outside the pitch)');
-   else by[n.i]={n,i,r:1.2+Math.sqrt(n.p||0)*.35}});
+   else by[n.i]={n,i,r:1.2+Math.sqrt(n.p||0)*.35,x:n.x,y:flip?68-n.y:n.y}});
   let maxP=0;row.edges.forEach(e=>{if(by[e.a]&&by[e.b])maxP=Math.max(maxP,e.p)});
   const seen=new Set();let dups=0,shown=0,g='';
   row.edges.forEach((e,i)=>{const a=by[e.a],b=by[e.b];if(!a||!b)return;
    const k=e.a+'>'+e.b;if(seen.has(k)){dups++;return}seen.add(k);if(e.p<min)return;
-   const dx=b.n.x-a.n.x,dy=b.n.y-a.n.y,L=Math.hypot(dx,dy);if(L<1)return;
-   const ux=dx/L,uy=dy/L,px=-uy*.8,py=ux*.8,x1=a.n.x+ux*a.r+px,y1=a.n.y+uy*a.r+py,x2=b.n.x-ux*(b.r+.6)+px,y2=b.n.y-uy*(b.r+.6)+py;
+   const dx=b.x-a.x,dy=b.y-a.y,L=Math.hypot(dx,dy);if(L<1)return;
+   const ux=dx/L,uy=dy/L,px=-uy*.8,py=ux*.8,x1=a.x+ux*a.r+px,y1=a.y+uy*a.r+py,x2=b.x-ux*(b.r+.6)+px,y2=b.y-uy*(b.r+.6)+py;
    const w=Math.max(.25,3*e.p/maxP),op=(.35+.5*e.p/maxP).toFixed(2);shown++;
    g+=`<g onclick="netSel('e',${i})" style="cursor:pointer"><line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke="#8a9bb0" stroke-opacity="${op}" stroke-width="${w.toFixed(2)}" marker-end="url(#ah)"/><line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke="transparent" stroke-width="3"/><title>${esc(a.n.n)} → ${esc(b.n.n)}: ${e.p} passes</title></g>`});
-  const nl=Object.values(by),lp=placeLabels(nl.map(o=>({x:o.n.x,y:o.n.y,r:o.r,t:nodeName(o.n.n)})));
-  nl.forEach(o=>{g+=`<g onclick="netSel('n',${o.i})" style="cursor:pointer"><circle cx="${o.n.x}" cy="${o.n.y}" r="${o.r.toFixed(2)}" fill="#5aa9e6" fill-opacity=".9" stroke="#e8eef5" stroke-width=".3"/><title>${esc(o.n.n)}: ${o.n.p==null?'N/A':o.n.p} passes played, average pass origin (${f(o.n.x,1)}, ${f(o.n.y,1)}) m</title></g>`});
+  const nl=Object.values(by),lp=placeLabels(nl.map(o=>({x:o.x,y:o.y,r:o.r,t:nodeName(o.n.n)})));
+  nl.forEach(o=>{g+=`<g onclick="netSel('n',${o.i})" style="cursor:pointer"><circle cx="${+o.x.toFixed(2)}" cy="${+o.y.toFixed(2)}" r="${o.r.toFixed(2)}" fill="#5aa9e6" fill-opacity=".9" stroke="#e8eef5" stroke-width=".3"/><title>${esc(o.n.n)}: ${o.n.p==null?'N/A':o.n.p} passes played, average pass origin (${f(o.n.x,1)}, ${f(o.n.y,1)}) m</title></g>`});
   nl.forEach((o,j)=>{const l=lp[j];g+=`<text x="${l.x.toFixed(2)}" y="${l.y.toFixed(2)}" text-anchor="${l.a}" font-size="${LFS}" fill="#e8eef5" stroke="#0d1520" stroke-width=".8" paint-order="stroke" stroke-linejoin="round" style="pointer-events:none">${esc(nodeName(o.n.n))}</text>`});
   const defs='<defs><marker id="ah" viewBox="0 0 4 4" refX="3" refY="2" markerWidth="2" markerHeight="2" orient="auto"><path d="M0 0L4 2L0 4z" fill="#8a9bb0"/></marker></defs>';
   const win=row.u?`starting eleven until the team's first substitution (about minute ${Math.round(row.u/60)}). Passes after that are not included, so this is not the whole match.`:`PitchAPI documents it as the starting eleven until the team's first substitution; the end time was not reported for this match.`;
@@ -1821,12 +1825,12 @@ R.passing=async function(el){
   let pr=(A.pass||[]).filter(r=>r.m===mid&&r.t===tid);
   const sk=cat||'ps';if(cat)pr=pr.filter(r=>(r[cat]||0)>0);pr.sort((a,b)=>(b[sk]||0)-(a[sk]||0));
   const cell=v=>v==null?'N/A':f(v,v%1?1:0);
-  out.innerHTML=`<div class="card" style="font-size:13px"><b>Observation window:</b> ${win}<div class="mu" style="margin-top:4px">Node position = average origin of that player's completed passes in the window (not their average position). Node size = passes played. Line width is proportional to the passes between the two players (thickest drawn: ${maxP}); the arrow points from passer to receiver. Receivers are inferred, so a pass with no resolved receiver is in the node total but has no link.</div></div>`+
+  out.innerHTML=`<div class="card" style="font-size:13px"><b>Observation window:</b> ${win}<div class="mu" style="margin-top:4px">Node position = average origin of that player's completed passes in the window (not their average position). Left/right: the team's left flank is at the top when it attacks to the right (untick "Flip left/right" if a player you know looks mirrored). Node size = passes played. Line width is proportional to the passes between the two players (thickest drawn: ${maxP}); the arrow points from passer to receiver. Receivers are inferred, so a pass with no resolved receiver is in the node total but has no link.</div></div>`+
   `<div class="mu" style="margin-bottom:6px">${row.edges.length?`Showing ${shown} of ${row.edges.length} links (at least ${min} passes).${dups?' '+dups+' duplicate row(s) ignored.':''}`:'No links available for this team (none provided, or the response fields could not be read).'} Tap a player or a link.${undrawn.length?'<br>Not drawn: '+undrawn.map(esc).join('; ')+'.':''}</div>`+pitchSvg(g,defs)+`<div class="card" id="ndet" style="font-size:13px">Tap a player or a link for details.</div>`+
   `<h3>Pass categories (counts per player, this match)</h3>`+tbl([['Player'],['Min',1],['Passes',1],['Acc %',1],['Progr.',1],['Into box',1],['Key',1],['Assists',1],['Through',1],['Crosses',1],['Switches',1]],pr.map(r=>[esc(r.n),cell(r.mi),cell(r.ps),cell(r.ac),cell(r.pr),cell(r.bx),cell(r.kp),cell(r.as),cell(r.tb),cell(r.cr),cell(r.sw)]))};
  const fillTeams=()=>{const old=$('#nt').value,t=nets.filter(n=>n.m===$('#nm').value);
   $('#nt').innerHTML=opts(t.map(n=>[n.i,n.n]),t.some(n=>n.i===old)?old:(t[0]?t[0].i:''));draw()};
- $('#nm').onchange=fillTeams;$('#nt').onchange=draw;$('#nmin').oninput=draw;$('#nf').onchange=draw;
+ $('#fl').onchange=()=>{flipSet($('#fl').checked);draw()};$('#nm').onchange=fillTeams;$('#nt').onchange=draw;$('#nmin').oninput=draw;$('#nf').onchange=draw;
  fillTeams();
 };
 
