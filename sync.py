@@ -580,6 +580,7 @@ def gh_get_json(hub, path):
     except Exception:
         return None
 
+# ===== نهاية الجزء 1 من 5 — كمّل الصق الجزء 2 تحت هذا السطر مباشرة =====
 def gh_restore(hub, metas):
     """يرجّع البيانات المحفوظة (لكل دوري ليس عنده بيانات محلية). ترجع عدد الدوريات."""
     n = 0
@@ -603,7 +604,6 @@ def gh_restore(hub, metas):
                 log(f"  تعذر استعادة البيانات القديمة: {type(e).__name__}")
     return n
 
-# ===== نهاية الجزء 1 من 4 — كمّل الصق الجزء 2 تحت هذا السطر مباشرة =====
 def gh_enable_pages(hub):
     r = requests.post(f"{GH}/repos/{hub['repo']}/pages", timeout=30,
                       headers=gh_headers(hub["token"]),
@@ -1087,7 +1087,7 @@ async function route(){
 })();
 </script></body></html>"""
 
-# ===== نهاية الجزء 2 من 4 — كمّل الصق الجزء 3 تحت هذا السطر مباشرة =====
+# ===== نهاية الجزء 2 من 5 — كمّل الصق الجزء 3 تحت هذا السطر مباشرة =====
 # ---------------- التشغيل ----------------
 def get_secret(name, prompt):
     v = os.environ.get(name)
@@ -1277,6 +1277,21 @@ def init_db():
       league_id TEXT, match_id TEXT, kind TEXT, pkey TEXT, name TEXT, club TEXT,
       side TEXT, actions REAL, cells TEXT,
       PRIMARY KEY(league_id, match_id, kind, pkey));
+    CREATE TABLE IF NOT EXISTS pm(
+      league_id TEXT, match_id TEXT, status TEXT, fetched_at TEXT,
+      PRIMARY KEY(league_id, match_id));
+    CREATE TABLE IF NOT EXISTS pl_adv(
+      league_id TEXT, match_id TEXT, player_id TEXT, player TEXT, team_id TEXT, minutes REAL,
+      ps REAL, pr REAL, bx REAL, kp REAL, ast REAL, tb REAL, cr REAL,
+      ca REAL, pc REAL, cb REAL, tko REAL, tkw REAL,
+      sca REAL, gca REAL, xag REAL, xgc REAL, xgb REAL,
+      tk REAL, ic REAL, bl REAL, cl REAL, duw REAL, aer REAL, aerw REAL,
+      xt REAL, vaep REAL, sh REAL, sot REAL, xg REAL, npxg REAL, gl REAL,
+      PRIMARY KEY(league_id, match_id, player_id));
+    CREATE TABLE IF NOT EXISTS team_def(
+      league_id TEXT, match_id TEXT, team_id TEXT, team TEXT, side TEXT,
+      hto REAL, cpr REAL, brt REAL, adx REAL, blk REAL, clr REAL, duw REAL, aer REAL, aerw REAL, tilt REAL,
+      PRIMARY KEY(league_id, match_id, team_id));
     """)
     c.commit()
     c.close()
@@ -1534,6 +1549,176 @@ def sync_home_frame(client, league_id):
         time.sleep(REQUEST_DELAY)
 
 
+# ---------------- الدفاع + "لاعبين يشبهون بعض": إحصائيات اللاعب الكاملة (advanced/players + shots) ----------------
+# (اسم العمود, المجموعة في الرد, الحقل) — كلها حقول موثقة في advanced/players
+_PL_F = [("ps", "passing", "passes"), ("pr", "passing", "progressive_passes"), ("bx", "passing", "passes_into_box"),
+         ("kp", "passing", "key_passes"), ("ast", "passing", "assists"), ("tb", "passing", "through_balls"),
+         ("cr", "passing", "crosses"),
+         ("ca", "carrying", "carries"), ("pc", "carrying", "progressive_carries"),
+         ("cb", "carrying", "carries_into_box"), ("tko", "carrying", "take_ons"), ("tkw", "carrying", "take_ons_won"),
+         ("sca", "creation", "sca"), ("gca", "creation", "gca"), ("xag", "creation", "xag"),
+         ("xgc", "creation", "xg_chain"), ("xgb", "creation", "xg_buildup"),
+         ("tk", "defending", "tackles"), ("ic", "defending", "interceptions"), ("bl", "defending", "blocks"),
+         ("cl", "defending", "clearances"), ("duw", "defending", "duels_won"), ("aer", "defending", "aerials"),
+         ("aerw", "defending", "aerials_won"),
+         ("xt", "possession_value", "xt_total"), ("vaep", "possession_value", "vaep_total")]
+_PL_S = ["sh", "sot", "xg", "npxg", "gl"]        # من shots: تسديدات، على المرمى (علم المزود)، xG، xG بدون ركلات جزاء، أهداف
+_PL_COLS = [c for c, _, _ in _PL_F] + _PL_S
+_TD_F = [("hto", "defending", "high_turnovers"), ("cpr", "defending", "counterpress_regains_5s"),
+         ("brt", "defending", "ball_recovery_time"), ("adx", "defending", "avg_defensive_action_x"),
+         ("blk", "defending", "blocks"), ("clr", "defending", "clearances"), ("duw", "defending", "duels_won"),
+         ("aer", "defending", "aerials"), ("aerw", "defending", "aerials_won"), ("tilt", "territory", "field_tilt")]
+_TD_COLS = [c for c, _, _ in _TD_F]
+
+
+def _x_plrows(res):
+    out = []
+    for p in _g(res, "players") or []:
+        pl = _g(p, "player")
+        i = _g(pl, "id")
+        if not i:
+            continue
+        d = dict(pid=str(i), name=_g(pl, "name") or "Unknown player", tid=str(_g(p, "team_id") or ""),
+                 mi=num(_g(p, "minutes_played")))
+        for col, grp, fld in _PL_F:
+            d[col] = num(_g(_g(p, grp), fld))
+        out.append(d)
+    return out
+
+
+def _x_shots(res):
+    """لكل لاعب: تسديدات / على المرمى / xG / xG بدون جزاء / أهداف. الأهداف العكسية تُستبعد (ما هي تسديدة للاعب)."""
+    acc = {}
+    for per in _g(res, "periods") or []:
+        for s in _g(per, "shots") or []:
+            if _g(s, "is_own_goal"):
+                continue
+            i = _g(_g(s, "player"), "id")
+            if not i:
+                continue
+            a = acc.setdefault(str(i), dict(sh=0, sot=0, xg=0.0, npxg=0.0, gl=0))
+            xg = num(_g(s, "expected_goals")) or 0.0
+            a["sh"] += 1
+            if _g(s, "is_on_target"):
+                a["sot"] += 1
+            a["xg"] += xg
+            if str(_g(s, "situation")).split(".")[-1] != "Penalty":
+                a["npxg"] += xg
+            if str(_g(s, "event_type")).split(".")[-1] == "Goal":
+                a["gl"] += 1
+    return acc
+
+# ===== نهاية الجزء 3 من 5 — كمّل الصق الجزء 4 تحت هذا السطر مباشرة =====
+def _x_teamdef(r, adv):
+    out = []
+    for idx, t in enumerate(_g(adv, "teams") or []):
+        team = _g(t, "team")
+        name = _g(team, "name") or ""
+        side = "home" if name == r["home"] else ("away" if name == r["away"] else ("home" if idx == 0 else "away"))
+        row = dict(tid=str(_g(team, "id") or name), team=name, side=side)
+        for col, grp, fld in _TD_F:
+            row[col] = num(_g(_g(t, grp), fld))
+        out.append(row)
+    return out
+
+
+_PL_SQL = ("INSERT OR REPLACE INTO pl_adv(league_id,match_id,player_id,player,team_id,minutes,%s) VALUES(%s)"
+           % (",".join(_PL_COLS), ",".join("?" * (6 + len(_PL_COLS)))))
+_TD_SQL = ("INSERT OR REPLACE INTO team_def(league_id,match_id,team_id,team,side,%s) VALUES(%s)"
+           % (",".join(_TD_COLS), ",".join("?" * (5 + len(_TD_COLS)))))
+
+
+def sync_pstats(client, league_id, on_progress=None):
+    """يجلب إحصائيات كل لاعب (دفاع/إبداع/تمرير/حمل + تسديدات) وإحصائيات الضغط لكل فريق. يشمل المباريات القديمة."""
+    api_m = client.matches
+    rows = q("SELECT m.match_id, m.date, m.home, m.away, e.status, e.fetched_at FROM matches m "
+             "LEFT JOIN pm e ON e.league_id=m.league_id AND e.match_id=m.match_id "
+             "WHERE m.league_id=?", (league_id,))
+    todo = [r for r in rows if match_due(r)]
+    log(f"  [إضافي: إحصائيات اللاعبين/الدفاع] مكتملة سابقاً: {sum(1 for r in rows if r['status'] == 'ok')} | المطلوب الآن: {len(todo)}")
+    hard = lambda e: e and e not in ("not_found", "plan")
+    for i, r in enumerate(todo, 1):
+        mid = r["match_id"]
+        adv, e1 = call(api_m.advanced, mid)
+        pls, e2 = call(api_m.advanced_players, mid)
+        sh, e3 = call(api_m.shots, mid) if hasattr(api_m, "shots") else (None, "sdk")
+        plr = _x_plrows(pls) if pls is not None else []
+        td = _x_teamdef(r, adv) if adv is not None else []
+        sacc = _x_shots(sh) if sh is not None else None
+        if sh is not None and (_g(sh, "periods") or []) and not sacc:
+            log("    تنبيه: shots رجّع رد لكن ما طلع منه تسديدات (شكل الرد يختلف عن المتوقع؟)")
+        if pls is not None and not plr:
+            log("    تنبيه: advanced/players رجّع رد لكن ما طلع منه لاعبين (شكل الرد يختلف عن المتوقع؟)")
+        if not plr and not td and sh is None:
+            status = "failed" if any(hard(e) for e in (e1, e2, e3)) else "no_data"
+        elif plr and td and sacc is not None and e1 is None and e2 is None and e3 is None:
+            status = "ok"
+        else:
+            status = "partial"
+        t = now()
+        c = db()
+        L = league_id
+        if plr:
+            c.execute("DELETE FROM pl_adv WHERE league_id=? AND match_id=?", (L, mid))
+            for x in plr:
+                s = sacc.get(x["pid"], dict(sh=0, sot=0, xg=0.0, npxg=0.0, gl=0)) if sacc is not None else {}
+                c.execute(_PL_SQL, (L, mid, x["pid"], x["name"], x["tid"], x["mi"]) +
+                          tuple(x[k] for k, _, _ in _PL_F) + tuple(s.get(k) for k in _PL_S))
+        if td:
+            c.execute("DELETE FROM team_def WHERE league_id=? AND match_id=?", (L, mid))
+            c.executemany(_TD_SQL, [(L, mid, x["tid"], x["team"], x["side"]) + tuple(x[k] for k in _TD_COLS) for x in td])
+        c.execute("INSERT OR REPLACE INTO pm VALUES(?,?,?,?)", (L, mid, status, t))
+        c.commit()
+        c.close()
+        log(f"  [{i}/{len(todo)}] {r['home']} vs {r['away']} -> {status} (لاعبين {len(plr)} | فرق {len(td)} | "
+            f"تسديدات {'-' if sacc is None else sum(v['sh'] for v in sacc.values())})")
+        if on_progress and i % PUBLISH_EVERY == 0 and i < len(todo):
+            on_progress()
+        time.sleep(REQUEST_DELAY)
+
+
+def build_pl_payload(L):
+    gl_ = _XGRID["l"]
+    heat = {}
+    for r in q("SELECT match_id m, pkey k, cells FROM heat WHERE league_id=? AND kind='player'", (L,)):
+        c = json.loads(r["cells"])
+        tot = opp = 0
+        for j in range(0, len(c) - 2, 3):
+            tot += c[j + 2]
+            if c[j] >= gl_ // 2:
+                opp += c[j + 2]
+        heat[(r["m"], r["k"])] = (tot, opp)
+    cols = ["m", "i", "n", "t", "c", "o", "mi"] + _PL_COLS + ["act", "aco"]
+    rows = []
+    for r in q("SELECT p.match_id m, p.player_id i, p.player n, p.team_id t, COALESCE(a.team, p.team_id) c, "
+               "(SELECT s.pos FROM stats s WHERE s.league_id=p.league_id AND s.match_id=p.match_id "
+               "AND s.player_id=p.player_id) o, p.minutes mi, " + ",".join("p." + c for c in _PL_COLS) +
+               " FROM pl_adv p LEFT JOIN team_adv a ON a.league_id=p.league_id AND a.match_id=p.match_id "
+               "AND a.team_id=p.team_id WHERE p.league_id=? ORDER BY p.match_id, p.team_id, p.player_id", (L,)):
+        h = heat.get((r["m"], r["i"]), (None, None))
+        row = [r[k] if k in r else None for k in cols[:-2]] + [h[0], h[1]]
+        rows.append([round(v, 3) if isinstance(v, float) else v for v in row])
+    team = [_x_round(r, _TD_COLS) for r in q(
+        "SELECT match_id m, team_id i, team n, side s, " + ",".join(_TD_COLS) +
+        " FROM team_def WHERE league_id=? ORDER BY match_id, side, team_id", (L,))]
+    pm = q("SELECT match_id i, status t, fetched_at f FROM pm WHERE league_id=? ORDER BY match_id", (L,))
+    return dict(cols=cols, rows=rows, team=team, pm=pm)
+
+
+def restore_pl(L, d):
+    c = db()
+    for e in d.get("pm", []):
+        c.execute("INSERT OR REPLACE INTO pm VALUES(?,?,?,?)", (L, e["i"], e["t"], e.get("f")))
+    cols = d.get("cols", [])
+    for row in d.get("rows", []):
+        x = dict(zip(cols, row))
+        c.execute(_PL_SQL, (L, x["m"], x["i"], x["n"], x["t"], x["mi"]) + tuple(x.get(k) for k in _PL_COLS))
+    for x in d.get("team", []):
+        c.execute(_TD_SQL, (L, x["m"], x["i"], x["n"], x["s"]) + tuple(x.get(k) for k in _TD_COLS))
+    c.commit()
+    c.close()
+
+
 _orig_sync_league = sync_league
 
 def sync_league(client, league_id, on_progress=None):
@@ -1542,6 +1727,7 @@ def sync_league(client, league_id, on_progress=None):
         try:
             sync_extras(client, league_id, on_progress)
             sync_home_frame(client, league_id)
+            sync_pstats(client, league_id, on_progress)
         except Exception as e:      # أي خطأ في الإضافة ما يوقف المزامنة الأصلية
             log(f"  خطأ في المزامنة الإضافية ({type(e).__name__}: {e}) — المزامنة الأصلية ما تأثرت.")
     return ok
@@ -1606,6 +1792,13 @@ def publish_extras(metas):
                 gh_put(_x_hub, f"data/{entry['heat_file']}",
                        json.dumps(heat, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
                        f"Update {lg['name']} heatmaps")
+            pl = build_pl_payload(L)
+            if pl["rows"] or pl["team"]:
+                entry["pl_file"] = safe_name(L) + "_pl.json"
+                gh_put(_x_hub, f"data/{entry['pl_file']}",
+                       json.dumps(pl, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
+                       f"Update {lg['name']} players")
+                entry["pl_v"] = q("SELECT MAX(fetched_at) t FROM pm WHERE league_id=?", (L,), True)["t"]
             EXTRA_INDEX[L] = entry
         except Exception as e:
             log(f"  تعذر نشر ملفات الإضافة لـ {lg.get('name')}: {e}")
@@ -1661,7 +1854,7 @@ def restore_extras(L, adv, heat):
     if g:
         _XGRID.update(g)
 
-# ===== نهاية الجزء 3 من 4 — كمّل الصق الجزء 4 تحت هذا السطر مباشرة =====
+
 _orig_gh_restore = gh_restore
 
 def gh_restore(hub, metas):
@@ -1673,6 +1866,14 @@ def gh_restore(hub, metas):
             adv = gh_get_json(hub, f"data/{safe_name(lg['id'])}_adv.json")
             if adv:
                 restore_extras(lg["id"], adv, gh_get_json(hub, f"data/{safe_name(lg['id'])}_heat.json"))
+        except Exception as e:
+            log(f"  تعذر استعادة بيانات الإضافة لـ {lg.get('name')}: {type(e).__name__}")
+        try:
+            if q("SELECT 1 FROM pm WHERE league_id=? LIMIT 1", (lg["id"],)):
+                continue
+            pl = gh_get_json(hub, f"data/{safe_name(lg['id'])}_pl.json")
+            if pl:
+                restore_pl(lg["id"], pl)
         except Exception as e:
             log(f"  تعذر استعادة بيانات الإضافة لـ {lg.get('name')}: {type(e).__name__}")
     return n
@@ -1701,6 +1902,9 @@ const flipOn=()=>{try{const v=localStorage.getItem('flipy');return v===null?true
 const flipSet=v=>{try{localStorage.setItem('flipy',v?'1':'0')}catch(e){}};
 const flipBox=()=>`<label class="mu" style="align-self:center"><input type="checkbox" id="fl" ${flipOn()?'checked':''} style="min-height:0"> Flip left/right</label>`;
 
+'''
+
+_X_JS += r'''
 /* ---------- Heatmaps ---------- */
 const HSTOPS=[[255,230,109],[255,140,66],[229,36,43]];
 const hcol=t=>{const x=Math.max(0,Math.min(1,t))*2,i=Math.min(1,Math.floor(x)),u=x-i,a=HSTOPS[i],b=HSTOPS[i+1];return 'rgb('+a.map((v,k)=>Math.round(v+(b[k]-v)*u)).join(',')+')'};
@@ -1758,6 +1962,9 @@ R.heatmaps=async function(el){
  fillTeams();
 };
 
+'''
+
+_X_JS += r'''
 /* ---------- Passing: pass network + pass-category counts ---------- */
 const PF=[['','All players (sort by passes)'],['pr','Progressive passes'],['kp','Key passes'],['tb','Through balls'],['cr','Crosses'],['bx','Passes into box'],['sw','Switches'],['as','Assists']];
 let NETCUR=null;
@@ -1834,6 +2041,10 @@ R.passing=async function(el){
  fillTeams();
 };
 
+'''
+
+# ===== نهاية الجزء 4 من 5 — كمّل الصق الجزء 5 تحت هذا السطر مباشرة =====
+_X_JS += r'''
 /* ---------- PPDA ---------- */
 R.ppda=async function(el){
  el.innerHTML='<h2>PPDA</h2><div class="card mu" style="font-size:13px"><b>Definition (PitchAPI):</b> PPDA = opponent passes attempted ÷ defensive actions by the pressing team (fouls, tackles, interceptions, challenges, blocked passes), both counted only in the pressing zone, i.e. outside the pressing team\'s own defensive third. Clearances and shot blocks are excluded. Lower means more intense pressing. Values come from PitchAPI; nothing is estimated here.</div>';
@@ -1856,6 +2067,138 @@ R.ppda=async function(el){
     return [esc(String(m.date).slice(0,10)),mlink(m),esc(r.n),f(r.pp,2),r.op==null?'N/A':r.op,r.da==null?'N/A':r.da,f(c,2)+(bad?' ⚠':'')].concat(hasZ?[f(r.z,2)]:[])}))};
  $('#pt').onchange=draw;draw();
 };
+
+'''
+
+_X_JS += r'''
+/* ---------- Defensive + Look Like (read data/*_pl.json: one row per player per match) ---------- */
+let PLD=null;
+async function loadPl(){if(PLD)return PLD;const m=lgMeta();if(!m.pl_file)return null;const d=await loadJson(m.pl_file,m.pl_v);d.ix={};d.cols.forEach((c,k)=>d.ix[c]=k);PLD=d;return d}
+const PL_SUM=['ps','pr','bx','kp','ast','tb','cr','ca','pc','cb','tko','tkw','sca','gca','xag','xgc','xgb','tk','ic','bl','cl','duw','aer','aerw','xt','vaep','sh','sot','xg','npxg','gl','act','aco'];
+/* Season totals per player. A missing value is never turned into 0: per-90 uses only the minutes of matches where that value exists. */
+function aggPl(P){
+ const g=new Map(),ix=P.ix;
+ for(const r of P.rows){
+  const mi=r[ix.mi];if(mi==null)continue;
+  const id=r[ix.i];let a=g.get(id);
+  if(!a){a={id,n:r[ix.n],clubs:{},pos:{},games:0,s:{mi:0},d:{}};PL_SUM.forEach(k=>{a.s[k]=0;a.d[k]=0});g.set(id,a)}
+  a.games++;a.s.mi+=mi;a.clubs[r[ix.c]]=(a.clubs[r[ix.c]]||0)+mi;if(r[ix.o])a.pos[r[ix.o]]=(a.pos[r[ix.o]]||0)+mi;
+  for(const k of PL_SUM){const v=r[ix[k]];if(v!=null){a.s[k]+=v;a.d[k]+=mi}}
+ }
+ const top=o=>Object.entries(o).sort((x,y)=>y[1]-x[1])[0];
+ return [...g.values()].filter(a=>a.s.mi>0).map(a=>{a.club=(top(a.clubs)||['Unknown'])[0];a.p=(top(a.pos)||[null])[0];
+  a.has=k=>a.d[k]>0;a.p90=k=>a.d[k]>0?a.s[k]/a.d[k]*90:null;return a});
+}
+/* Team pressing (PitchAPI reports pressing per team only): PPDA weighted over matches + per-match means */
+function teamCtx(P,A){
+ const g=new Map();
+ P.team.forEach(r=>{let t=g.get(r.n);if(!t){t={n:r.n,m:0,s:{},c:{}};g.set(r.n,t)}t.m++;
+  ['hto','cpr','brt','adx','tilt'].forEach(k=>{if(r[k]!=null){t.s[k]=(t.s[k]||0)+r[k];t.c[k]=(t.c[k]||0)+1}})});
+ const pp=new Map();((A&&A.team)||[]).forEach(r=>{let t=pp.get(r.n);if(!t){t={op:0,da:0};pp.set(r.n,t)}if(r.op!=null&&r.da!=null&&r.da>0){t.op+=r.op;t.da+=r.da}});
+ return [...g.values()].map(t=>{const o={n:t.n,m:t.m};['hto','cpr','brt','adx','tilt'].forEach(k=>o[k]=t.c[k]?t.s[k]/t.c[k]:null);
+  const q=pp.get(t.n);o.ppda=q&&q.da>0?q.op/q.da:null;return o});
+}
+const cellN=(v,d)=>v==null?'N/A':f(v,d);
+R.defense=async function(el){
+ el.innerHTML='<h2>Defensive</h2>';
+ let P=null,A=null;try{P=await loadPl()}catch(e){noData(el,'Could not load defensive data: '+esc(e.message));return}
+ if(!P||!P.rows.length){noData(el,'No player data for this league yet. It appears after the next synchronization.');return}
+ try{A=await loadAdv()}catch(e){A=null}
+ const AG=aggPl(P),TC=teamCtx(P,A),teams=[...new Set(AG.map(a=>a.club))].sort();
+ el.innerHTML+=`<div class="card mu" style="font-size:13px"><b>What this shows:</b> every defensive count PitchAPI reports per player. It reports duels <i>won</i> only (not duels lost), so total duels and duel win % are not available; aerial win % uses aerials won ÷ aerials contested. "Ground duels won" = duels won − aerial duels won (derived). Pressing is reported per <b>team</b> only (table below), not per player; "Opp-half %" is where the player's on-ball actions happen (from heatmaps), a position indicator, not a pressing stat.</div>
+ <div class="ctl"><input id="dq" placeholder="Search player"><select id="dt">${opts([['','All teams'],...teams.map(t=>[t,t])],'')}</select><select id="dp">${opts([['','All positions'],['GK','GK'],['DF','DF'],['MF','MF'],['FW','FW']],'')}</select>
+ <select id="ds">${opts([['da','Sort: defensive actions'],['tk','Tackles'],['ic','Interceptions'],['bl','Blocks'],['cl','Clearances'],['duw','Duels won'],['aerw','Aerials won'],['ap','Aerial win %'],['op','Opp-half %']],'da')}</select>
+ <label class="mu" style="align-self:center"><input type="checkbox" id="d9" checked style="min-height:0"> per 90</label><input id="dm" type="number" value="270" style="width:130px" placeholder="Min minutes"></div><div id="dout"></div>
+ <h3>Team pressing</h3><div class="mu" style="font-size:12px;margin-bottom:6px">High turnovers = regains in the attacking third that lead to a shot or the box; counterpress = regains within 5 s of losing the ball (per match averages). PPDA: lower = more pressing.</div>`+
+ tbl([['Team'],['Matches',1],['PPDA',1],['High turnovers',1],['Counterpress regains',1],['Recovery time (s)',1],['Avg def. action x (m)',1],['Field tilt %',1]],
+  [...TC].sort((a,b)=>(a.ppda??1e9)-(b.ppda??1e9)).map(t=>[esc(t.n),t.m,cellN(t.ppda,2),cellN(t.hto,2),cellN(t.cpr,2),cellN(t.brt,1),cellN(t.adx,1),cellN(t.tilt,1)]));
+ const draw=()=>{
+  const q=$('#dq').value.toLowerCase().trim(),t=$('#dt').value,ps=$('#dp').value,mn=num($('#dm').value)||0,p90=$('#d9').checked,sk=$('#ds').value;
+  const v=(a,k)=>p90?a.p90(k):(a.has(k)?a.s[k]:null);
+  const sum=(a,ks)=>ks.every(k=>a.has(k))?ks.reduce((x,k)=>x+v(a,k),0):null;
+  const C={tk:a=>v(a,'tk'),ic:a=>v(a,'ic'),bl:a=>v(a,'bl'),cl:a=>v(a,'cl'),duw:a=>v(a,'duw'),aerw:a=>v(a,'aerw'),aer:a=>v(a,'aer'),
+   gd:a=>(a.has('duw')&&a.has('aerw'))?v(a,'duw')-v(a,'aerw'):null,
+   ap:a=>(a.has('aer')&&a.has('aerw')&&a.s.aer>0)?a.s.aerw/a.s.aer*100:null,
+   da:a=>sum(a,['tk','ic','bl','cl']),op:a=>a.s.act>0?a.s.aco/a.s.act*100:null};
+  const rows=AG.filter(a=>a.s.mi>=mn&&(!q||a.n.toLowerCase().includes(q))&&(!t||a.club===t)&&(!ps||a.p===ps))
+   .sort((x,y)=>(C[sk](y)??-1e18)-(C[sk](x)??-1e18)).slice(0,150),d=p90?2:0;
+  $('#dout').innerHTML=`<div class="mu" style="margin-bottom:6px">${rows.length} players${rows.length===150?' (top 150)':''} · ${p90?'per 90 minutes':'season totals'}</div>`+
+   tbl([['#',1],['Player'],['Club'],['Pos'],['Min',1],['Tackles',1],['Interc.',1],['Blocks',1],['Clear.',1],['Duels won',1],['Ground won',1],['Aerials won',1],['Aerials',1],['Aerial %',1],['Def. actions',1],['Opp-half %',1]],
+    rows.map((a,i)=>[i+1,esc(a.n),esc(a.club),a.p||'N/A',Math.round(a.s.mi),cellN(C.tk(a),d),cellN(C.ic(a),d),cellN(C.bl(a),d),cellN(C.cl(a),d),cellN(C.duw(a),d),cellN(C.gd(a),d),cellN(C.aerw(a),d),cellN(C.aer(a),d),cellN(C.ap(a),0),cellN(C.da(a),d),cellN(C.op(a),0)]))};
+ ['dq','dm'].forEach(i=>$('#'+i).oninput=draw);['dt','dp','ds','d9'].forEach(i=>$('#'+i).onchange=draw);
+ draw();
+};
+
+'''
+
+_X_JS += r'''
+/* ---------- Look Like: players with a similar profile ---------- */
+const LG=[['att','Attacking'],['cre','Creation'],['pas','Passing & carrying'],['def','Defensive'],['pos','Position (heatmap)'],['tm','Team pressing context']];
+const LG_ON={att:1,cre:1,def:1};
+const p90m=k=>a=>a.p90(k);
+const MET=[
+ ['xg','xG /90','att',p90m('xg')],['npxg','npxG /90','att',p90m('npxg')],['gl','Goals /90','att',p90m('gl')],['sh','Shots /90','att',p90m('sh')],['sot','On target /90','att',p90m('sot')],
+ ['fin','Goals − xG /90','att',a=>(a.has('gl')&&a.has('xg'))?a.p90('gl')-a.p90('xg'):null],['xt','xT /90','att',p90m('xt')],['vaep','VAEP /90','att',p90m('vaep')],
+ ['kp','Key passes /90','cre',p90m('kp')],['xag','xAG /90','cre',p90m('xag')],['ast','Assists /90','cre',p90m('ast')],['sca','Shot-creating actions /90','cre',p90m('sca')],['gca','Goal-creating actions /90','cre',p90m('gca')],['xgc','xG chain /90','cre',p90m('xgc')],['xgb','xG buildup /90','cre',p90m('xgb')],
+ ['ps','Passes /90','pas',p90m('ps')],['pr','Progressive passes /90','pas',p90m('pr')],['bx','Passes into box /90','pas',p90m('bx')],['tb','Through balls /90','pas',p90m('tb')],['cr','Crosses /90','pas',p90m('cr')],['pc','Progressive carries /90','pas',p90m('pc')],['cb','Carries into box /90','pas',p90m('cb')],['tko','Take-ons /90','pas',p90m('tko')],
+ ['tkr','Take-on success %','pas',a=>a.s.tko>0&&a.has('tkw')?a.s.tkw/a.s.tko*100:null],
+ ['tk','Tackles /90','def',p90m('tk')],['ic','Interceptions /90','def',p90m('ic')],['bl','Blocks /90','def',p90m('bl')],['cl','Clearances /90','def',p90m('cl')],['duw','Duels won /90','def',p90m('duw')],['aerw','Aerials won /90','def',p90m('aerw')],
+ ['ap','Aerial win %','def',a=>a.s.aer>0&&a.has('aerw')?a.s.aerw/a.s.aer*100:null],
+ ['gdw','Ground duels won /90','def',a=>(a.has('duw')&&a.has('aerw'))?a.p90('duw')-a.p90('aerw'):null],
+ ['opp','Actions in opponent half %','pos',a=>a.s.act>0?a.s.aco/a.s.act*100:null],
+ ['t_ppda','Team PPDA','tm',(a,T)=>(T[a.club]||{}).ppda??null],['t_hto','Team high turnovers /match','tm',(a,T)=>(T[a.club]||{}).hto??null],['t_cpr','Team counterpress regains /match','tm',(a,T)=>(T[a.club]||{}).cpr??null]];
+let LK=null;
+function lkSel(i){
+ if(!LK||!LK.res[i])return;const r=LK.res[i],b=$('#lcmp');if(!b)return;
+ b.innerHTML=`<h3>${esc(LK.t.n)} vs ${esc(r.a.n)}</h3>`+tbl([['Metric'],[esc(LK.t.n),1],[esc(r.a.n),1],['Gap (SD)',1]],r.det.map(x=>[esc(x.l),f(x.tv,2),f(x.cv,2),(x.dz>0?'+':'')+f(x.dz,2)]))+
+  `<div class="mu" style="font-size:12px;margin-top:6px">Gap in standard deviations of the comparison pool: 0 = identical, ±1 = one SD apart.</div>`;
+}
+R.looklike=async function(el){
+ el.innerHTML='<h2>Look Like</h2>';
+ let P=null,A=null;try{P=await loadPl()}catch(e){noData(el,'Could not load player data: '+esc(e.message));return}
+ if(!P||!P.rows.length){noData(el,'No player data for this league yet. It appears after the next synchronization.');return}
+ try{A=await loadAdv()}catch(e){A=null}
+ const AG=aggPl(P),T={};teamCtx(P,A).forEach(t=>T[t.n]=t);
+ const ON={};MET.forEach(m=>ON[m[0]]=!!LG_ON[m[2]]);
+ el.innerHTML+=`<div class="card mu" style="font-size:13px"><b>How it works:</b> pick a player and the stat groups you care about. Every stat is turned into a score relative to the other players in the pool (same position by default, goalkeepers excluded). Match % = 100 ÷ (1 + average gap in standard deviations), so 50% means about one SD apart on average. It compares playing <i>style and output</i>, not quality: a similar profile in a weaker league can look identical on paper. Values come from PitchAPI; xG and goals are summed from its shot data.</div>
+ <div class="ctl"><input id="lq" placeholder="Search player"><select id="lp" style="max-width:100%"></select></div>
+ <div class="ctl"><input id="lm" type="number" value="450" style="width:140px" placeholder="Min minutes"><select id="lx">${opts([['s','Same position only'],['a','Any outfield position']],'s')}</select></div>
+ <div class="ctl" id="lgs">${LG.map(([k,n])=>`<label class="mu"><input type="checkbox" id="g_${k}" ${LG_ON[k]?'checked':''} style="min-height:0"> ${n}</label>`).join(' ')}</div>
+ <details style="margin-bottom:10px"><summary class="mu">Pick individual stats</summary><div class="ctl" style="margin-top:8px">${MET.map(m=>`<label class="mu" style="font-size:13px"><input type="checkbox" id="m_${m[0]}" ${ON[m[0]]?'checked':''} style="min-height:0"> ${m[1]}</label>`).join(' ')}</div></details>
+ <div id="lout"></div><div id="lcmp"></div>`;
+ const fillPlayers=()=>{const old=$('#lp').value,q=$('#lq').value.toLowerCase().trim(),mn=num($('#lm').value)||0;
+  const l=AG.filter(a=>a.p!=='GK'&&a.s.mi>=mn&&(!q||a.n.toLowerCase().includes(q))).sort((x,y)=>y.s.mi-x.s.mi).slice(0,300);
+  $('#lp').innerHTML=opts(l.map(a=>[a.id,`${a.n} · ${a.club} · ${a.p||'?'} · ${Math.round(a.s.mi)}'`]),l.some(a=>a.id===old)?old:(l[0]?l[0].id:''));run()};
+ const run=()=>{
+  const out=$('#lout'),t=AG.find(a=>a.id===$('#lp').value);$('#lcmp').innerHTML='';LK=null;
+  if(!t){out.innerHTML='<div class="empty">No player matches this search and minutes filter.</div>';return}
+  const mn=num($('#lm').value)||0,same=$('#lx').value==='s',mets=MET.filter(m=>ON[m[0]]);
+  if(!mets.length){out.innerHTML='<div class="empty">Pick at least one stat group.</div>';return}
+  const pool=AG.filter(a=>a.p!=='GK'&&a.s.mi>=mn&&(!same||!t.p||a.p===t.p));
+  if(pool.length<5){out.innerHTML=`<div class="empty">Only ${pool.length} players in the pool. Lower the minutes filter or allow any position.</div>`;return}
+  const st=mets.map(m=>{const v=pool.map(a=>m[3](a,T)).filter(x=>x!=null);if(v.length<5)return null;
+   const mu=v.reduce((x,y)=>x+y,0)/v.length,sd=Math.sqrt(v.reduce((x,y)=>x+(y-mu)*(y-mu),0)/v.length);return sd>0?{mu,sd}:null});
+  const use=mets.map((m,i)=>i).filter(i=>st[i]&&mets[i][3](t,T)!=null);
+  if(!use.length){out.innerHTML='<div class="empty">This player has no data for the selected stats.</div>';return}
+  const res=[];
+  pool.forEach(a=>{if(a.id===t.id)return;const det=[];
+   use.forEach(i=>{const m=mets[i],tv=m[3](t,T),cv=m[3](a,T);if(cv==null)return;det.push({l:m[1],tv,cv,dz:(cv-tv)/st[i].sd})});
+   if(det.length<Math.max(3,Math.ceil(use.length*.6)))return;
+   const d=Math.sqrt(det.reduce((x,y)=>x+y.dz*y.dz,0)/det.length);
+   res.push({a,det,sim:100/(1+d)})});
+  res.sort((x,y)=>y.sim-x.sim);const top=res.slice(0,10);LK={t,res:top};
+  const near=r=>[...r.det].sort((x,y)=>Math.abs(x.dz)-Math.abs(y.dz)).slice(0,3).map(x=>esc(x.l)).join(', ');
+  const far=r=>[...r.det].sort((x,y)=>Math.abs(y.dz)-Math.abs(x.dz)).slice(0,2).map(x=>`${esc(x.l)}: ${f(x.tv,2)} vs ${f(x.cv,2)}`).join('; ');
+  out.innerHTML=`<div class="card" style="font-size:13px"><b>${esc(t.n)}</b> · ${esc(t.club)} · ${t.p||'?'} · ${Math.round(t.s.mi)} min · xG ${cellN(t.has('xg')?t.s.xg:null,1)} · goals ${cellN(t.has('gl')?t.s.gl:null,0)} · compared with ${pool.length-1} players on ${use.length} stats</div>`+
+   tbl([['#',1],['Player'],['Club'],['Pos'],['Min',1],['Match %',1],['xG',1],['Goals',1],['Closest on'],['Biggest gaps']],
+    top.map((r,i)=>[i+1,`<a href="javascript:void(0)" onclick="lkSel(${i})">${esc(r.a.n)}</a>`,esc(r.a.club),r.a.p||'N/A',Math.round(r.a.s.mi),f(r.sim,0),cellN(r.a.has('xg')?r.a.s.xg:null,1),cellN(r.a.has('gl')?r.a.s.gl:null,0),near(r),far(r)]))+
+   `<div class="mu" style="font-size:12px;margin-top:6px">Tap a name to see the full stat-by-stat comparison. xG and goals are season totals; the match % uses per-90 rates.</div>`;
+  if(top.length)lkSel(0)};
+ $('#lq').oninput=fillPlayers;$('#lm').oninput=fillPlayers;$('#lp').onchange=run;$('#lx').onchange=run;
+ LG.forEach(([k])=>{$('#g_'+k).onchange=()=>{const on=$('#g_'+k).checked;MET.forEach(m=>{if(m[2]===k){ON[m[0]]=on;$('#m_'+m[0]).checked=on}});run()}});
+ MET.forEach(m=>{$('#m_'+m[0]).onchange=()=>{ON[m[0]]=$('#m_'+m[0]).checked;run()}});
+ fillPlayers();
+};
 '''
 
 
@@ -1868,9 +2211,9 @@ def _x_patch_index(html):
     h = html
     h = sub(h, ".chart{width:100%;height:140px}.mu{color:var(--mu)}",
             ".chart{width:100%;height:140px}.mu{color:var(--mu)}" + _X_CSS)
-    h = sub(h, "['passing','Passing'],", "['passing','Passing'],['ppda','PPDA'],")
+    h = sub(h, "['passing','Passing'],", "['passing','Passing'],['ppda','PPDA'],['defense','Defensive'],['looklike','Look Like'],")
     h = sub(h, "AGGC=null;try{localStorage.setItem('league',D.id)}catch(e){}",
-            "AGGC=null;ADV=null;HEAT=null;try{localStorage.setItem('league',D.id)}catch(e){}")
+            "AGGC=null;ADV=null;HEAT=null;PLD=null;try{localStorage.setItem('league',D.id)}catch(e){}")
     h = sub(h, "async function route(){", _X_JS + "\nasync function route(){")
     h = sub(h, "if(PLAN[pg]){", "if(PLAN[pg]&&!R[pg]){")
     h = sub(h, "const r=await api('/api/availability');",
@@ -1935,760 +2278,6 @@ def main():
         return probe_api(get_secret("PITCHAPI_KEY", "PitchAPI key: "))
     return _orig_main()
 # ======================== نهاية الإضافة ========================
-
-
-if __name__ == "__main__":
-    main()
-# ============================================================================
-# إضافة 2 — النسخة المصححة (v2)
-# ثلاث خانات: Defending (الدفاع) + Pressing (الضغط العالي لكل لاعب) + Look like (لاعبين يشبهون بعض)
-#
-# طريقة اللصق:
-#   1) احذف الإضافة 2 القديمة كلها (اللي تبدأ بـ PM_ENABLED وتنتهي بـ "نهاية الإضافة 2").
-#   2) احذف السطرين الأخيرين من الجزء 4:  if __name__ == "__main__":  /  main()
-#      (هذا الكود فيه نفس السطرين في آخره).
-#   3) الصق هذا الكود كامل بعد "نهاية الإضافة" (الجزء 4) مباشرة.
-#
-# مقسّم لأقسام مستقلة، وكل قسم له مفتاح تشغيل:
-#   القسم A  (جمع البيانات المشترك)  — يشتغل إذا أي خانة من الثلاث مفعّلة
-#   القسم B  (Defending)             — PX_DEFENDING
-#   القسم C  (Pressing)              — PX_PRESSING
-#   القسم D  (Look like)             — PX_LOOKLIKE
-# ما يغيّر أي سطر من كودك الأصلي: يلفّ دوال موجودة ويستدعيها كما هي.
-# ============================================================================
-import gzip, io
-
-PX_DEFENDING = True        # خانة Defending
-PX_PRESSING = True         # خانة Pressing (ضغط عالي لكل لاعب)
-PX_LOOKLIKE = True         # خانة Look like
-PX_HEAT_POSITION = True    # يضيف مؤشرات موقع من الـheatmap (أفعال في نصف الخصم / الثلث الأخير) لخانة الضغط
-PX_MAX_KEYS = 600          # أقصى عدد إحصائيات تُحفظ لكل دوري
-PX_LOG_KEYS = True         # يطبع أسماء الإحصائيات المكتشفة وتصنيفها (للتأكد)
-PX_PROBE = False           # True = يطبع شكل ردود players / advanced_players لمباراة واحدة ثم يتوقف
-PX_STATE_MAX_MB = 60       # لو ملف الحالة المضغوط تعدّى هذا الحجم ما نرفعه (حماية)
-
-PX_INDEX = {}              # أسماء ملفات الإضافة (تدخل في data/index.json)
-_PX_RAW = {}               # كاش مؤقت لردود players / advanced_players (يمنع تكرار الطلب)
-_PX_STOP = ("player", "team", "id", "playerid", "teamid", "name", "position", "pos", "role", "shirt",
-            "number", "jersey", "minutesplayed", "minutes", "side", "season", "league")
-
-
-def _px_on():
-    return bool(PX_DEFENDING or PX_PRESSING or PX_LOOKLIKE)
-
-
-# ============================================================================
-# القسم A — جمع البيانات المشترك (يخدم الخانات الثلاث)
-# ============================================================================
-_px_prev_init_db = init_db
-
-def init_db():
-    _px_prev_init_db()
-    c = db()
-    c.executescript("""
-    CREATE TABLE IF NOT EXISTS px_keys(
-      league_id TEXT, k TEXT, label TEXT, grp TEXT, rate INTEGER,
-      PRIMARY KEY(league_id, k));
-    CREATE TABLE IF NOT EXISTS px_stat(
-      league_id TEXT, match_id TEXT, player_key TEXT, player TEXT, club TEXT, pos TEXT,
-      minutes REAL, vals TEXT,
-      PRIMARY KEY(league_id, match_id, player_key));
-    CREATE TABLE IF NOT EXISTS px_done(
-      league_id TEXT, match_id TEXT, status TEXT, fetched_at TEXT,
-      PRIMARY KEY(league_id, match_id));
-    """)
-    c.commit()
-    c.close()
-
-
-# ---- كاش الردود: نفس الرد ما نطلبه مرتين ----
-_px_prev_call = call
-
-def call(fn, *a):
-    r, e = _px_prev_call(fn, *a)
-    try:
-        nm = getattr(fn, "__name__", "")
-        if e is None and r is not None and a and nm in ("players", "advanced_players"):
-            if len(_PX_RAW) >= 400:
-                _PX_RAW.pop(next(iter(_PX_RAW)))
-            _PX_RAW[(nm, str(a[0]))] = r
-    except Exception:
-        pass
-    return r, e
-
-
-def _px_cached(fn, name, mid):
-    r = _PX_RAW.get((name, str(mid)))
-    if r is not None:
-        return r, None
-    return call(fn, mid)
-
-
-# ---- قراءة الإحصائيات (بدون افتراض أسماء حقول) ----
-def _px_num(v):
-    if isinstance(v, bool):
-        return None
-    if isinstance(v, str):
-        v = v.strip().replace("%", "").replace(",", "")
-    v = num(v)
-    return v if (v is not None and v == v and abs(v) != float("inf")) else None
-
-
-def _px_names(o):
-    import dataclasses
-    if isinstance(o, dict):
-        return list(o.keys())
-    if dataclasses.is_dataclass(o):
-        return [f.name for f in dataclasses.fields(o)]
-    md = getattr(type(o), "model_fields", None)
-    if md:
-        return list(md.keys())
-    return [k for k in dir(o) if not k.startswith("_") and not k.startswith("model_")
-            and not callable(getattr(o, k, None))]
-
-
-def _px_get(o, n):
-    if o is None:
-        return None
-    return o.get(n) if isinstance(o, dict) else getattr(o, n, None)
-
-
-def _px_flat(o, prefix="", depth=0, out=None):
-    """يسطّح أي كائن متداخل إلى {مسار.بنقاط: رقم}. يتجاهل النصوص والقوائم والهويات."""
-    import decimal
-    out = {} if out is None else out
-    if o is None or depth > 3 or isinstance(o, (bool, str, bytes, list, tuple, set)):
-        return out
-    if isinstance(o, (int, float, decimal.Decimal)):
-        v = _px_num(float(o))
-        if prefix and v is not None:
-            out[prefix] = v
-        return out
-    if type(o).__module__ in ("datetime", "enum", "uuid"):
-        return out
-    for n in _px_names(o):
-        if nrm(n) in _PX_STOP or n.startswith("model_"):
-            continue
-        try:
-            v = _px_get(o, n)
-        except Exception:
-            continue
-        _px_flat(v, f"{prefix}.{n}" if prefix else n, depth + 1, out)
-    return out
-
-
-def _px_stats(p):
-    """إحصائيات اللاعب من players(): مجموعات → {المفتاح: قيمة} + (الاسم، المجموعة)."""
-    out, meta = {}, {}
-    for grp in (getattr(p, "stats", None) or []):
-        gname = ""
-        for a in ("name", "title", "label", "category", "group"):
-            v = _px_get(grp, a)
-            if isinstance(v, str) and v:
-                gname = v
-                break
-        stats = _px_get(grp, "stats") or {}
-        items = stats.items() if hasattr(stats, "items") else []
-        for label, en in items:
-            k = str(_px_get(en, "key") or label)
-            v = _px_num(_px_get(_px_get(en, "stat"), "value"))
-            if v is None:
-                continue
-            if k in out and out[k] != v:            # نفس المفتاح في مجموعتين بقيمتين مختلفتين: نفصلهما
-                k = f"{k}#{nrm(gname)}"
-            out[k] = v
-            meta[k] = (str(label), gname)
-    return out, meta
-
-
-def _px_human(path):
-    return " · ".join(s.replace("_", " ").strip().capitalize() for s in path.split("."))
-
-
-# ---- كشف النِّسَب (rate) مقابل العدّادات ----
-# ملاحظة: التحقق بحدود الكلمة، حتى "accurate_passes" ما يُحسب نسبة بالغلط (فيها rate داخل accurate)
-_PX_RATE_RX = re.compile(r"(?<![a-z])(pct|percent|percentage|accuracy|rate|ratio|fraction|share|average|avg|"
-                         r"rating|centralization)(?![a-z])|%|per ?90|per_(shot|pass|minute|touch|game|match)")
-
-def _px_israte(key, label=""):
-    s = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", f"{key}|{label}").lower()
-    return 1 if _PX_RATE_RX.search(s) else 0
-
-
-# ---- التصنيف: دفاعي / ضغط / حارس / تمرير / هجومي ----
-_PX_HIGHZ = r"(finalthird|attackingthird|attthird|oppositionhalf|opphalf|opponenthalf|highup)"
-_PX_ACT = r"(recover|tackle|interception|duel|foul|challenge|won)"
-_PX_PRESS_RX = re.compile(r"press|highturnover|turnoverhigh|forcedturnover|ppda|regain|"
-                          + _PX_ACT + r"\w*" + _PX_HIGHZ + "|" + _PX_HIGHZ + r"\w*" + _PX_ACT)
-_PX_GK_RX = re.compile(r"save|keeper|goalkeep|goalkick|claim|punch|sweep|conceded|faced|goalsprevented")
-_PX_DEF_RX = re.compile(r"tackle|duel|aerial|groundwon|interception|intercept|clearance|clear|block|foul|recover|"
-                        r"challenge|dribbledpast|beaten|defens|errorlead|offsidewon|ballwin")
-_PX_PASS_RX = re.compile(r"pass|cross|throughball|longball|switch|assist|chancecreated|keychance|carr|progress")
-_PX_ATT_RX = re.compile(r"goal|shot|xg|expectedgoal|dribble|takeon|touchesinbox|boxtouch|bigchance|attempt|"
-                        r"offside|penalt|possessionvalue|touch|(^|[|.])xt")
-_PX_GROUP_RULES = (("press", r"press"), ("gk", r"goalkeep|keeper"), ("def", r"defen|duel"),
-                   ("pass", r"passing"), ("att", r"attack|shoot|possessionvalue"))
-
-
-def _px_classify(key, label, grp):
-    g = nrm(grp)
-    if g.startswith("heatmap"):
-        return "press"
-    s = nrm(key) + "|" + nrm(label)
-    if _PX_PRESS_RX.search(s):
-        return "press"
-    for cat, rx in _PX_GROUP_RULES:
-        if re.search(rx, g):
-            return cat
-    for cat, rx in (("gk", _PX_GK_RX), ("def", _PX_DEF_RX), ("pass", _PX_PASS_RX), ("att", _PX_ATT_RX)):
-        if rx.search(s):
-            return cat
-    return "other"
-
-
-def _px_cnum(v):
-    v = float(v)
-    return int(v) if abs(v - round(v)) < 1e-9 else round(v, 3)
-
-
-# ---- مؤشرات الموقع من الـheatmap (حقيقية من PitchAPI، لكنها مو "ضغط" مباشر) ----
-def _px_heat_pos(league_id, mid):
-    out = {}
-    try:
-        gl = int(_XGRID.get("l", 16))
-        for r in q("SELECT pkey, cells FROM heat WHERE league_id=? AND match_id=? AND kind='player'",
-                   (league_id, mid)):
-            cells = json.loads(r["cells"])
-            tot = opp = fin = 0.0
-            for i in range(0, len(cells) - 2, 3):
-                x, n = cells[i], cells[i + 2]
-                tot += n
-                if x >= gl / 2:
-                    opp += n
-                if x >= gl * 2 / 3:
-                    fin += n
-            if tot > 0:
-                out[str(r["pkey"])] = (tot, opp, fin)
-    except Exception:
-        pass
-    return out
-
-
-def px_fetch_store(client, league_id, mid):
-    """يجلب (أو يأخذ من الكاش) إحصائيات اللاعبين لمباراة ويحفظها. ترجع (الحالة, عدد اللاعبين)."""
-    pls, e1 = _px_cached(client.matches.players, "players", mid)
-    adv, e2 = _px_cached(client.matches.advanced_players, "advanced_players", mid)
-    base = {r["player_key"]: (r["club"], r["pos"]) for r in q(
-        "SELECT player_key, club, pos FROM stats WHERE league_id=? AND match_id=?", (league_id, mid))}
-    recs = {}
-
-    def rec(p):
-        n = pname(p)
-        key = pid(p) or n
-        r = recs.get(key)
-        if r is None:
-            club, pos = base.get(key, (None, None))
-            r = recs[key] = dict(name=n, club=club or get_club(p), pos=pos, minutes=None, vals={}, meta={})
-        if r["minutes"] is None:
-            r["minutes"] = get_minutes(p)
-        if r["pos"] is None:
-            r["pos"] = get_pos(p)
-        if not r["club"]:
-            r["club"] = get_club(p)
-        return r
-
-    for p in pls or []:
-        r = rec(p)
-        st, meta = _px_stats(p)
-        r["vals"].update(st)
-        r["meta"].update(meta)
-    for p in getattr(adv, "players", None) or []:
-        r = rec(p)
-        for path, v in _px_flat(p).items():
-            k = "adv." + path
-            r["vals"][k] = v
-            r["meta"][k] = (_px_human(path), path.split(".")[0])
-
-    if PX_HEAT_POSITION:
-        for key, (tot, opp, fin) in _px_heat_pos(league_id, mid).items():
-            r = recs.get(key)
-            if r is None:
-                continue
-            for k, lab, v in (("hm.actions", "Actions (heatmap grid)", tot),
-                              ("hm.opp_half", "Actions in opponent half (heatmap grid)", opp),
-                              ("hm.final_third", "Actions in final third (heatmap grid)", fin),
-                              ("hm.opp_half_share", "Share of actions in opponent half (heatmap grid)", opp / tot),
-                              ("hm.final_third_share", "Share of actions in final third (heatmap grid)", fin / tot)):
-                r["vals"][k] = v
-                r["meta"][k] = (lab, "Heatmap position")
-
-    hard = lambda e: e and e not in ("not_found", "plan")
-    t = now()
-    c = db()
-    n_keys = c.execute("SELECT COUNT(*) FROM px_keys WHERE league_id=?", (league_id,)).fetchone()[0]
-    known = {r[0] for r in c.execute("SELECT k FROM px_keys WHERE league_id=?", (league_id,)).fetchall()}
-    rows = []
-    for key, r in recs.items():
-        vals = {}
-        for k, v in r["vals"].items():
-            label, grp = r["meta"][k]
-            rate = _px_israte(k, label)
-            if k not in known:
-                if n_keys >= PX_MAX_KEYS:
-                    continue
-                c.execute("INSERT OR IGNORE INTO px_keys VALUES(?,?,?,?,?)", (league_id, k, label, grp, rate))
-                known.add(k)
-                n_keys += 1
-            if not rate and v == 0:
-                continue                      # العدّادات الصفرية لا تُحفظ (الغائب = 0)
-            vals[k] = round(v, 4) if rate else _px_cnum(v)
-        if vals:
-            rows.append((league_id, mid, key, r["name"], r["club"] or UNKNOWN, r["pos"],
-                         None if r["minutes"] is None else round(r["minutes"], 1),
-                         json.dumps(vals, ensure_ascii=False, separators=(",", ":"))))
-    if rows:
-        c.execute("DELETE FROM px_stat WHERE league_id=? AND match_id=?", (league_id, mid))
-        c.executemany("INSERT OR REPLACE INTO px_stat VALUES(?,?,?,?,?,?,?,?)", rows)
-    if not rows:
-        status = "failed" if (hard(e1) or hard(e2)) else "no_data"
-    elif pls and getattr(adv, "players", None) and e1 is None and e2 is None:
-        status = "ok"
-    else:
-        status = "partial"
-    c.execute("INSERT OR REPLACE INTO px_done VALUES(?,?,?,?)", (league_id, mid, status, t))
-    c.commit()
-    c.close()
-    return status, len(rows)
-
-
-def sync_pxmetrics(client, league_id, on_progress=None):
-    rows = q("SELECT m.match_id, m.date, m.home, m.away, e.status, e.fetched_at FROM matches m "
-             "LEFT JOIN px_done e ON e.league_id=m.league_id AND e.match_id=m.match_id "
-             "WHERE m.league_id=?", (league_id,))
-    todo = [r for r in rows if match_due(r)]
-    n_ok = sum(1 for r in rows if r["status"] == "ok")
-    log(f"  [إضافي: دفاع/ضغط/Look like] مكتملة سابقاً: {n_ok} | المطلوب الآن: {len(todo)}")
-    for i, r in enumerate(todo, 1):
-        status, n = px_fetch_store(client, league_id, r["match_id"])
-        log(f"  [{i}/{len(todo)}] {r['home']} vs {r['away']} -> {status} ({n} لاعب)")
-        if on_progress and i % PUBLISH_EVERY == 0 and i < len(todo):
-            on_progress()
-        time.sleep(REQUEST_DELAY)
-    if PX_LOG_KEYS:
-        ks = q("SELECT k, label, grp FROM px_keys WHERE league_id=? ORDER BY k", (league_id,))
-        if ks:
-            by = {}
-            for k in ks:
-                by.setdefault(_px_classify(k["k"], k["label"], k["grp"]), []).append(k["k"])
-            log("  الإحصائيات المكتشفة: " + " | ".join(f"{c_} ({len(v)})" for c_, v in sorted(by.items())))
-            for c_, v in sorted(by.items()):
-                if c_ in ("def", "press", "gk"):
-                    log(f"    {c_}: " + ", ".join(v[:60]) + (" ..." if len(v) > 60 else ""))
-
-
-_px_prev_sync_league = sync_league
-
-def sync_league(client, league_id, on_progress=None):
-    ok = _px_prev_sync_league(client, league_id, on_progress)
-    if ok and _px_on():
-        try:
-            sync_pxmetrics(client, league_id, on_progress)
-        except Exception as e:          # أي خطأ هنا ما يوقف المزامنة الأصلية
-            log(f"  خطأ في مزامنة الدفاع/الضغط/Look like ({type(e).__name__}: {e}) — الباقي ما تأثر.")
-    return ok
-
-
-# ---- التصدير: ملف للموقع (صغير) + ملف حالة مضغوط للاستعادة ----
-def _px_keys_rows(L):
-    return q("SELECT k, label, grp, rate FROM px_keys WHERE league_id=? ORDER BY k", (L,))
-
-
-def _px_gz(b):
-    buf = io.BytesIO()
-    with gzip.GzipFile(fileobj=buf, mode="wb", compresslevel=9, mtime=0) as f:
-        f.write(b)
-    return buf.getvalue()
-
-
-def _px_json(d):
-    return json.dumps(d, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-
-
-def build_px_state(L):
-    keys = _px_keys_rows(L)
-    kidx = {k["k"]: i for i, k in enumerate(keys)}
-    rows = []
-    for r in q("SELECT match_id, player_key, player, club, pos, minutes, vals FROM px_stat "
-               "WHERE league_id=? ORDER BY match_id, player_key", (L,)):
-        vals = {str(kidx[k]): v for k, v in json.loads(r["vals"]).items() if k in kidx}
-        rows.append([r["match_id"], r["player_key"], r["player"], r["club"], r["pos"], r["minutes"], vals])
-    done = q("SELECT match_id i, status t, fetched_at f FROM px_done WHERE league_id=? ORDER BY match_id", (L,))
-    return dict(keys=[[k["k"], k["label"], k["grp"], k["rate"]] for k in keys], rows=rows, done=done)
-
-
-def restore_px(L, d):
-    keys = d.get("keys", [])
-    c = db()
-    c.executemany("INSERT OR REPLACE INTO px_keys VALUES(?,?,?,?,?)", [(L, k[0], k[1], k[2], k[3]) for k in keys])
-    c.executemany("INSERT OR REPLACE INTO px_stat VALUES(?,?,?,?,?,?,?,?)", [
-        (L, r[0], r[1], r[2], r[3], r[4], r[5],
-         json.dumps({keys[int(i)][0]: v for i, v in r[6].items() if int(i) < len(keys)},
-                    ensure_ascii=False, separators=(",", ":")))
-        for r in d.get("rows", [])])
-    c.executemany("INSERT OR REPLACE INTO px_done VALUES(?,?,?,?)",
-                  [(L, e["i"], e["t"], e.get("f")) for e in d.get("done", [])])
-    c.commit()
-    c.close()
-
-
-def build_pxa_payload(L):
-    """تجميع الموسم لكل لاعب: لكل إحصائية [المجموع (أو المتوسط لو نسبة), لكل 90 دقيقة]."""
-    keys = _px_keys_rows(L)
-    names = set()
-    for k in keys:
-        if not k["k"].startswith("adv."):
-            names.add(nrm(k["k"]))
-            names.add(nrm(k["label"]))
-    # إحصائيات advanced المكررة (نفس الاسم موجود في players) نحذفها حتى ما تتضاعف
-    keys = [k for k in keys if not (k["k"].startswith("adv.") and (
-        nrm(k["k"].split(".")[-1]) in names or nrm(k["label"].split(" · ")[-1]) in names))]
-    kidx = {k["k"]: i for i, k in enumerate(keys)}
-    rate = {k["k"]: bool(k["rate"]) for k in keys}
-    agg = {}
-    for r in q("SELECT player_key, player, club, pos, minutes, vals FROM px_stat WHERE league_id=?", (L,)):
-        a = agg.setdefault((r["player_key"], r["club"]), dict(
-            name=r["player"], club=r["club"], pos={}, games=0, min=0.0,
-            tot={}, sm={}, rn={}, rd={}, ru={}, rc={}))
-        a["games"] += 1
-        if r["pos"]:
-            a["pos"][r["pos"]] = a["pos"].get(r["pos"], 0) + 1
-        mins = r["minutes"]
-        if mins:
-            a["min"] += mins
-        for k, v in json.loads(r["vals"]).items():
-            if k not in kidx:
-                continue
-            if rate[k]:
-                a["ru"][k] = a["ru"].get(k, 0.0) + v
-                a["rc"][k] = a["rc"].get(k, 0) + 1
-                if mins:
-                    a["rn"][k] = a["rn"].get(k, 0.0) + v * mins
-                    a["rd"][k] = a["rd"].get(k, 0.0) + mins
-            else:
-                a["tot"][k] = a["tot"].get(k, 0.0) + v
-                if mins:
-                    a["sm"][k] = a["sm"].get(k, 0.0) + v
-    players = []
-    for a in agg.values():
-        vals = {}
-        for k in set(a["tot"]) | set(a["ru"]):
-            if rate[k]:
-                m = a["rn"][k] / a["rd"][k] if a["rd"].get(k) else a["ru"][k] / a["rc"][k]
-                vals[str(kidx[k])] = [round(m, 4), round(m, 4)]
-            else:
-                p90 = round(a["sm"].get(k, 0.0) / a["min"] * 90, 3) if a["min"] > 0 else None
-                vals[str(kidx[k])] = [_px_cnum(a["tot"][k]), p90]
-        pos = max(a["pos"], key=a["pos"].get) if a["pos"] else None
-        players.append([a["name"], a["club"], pos, a["games"], round(a["min"], 1), vals])
-    players.sort(key=lambda p: -p[4])
-    return dict(keys=[dict(k=k["k"], l=k["label"], g=k["grp"], c=_px_classify(k["k"], k["label"], k["grp"]),
-                           r=k["rate"]) for k in keys], players=players)
-
-
-def publish_px(hub, metas):
-    for lg in metas:
-        L = lg["id"]
-        try:
-            if not q("SELECT 1 FROM px_stat WHERE league_id=? LIMIT 1", (L,)):
-                continue
-            fn = safe_name(L)
-            # 1) ملف الموقع أولاً (هذا اللي تحتاجه الصفحات)
-            gh_put(hub, f"data/{fn}_pxa.json", _px_json(build_pxa_payload(L)), f"Update {lg['name']} player stats")
-            last = q("SELECT MAX(fetched_at) t FROM px_done WHERE league_id=?", (L,), True)["t"]
-            PX_INDEX[L] = dict(pxa_file=f"{fn}_pxa.json", pxa_v=last)
-        except Exception as e:
-            log(f"  تعذر نشر ملف الموقع للدفاع/الضغط لـ {lg.get('name')}: {e}")
-            continue
-        try:
-            # 2) ملف الحالة المضغوط (للاستعادة فقط) — فشله ما يمنع الموقع
-            blob = _px_gz(_px_json(build_px_state(L)))
-            if len(blob) > PX_STATE_MAX_MB * 1024 * 1024:
-                log(f"  ملف الحالة كبير ({len(blob) / 1048576:.0f} MB) — تخطيت رفعه.")
-            else:
-                gh_put(hub, f"data/{fn}_px.json.gz", blob, f"Update {lg['name']} player stats state")
-        except Exception as e:
-            log(f"  تعذر رفع ملف الحالة لـ {lg.get('name')} (الموقع ما تأثر): {e}")
-
-
-_px_prev_publish = publish
-
-def publish(hub, metas, final=False):
-    if _px_on():
-        publish_px(hub, metas)
-    return _px_prev_publish(hub, metas, final)
-
-
-_px_prev_gh_put = gh_put
-
-def gh_put(hub, path, content, message):
-    """نفس الدالة السابقة، لكن data/index.json يُضاف له أسماء ملفات هذه الإضافة."""
-    if path == "data/index.json" and PX_INDEX:
-        try:
-            d = json.loads(content.decode("utf-8"))
-            for lg in d.get("leagues", []):
-                lg.update(PX_INDEX.get(lg["id"], {}))
-            content = json.dumps(d, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-        except Exception as e:
-            log(f"  تنبيه: ما قدرت أضيف ملفات الدفاع للفهرس: {e}")
-    return _px_prev_gh_put(hub, path, content, message)
-
-
-def _px_gh_bytes(hub, path):
-    r = requests.get(f"{GH}/repos/{hub['repo']}/contents/{path}", params={"ref": hub["branch"]}, timeout=300,
-                     headers=gh_headers(hub["token"], "application/vnd.github.raw+json"))
-    return r.content if r.status_code == 200 else None
-
-
-_px_prev_gh_restore = gh_restore
-
-def gh_restore(hub, metas):
-    n = _px_prev_gh_restore(hub, metas)
-    if _px_on():
-        for lg in metas:
-            try:
-                if q("SELECT 1 FROM px_done WHERE league_id=? LIMIT 1", (lg["id"],)):
-                    continue
-                b = _px_gh_bytes(hub, f"data/{safe_name(lg['id'])}_px.json.gz")
-                if b:
-                    restore_px(lg["id"], json.loads(gzip.decompress(b).decode("utf-8")))
-            except Exception as e:
-                log(f"  تعذر استعادة بيانات الدفاع/الضغط لـ {lg.get('name')}: {type(e).__name__}")
-    return n
-
-
-# ============================================================================
-# الواجهة — كود JS مقسّم: أساس مشترك + (Defending/Pressing) + (Look like)
-# ============================================================================
-_PX_JS_CORE = r'''/* ===== Addon 2 v2 — core: loads data/*_pxa.json ===== */
-const PXC={};
-const pxOpts=(arr,sel)=>arr.map(([v,t])=>`<option value="${esc(v)}" ${String(v)===String(sel)?'selected':''}>${esc(t)}</option>`).join('');
-const pxNote=(el,msg)=>{el.innerHTML+=`<div class="empty">${msg}</div>`};
-const pxNr=s=>String(s==null?'':s).toLowerCase().replace(/[^a-z0-9]/g,'');
-const pxFmt=(x,r)=>x==null?(r?'N/A':'0'):(Math.abs(x-Math.round(x))<1e-9?String(Math.round(x)):Number(x).toFixed(2));
-const pxMatch=(k,rx)=>{if(!rx)return true;try{return new RegExp(rx).test(pxNr(k.k)+'|'+pxNr(k.l)+'|'+pxNr(k.g))}catch(e){return true}};
-async function loadPX(id){
- if(PXC[id])return PXC[id];
- const m=ALL.leagues.find(l=>l.id===id)||{};
- if(!m.pxa_file)return null;
- const r=await fetch('data/'+m.pxa_file+'?v='+encodeURIComponent(m.pxa_v||ALL.generated||''));
- if(!r.ok)throw new Error(m.pxa_file+' (HTTP '+r.status+')');
- const raw=await r.json(),K=raw.keys;
- const players=raw.players.map(a=>{const v={},p={};for(const i in a[5]){const k=K[+i].k;v[k]=a[5][i][0];p[k]=a[5][i][1]}return {player:a[0],club:a[1],pos:a[2],games:a[3],min:a[4],v,p,lg:m.name}});
- return PXC[id]={keys:K,players,name:m.name};
-}
-'''
-
-_PX_JS_TABLE = r'''/* ===== Addon 2 v2 — Defending + Pressing tables ===== */
-const PX_DEF_FILTERS=[['','All defensive'],['tackle','Tackles'],['duel','Duels (all)'],['aerial|air','Aerial duels'],['ground','Ground duels'],['intercept','Interceptions'],['clear','Clearances'],['block','Blocks'],['recover','Recoveries'],['foul','Fouls'],['dribbledpast|beaten','Dribbled past'],['error','Errors'],['won|success','Won / success']];
-const PX_PRESS_FILTERS=[['','All pressing'],['press','Pressures'],['counter','Counter-press'],['turnover|regain|recover','Turnovers / regains'],['final|opp|attacking|highup','High up the pitch'],['heatmap','Position (heatmap grid)']];
-async function pxTablePage(el,cfg){
- el.innerHTML=`<h2>${cfg.title}</h2><div class="card mu" style="font-size:13px">${cfg.intro}</div>`;
- let P=null;try{P=await loadPX(D.id)}catch(e){pxNote(el,'Could not load data: '+esc(e.message));return}
- if(!P||!P.players.length){pxNote(el,'No data for this league yet. It appears after the next synchronization (the first backfill of past matches can take several runs).');return}
- const cats=cfg.cats.filter(c=>P.keys.some(k=>k.c===c[0]));
- if(!cats.length){pxNote(el,cfg.none);return}
- const teams=[...new Set(P.players.map(p=>p.club))].sort();
- el.innerHTML+=`<div class="ctl">${cats.length>1?`<select id="pc">${pxOpts(cats,cats[0][0])}</select>`:''}<select id="pf">${pxOpts(cfg.filters,'')}</select><select id="pt">${pxOpts([['','All teams'],...teams.map(t=>[t,t])],'')}</select><select id="pp">${pxOpts([['','All positions'],['GK','GK'],['DF','DF'],['MF','MF'],['FW','FW']],'')}</select><input id="pq" placeholder="Search player"><input id="pm" type="number" placeholder="Min minutes" value="0" style="width:120px"><label class="mu" style="align-self:center"><input type="checkbox" id="p9" style="min-height:0"> per 90</label></div><div class="ctl"><select id="ps"></select><button class="s" id="pall">All columns</button></div><details class="card"><summary>Columns</summary><div id="pcl" class="mu"></div></details><div id="pout"></div>`;
- let colSel=new Set();
- const catNow=()=>cats.length>1?$('#pc').value:cats[0][0];
- const keysNow=()=>P.keys.filter(k=>k.c===catNow()&&pxMatch(k,$('#pf').value));
- const cover=k=>P.players.reduce((n,p)=>n+(p.v[k.k]!=null?1:0),0);
- const renderCols=()=>{const ks=keysNow().map(k=>[k,cover(k)]).sort((a,b)=>b[1]-a[1]);
-  $('#pcl').innerHTML=ks.map(([k,c])=>`<label style="display:block"><input type="checkbox" data-k="${esc(k.k)}" ${colSel.has(k.k)?'checked':''} style="min-height:0"> ${esc(k.l)} <span class="mu">(${c} players)</span></label>`).join('')||'None';return ks};
- const resetCols=()=>{const ks=keysNow().map(k=>[k,cover(k)]).sort((a,b)=>b[1]-a[1]);colSel=new Set(ks.slice(0,14).map(x=>x[0].k));renderCols()};
- const draw=()=>{
-  const out=$('#pout'),per=$('#p9').checked,mn=num($('#pm').value)||0,s=($('#pq').value||'').toLowerCase().trim();
-  const all=keysNow(),cols=all.filter(k=>colSel.has(k.k));
-  if(!all.length){out.innerHTML='<div class="empty">PitchAPI provides no statistics of this type for this league.</div>';return}
-  if(!cols.length){out.innerHTML='<div class="empty">Select at least one column.</div>';return}
-  const cur=$('#ps').value,sk=cols.some(k=>k.k===cur)?cur:cols[0].k;
-  $('#ps').innerHTML=pxOpts(cols.map(k=>[k.k,'Sort by: '+k.l]),sk);
-  const sget=p=>{const x=(per?p.p:p.v)[sk];return x==null?-1e18:x};
-  let rows=P.players.filter(p=>(!$('#pt').value||p.club===$('#pt').value)&&(!$('#pp').value||p.pos===$('#pp').value)&&(!s||p.player.toLowerCase().includes(s))&&((p.min||0)>=mn));
-  const n=rows.length;rows=rows.sort((a,b)=>sget(b)-sget(a)).slice(0,200);
-  out.innerHTML=`<div class="mu" style="margin-bottom:8px">${n} players · ${all.length} statistics in this view · ${per?'per 90 minutes':'season totals'} · top 200 shown.</div>`+
-   tbl([['#',1],['Player'],['Club'],['Pos'],['Games',1],['Min',1],...cols.map(k=>[esc(k.l),1])],rows.map((p,i)=>[i+1,esc(p.player),esc(p.club),p.pos||'N/A',p.games,Math.round(p.min||0),...cols.map(k=>pxFmt((per?p.p:p.v)[k.k],k.r))]))};
- $('#pcl').onchange=ev=>{const k=ev.target&&ev.target.getAttribute&&ev.target.getAttribute('data-k');if(k){ev.target.checked?colSel.add(k):colSel.delete(k);draw()}};
- $('#pall').onclick=()=>{colSel=new Set(keysNow().map(k=>k.k));renderCols();draw()};
- const pc=$('#pc');if(pc)pc.onchange=()=>{resetCols();draw()};
- $('#pf').onchange=()=>{resetCols();draw()};
- ['pt','pp','p9','ps'].forEach(i=>$('#'+i).onchange=draw);
- ['pq','pm'].forEach(i=>$('#'+i).oninput=draw);
- resetCols();draw();
-}
-'''
-
-_PX_JS_DEFENDING = r'''R.defending=el=>pxTablePage(el,{title:'Defending',
- intro:'<b>What this shows:</b> every defensive and goalkeeping statistic PitchAPI provides for players (tackles, duels, aerial and ground duels, interceptions, clearances, blocks, recoveries, fouls and so on), summed over the season for the matches with data. Names and values are PitchAPI\'s own; nothing is estimated here. A statistic appears only if PitchAPI supplies it for this league. A missing count is shown as 0 and a missing rate as N/A. Per 90 uses only matches that report minutes. Use the filter to isolate aerial duels, ground duels, tackles, interceptions and so on, and "Columns" to pick exactly what you want to see.',
- cats:[['def','Defensive'],['gk','Goalkeeping']],filters:PX_DEF_FILTERS,
- none:'PitchAPI returned no defensive statistics for this league. Set PX_PROBE = True in the Colab cell to see which fields it provides.'});
-'''
-
-_PX_JS_PRESSING = r'''R.pressing=el=>pxTablePage(el,{title:'Pressing',
- intro:'<b>What this shows:</b> pressing and high-up-the-pitch statistics per player. Two kinds of columns: (1) statistics PitchAPI supplies directly (pressures, counter-pressing, turnovers or regains, actions in the final third and so on, if the provider has them for this league); (2) "heatmap grid" columns, which are real counts of a player\'s on-the-ball actions in the opponent half and the final third taken from the heatmap grid. Those are position indicators, not pressures. Team-level pressing intensity (PPDA) is in the PPDA tab. Nothing is estimated here.',
- cats:[['press','Pressing']],filters:PX_PRESS_FILTERS,
- none:'No pressing statistics yet for this league. They appear after the next synchronization.'});
-'''
-
-_PX_JS_LOOK = r'''/* ===== Addon 2 v2 — Look like ===== */
-const PXG=[['att','Attacking'],['def','Defensive'],['press','High press'],['pass','Passing'],['gk','Goalkeeping'],['other','Other']];
-const PXPRE={all:{att:1,def:1,press:1,pass:1,gk:0,other:0},finisher:{att:2,def:0,press:0,pass:0,gk:0,other:0},defender:{att:0,def:2,press:1,pass:1,gk:0,other:0},presser:{att:1,def:1,press:2,pass:0,gk:0,other:0},creator:{att:1,def:0,press:0,pass:2,gk:0,other:0},keeper:{att:0,def:0,press:0,pass:1,gk:2,other:0}};
-function pxSimilar(tgt,pool,keys,o){
- const mode=o.per?'p':'v';
- const E=pool.filter(p=>p===tgt||((p.min||0)>=o.min&&(!o.pos||!tgt.pos||p.pos===tgt.pos)));
- if(E.length<5)return {err:'Too few players match these filters (need at least 5). Lower the minimum minutes, untick "Same position only", or search all leagues.'};
- const feats=[];
- for(const [cat,w] of Object.entries(o.w)){
-  if(!w)continue;const ks=[];
-  for(const k of keys.filter(k=>k.c===cat&&!o.ex.has(k.k))){
-   const vals=E.map(p=>{const x=p[mode][k.k];return x==null?(k.r?null:0):x});
-   const have=vals.filter(x=>x!=null);if(have.length<E.length*.1)continue;
-   const nz=k.r?have.length:have.filter(x=>x!==0).length;if(nz<E.length*.1)continue;
-   const mean=have.reduce((a,b)=>a+b,0)/have.length,sd=Math.sqrt(have.reduce((a,b)=>a+(b-mean)**2,0)/have.length);
-   if(!(sd>1e-9))continue;
-   ks.push({k:k.k,l:k.l,r:k.r,cat,mean,sd});
-  }
-  ks.forEach(f=>{f.w=w/Math.sqrt(ks.length);feats.push(f)});
- }
- if(!feats.length)return {err:'No usable statistics in the selected groups. PitchAPI may not provide them for this league, or switch another group on.'};
- const z=p=>feats.map(f=>{const x=p[mode][f.k],v=x==null?(f.r?f.mean:0):x;return Math.max(-5,Math.min(5,(v-f.mean)/f.sd))});
- const zt=z(tgt),W=feats.reduce((a,f)=>a+f.w*f.w,0),den=Math.sqrt(2*W);
- const rows=E.filter(p=>p!==tgt).map(p=>{const zp=z(p);let d=0;for(let i=0;i<feats.length;i++){const t=zp[i]-zt[i];d+=feats[i].w*feats[i].w*t*t}d=Math.sqrt(d);return {p,d,sim:Math.max(0,100*(1-d/den))}}).sort((a,b)=>a.d-b.d);
- return {feats,zt,rows,n:E.length};
-}
-R.looklike=async function(el){
- el.innerHTML='<h2>Look like</h2><div class="card mu" style="font-size:13px"><b>How it works:</b> pick a player and what should count as similar (attacking, defensive, high press, passing, goalkeeping). Each selected statistic is compared with the other players, after putting every statistic on the same scale. Each group weighs the same however many statistics it has; "High" counts it double. Similarity 100 = identical profile, 0 = as different as two random players. Players do <b>not</b> have to match exactly: a player with xG 12 and 10 goals can sit next to one with xG 12 and 8 goals. Use a preset for a quick start, or tick individual statistics off under "Pick individual statistics". Values are PitchAPI\'s; per 90 uses minutes played.</div>';
- let P=null;try{P=await loadPX(D.id)}catch(e){pxNote(el,'Could not load player stats: '+esc(e.message));return}
- if(!P||!P.players.length){pxNote(el,'No player statistics for this league yet. They appear after the next synchronization (the first backfill of past matches can take several runs).');return}
- const byMin=[...P.players].filter(p=>(p.min||0)>0).sort((a,b)=>(b.min||0)-(a.min||0));
- if(!byMin.length){pxNote(el,'No player has minutes data yet.');return}
- const ex=new Set(),gcount=c=>P.keys.filter(k=>k.c===c).length;
- el.innerHTML+=`<div class="ctl"><input id="lq" placeholder="Search player"><select id="lp" style="flex:1;min-width:200px"></select></div>
- <div class="card"><h3>What counts as similar</h3>
- <div class="ctl"><select id="lpre">${pxOpts([['all','Preset: all-round'],['finisher','Preset: finisher'],['defender','Preset: defender'],['presser','Preset: presser'],['creator','Preset: creator'],['keeper','Preset: goalkeeper']],'all')}</select></div>
- <div class="ctl">${PXG.map(([c,n])=>`<label class="mu">${n} (${gcount(c)})<br><select id="w_${c}">${pxOpts([['0','Off'],['1','Normal'],['2','High']],String(PXPRE.all[c]))}</select></label>`).join('')}</div>
- <div class="ctl"><label class="mu" style="align-self:center"><input type="checkbox" id="lpos" checked style="min-height:0"> Same position only</label><label class="mu" style="align-self:center"><input type="checkbox" id="l9" checked style="min-height:0"> Per 90</label><input id="lmin" type="number" value="600" style="width:120px" placeholder="Min minutes"><select id="lsc">${pxOpts([['one','This league'],['all','All leagues (loads more data)']],'one')}</select><select id="ln">${pxOpts([['10','10 results'],['15','15 results'],['25','25 results']],'15')}</select></div>
- <details><summary>Pick individual statistics</summary><div id="lks" class="mu"></div></details></div><div id="lout"></div>`;
- let selKey='',tok=0;
- const renderKs=()=>{$('#lks').innerHTML=PXG.map(([c,n])=>{const ks=P.keys.filter(k=>k.c===c);if(!ks.length)return '';return `<div style="margin:6px 0"><b>${n}</b>`+ks.map(k=>`<label style="display:block"><input type="checkbox" data-k="${esc(k.k)}" ${ex.has(k.k)?'':'checked'} style="min-height:0"> ${esc(k.l)}</label>`).join('')+'</div>'}).join('')};
- const run=async()=>{
-  const my=++tok,out=$('#lout');
-  const tgt=P.players.find(p=>p.player+'||'+p.club===selKey);
-  if(!tgt){out.innerHTML='<div class="empty">Pick a player.</div>';return}
-  const all=$('#lsc').value==='all';let pool=P.players;
-  if(all){out.innerHTML='<div class="empty">Loading all leagues…</div>';pool=[];
-   for(const l of ALL.leagues){try{const x=await loadPX(l.id);if(x)pool=pool.concat(x.players)}catch(e){}if(my!==tok)return}}
-  const o={per:$('#l9').checked,pos:$('#lpos').checked,min:num($('#lmin').value)||0,w:{},ex};
-  PXG.forEach(([c])=>{o.w[c]=+($('#w_'+c).value||0)});
-  const res=pxSimilar(tgt,pool,P.keys,o);
-  if(my!==tok)return;
-  if(res.err){out.innerHTML=`<div class="empty">${res.err}</div>`;return}
-  const nn=+($('#ln').value||15),keys=P.keys,mode=o.per?'p':'v';
-  const want=[],addK=k=>{if(k&&!want.some(x=>x.k===k.k))want.push(k)};
-  const isx=k=>/^(expectedgoals|xg)$/.test(pxNr(k.k))||/^(expectedgoals|xg)$/.test(pxNr(k.l));
-  const isg=k=>/^goals$/.test(pxNr(k.k))||/^goals$/.test(pxNr(k.l));
-  addK(keys.find(isx));addK(keys.find(isg));
-  const dfn=res.feats.map((f,i)=>({f,z:res.zt[i]})).sort((a,b)=>Math.abs(b.z)-Math.abs(a.z));
-  dfn.slice(0,8).forEach(d=>addK(keys.find(k=>k.k===d.f.k)));
-  const defTxt=dfn.slice(0,6).map(d=>`${esc(d.f.l)} (${d.z>0?'+':''}${d.z.toFixed(1)})`).join(', ');
-  const row=(p,i,sim,me)=>{const b=s=>me?`<b>${s}</b>`:s;return [me?'★':i,b(esc(p.player)),esc(p.club)+(all?' <span class="mu">· '+esc(p.lg||'')+'</span>':''),p.pos||'N/A',Math.round(p.min||0),me?'—':sim.toFixed(0)+'%',...want.map(k=>b(pxFmt(p[mode][k.k],k.r)))]};
-  const rows=[row(tgt,0,0,true),...res.rows.slice(0,nn).map((r,i)=>row(r.p,i+1,r.sim,false))];
-  out.innerHTML=`<div class="mu" style="margin-bottom:6px">Compared with ${res.n-1} players using ${res.feats.length} statistics (${o.per?'per 90':'season totals'}). What defines ${esc(tgt.player)} (z-score vs peers): ${defTxt}.</div>`+
-   tbl([['#',1],['Player'],['Club'],['Pos'],['Min',1],['Similarity',1],...want.map(k=>[esc(k.l),1])],rows);
- };
- const fillTargets=()=>{const s=($('#lq').value||'').toLowerCase().trim();
-  const L=byMin.filter(p=>!s||p.player.toLowerCase().includes(s)).slice(0,400),ids=L.map(p=>p.player+'||'+p.club);
-  selKey=ids.includes(selKey)?selKey:(ids[0]||'');
-  $('#lp').innerHTML=pxOpts(L.map(p=>[p.player+'||'+p.club,p.player+' · '+p.club+' · '+(p.pos||'?')+' · '+Math.round(p.min)+' min']),selKey);run()};
- $('#lq').oninput=fillTargets;$('#lp').onchange=()=>{selKey=$('#lp').value;run()};
- $('#lpre').onchange=()=>{const p=PXPRE[$('#lpre').value]||PXPRE.all;PXG.forEach(([c])=>{$('#w_'+c).value=String(p[c]||0)});run()};
- $('#lks').onchange=ev=>{const k=ev.target&&ev.target.getAttribute&&ev.target.getAttribute('data-k');if(k){ev.target.checked?ex.delete(k):ex.add(k);run()}};
- ['lpos','l9','lsc','ln'].concat(PXG.map(([c])=>'w_'+c)).forEach(i=>$('#'+i).onchange=run);$('#lmin').oninput=run;
- renderKs();fillTargets();
-};
-'''
-
-
-def _px_patch_index(html):
-    def sub(h, old, new):
-        if h.count(old) != 1:
-            log(f"  تنبيه (إضافة 2): ما لقيت نقطة التعديل بدقة، تخطيتها: {old[:50]}")
-            return h
-        return h.replace(old, new)
-    if not _px_on():
-        return html
-    h = html
-    nav = ("['defending','Defending']," if PX_DEFENDING else "") + \
-          ("['pressing','Pressing']," if PX_PRESSING else "") + \
-          ("['looklike','Look like']," if PX_LOOKLIKE else "")
-    h = sub(h, "['passing','Passing'],", "['passing','Passing']," + nav)
-    h = sub(h, "try{localStorage.setItem('league',D.id)}catch(e){}",
-            "delete PXC[D.id];try{localStorage.setItem('league',D.id)}catch(e){}")
-    js = _PX_JS_CORE
-    if PX_DEFENDING or PX_PRESSING:
-        js += _PX_JS_TABLE
-    if PX_DEFENDING:
-        js += _PX_JS_DEFENDING
-    if PX_PRESSING:
-        js += _PX_JS_PRESSING
-    if PX_LOOKLIKE:
-        js += _PX_JS_LOOK
-    return sub(h, "async function route(){", js + "\nasync function route(){")
-
-
-INDEX = _px_patch_index(INDEX)
-
-
-# ---------------- وضع الفحص: يطبع شكل ردود players / advanced_players ----------------
-def px_probe(pit_key):
-    with PitchAPI(api_key=pit_key) as client:
-        res, err = call(lambda: client.leagues.matches("l_4WFCIZ", season=None, status="played"))
-        if res is None or not list(res.matches):
-            log("ما قدرت أجلب مباراة للفحص:", err)
-            return
-        mid = list(res.matches)[0].id
-        log(f"فحص المباراة {mid}")
-        pls, e1 = call(client.matches.players, mid)
-        log("\n" + "=" * 40 + "\nplayers()")
-        if not pls:
-            log("  لا يوجد رد:", e1)
-        else:
-            p = max(list(pls), key=lambda x: len(getattr(x, "stats", None) or []))
-            st, meta = _px_stats(p)
-            log(f"  لاعب: {pname(p)} | عدد الإحصائيات: {len(st)}")
-            for k, v in st.items():
-                label, grp = meta[k]
-                log(f"    [{_px_classify(k, label, grp):6}] {'rate' if _px_israte(k, label) else 'count'} "
-                    f"| مجموعة: {grp} | {k} = {v}")
-        adv, e2 = call(client.matches.advanced_players, mid)
-        log("\n" + "=" * 40 + "\nadvanced_players()")
-        if adv is None:
-            log("  لا يوجد رد:", e2)
-        else:
-            plist = list(getattr(adv, "players", None) or [])
-            if plist:
-                for path, v in _px_flat(plist[0]).items():
-                    log(f"    [{_px_classify('adv.' + path, _px_human(path), path.split('.')[0]):6}] adv.{path} = {v}")
-        log("\nانسخ كل هذا الناتج وأرسله لي لنتأكد من التصنيف.")
-
-
-_px_prev_main = main
-
-def main():
-    if PX_PROBE and os.environ.get("GITHUB_ACTIONS") != "true":
-        return px_probe(get_secret("PITCHAPI_KEY", "PitchAPI key: "))
-    return _px_prev_main()
-# ======================== نهاية الإضافة 2 (v2) ========================
 
 
 if __name__ == "__main__":
