@@ -6,10 +6,14 @@
 # مستضاف على GitHub، فيفتح بنفس الرابط من أي جهاز (آيباد، جوال، كمبيوتر)
 # بدون Colab وبدون iframe.
 #
+# الملف كله قطعة وحدة: الصقه كاملاً في خلية Colab واحدة وشغّلها.
+#
 # قبل أول تشغيل (مرة واحدة فقط) — Colab ← المفاتيح (🔑 Secrets):
 #   PITCHAPI_KEY  = مفتاح PitchAPI
-#   GITHUB_TOKEN  = GitHub Personal access token (classic) بصلاحية repo
-# ثم الصق الملف كاملاً في خلية وشغّلها. يطبع لك رابط الموقع في الآخر.
+#   GITHUB_TOKEN  = GitHub Personal access token (classic) بصلاحية repo + workflow
+#
+# بعد أول تشغيل: التحديث يتم من زر Synchronize في صفحة Settings بالموقع
+# (أو تلقائياً كل 5 دقايق). ما تحتاج ترجع تشغّل Colab إلا إذا غيّرت الكود نفسه.
 # ============================================================
 import os, re, sys, time, json, base64, hashlib, sqlite3, datetime, subprocess
 from getpass import getpass
@@ -40,6 +44,7 @@ LEAGUE_TARGETS = [
 EXTRA_LEAGUE_IDS = []         # أي دوري ثاني تبغاه: حط الـID هنا (من LIST_LEAGUES)
 GLOBAL_EXCLUDE = ("women", "feminin", "femenin", "qualif", "youth", "u17", "u18",
                   "u19", "u20", "u21", "u23", "reserve")
+BLOCKED_COUNTRIES = ("brazil", "brasil")   # دوريات مستبعدة نهائياً (الدوري البرازيلي محذوف)
 LIST_LEAGUES = False          # True = يطبع أسماء الدوريات و IDs ثم يتوقف
 REPO_NAME = "pl-analytics"    # اسم المستودع على GitHub (يُنشأ تلقائياً)
 SETUP_AUTOMATION = True       # يجهّز زر Synchronize والتحديث التلقائي على GitHub Actions
@@ -47,6 +52,10 @@ COLAB_DOES_SYNC = False       # False = أول مزامنة تشتغل على Gi
 SYNC_CRON = "3-59/5 * * * *"  # تحديث تلقائي كل 5 دقايق (أقل فاصل يسمح به GitHub)
 RETRY_RECENT_MIN = 30         # مباراة لعبت قريباً وتحليلاتها ناقصة: أعد المحاولة كل N دقيقة
 RETRY_OLD_MIN = 720           # مباراة قديمة ناقصة: أعد المحاولة كل N دقيقة (حتى لا نستنزف الـAPI)
+# زر Synchronize في الموقع يشغّل المزامنة بوضع force: يعيد محاولة المباريات الناقصة
+# اللي انلعبت خلال آخر FORCE_RECENT_DAYS يوم فوراً (بدون انتظار فاصل الإعادة).
+FORCE_SYNC = os.environ.get("FORCE_SYNC", "").strip().lower() == "true"
+FORCE_RECENT_DAYS = 14
 PUBLISH_EVERY = 40            # ينشر نسخة جزئية كل N مباراة (حتى لا يضيع التقدم)
 DB_PATH = "/content/pl_app.db" if os.path.isdir("/content") else "pl_app.db"
 RETRY_WAITS = (5, 15, 30, 60)
@@ -302,17 +311,21 @@ def _parse_ts(ts):
         return None
 
 def match_due(r):
-    """هل نجلب هذه المباراة الآن؟ المكتملة لا تُعاد، والناقصة تُعاد بفاصل زمني (backoff)."""
+    """هل نجلب هذه المباراة الآن؟ المكتملة لا تُعاد، والناقصة تُعاد بفاصل زمني (backoff).
+    في وضع force (زر Synchronize): الناقصة اللي انلعبت خلال FORCE_RECENT_DAYS يوم تُعاد فوراً."""
     if r is None or r["status"] in (None, "pending") or not r["fetched_at"]:
         return True
     if r["status"] == "ok":
         return False
+    t_now = datetime.datetime.now(datetime.timezone.utc)
+    played = _parse_ts(r["date"])
+    if FORCE_SYNC and played is not None and (t_now - played).days < FORCE_RECENT_DAYS:
+        return True
     last = _parse_ts(r["fetched_at"])
     if last is None:
         return True
-    age_min = (datetime.datetime.now(datetime.timezone.utc) - last).total_seconds() / 60
-    played = _parse_ts(r["date"])
-    recent = played is not None and (datetime.datetime.now(datetime.timezone.utc) - played).days < 3
+    age_min = (t_now - last).total_seconds() / 60
+    recent = played is not None and (t_now - played).days < 3
     return age_min >= (RETRY_RECENT_MIN if recent else RETRY_OLD_MIN)
 
 def sync_league(client, league_id, on_progress=None):
@@ -412,6 +425,11 @@ def restore_payload(payload):
         restore_league(lg)
 
 # ---------------- تحديد الدوريات تلقائياً بالاسم ----------------
+def is_blocked(lg):
+    """دوري مستبعد نهائياً (حسب الدولة أو الاسم)، مثل الدوري البرازيلي."""
+    s = nrm(txt(getattr(lg, "country", None))) + "|" + nrm(getattr(lg, "name", ""))
+    return any(b in s for b in BLOCKED_COUNTRIES)
+
 def resolve_leagues(client):
     res, err = call(client.leagues.list)
     items = list(getattr(res, "leagues", None) or res or []) if res is not None else []
@@ -426,6 +444,9 @@ def resolve_leagues(client):
     def add(lg):
         if str(lg.id) in seen:
             return
+        if is_blocked(lg):
+            log(f"  ⊘ تم استبعاد {lg.name} [{lg.id}] (دوري محذوف)")
+            return
         seen.add(str(lg.id))
         metas.append(dict(id=str(lg.id), name=lg.name, country=txt(getattr(lg, "country", None))))
 
@@ -436,7 +457,8 @@ def resolve_leagues(client):
             bad = GLOBAL_EXCLUDE + tuple(t.get("exclude", ()))
             cands = [l for l in items
                      if any(nrm(w) in nrm(l.name) for w in t["words"])
-                     and not any(nrm(x) in nrm(l.name) for x in bad)]
+                     and not any(nrm(x) in nrm(l.name) for x in bad)
+                     and not is_blocked(l)]
             c = t.get("country")
             if len(cands) > 1 and c:
                 pref = [l for l in cands if nrm(c) in nrm(txt(getattr(l, "country", None)))]
@@ -548,8 +570,6 @@ def gh_setup(token, name):
     branch = info.get("default_branch", "main")
     return dict(token=token, repo=repo, branch=branch, pages=False,
                 url=f"https://{login}.github.io/{name}/")
-
-# ===== نهاية الجزء 1 من 6 — كمّل الصق الجزء 2 تحت هذا السطر مباشرة =====
 def git_blob_sha(b):
     return hashlib.sha1(b"blob %d\0" % len(b) + b).hexdigest()
 
@@ -580,6 +600,32 @@ def gh_get_json(hub, path):
         return r.json()
     except Exception:
         return None
+
+def gh_delete(hub, path):
+    """يحذف ملفاً من المستودع. ترجع True إذا انحذف."""
+    url = f"{GH}/repos/{hub['repo']}/contents/{path}"
+    r = requests.get(url, params={"ref": hub["branch"]}, timeout=60,
+                     headers=gh_headers(hub["token"], "application/vnd.github.object+json"))
+    if r.status_code != 200:
+        return False
+    sha = r.json().get("sha")
+    r = requests.delete(url, json={"message": f"Remove {path}", "sha": sha, "branch": hub["branch"]},
+                        headers=gh_headers(hub["token"]), timeout=60)
+    return r.status_code == 200
+
+def prune_blocked(hub):
+    """يحذف من GitHub ملفات الدوريات المستبعدة (مثل البرازيلي) اللي نُشرت سابقاً.
+    يقرأ الفهرس القديم ويحذف فقط الدوريات اللي دولتها/اسمها في BLOCKED_COUNTRIES."""
+    old = gh_get_json(hub, "data/index.json")
+    for lg in (old or {}).get("leagues", []):
+        s = nrm(lg.get("country", "")) + "|" + nrm(lg.get("name", ""))
+        if not any(b in s for b in BLOCKED_COUNTRIES):
+            continue
+        log(f"حذف بيانات {lg.get('name')} من GitHub (دوري مستبعد)...")
+        for key in ("file", "adv_file", "heat_file", "pl_file", "sh_file"):
+            fn = lg.get(key)
+            if fn and gh_delete(hub, f"data/{fn}"):
+                log(f"  تم حذف data/{fn}")
 
 def gh_restore(hub, metas):
     """يرجّع البيانات المحفوظة (لكل دوري ليس عنده بيانات محلية). ترجع عدد الدوريات."""
@@ -638,6 +684,11 @@ def gh_pages_status(hub, wait=120):
 WORKFLOW_YML = r"""name: Sync data
 on:
   workflow_dispatch:
+    inputs:
+      force:
+        description: "Retry incomplete recent matches immediately"
+        required: false
+        default: "false"
   schedule:
     - cron: "__CRON__"
 concurrency:
@@ -661,6 +712,7 @@ jobs:
         env:
           PITCHAPI_KEY: ${{ secrets.PITCHAPI_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORCE_SYNC: ${{ github.event.inputs.force }}
         run: |
           python3 -m venv .venv
           . .venv/bin/activate
@@ -689,14 +741,20 @@ def gh_set_secret(hub, name, value):
         raise RuntimeError(f"GitHub {r.status_code}: {r.text[:120]}")
 
 
-def gh_dispatch(hub):
-    """يشغّل المزامنة على GitHub Actions."""
+def gh_dispatch(hub, force=True):
+    """يشغّل المزامنة على GitHub Actions (force = يعيد محاولة المباريات الناقصة الحديثة فوراً)."""
     url = f"{GH}/repos/{hub['repo']}/actions/workflows/sync.yml/dispatches"
     r = None
     for _ in range(6):                      # أحياناً يتأخر GitHub ثواني قبل ما يشوف الملف الجديد
-        r = requests.post(url, json={"ref": hub["branch"]}, headers=gh_headers(hub["token"]), timeout=30)
+        body = {"ref": hub["branch"]}
+        if force:
+            body["inputs"] = {"force": "true"}
+        r = requests.post(url, json=body, headers=gh_headers(hub["token"]), timeout=30)
         if r.status_code == 204:
             return True
+        if r.status_code == 422 and force:  # الـworkflow القديم ما يعرف input اسمه force
+            force = False
+            continue
         if r.status_code != 404:
             break
         time.sleep(5)
@@ -947,7 +1005,7 @@ async function reloadData(){
  head();
 }
 const tag=s=>`<span class="tag ${s}">${({ok:'Complete',partial:'Partial',no_data:'No data',failed:'Failed',pending:'Not checked',available:'Available',missing:'Missing',ni:'Not yet integrated'})[s]||s}</span>`;
-const tbl=(h,rows)=>rows.length?`<div class="wrap"><table><tr>${h.map(x=>`<th class="${x[1]?'n':''}">${x[0]}</th>`).join('')}</tr>${rows.map(r=>`<tr>${r.map((c,i)=>`<td class="${h[i][1]?'n':''}">${c}</td>`).join('')}</tr>`).join('')}</table></div>`:'<div class="empty">No data yet. Run the Colab cell to update the data.</div>';
+const tbl=(h,rows)=>rows.length?`<div class="wrap"><table><tr>${h.map(x=>`<th class="${x[1]?'n':''}">${x[0]}</th>`).join('')}</tr>${rows.map(r=>`<tr>${r.map((c,i)=>`<td class="${h[i][1]?'n':''}">${c}</td>`).join('')}</tr>`).join('')}</table></div>`:'<div class="empty">No data yet. Press Synchronize in Settings to update the data.</div>';
 const mlink=m=>`<a href="#/match/${esc(m.match_id)}">${esc(m.home)} ${esc(m.score)} ${esc(m.away)}</a>`;
 function bars(vals,labels,title){
  const v=vals.filter(x=>x!=null);if(!v.length)return `<div class="empty">${title}: no data</div>`;
@@ -1023,38 +1081,62 @@ const R={
   <div class="card"><h3>Leagues</h3>${tbl([['League'],['Country'],['Matches',1],['Analysed',1]],ALL.leagues.map(l=>[esc(l.name),esc(l.country||''),l.matches??'',l.ok??'']))}
   <div class="mu" style="margin-top:8px">Data updated (UTC): ${esc(ALL.generated||'N/A')}</div></div>
   <div class="card"><h3>Synchronize</h3>
-  <p class="mu">Fetches new matches from PitchAPI and refreshes this site. It also runs automatically on a schedule.</p>
+  <p class="mu">One press fetches every new match from PitchAPI, retries recent matches whose analytics were incomplete, and then refreshes this site by itself when the new data is published. It also runs automatically on a schedule.</p>
   <div class="ctl"><input id="ghrepo" value="${esc(GH_REPO())}" placeholder="owner/repo" style="flex:1;min-width:180px"></div>
   <div class="ctl"><input id="ghtok" type="password" placeholder="GitHub token (kept on this device only)" value="${ghTok()?'••••••••':''}" style="flex:1;min-width:180px"><button class="s" id="svtok">Save</button><button class="s" id="cltok">Clear</button></div>
   <p class="mu" style="font-size:12px">Create a fine-grained token for this repository only, with the permission Actions: Read and write. It is stored in this browser and only sent to GitHub.</p>
   <div class="ctl"><button id="sy">Synchronize now</button><button class="s" id="rl">Reload data</button></div><div id="ss" class="mu"></div></div>`;
   const msg=t=>{const e=$('#ss');if(e)e.textContent=t};
   const repo=()=>((($('#ghrepo')||{}).value)||GH_REPO()).trim();
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
   $('#svtok').onclick=()=>{try{const v=$('#ghtok').value.trim();if(v&&!v.startsWith('•'))localStorage.setItem('gh_token',v);localStorage.setItem('gh_repo',repo());msg('Saved on this device.')}catch(e){msg('Could not save: '+e.message)}};
   $('#cltok').onclick=()=>{try{localStorage.removeItem('gh_token')}catch(e){}$('#ghtok').value='';msg('Token removed from this device.')};
-  const showRun=async(follow)=>{
-   const r=await ghApi(`/repos/${repo()}/actions/workflows/sync.yml/runs?per_page=1`);
-   if(!r.ok){msg('Could not read sync status (HTTP '+r.status+').');return}
-   const run=((await r.json()).workflow_runs||[])[0];
-   if(!run){msg('No sync has run yet.');return}
-   const when=(run.created_at||'').replace('T',' ').replace('Z',' UTC');
-   if(run.status!=='completed'){msg('Sync running ('+run.status+') · started '+when);if(follow&&$('#ss'))setTimeout(()=>showRun(true),15000);return}
-   msg(run.conclusion==='success'?'Last sync finished OK · '+when+'. If you just ran it, wait about a minute, then press Reload data.':'Last sync '+run.conclusion+' · '+when+'. Open the Actions tab of the repository to see why.');
-  };
+  const runs=async()=>{const r=await ghApi(`/repos/${repo()}/actions/workflows/sync.yml/runs?per_page=10`);if(!r.ok)throw new Error('HTTP '+r.status);return (await r.json()).workflow_runs||[]};
+  const showRun=async()=>{
+   try{
+    const run=(await runs())[0];
+    if(!run){msg('No sync has run yet.');return}
+    const when=(run.created_at||'').replace('T',' ').replace('Z',' UTC');
+    msg(run.status!=='completed'?'A sync is running now ('+run.status+'), started '+when:'Last sync '+(run.conclusion==='success'?'finished OK':run.conclusion)+' · '+when);
+   }catch(e){msg('Could not read sync status ('+e.message+').')}};
+  if(window.SYNC_NOTE){msg(window.SYNC_NOTE);window.SYNC_NOTE=''}else showRun();
   $('#sy').onclick=async()=>{
    if(!ghTok()){msg('Save a GitHub token first.');return}
    $('#sy').disabled=true;
    try{
+    const before=await runs(),lastId=before.length?before[0].id:0,prev=ALL.generated||'';
     const info=await (await ghApi('/repos/'+repo())).json();
-    const r=await ghApi(`/repos/${repo()}/actions/workflows/sync.yml/dispatches`,{method:'POST',body:JSON.stringify({ref:info.default_branch||'main'})});
-    if(r.status===204){msg('Sync started…');setTimeout(()=>showRun(true),4000)}
-    else if(r.status===404)msg('Not found (404): check the repository name, or the token has no access to it.');
-    else if(r.status===403||r.status===401)msg('Token not allowed ('+r.status+'): it needs Actions: Read and write on this repository.');
-    else msg('GitHub answered '+r.status+'.');
+    const ref=info.default_branch||'main';
+    const send=inputs=>ghApi(`/repos/${repo()}/actions/workflows/sync.yml/dispatches`,{method:'POST',body:JSON.stringify(inputs?{ref,inputs}:{ref})});
+    let r=await send({force:'true'});
+    if(r.status===422)r=await send(null);
+    if(r.status===404){msg('Not found (404): check the repository name, or the token has no access to it.');return}
+    if(r.status===403||r.status===401){msg('Token not allowed ('+r.status+'): it needs Actions: Read and write on this repository.');return}
+    if(r.status!==204){msg('GitHub answered '+r.status+'.');return}
+    msg('Sync requested. Waiting for GitHub to start it…');
+    let run=null;const stop=Date.now()+45*60000;
+    while(Date.now()<stop){
+     await sleep(10000);
+     if(!$('#ss'))return;
+     run=(await runs()).find(x=>x.event==='workflow_dispatch'&&x.id>lastId)||null;
+     if(!run){msg('Waiting for GitHub to start the sync…');continue}
+     if(run.status==='completed')break;
+     msg(['queued','pending','waiting'].includes(run.status)?'Queued: another sync is still running, yours starts right after it…':'Syncing matches from PitchAPI… you can leave this page and come back.');
+    }
+    if(!run||run.status!=='completed'){msg('Still running. Check the Actions tab of the repository, then press Reload data.');return}
+    if(run.conclusion!=='success'){msg('Sync '+run.conclusion+'. Open the Actions tab of the repository to see why.');return}
+    msg('Sync finished. Waiting for the site to publish the new data…');
+    for(let i=0;i<24;i++){
+     const x=await fetch('data/index.json?'+Date.now());
+     if(x.ok){const j=await x.json();
+      if((j.generated||'')!==prev){await reloadData();window.SYNC_NOTE='Updated. Data as of '+j.generated+' UTC.';await route();return}}
+     await sleep(10000);
+     if(!$('#ss'))return;
+    }
+    msg('Sync finished and nothing new was available. Everything PitchAPI has for now is already here.');
    }catch(e){msg('Failed: '+e.message)}
-   $('#sy').disabled=false};
+   finally{const b=$('#sy');if(b)b.disabled=false}};
   $('#rl').onclick=async()=>{try{msg('Reloading…');await reloadData();msg('Data reloaded.')}catch(e){msg('Reload failed: '+e.message)}};
-  showRun(false);
  },
  async data(el){
   const r=await api('/api/availability');
@@ -1083,11 +1165,9 @@ async function route(){
   window.onhashchange=route;route();
  }catch(e){
   $('#lg').textContent='';
-  $('#app').innerHTML=`<div class="empty">No data yet. Run the Colab cell once (it starts the first sync), then reload this page.<br><span class="mu">${esc(e.message)}</span></div>`}
+  $('#app').innerHTML=`<div class="empty">No data yet. The first sync is running in the background, reload this page in a few minutes.<br><span class="mu">${esc(e.message)}</span></div>`}
 })();
 </script></body></html>"""
-
-# ===== نهاية الجزء 2 من 6 — كمّل الصق الجزء 3 تحت هذا السطر مباشرة =====
 # ---------------- التشغيل ----------------
 def get_secret(name, prompt):
     v = os.environ.get(name)
@@ -1116,6 +1196,12 @@ def run_pipeline(hub, pit_key):
         if not metas:
             log("ما لقيت أي دوري. شغّل LIST_LEAGUES = True وحط الـIDs في EXTRA_LEAGUE_IDS.")
             return False
+        try:
+            prune_blocked(hub)       # يشيل الدوريات المستبعدة (البرازيلي) من GitHub
+        except Exception as e:
+            log(f"  تعذر تنظيف الدوريات المستبعدة: {type(e).__name__}: {e}")
+        if FORCE_SYNC:
+            log(f"وضع force: إعادة محاولة المباريات الناقصة اللي انلعبت خلال آخر {FORCE_RECENT_DAYS} يوم.")
         n = gh_restore(hub, metas)
         if n:
             log(f"تم تحميل بيانات {n} دوري من GitHub (المزامنة تراكمية).")
@@ -1213,6 +1299,7 @@ def main():
                 log("\nبدأت أول مزامنة على GitHub (تشتغل بالخلفية، وتقدر تقفل Colab).")
                 log(f"  تابع التقدم: https://github.com/{hub['repo']}/actions")
                 log(f"  الموقع (يظهر بعد أول نشر، وفيه صفحة Settings فيها زر Synchronize): {hub['url']}")
+                log("  من الحين: التحديث بزر Synchronize في الموقع، ما تحتاج ترجع تشغّل Colab.")
                 return
             log("سأكمل المزامنة من Colab...")
         log("\n" + "=" * 55)
@@ -1229,10 +1316,8 @@ def main():
 
 # ============================================================================
 # إضافة (ADD-ON): PPDA + شبكة التمريرات (Passing) + خريطة الحرارة (Heatmaps)
-# الصق هذه الكتلة كما هي في آخر الملف، قبل السطرين:
-#     if __name__ == "__main__":
-#         main()
-# ما تغيّر أي سطر من كودك الأصلي: الإضافة تلفّ دوال موجودة (تستدعيها كما هي) وتضيف فوقها.
+# + الدفاع + Look Like + التسديدات.
+# ما تغيّر أي سطر من الكود الأصلي أعلاه: الإضافة تلفّ دوال موجودة (تستدعيها كما هي) وتضيف فوقها.
 # ============================================================================
 PROBE = False   # True = يطبع شكل ردود PitchAPI الحقيقية لمباراة واحدة ثم يتوقف (للتأكد من أسماء الحقول)
 EXTRA_INDEX = {}                 # يُملأ عند النشر: أسماء ملفات الإضافة لكل دوري (تدخل في data/index.json)
@@ -1578,8 +1663,6 @@ _TD_F = [("hto", "defending", "high_turnovers"), ("cpr", "defending", "counterpr
          ("blk", "defending", "blocks"), ("clr", "defending", "clearances"), ("duw", "defending", "duels_won"),
          ("aer", "defending", "aerials"), ("aerw", "defending", "aerials_won"), ("tilt", "territory", "field_tilt")]
 _TD_COLS = [c for c, _, _ in _TD_F]
-
-# ===== نهاية الجزء 3 من 6 — كمّل الصق الجزء 4 تحت هذا السطر مباشرة =====
 def _x_plrows(res):
     out = []
     for p in _g(res, "players") or []:
@@ -2073,8 +2156,6 @@ R.heatmaps=async function(el){
 };
 
 '''
-
-# ===== نهاية الجزء 4 من 6 — كمّل الصق الجزء 5 تحت هذا السطر مباشرة =====
 _X_JS += r'''
 /* ---------- Passing: pass network + pass-category counts ---------- */
 const PF=[['','All players (sort by passes)'],['pr','Progressive passes'],['kp','Key passes'],['tb','Through balls'],['cr','Crosses'],['bx','Passes into box'],['sw','Switches'],['as','Assists']];
@@ -2310,8 +2391,6 @@ R.looklike=async function(el){
  fillPlayers();
 };
 '''
-
-# ===== نهاية الجزء 5 من 6 — كمّل الصق الجزء 6 تحت هذا السطر مباشرة =====
 _X_JS += r'''
 /* ---------- Shots (reads data/*_sh.json: one row per shot, every field PitchAPI gives) ---------- */
 let SHD=null;
