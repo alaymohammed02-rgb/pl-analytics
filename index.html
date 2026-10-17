@@ -48,7 +48,7 @@ async function setLeague(id){
  D={id:meta.id,name:meta.name,
   matches:L.matches.map(m=>({match_id:String(m.i),date:m.d||'',home:m.h,away:m.a,score:m.s,status:m.t||'pending',fetched_at:m.f})),
   stats:L.stats.map(s=>({match_id:String(s.m),key:String(s.k),player_id:s.i,player:s.p,club:s.c,pos:s.o,xt:s.xt,xg:s.xg,xg_faced:s.xf,minutes:s.mi}))};
- AGGC=null;ADV=null;HEAT=null;PLD=null;try{localStorage.setItem('league',D.id)}catch(e){}
+ AGGC=null;ADV=null;HEAT=null;PLD=null;SHD=null;try{localStorage.setItem('league',D.id)}catch(e){}
 }
 function head(){
  const one=ALL.leagues.length<2;
@@ -267,7 +267,7 @@ const R={
   try{await loadAdv()}catch(e){}const r=await api('/api/availability');
   el.innerHTML=`<h2>Data Availability</h2><div class="mu" style="margin-bottom:8px">Stable player ID found on ${r.id_pct==null?'N/A':r.id_pct.toFixed(0)+'%'} of player rows. Rows without an ID are matched by name.</div>`+
   tbl([['Date'],['Match'],['Sync'],['xT'],['xG'],['Minutes'],['Shots'],['Heatmap'],['Passing network'],['Lineups']],
-   r.rows.map(m=>[esc(m.date.slice(0,10)),esc(m.home+' v '+m.away),tag(m.status),tag(m.xt),tag(m.xg),tag(m.mi),tag('ni'),exTag(m,'h'),exTag(m,'n'),tag('ni')]))}
+   r.rows.map(m=>[esc(m.date.slice(0,10)),esc(m.home+' v '+m.away),tag(m.status),tag(m.xt),tag(m.xg),tag(m.mi),exTag(m,'s'),exTag(m,'h'),exTag(m,'n'),tag('ni')]))}
 };
 /* ===== Addon: Passing network / Heatmaps / PPDA (reads data/*_adv.json and data/*_heat.json) ===== */
 let ADV=null,HEAT=null;
@@ -573,6 +573,92 @@ R.looklike=async function(el){
  LG.forEach(([k])=>{$('#g_'+k).onchange=()=>{const on=$('#g_'+k).checked;MET.forEach(m=>{if(m[2]===k){ON[m[0]]=on;$('#m_'+m[0]).checked=on}});run()}});
  MET.forEach(m=>{$('#m_'+m[0]).onchange=()=>{ON[m[0]]=$('#m_'+m[0]).checked;run()}});
  fillPlayers();
+};
+
+/* ---------- Shots (reads data/*_sh.json: one row per shot, every field PitchAPI gives) ---------- */
+let SHD=null;
+async function loadSh(){if(SHD)return SHD;const m=lgMeta();if(!m.sh_file)return null;const d=await loadJson(m.sh_file,m.sh_v);d.rows=d.rows.map(r=>{const o={};d.cols.forEach((c,k)=>o[c]=r[k]);return o});SHD=d;return d}
+const SIT={RegularPlay:'Regular play',FromCorner:'From corner',SetPiece:'Set piece',FastBreak:'Fast break',FreeKick:'Free kick',ThrowInSetPiece:'Throw-in set piece',Penalty:'Penalty',IndividualPlay:'Individual play'};
+const BODY={RightFoot:'Right foot',LeftFoot:'Left foot',Header:'Header',OtherBodyParts:'Other body part'};
+const SHCOL={Goal:'#4cc38a',Saved:'#5aa9e6','Off target':'#8a9bb0',Post:'#e9b44c',Blocked:'#e5646b'};
+const shCls=s=>s.og?'Own goal':s.ev==='Goal'?'Goal':s.bl?'Blocked':s.ev==='AttemptSaved'?'Saved':s.ev==='Post'?'Post':s.ev==='Miss'?'Off target':(s.ev||'Unknown');
+const shDist=s=>(s.x!=null&&s.y!=null)?Math.hypot(105-s.x,34-s.y):null;
+/* rows must exclude own goals. Goals-minus-xG uses only shots that have an xG, so numerator and denominator cover the same shots. */
+function shStats(rows){
+ let g=0,gx=0,ot=0,bl=0,sv=0,po=0,pe=0,xg=0,npxg=0,xo=0,xoN=0,ib=0,ibN=0,ds=0,dn=0,xgN=0;
+ rows.forEach(s=>{const c=shCls(s);if(c==='Goal')g++;if(c==='Saved')sv++;if(c==='Post')po++;if(s.ot===1)ot++;if(s.bl===1)bl++;if(s.st==='Penalty')pe++;
+  if(s.xg!=null){xgN++;xg+=s.xg;if(s.st!=='Penalty')npxg+=s.xg;if(c==='Goal')gx++}
+  if(s.xo!=null){xoN++;xo+=s.xo}
+  if(s.ib!=null){ibN++;if(s.ib===1)ib++}
+  const d=shDist(s);if(d!=null){ds+=d;dn++}});
+ const n=rows.length;
+ return {n,g,ot,bl,sv,po,pe,xg:xgN?xg:null,npxg:xgN?npxg:null,xo:xoN?xo:null,ib:ibN?ib/ibN*100:null,dist:dn?ds/dn:null,
+  conv:n?g/n*100:null,sot:n?ot/n*100:null,sotc:ot?g/ot*100:null,xgps:xgN?xg/xgN:null,gxg:xgN?gx-xg:null};
+}
+let SHCUR=[];
+function shSel(i){
+ const s=SHCUR[i],b=$('#shd');if(!s||!b)return;
+ const mm=D.matches.find(m=>m.match_id===s.m),mn=s.mn==null?'N/A':s.mn+(s.ma?'+'+s.ma:'')+"'";
+ b.innerHTML=`<b>${esc(s.pn)}</b> · ${esc(s.c)}<div class="mu">${mm?esc(mm.date.slice(0,10)+'  '+mm.home+' '+mm.score+' '+mm.away)+'<br>':''}Minute ${mn} · ${esc(s.pd||'')}<br>Outcome: ${shCls(s)} · ${esc(SIT[s.st]||s.st||'N/A')} · ${esc(BODY[s.ty]||s.ty||'N/A')}<br>xG ${f(s.xg,2)} · xGOT ${f(s.xo,2)} · ${s.ib==null?'box N/A':(s.ib?'inside the box':'outside the box')}<br>Struck at x ${f(s.x,1)} m, y ${f(s.y,1)} m (${f(shDist(s),1)} m from the goal centre, derived)<br>Goal-line crossing: y ${f(s.gy,1)} m, height ${f(s.gz,2)} m${s.blx!=null?'<br>Blocked at x '+f(s.blx,1)+' m, y '+f(s.bly,1)+' m':''}${s.kn?'<br>Goalkeeper: '+esc(s.kn):''}${s.sl?'<br>Cleared off the line':''}</div>`;
+}
+
+R.shots=async function(el){
+ el.innerHTML='<h2>Shots</h2>';
+ let S=null;try{S=await loadSh()}catch(e){noData(el,'Could not load shot data: '+esc(e.message));return}
+ if(!S||!S.rows.length){noData(el,'No shot data for this league yet. It appears after the next synchronization.');return}
+ const ALLR=S.rows,have=[...new Set(ALLR.map(r=>r.m))],ms=D.matches.filter(m=>have.includes(m.match_id)).sort(byDate);
+ const uniq=k=>[...new Set(ALLR.map(r=>r[k]).filter(Boolean))].sort();
+ const OUT=['Goal','Saved','Blocked','Off target','Post'];
+ el.innerHTML+=`<div class="mu" style="margin-bottom:8px">${ALLR.length} shots in ${have.length} of ${D.matches.length} matches. Every figure comes from PitchAPI's shot data; own goals are left out of shooting figures.</div>
+ <div class="ctl"><select id="sm">${opts([['','All matches (season)'],...ms.map(m=>[m.match_id,mlabel(m.match_id)])],'')}</select><select id="st"></select><select id="sp"></select></div>
+ <div class="ctl"><select id="so">${opts([['','All outcomes'],...OUT.map(x=>[x,x])],'')}</select><select id="ss">${opts([['','All situations'],...uniq('st').map(x=>[x,SIT[x]||x])],'')}</select><select id="sb">${opts([['','All body parts'],...uniq('ty').map(x=>[x,BODY[x]||x])],'')}</select><select id="sz">${opts([['','Any zone'],['in','Inside the box'],['out','Outside the box']],'')}</select></div>
+ <div class="ctl"><input id="sf" type="number" min="0" placeholder="From minute" style="width:130px"><input id="sg" type="number" min="0" placeholder="To minute" style="width:130px"><select id="sx">${opts([['g','Table sort: goals'],['n','Shots'],['xg','xG'],['conv','Conversion %'],['gxg','Goals − xG'],['xgps','xG per shot']],'g')}</select><input id="sn" type="number" min="1" value="3" style="width:120px" placeholder="Min shots">${flipBox()}</div><div id="sout"></div>`;
+ const base=()=>{const m=$('#sm').value;return ALLR.filter(s=>!s.og&&(!m||s.m===m))};
+ const filt=()=>{const t=$('#st').value,p=$('#sp').value,o=$('#so').value,si=$('#ss').value,b=$('#sb').value,z=$('#sz').value,a=num($('#sf').value),c=num($('#sg').value);
+  return base().filter(s=>(!t||s.c===t)&&(!p||s.pid===p)&&(!o||shCls(s)===o)&&(!si||s.st===si)&&(!b||s.ty===b)&&(!z||(z==='in'?s.ib===1:s.ib===0))&&(a==null||s.mn==null||s.mn>=a)&&(c==null||s.mn==null||s.mn<=c))};
+ const grp=(rows,kf)=>{const g=new Map();rows.forEach(s=>{const k=kf(s);if(k==null)return;if(!g.has(k))g.set(k,[]);g.get(k).push(s)});return g};
+ const pc=(v,d)=>v==null?'N/A':f(v,d);
+ const brk=(title,rows,kf,lab)=>{const g=[...grp(rows,kf).entries()].map(([k,r])=>[k,shStats(r)]).sort((a,b)=>b[1].n-a[1].n);
+  return `<h3>${title}</h3>`+tbl([[title.replace('By ','')],['Shots',1],['Goals',1],['Conv. %',1],['xG',1],['xG/shot',1]],g.map(([k,s])=>[esc(lab?lab(k):k),s.n,s.g,pc(s.conv,1),pc(s.xg,2),pc(s.xgps,3)]))};
+ const mb=s=>s.mn==null?null:(s.mn<=15?'0-15':s.mn<=30?'16-30':s.mn<=45?'31-45':s.mn<=60?'46-60':s.mn<=75?'61-75':s.mn<=90?'76-90':'90+');
+ const tableBy=(rows,kf,nameOf,clubOf,mn,sk)=>{
+  const g=[...grp(rows,kf).entries()].map(([k,r])=>({k,r,s:shStats(r)})).filter(o=>o.s.n>=mn);
+  const val=o=>({g:o.s.g,n:o.s.n,xg:o.s.xg,conv:o.s.conv,gxg:o.s.gxg,xgps:o.s.xgps})[sk];
+  return g.sort((a,b)=>(val(b)??-1e18)-(val(a)??-1e18)).slice(0,40).map((o,i)=>[i+1,esc(nameOf(o)),esc(clubOf(o)),o.s.n,o.s.g,pc(o.s.conv,1),o.s.ot,pc(o.s.sot,0),pc(o.s.xg,2),pc(o.s.npxg,2),pc(o.s.xgps,3),pc(o.s.xo,2),pc(o.s.gxg,2),pc(o.s.ib,0),pc(o.s.dist,1)])};
+ const HEAD=[['#',1],['Name'],['Club'],['Shots',1],['Goals',1],['Conv. %',1],['On target',1],['SoT %',1],['xG',1],['npxG',1],['xG/shot',1],['xGOT',1],['G − xG',1],['Box %',1],['Avg dist (m)',1]];
+ const draw=()=>{
+  const out=$('#sout'),rows=filt(),flip=$('#fl').checked,s=shStats(rows),mn=num($('#sn').value)||1,sk=$('#sx').value;
+  const ogN=ALLR.filter(x=>x.og&&(!$('#sm').value||x.m===$('#sm').value)).length;
+  if(!rows.length){out.innerHTML='<div class="empty">No shots match this selection.</div>';return}
+  const kp=(v,l)=>`<div class="kpi"><b>${v}</b><span>${l}</span></div>`;
+  SHCUR=[...rows].sort((a,b)=>(b.xg??-1)-(a.xg??-1)).slice(0,800);
+  let g='',gv='';
+  SHCUR.forEach((x,i)=>{if(x.x==null||x.y==null)return;const c=shCls(x),col=SHCOL[c]||'#8a9bb0',r=x.xg==null?.9:.7+2.2*Math.sqrt(x.xg),yy=flip?68-x.y:x.y,hollow=c==='Blocked';
+   g+=`<circle onclick="shSel(${i})" style="cursor:pointer" cx="${x.x.toFixed(2)}" cy="${yy.toFixed(2)}" r="${r.toFixed(2)}" fill="${hollow?'none':col}" fill-opacity=".78" stroke="${hollow?col:'#e8eef5'}" stroke-width="${c==='Goal'?.45:.25}"><title>${esc(x.pn)} ${x.mn==null?'':x.mn+"'"} · ${c} · xG ${f(x.xg,2)}</title></circle>`;
+   if(x.gy!=null&&x.gz!=null){const gx=flip?68-x.gy:x.gy,gz=Math.min(x.gz,6),rr=.25+.9*Math.sqrt(x.xo??x.xg??.05);
+    gv+=`<circle onclick="shSel(${i})" style="cursor:pointer" cx="${gx.toFixed(2)}" cy="${(6-gz).toFixed(2)}" r="${rr.toFixed(2)}" fill="${col}" fill-opacity=".78" stroke="#e8eef5" stroke-width=".08"><title>${esc(x.pn)} · ${c} · y ${f(x.gy,1)} m, height ${f(x.gz,2)} m</title></circle>`}});
+  const map=`<svg class="pitch" viewBox="50 -2 57 72" style="max-width:520px">${PITCH_BG}${pitchLines('#4d8f6b','1')}${g}<text x="78" y="70" text-anchor="middle" font-size="2.4" fill="#8a9bb0">Attack direction →</text></svg>`;
+  const goal=`<svg class="pitch" viewBox="26 0 16 6.6" style="max-width:520px"><rect x="26" y="0" width="16" height="6.6" fill="#12301f"/><line x1="26" y1="6" x2="42" y2="6" stroke="#4d8f6b" stroke-width=".08"/><rect x="30.34" y="3.56" width="7.32" height="2.44" fill="#e8eef5" fill-opacity=".06" stroke="#e8eef5" stroke-width=".12"/>${gv}</svg>`;
+  const nG=SHCUR.filter(x=>x.gy!=null&&x.gz!=null).length;
+  const legend=Object.entries(SHCOL).map(([k,c])=>`<span style="margin-right:10px"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${k==='Blocked'?'transparent':c};border:2px solid ${c};vertical-align:middle"></span> ${k}</span>`).join('');
+  out.innerHTML=`<div class="grid">${kp(s.n,'Shots')}${kp(s.g,'Goals')}${kp(pc(s.conv,1)+'%','Conversion (goals ÷ all shots)')}${kp(s.ot+' · '+pc(s.sot,0)+'%','On target (provider flag)')}${kp(pc(s.sotc,0)+'%','Goals ÷ on target')}${kp(s.sv,'Saved')}${kp(s.bl,'Blocked')}${kp(s.po,'Hit the post')}${kp(pc(s.xg,2),'xG')}${kp(pc(s.npxg,2),'npxG (no penalties)')}${kp(pc(s.xgps,3),'xG per shot')}${kp(pc(s.xo,2),'xGOT')}${kp(pc(s.gxg,2),'Goals − xG')}${kp(pc(s.ib,0)+'%','Inside the box')}${kp(pc(s.dist,1)+' m','Avg distance to goal (derived)')}${kp(s.pe,'Penalties')}</div>
+   <div class="mu" style="margin:8px 0">${legend}<br>Marker size = xG. ${SHCUR.length<rows.length?'Showing the '+SHCUR.length+' highest-xG shots of '+rows.length+'; narrow the filters to see all. ':''}Tap a shot for details. Every team attacks to the right.</div>${map}
+   <h3>Goal view (where shots crossed the goal line)</h3><div class="mu" style="font-size:12px;margin-bottom:4px">${nG} of ${SHCUR.length} shown shots have goal-line coordinates (posts at the white frame; height above 6 m is drawn at 6 m).</div>${goal}
+   <div class="card" id="shd" style="font-size:13px">Tap a shot for its details.</div>`+
+   brk('By situation',rows,x=>x.st||null,k=>SIT[k]||k)+brk('By body part',rows,x=>x.ty||null,k=>BODY[k]||k)+brk('By outcome',rows,shCls)+brk('By minute',rows,mb)+
+   `<h3>Players</h3>`+tbl([...HEAD.slice(0,1),['Player'],...HEAD.slice(2)],tableBy(rows,x=>x.pid,o=>o.r[0].pn,o=>o.r[0].c,mn,sk))+
+   `<h3>Teams</h3>`+tbl(HEAD,tableBy(rows,x=>x.c,o=>o.k,o=>'',mn,sk))+
+   `<div class="mu" style="font-size:12px;margin-top:8px">On target is PitchAPI's flag (also true for blocked shots heading on target). Conversion divides goals by all shots, blocked ones included. Goals − xG uses only shots that have an xG. Average distance is computed here from the shot coordinates.${ogN?' '+ogN+' own goal(s) excluded.':''} Left/right: the team's left flank is at the top; untick "Flip left/right" if a shooter looks mirrored.</div>`};
+ const fillPlayers=()=>{const old=$('#sp').value,t=$('#st').value,c=new Map();
+  base().filter(s=>!t||s.c===t).forEach(s=>{if(!s.pid)return;const o=c.get(s.pid)||{n:s.pn,k:0};o.k++;c.set(s.pid,o)});
+  const l=[...c.entries()].sort((a,b)=>b[1].k-a[1].k).map(([k,v])=>[k,v.n+' · '+v.k]);
+  $('#sp').innerHTML=opts([['','All players'],...l],c.has(old)?old:'');draw()};
+ const fillTeams=()=>{const old=$('#st').value,t=[...new Set(base().map(s=>s.c).filter(Boolean))].sort();
+  $('#st').innerHTML=opts([['','All teams'],...t.map(x=>[x,x])],t.includes(old)?old:'');fillPlayers()};
+ $('#sm').onchange=fillTeams;$('#st').onchange=fillPlayers;
+ ['sp','so','ss','sb','sz','sx'].forEach(i=>$('#'+i).onchange=draw);['sf','sg','sn'].forEach(i=>$('#'+i).oninput=draw);
+ $('#fl').onchange=()=>{flipSet($('#fl').checked);draw()};
+ fillTeams();
 };
 
 async function route(){
