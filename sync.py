@@ -549,6 +549,7 @@ def gh_setup(token, name):
     return dict(token=token, repo=repo, branch=branch, pages=False,
                 url=f"https://{login}.github.io/{name}/")
 
+# ===== نهاية الجزء 1 من 6 — كمّل الصق الجزء 2 تحت هذا السطر مباشرة =====
 def git_blob_sha(b):
     return hashlib.sha1(b"blob %d\0" % len(b) + b).hexdigest()
 
@@ -580,7 +581,6 @@ def gh_get_json(hub, path):
     except Exception:
         return None
 
-# ===== نهاية الجزء 1 من 5 — كمّل الصق الجزء 2 تحت هذا السطر مباشرة =====
 def gh_restore(hub, metas):
     """يرجّع البيانات المحفوظة (لكل دوري ليس عنده بيانات محلية). ترجع عدد الدوريات."""
     n = 0
@@ -1087,7 +1087,7 @@ async function route(){
 })();
 </script></body></html>"""
 
-# ===== نهاية الجزء 2 من 5 — كمّل الصق الجزء 3 تحت هذا السطر مباشرة =====
+# ===== نهاية الجزء 2 من 6 — كمّل الصق الجزء 3 تحت هذا السطر مباشرة =====
 # ---------------- التشغيل ----------------
 def get_secret(name, prompt):
     v = os.environ.get(name)
@@ -1292,6 +1292,15 @@ def init_db():
       league_id TEXT, match_id TEXT, team_id TEXT, team TEXT, side TEXT,
       hto REAL, cpr REAL, brt REAL, adx REAL, blk REAL, clr REAL, duw REAL, aer REAL, aerw REAL, tilt REAL,
       PRIMARY KEY(league_id, match_id, team_id));
+    CREATE TABLE IF NOT EXISTS sm(
+      league_id TEXT, match_id TEXT, status TEXT, fetched_at TEXT,
+      PRIMARY KEY(league_id, match_id));
+    CREATE TABLE IF NOT EXISTS shot_rows(
+      league_id TEXT, match_id TEXT, shot_id TEXT, pd TEXT, pid TEXT, pn TEXT, tid TEXT,
+      x REAL, y REAL, xg REAL, xo REAL, ot INTEGER, gy REAL, gz REAL, ib INTEGER,
+      ev TEXT, st TEXT, ty TEXT, mn REAL, ma REAL, bl INTEGER, blx REAL, bly REAL,
+      og INTEGER, sl INTEGER, kid TEXT, kn TEXT,
+      PRIMARY KEY(league_id, match_id, shot_id));
     """)
     c.commit()
     c.close()
@@ -1570,7 +1579,7 @@ _TD_F = [("hto", "defending", "high_turnovers"), ("cpr", "defending", "counterpr
          ("aer", "defending", "aerials"), ("aerw", "defending", "aerials_won"), ("tilt", "territory", "field_tilt")]
 _TD_COLS = [c for c, _, _ in _TD_F]
 
-
+# ===== نهاية الجزء 3 من 6 — كمّل الصق الجزء 4 تحت هذا السطر مباشرة =====
 def _x_plrows(res):
     out = []
     for p in _g(res, "players") or []:
@@ -1608,7 +1617,7 @@ def _x_shots(res):
                 a["gl"] += 1
     return acc
 
-# ===== نهاية الجزء 3 من 5 — كمّل الصق الجزء 4 تحت هذا السطر مباشرة =====
+
 def _x_teamdef(r, adv):
     out = []
     for idx, t in enumerate(_g(adv, "teams") or []):
@@ -1719,6 +1728,99 @@ def restore_pl(L, d):
     c.close()
 
 
+# ---------------- صفحة التسديدات: كل تسديدة بكل حقولها (shots endpoint) ----------------
+_SH_COLS = ["pd", "pid", "pn", "tid", "x", "y", "xg", "xo", "ot", "gy", "gz", "ib", "ev", "st", "ty", "mn", "ma",
+            "bl", "blx", "bly", "og", "sl", "kid", "kn"]
+_SH_SQL = ("INSERT OR REPLACE INTO shot_rows(league_id,match_id,shot_id,%s) VALUES(%s)"
+           % (",".join(_SH_COLS), ",".join("?" * (3 + len(_SH_COLS)))))
+
+
+def _x_bool(v):
+    return None if v is None else (1 if v else 0)
+
+
+def _x_shotrows(res):
+    """كل تسديدة كما جاءت من PitchAPI: موقع الضربة، xG، xGOT، مكان عبور خط المرمى، النتيجة، الموقف، جزء الجسم، الحارس..."""
+    out = []
+    for per in _g(res, "periods") or []:
+        pd_ = str(_g(per, "period") or "")
+        for s in _g(per, "shots") or []:
+            pl = _g(s, "player")
+            kp = _g(s, "keeper")
+            out.append(dict(
+                sid=str(_g(s, "id") or f"n{len(out)}"), pd=pd_, pid=str(_g(pl, "id") or ""), pn=_g(pl, "name") or "",
+                tid=str(_g(s, "team_id") or ""), x=num(_g(s, "x")), y=num(_g(s, "y")),
+                xg=num(_g(s, "expected_goals")), xo=num(_g(s, "expected_goals_on_target")),
+                ot=_x_bool(_g(s, "is_on_target")), gy=num(_g(s, "goal_crossed_y")), gz=num(_g(s, "goal_crossed_z")),
+                ib=_x_bool(_g(s, "is_inside_box")), ev=str(_g(s, "event_type") or "").split(".")[-1],
+                st=str(_g(s, "situation") or "").split(".")[-1], ty=str(_g(s, "shot_type") or "").split(".")[-1],
+                mn=num(_g(s, "minute")), ma=num(_g(s, "minute_added")), bl=_x_bool(_g(s, "is_blocked")),
+                blx=num(_g(s, "blocked_x")), bly=num(_g(s, "blocked_y")), og=_x_bool(_g(s, "is_own_goal")),
+                sl=_x_bool(_g(s, "is_saved_off_line")), kid=str(_g(kp, "id") or ""), kn=_g(kp, "name") or ""))
+    return out
+
+
+def sync_shots(client, league_id, on_progress=None):
+    """يجلب كل تسديدات كل مباراة (يشمل المباريات القديمة) ويحفظها تسديدة تسديدة."""
+    api_m = client.matches
+    if not hasattr(api_m, "shots"):
+        return
+    rows = q("SELECT m.match_id, m.date, m.home, m.away, e.status, e.fetched_at FROM matches m "
+             "LEFT JOIN sm e ON e.league_id=m.league_id AND e.match_id=m.match_id "
+             "WHERE m.league_id=?", (league_id,))
+    todo = [r for r in rows if match_due(r)]
+    log(f"  [إضافي: التسديدات] مكتملة سابقاً: {sum(1 for r in rows if r['status'] == 'ok')} | المطلوب الآن: {len(todo)}")
+    for i, r in enumerate(todo, 1):
+        mid = r["match_id"]
+        res, e = call(api_m.shots, mid)
+        srows = _x_shotrows(res) if res is not None else []
+        if res is not None and (_g(res, "periods") or []) and not srows:
+            log("    تنبيه: shots رجّع فترات لكن بدون تسديدات (شكل الرد يختلف عن المتوقع؟)")
+        if srows:
+            status = "ok"
+        elif e and e not in ("not_found", "plan"):
+            status = "failed"
+        else:
+            status = "no_data"
+        t = now()
+        c = db()
+        L = league_id
+        if srows:
+            c.execute("DELETE FROM shot_rows WHERE league_id=? AND match_id=?", (L, mid))
+            c.executemany(_SH_SQL, [(L, mid, x["sid"]) + tuple(x[k] for k in _SH_COLS) for x in srows])
+        c.execute("INSERT OR REPLACE INTO sm VALUES(?,?,?,?)", (L, mid, status, t))
+        c.commit()
+        c.close()
+        log(f"  [{i}/{len(todo)}] {r['home']} vs {r['away']} -> {status} (تسديدات {len(srows)})")
+        if on_progress and i % PUBLISH_EVERY == 0 and i < len(todo):
+            on_progress()
+        time.sleep(REQUEST_DELAY)
+
+
+def build_sh_payload(L):
+    cols = ["m", "s"] + _SH_COLS + ["c"]
+    rows = []
+    for r in q("SELECT p.match_id m, p.shot_id s, " + ",".join("p." + c for c in _SH_COLS) +
+               ", COALESCE(a.team, p.tid) c FROM shot_rows p "
+               "LEFT JOIN team_adv a ON a.league_id=p.league_id AND a.match_id=p.match_id AND a.team_id=p.tid "
+               "WHERE p.league_id=? ORDER BY p.match_id, p.shot_id", (L,)):
+        rows.append([round(r[k], 3) if isinstance(r[k], float) else r[k] for k in cols])
+    sm = q("SELECT match_id i, status t, fetched_at f FROM sm WHERE league_id=? ORDER BY match_id", (L,))
+    return dict(cols=cols, rows=rows, sm=sm)
+
+
+def restore_sh(L, d):
+    c = db()
+    for e in d.get("sm", []):
+        c.execute("INSERT OR REPLACE INTO sm VALUES(?,?,?,?)", (L, e["i"], e["t"], e.get("f")))
+    cols = d.get("cols", [])
+    for row in d.get("rows", []):
+        x = dict(zip(cols, row))
+        c.execute(_SH_SQL, (L, x["m"], x["s"]) + tuple(x.get(k) for k in _SH_COLS))
+    c.commit()
+    c.close()
+
+
 _orig_sync_league = sync_league
 
 def sync_league(client, league_id, on_progress=None):
@@ -1728,6 +1830,7 @@ def sync_league(client, league_id, on_progress=None):
             sync_extras(client, league_id, on_progress)
             sync_home_frame(client, league_id)
             sync_pstats(client, league_id, on_progress)
+            sync_shots(client, league_id, on_progress)
         except Exception as e:      # أي خطأ في الإضافة ما يوقف المزامنة الأصلية
             log(f"  خطأ في المزامنة الإضافية ({type(e).__name__}: {e}) — المزامنة الأصلية ما تأثرت.")
     return ok
@@ -1746,7 +1849,8 @@ def build_adv_payload(L):
            "(SELECT COUNT(*) FROM team_adv a WHERE a.league_id=e.league_id AND a.match_id=e.match_id) p, "
            "(SELECT COUNT(*) FROM heat h WHERE h.league_id=e.league_id AND h.match_id=e.match_id) h, "
            "(SELECT COUNT(*) FROM net n WHERE n.league_id=e.league_id AND n.match_id=e.match_id) n, "
-           "(SELECT COUNT(*) FROM pass_stats s WHERE s.league_id=e.league_id AND s.match_id=e.match_id) k "
+           "(SELECT COUNT(*) FROM pass_stats s WHERE s.league_id=e.league_id AND s.match_id=e.match_id) k, "
+           "(SELECT COUNT(*) FROM shot_rows z WHERE z.league_id=e.league_id AND z.match_id=e.match_id) s "
            "FROM extras e WHERE e.league_id=? ORDER BY e.match_id", (L,))
     team = [_x_round(r, ("pp", "op", "da", "ch", "z", "tk", "ic")) for r in q(
         "SELECT match_id m, team_id i, team n, side s, ppda pp, opp op, da, ch, zone z, tk, ic "
@@ -1799,6 +1903,13 @@ def publish_extras(metas):
                        json.dumps(pl, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
                        f"Update {lg['name']} players")
                 entry["pl_v"] = q("SELECT MAX(fetched_at) t FROM pm WHERE league_id=?", (L,), True)["t"]
+            sh = build_sh_payload(L)
+            if sh["rows"]:
+                entry["sh_file"] = safe_name(L) + "_sh.json"
+                gh_put(_x_hub, f"data/{entry['sh_file']}",
+                       json.dumps(sh, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
+                       f"Update {lg['name']} shots")
+                entry["sh_v"] = q("SELECT MAX(fetched_at) t FROM sm WHERE league_id=?", (L,), True)["t"]
             EXTRA_INDEX[L] = entry
         except Exception as e:
             log(f"  تعذر نشر ملفات الإضافة لـ {lg.get('name')}: {e}")
@@ -1860,22 +1971,21 @@ _orig_gh_restore = gh_restore
 def gh_restore(hub, metas):
     n = _orig_gh_restore(hub, metas)
     for lg in metas:
-        try:
-            if q("SELECT 1 FROM extras WHERE league_id=? LIMIT 1", (lg["id"],)):
-                continue
-            adv = gh_get_json(hub, f"data/{safe_name(lg['id'])}_adv.json")
-            if adv:
-                restore_extras(lg["id"], adv, gh_get_json(hub, f"data/{safe_name(lg['id'])}_heat.json"))
-        except Exception as e:
-            log(f"  تعذر استعادة بيانات الإضافة لـ {lg.get('name')}: {type(e).__name__}")
-        try:
-            if q("SELECT 1 FROM pm WHERE league_id=? LIMIT 1", (lg["id"],)):
-                continue
-            pl = gh_get_json(hub, f"data/{safe_name(lg['id'])}_pl.json")
-            if pl:
-                restore_pl(lg["id"], pl)
-        except Exception as e:
-            log(f"  تعذر استعادة بيانات الإضافة لـ {lg.get('name')}: {type(e).__name__}")
+        L = lg["id"]
+        for tbl_, fn_ in (("extras", None), ("pm", restore_pl), ("sm", restore_sh)):
+            try:
+                if q(f"SELECT 1 FROM {tbl_} WHERE league_id=? LIMIT 1", (L,)):
+                    continue
+                if tbl_ == "extras":
+                    adv = gh_get_json(hub, f"data/{safe_name(L)}_adv.json")
+                    if adv:
+                        restore_extras(L, adv, gh_get_json(hub, f"data/{safe_name(L)}_heat.json"))
+                else:
+                    d = gh_get_json(hub, f"data/{safe_name(L)}_{'pl' if tbl_ == 'pm' else 'sh'}.json")
+                    if d:
+                        fn_(L, d)
+            except Exception as e:
+                log(f"  تعذر استعادة بيانات الإضافة لـ {lg.get('name')}: {type(e).__name__}")
     return n
 
 
@@ -1964,6 +2074,7 @@ R.heatmaps=async function(el){
 
 '''
 
+# ===== نهاية الجزء 4 من 6 — كمّل الصق الجزء 5 تحت هذا السطر مباشرة =====
 _X_JS += r'''
 /* ---------- Passing: pass network + pass-category counts ---------- */
 const PF=[['','All players (sort by passes)'],['pr','Progressive passes'],['kp','Key passes'],['tb','Through balls'],['cr','Crosses'],['bx','Passes into box'],['sw','Switches'],['as','Assists']];
@@ -2043,7 +2154,6 @@ R.passing=async function(el){
 
 '''
 
-# ===== نهاية الجزء 4 من 5 — كمّل الصق الجزء 5 تحت هذا السطر مباشرة =====
 _X_JS += r'''
 /* ---------- PPDA ---------- */
 R.ppda=async function(el){
@@ -2201,6 +2311,97 @@ R.looklike=async function(el){
 };
 '''
 
+# ===== نهاية الجزء 5 من 6 — كمّل الصق الجزء 6 تحت هذا السطر مباشرة =====
+_X_JS += r'''
+/* ---------- Shots (reads data/*_sh.json: one row per shot, every field PitchAPI gives) ---------- */
+let SHD=null;
+async function loadSh(){if(SHD)return SHD;const m=lgMeta();if(!m.sh_file)return null;const d=await loadJson(m.sh_file,m.sh_v);d.rows=d.rows.map(r=>{const o={};d.cols.forEach((c,k)=>o[c]=r[k]);return o});SHD=d;return d}
+const SIT={RegularPlay:'Regular play',FromCorner:'From corner',SetPiece:'Set piece',FastBreak:'Fast break',FreeKick:'Free kick',ThrowInSetPiece:'Throw-in set piece',Penalty:'Penalty',IndividualPlay:'Individual play'};
+const BODY={RightFoot:'Right foot',LeftFoot:'Left foot',Header:'Header',OtherBodyParts:'Other body part'};
+const SHCOL={Goal:'#4cc38a',Saved:'#5aa9e6','Off target':'#8a9bb0',Post:'#e9b44c',Blocked:'#e5646b'};
+const shCls=s=>s.og?'Own goal':s.ev==='Goal'?'Goal':s.bl?'Blocked':s.ev==='AttemptSaved'?'Saved':s.ev==='Post'?'Post':s.ev==='Miss'?'Off target':(s.ev||'Unknown');
+const shDist=s=>(s.x!=null&&s.y!=null)?Math.hypot(105-s.x,34-s.y):null;
+/* rows must exclude own goals. Goals-minus-xG uses only shots that have an xG, so numerator and denominator cover the same shots. */
+function shStats(rows){
+ let g=0,gx=0,ot=0,bl=0,sv=0,po=0,pe=0,xg=0,npxg=0,xo=0,xoN=0,ib=0,ibN=0,ds=0,dn=0,xgN=0;
+ rows.forEach(s=>{const c=shCls(s);if(c==='Goal')g++;if(c==='Saved')sv++;if(c==='Post')po++;if(s.ot===1)ot++;if(s.bl===1)bl++;if(s.st==='Penalty')pe++;
+  if(s.xg!=null){xgN++;xg+=s.xg;if(s.st!=='Penalty')npxg+=s.xg;if(c==='Goal')gx++}
+  if(s.xo!=null){xoN++;xo+=s.xo}
+  if(s.ib!=null){ibN++;if(s.ib===1)ib++}
+  const d=shDist(s);if(d!=null){ds+=d;dn++}});
+ const n=rows.length;
+ return {n,g,ot,bl,sv,po,pe,xg:xgN?xg:null,npxg:xgN?npxg:null,xo:xoN?xo:null,ib:ibN?ib/ibN*100:null,dist:dn?ds/dn:null,
+  conv:n?g/n*100:null,sot:n?ot/n*100:null,sotc:ot?g/ot*100:null,xgps:xgN?xg/xgN:null,gxg:xgN?gx-xg:null};
+}
+let SHCUR=[];
+function shSel(i){
+ const s=SHCUR[i],b=$('#shd');if(!s||!b)return;
+ const mm=D.matches.find(m=>m.match_id===s.m),mn=s.mn==null?'N/A':s.mn+(s.ma?'+'+s.ma:'')+"'";
+ b.innerHTML=`<b>${esc(s.pn)}</b> · ${esc(s.c)}<div class="mu">${mm?esc(mm.date.slice(0,10)+'  '+mm.home+' '+mm.score+' '+mm.away)+'<br>':''}Minute ${mn} · ${esc(s.pd||'')}<br>Outcome: ${shCls(s)} · ${esc(SIT[s.st]||s.st||'N/A')} · ${esc(BODY[s.ty]||s.ty||'N/A')}<br>xG ${f(s.xg,2)} · xGOT ${f(s.xo,2)} · ${s.ib==null?'box N/A':(s.ib?'inside the box':'outside the box')}<br>Struck at x ${f(s.x,1)} m, y ${f(s.y,1)} m (${f(shDist(s),1)} m from the goal centre, derived)<br>Goal-line crossing: y ${f(s.gy,1)} m, height ${f(s.gz,2)} m${s.blx!=null?'<br>Blocked at x '+f(s.blx,1)+' m, y '+f(s.bly,1)+' m':''}${s.kn?'<br>Goalkeeper: '+esc(s.kn):''}${s.sl?'<br>Cleared off the line':''}</div>`;
+}
+'''
+
+_X_JS += r'''
+R.shots=async function(el){
+ el.innerHTML='<h2>Shots</h2>';
+ let S=null;try{S=await loadSh()}catch(e){noData(el,'Could not load shot data: '+esc(e.message));return}
+ if(!S||!S.rows.length){noData(el,'No shot data for this league yet. It appears after the next synchronization.');return}
+ const ALLR=S.rows,have=[...new Set(ALLR.map(r=>r.m))],ms=D.matches.filter(m=>have.includes(m.match_id)).sort(byDate);
+ const uniq=k=>[...new Set(ALLR.map(r=>r[k]).filter(Boolean))].sort();
+ const OUT=['Goal','Saved','Blocked','Off target','Post'];
+ el.innerHTML+=`<div class="mu" style="margin-bottom:8px">${ALLR.length} shots in ${have.length} of ${D.matches.length} matches. Every figure comes from PitchAPI's shot data; own goals are left out of shooting figures.</div>
+ <div class="ctl"><select id="sm">${opts([['','All matches (season)'],...ms.map(m=>[m.match_id,mlabel(m.match_id)])],'')}</select><select id="st"></select><select id="sp"></select></div>
+ <div class="ctl"><select id="so">${opts([['','All outcomes'],...OUT.map(x=>[x,x])],'')}</select><select id="ss">${opts([['','All situations'],...uniq('st').map(x=>[x,SIT[x]||x])],'')}</select><select id="sb">${opts([['','All body parts'],...uniq('ty').map(x=>[x,BODY[x]||x])],'')}</select><select id="sz">${opts([['','Any zone'],['in','Inside the box'],['out','Outside the box']],'')}</select></div>
+ <div class="ctl"><input id="sf" type="number" min="0" placeholder="From minute" style="width:130px"><input id="sg" type="number" min="0" placeholder="To minute" style="width:130px"><select id="sx">${opts([['g','Table sort: goals'],['n','Shots'],['xg','xG'],['conv','Conversion %'],['gxg','Goals − xG'],['xgps','xG per shot']],'g')}</select><input id="sn" type="number" min="1" value="3" style="width:120px" placeholder="Min shots">${flipBox()}</div><div id="sout"></div>`;
+ const base=()=>{const m=$('#sm').value;return ALLR.filter(s=>!s.og&&(!m||s.m===m))};
+ const filt=()=>{const t=$('#st').value,p=$('#sp').value,o=$('#so').value,si=$('#ss').value,b=$('#sb').value,z=$('#sz').value,a=num($('#sf').value),c=num($('#sg').value);
+  return base().filter(s=>(!t||s.c===t)&&(!p||s.pid===p)&&(!o||shCls(s)===o)&&(!si||s.st===si)&&(!b||s.ty===b)&&(!z||(z==='in'?s.ib===1:s.ib===0))&&(a==null||s.mn==null||s.mn>=a)&&(c==null||s.mn==null||s.mn<=c))};
+ const grp=(rows,kf)=>{const g=new Map();rows.forEach(s=>{const k=kf(s);if(k==null)return;if(!g.has(k))g.set(k,[]);g.get(k).push(s)});return g};
+ const pc=(v,d)=>v==null?'N/A':f(v,d);
+ const brk=(title,rows,kf,lab)=>{const g=[...grp(rows,kf).entries()].map(([k,r])=>[k,shStats(r)]).sort((a,b)=>b[1].n-a[1].n);
+  return `<h3>${title}</h3>`+tbl([[title.replace('By ','')],['Shots',1],['Goals',1],['Conv. %',1],['xG',1],['xG/shot',1]],g.map(([k,s])=>[esc(lab?lab(k):k),s.n,s.g,pc(s.conv,1),pc(s.xg,2),pc(s.xgps,3)]))};
+ const mb=s=>s.mn==null?null:(s.mn<=15?'0-15':s.mn<=30?'16-30':s.mn<=45?'31-45':s.mn<=60?'46-60':s.mn<=75?'61-75':s.mn<=90?'76-90':'90+');
+ const tableBy=(rows,kf,nameOf,clubOf,mn,sk)=>{
+  const g=[...grp(rows,kf).entries()].map(([k,r])=>({k,r,s:shStats(r)})).filter(o=>o.s.n>=mn);
+  const val=o=>({g:o.s.g,n:o.s.n,xg:o.s.xg,conv:o.s.conv,gxg:o.s.gxg,xgps:o.s.xgps})[sk];
+  return g.sort((a,b)=>(val(b)??-1e18)-(val(a)??-1e18)).slice(0,40).map((o,i)=>[i+1,esc(nameOf(o)),esc(clubOf(o)),o.s.n,o.s.g,pc(o.s.conv,1),o.s.ot,pc(o.s.sot,0),pc(o.s.xg,2),pc(o.s.npxg,2),pc(o.s.xgps,3),pc(o.s.xo,2),pc(o.s.gxg,2),pc(o.s.ib,0),pc(o.s.dist,1)])};
+ const HEAD=[['#',1],['Name'],['Club'],['Shots',1],['Goals',1],['Conv. %',1],['On target',1],['SoT %',1],['xG',1],['npxG',1],['xG/shot',1],['xGOT',1],['G − xG',1],['Box %',1],['Avg dist (m)',1]];
+ const draw=()=>{
+  const out=$('#sout'),rows=filt(),flip=$('#fl').checked,s=shStats(rows),mn=num($('#sn').value)||1,sk=$('#sx').value;
+  const ogN=ALLR.filter(x=>x.og&&(!$('#sm').value||x.m===$('#sm').value)).length;
+  if(!rows.length){out.innerHTML='<div class="empty">No shots match this selection.</div>';return}
+  const kp=(v,l)=>`<div class="kpi"><b>${v}</b><span>${l}</span></div>`;
+  SHCUR=[...rows].sort((a,b)=>(b.xg??-1)-(a.xg??-1)).slice(0,800);
+  let g='',gv='';
+  SHCUR.forEach((x,i)=>{if(x.x==null||x.y==null)return;const c=shCls(x),col=SHCOL[c]||'#8a9bb0',r=x.xg==null?.9:.7+2.2*Math.sqrt(x.xg),yy=flip?68-x.y:x.y,hollow=c==='Blocked';
+   g+=`<circle onclick="shSel(${i})" style="cursor:pointer" cx="${x.x.toFixed(2)}" cy="${yy.toFixed(2)}" r="${r.toFixed(2)}" fill="${hollow?'none':col}" fill-opacity=".78" stroke="${hollow?col:'#e8eef5'}" stroke-width="${c==='Goal'?.45:.25}"><title>${esc(x.pn)} ${x.mn==null?'':x.mn+"'"} · ${c} · xG ${f(x.xg,2)}</title></circle>`;
+   if(x.gy!=null&&x.gz!=null){const gx=flip?68-x.gy:x.gy,gz=Math.min(x.gz,6),rr=.25+.9*Math.sqrt(x.xo??x.xg??.05);
+    gv+=`<circle onclick="shSel(${i})" style="cursor:pointer" cx="${gx.toFixed(2)}" cy="${(6-gz).toFixed(2)}" r="${rr.toFixed(2)}" fill="${col}" fill-opacity=".78" stroke="#e8eef5" stroke-width=".08"><title>${esc(x.pn)} · ${c} · y ${f(x.gy,1)} m, height ${f(x.gz,2)} m</title></circle>`}});
+  const map=`<svg class="pitch" viewBox="50 -2 57 72" style="max-width:520px">${PITCH_BG}${pitchLines('#4d8f6b','1')}${g}<text x="78" y="70" text-anchor="middle" font-size="2.4" fill="#8a9bb0">Attack direction →</text></svg>`;
+  const goal=`<svg class="pitch" viewBox="26 0 16 6.6" style="max-width:520px"><rect x="26" y="0" width="16" height="6.6" fill="#12301f"/><line x1="26" y1="6" x2="42" y2="6" stroke="#4d8f6b" stroke-width=".08"/><rect x="30.34" y="3.56" width="7.32" height="2.44" fill="#e8eef5" fill-opacity=".06" stroke="#e8eef5" stroke-width=".12"/>${gv}</svg>`;
+  const nG=SHCUR.filter(x=>x.gy!=null&&x.gz!=null).length;
+  const legend=Object.entries(SHCOL).map(([k,c])=>`<span style="margin-right:10px"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${k==='Blocked'?'transparent':c};border:2px solid ${c};vertical-align:middle"></span> ${k}</span>`).join('');
+  out.innerHTML=`<div class="grid">${kp(s.n,'Shots')}${kp(s.g,'Goals')}${kp(pc(s.conv,1)+'%','Conversion (goals ÷ all shots)')}${kp(s.ot+' · '+pc(s.sot,0)+'%','On target (provider flag)')}${kp(pc(s.sotc,0)+'%','Goals ÷ on target')}${kp(s.sv,'Saved')}${kp(s.bl,'Blocked')}${kp(s.po,'Hit the post')}${kp(pc(s.xg,2),'xG')}${kp(pc(s.npxg,2),'npxG (no penalties)')}${kp(pc(s.xgps,3),'xG per shot')}${kp(pc(s.xo,2),'xGOT')}${kp(pc(s.gxg,2),'Goals − xG')}${kp(pc(s.ib,0)+'%','Inside the box')}${kp(pc(s.dist,1)+' m','Avg distance to goal (derived)')}${kp(s.pe,'Penalties')}</div>
+   <div class="mu" style="margin:8px 0">${legend}<br>Marker size = xG. ${SHCUR.length<rows.length?'Showing the '+SHCUR.length+' highest-xG shots of '+rows.length+'; narrow the filters to see all. ':''}Tap a shot for details. Every team attacks to the right.</div>${map}
+   <h3>Goal view (where shots crossed the goal line)</h3><div class="mu" style="font-size:12px;margin-bottom:4px">${nG} of ${SHCUR.length} shown shots have goal-line coordinates (posts at the white frame; height above 6 m is drawn at 6 m).</div>${goal}
+   <div class="card" id="shd" style="font-size:13px">Tap a shot for its details.</div>`+
+   brk('By situation',rows,x=>x.st||null,k=>SIT[k]||k)+brk('By body part',rows,x=>x.ty||null,k=>BODY[k]||k)+brk('By outcome',rows,shCls)+brk('By minute',rows,mb)+
+   `<h3>Players</h3>`+tbl([...HEAD.slice(0,1),['Player'],...HEAD.slice(2)],tableBy(rows,x=>x.pid,o=>o.r[0].pn,o=>o.r[0].c,mn,sk))+
+   `<h3>Teams</h3>`+tbl(HEAD,tableBy(rows,x=>x.c,o=>o.k,o=>'',mn,sk))+
+   `<div class="mu" style="font-size:12px;margin-top:8px">On target is PitchAPI's flag (also true for blocked shots heading on target). Conversion divides goals by all shots, blocked ones included. Goals − xG uses only shots that have an xG. Average distance is computed here from the shot coordinates.${ogN?' '+ogN+' own goal(s) excluded.':''} Left/right: the team's left flank is at the top; untick "Flip left/right" if a shooter looks mirrored.</div>`};
+ const fillPlayers=()=>{const old=$('#sp').value,t=$('#st').value,c=new Map();
+  base().filter(s=>!t||s.c===t).forEach(s=>{if(!s.pid)return;const o=c.get(s.pid)||{n:s.pn,k:0};o.k++;c.set(s.pid,o)});
+  const l=[...c.entries()].sort((a,b)=>b[1].k-a[1].k).map(([k,v])=>[k,v.n+' · '+v.k]);
+  $('#sp').innerHTML=opts([['','All players'],...l],c.has(old)?old:'');draw()};
+ const fillTeams=()=>{const old=$('#st').value,t=[...new Set(base().map(s=>s.c).filter(Boolean))].sort();
+  $('#st').innerHTML=opts([['','All teams'],...t.map(x=>[x,x])],t.includes(old)?old:'');fillPlayers()};
+ $('#sm').onchange=fillTeams;$('#st').onchange=fillPlayers;
+ ['sp','so','ss','sb','sz','sx'].forEach(i=>$('#'+i).onchange=draw);['sf','sg','sn'].forEach(i=>$('#'+i).oninput=draw);
+ $('#fl').onchange=()=>{flipSet($('#fl').checked);draw()};
+ fillTeams();
+};
+'''
+
 
 def _x_patch_index(html):
     def sub(h, old, new):
@@ -2213,13 +2414,13 @@ def _x_patch_index(html):
             ".chart{width:100%;height:140px}.mu{color:var(--mu)}" + _X_CSS)
     h = sub(h, "['passing','Passing'],", "['passing','Passing'],['ppda','PPDA'],['defense','Defensive'],['looklike','Look Like'],")
     h = sub(h, "AGGC=null;try{localStorage.setItem('league',D.id)}catch(e){}",
-            "AGGC=null;ADV=null;HEAT=null;PLD=null;try{localStorage.setItem('league',D.id)}catch(e){}")
+            "AGGC=null;ADV=null;HEAT=null;PLD=null;SHD=null;try{localStorage.setItem('league',D.id)}catch(e){}")
     h = sub(h, "async function route(){", _X_JS + "\nasync function route(){")
     h = sub(h, "if(PLAN[pg]){", "if(PLAN[pg]&&!R[pg]){")
     h = sub(h, "const r=await api('/api/availability');",
             "try{await loadAdv()}catch(e){}const r=await api('/api/availability');")
     h = sub(h, "tag('ni'),tag('ni'),tag('ni'),tag('ni')]))}",
-            "tag('ni'),exTag(m,'h'),exTag(m,'n'),tag('ni')]))}")
+            "exTag(m,'s'),exTag(m,'h'),exTag(m,'n'),tag('ni')]))}")
     return h
 
 
