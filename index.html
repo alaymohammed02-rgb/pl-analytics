@@ -154,7 +154,7 @@ async function reloadData(){
  head();
 }
 const tag=s=>`<span class="tag ${s}">${({ok:'Complete',partial:'Partial',no_data:'No data',failed:'Failed',pending:'Not checked',available:'Available',missing:'Missing',ni:'Not yet integrated'})[s]||s}</span>`;
-const tbl=(h,rows)=>rows.length?`<div class="wrap"><table><tr>${h.map(x=>`<th class="${x[1]?'n':''}">${x[0]}</th>`).join('')}</tr>${rows.map(r=>`<tr>${r.map((c,i)=>`<td class="${h[i][1]?'n':''}">${c}</td>`).join('')}</tr>`).join('')}</table></div>`:'<div class="empty">No data yet. Run the Colab cell to update the data.</div>';
+const tbl=(h,rows)=>rows.length?`<div class="wrap"><table><tr>${h.map(x=>`<th class="${x[1]?'n':''}">${x[0]}</th>`).join('')}</tr>${rows.map(r=>`<tr>${r.map((c,i)=>`<td class="${h[i][1]?'n':''}">${c}</td>`).join('')}</tr>`).join('')}</table></div>`:'<div class="empty">No data yet. Press Synchronize in Settings to update the data.</div>';
 const mlink=m=>`<a href="#/match/${esc(m.match_id)}">${esc(m.home)} ${esc(m.score)} ${esc(m.away)}</a>`;
 function bars(vals,labels,title){
  const v=vals.filter(x=>x!=null);if(!v.length)return `<div class="empty">${title}: no data</div>`;
@@ -230,38 +230,62 @@ const R={
   <div class="card"><h3>Leagues</h3>${tbl([['League'],['Country'],['Matches',1],['Analysed',1]],ALL.leagues.map(l=>[esc(l.name),esc(l.country||''),l.matches??'',l.ok??'']))}
   <div class="mu" style="margin-top:8px">Data updated (UTC): ${esc(ALL.generated||'N/A')}</div></div>
   <div class="card"><h3>Synchronize</h3>
-  <p class="mu">Fetches new matches from PitchAPI and refreshes this site. It also runs automatically on a schedule.</p>
+  <p class="mu">One press fetches every new match from PitchAPI, retries recent matches whose analytics were incomplete, and then refreshes this site by itself when the new data is published. It also runs automatically on a schedule.</p>
   <div class="ctl"><input id="ghrepo" value="${esc(GH_REPO())}" placeholder="owner/repo" style="flex:1;min-width:180px"></div>
   <div class="ctl"><input id="ghtok" type="password" placeholder="GitHub token (kept on this device only)" value="${ghTok()?'••••••••':''}" style="flex:1;min-width:180px"><button class="s" id="svtok">Save</button><button class="s" id="cltok">Clear</button></div>
   <p class="mu" style="font-size:12px">Create a fine-grained token for this repository only, with the permission Actions: Read and write. It is stored in this browser and only sent to GitHub.</p>
   <div class="ctl"><button id="sy">Synchronize now</button><button class="s" id="rl">Reload data</button></div><div id="ss" class="mu"></div></div>`;
   const msg=t=>{const e=$('#ss');if(e)e.textContent=t};
   const repo=()=>((($('#ghrepo')||{}).value)||GH_REPO()).trim();
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
   $('#svtok').onclick=()=>{try{const v=$('#ghtok').value.trim();if(v&&!v.startsWith('•'))localStorage.setItem('gh_token',v);localStorage.setItem('gh_repo',repo());msg('Saved on this device.')}catch(e){msg('Could not save: '+e.message)}};
   $('#cltok').onclick=()=>{try{localStorage.removeItem('gh_token')}catch(e){}$('#ghtok').value='';msg('Token removed from this device.')};
-  const showRun=async(follow)=>{
-   const r=await ghApi(`/repos/${repo()}/actions/workflows/sync.yml/runs?per_page=1`);
-   if(!r.ok){msg('Could not read sync status (HTTP '+r.status+').');return}
-   const run=((await r.json()).workflow_runs||[])[0];
-   if(!run){msg('No sync has run yet.');return}
-   const when=(run.created_at||'').replace('T',' ').replace('Z',' UTC');
-   if(run.status!=='completed'){msg('Sync running ('+run.status+') · started '+when);if(follow&&$('#ss'))setTimeout(()=>showRun(true),15000);return}
-   msg(run.conclusion==='success'?'Last sync finished OK · '+when+'. If you just ran it, wait about a minute, then press Reload data.':'Last sync '+run.conclusion+' · '+when+'. Open the Actions tab of the repository to see why.');
-  };
+  const runs=async()=>{const r=await ghApi(`/repos/${repo()}/actions/workflows/sync.yml/runs?per_page=10`);if(!r.ok)throw new Error('HTTP '+r.status);return (await r.json()).workflow_runs||[]};
+  const showRun=async()=>{
+   try{
+    const run=(await runs())[0];
+    if(!run){msg('No sync has run yet.');return}
+    const when=(run.created_at||'').replace('T',' ').replace('Z',' UTC');
+    msg(run.status!=='completed'?'A sync is running now ('+run.status+'), started '+when:'Last sync '+(run.conclusion==='success'?'finished OK':run.conclusion)+' · '+when);
+   }catch(e){msg('Could not read sync status ('+e.message+').')}};
+  if(window.SYNC_NOTE){msg(window.SYNC_NOTE);window.SYNC_NOTE=''}else showRun();
   $('#sy').onclick=async()=>{
    if(!ghTok()){msg('Save a GitHub token first.');return}
    $('#sy').disabled=true;
    try{
+    const before=await runs(),lastId=before.length?before[0].id:0,prev=ALL.generated||'';
     const info=await (await ghApi('/repos/'+repo())).json();
-    const r=await ghApi(`/repos/${repo()}/actions/workflows/sync.yml/dispatches`,{method:'POST',body:JSON.stringify({ref:info.default_branch||'main'})});
-    if(r.status===204){msg('Sync started…');setTimeout(()=>showRun(true),4000)}
-    else if(r.status===404)msg('Not found (404): check the repository name, or the token has no access to it.');
-    else if(r.status===403||r.status===401)msg('Token not allowed ('+r.status+'): it needs Actions: Read and write on this repository.');
-    else msg('GitHub answered '+r.status+'.');
+    const ref=info.default_branch||'main';
+    const send=inputs=>ghApi(`/repos/${repo()}/actions/workflows/sync.yml/dispatches`,{method:'POST',body:JSON.stringify(inputs?{ref,inputs}:{ref})});
+    let r=await send({force:'true'});
+    if(r.status===422)r=await send(null);
+    if(r.status===404){msg('Not found (404): check the repository name, or the token has no access to it.');return}
+    if(r.status===403||r.status===401){msg('Token not allowed ('+r.status+'): it needs Actions: Read and write on this repository.');return}
+    if(r.status!==204){msg('GitHub answered '+r.status+'.');return}
+    msg('Sync requested. Waiting for GitHub to start it…');
+    let run=null;const stop=Date.now()+45*60000;
+    while(Date.now()<stop){
+     await sleep(10000);
+     if(!$('#ss'))return;
+     run=(await runs()).find(x=>x.event==='workflow_dispatch'&&x.id>lastId)||null;
+     if(!run){msg('Waiting for GitHub to start the sync…');continue}
+     if(run.status==='completed')break;
+     msg(['queued','pending','waiting'].includes(run.status)?'Queued: another sync is still running, yours starts right after it…':'Syncing matches from PitchAPI… you can leave this page and come back.');
+    }
+    if(!run||run.status!=='completed'){msg('Still running. Check the Actions tab of the repository, then press Reload data.');return}
+    if(run.conclusion!=='success'){msg('Sync '+run.conclusion+'. Open the Actions tab of the repository to see why.');return}
+    msg('Sync finished. Waiting for the site to publish the new data…');
+    for(let i=0;i<24;i++){
+     const x=await fetch('data/index.json?'+Date.now());
+     if(x.ok){const j=await x.json();
+      if((j.generated||'')!==prev){await reloadData();window.SYNC_NOTE='Updated. Data as of '+j.generated+' UTC.';await route();return}}
+     await sleep(10000);
+     if(!$('#ss'))return;
+    }
+    msg('Sync finished and nothing new was available. Everything PitchAPI has for now is already here.');
    }catch(e){msg('Failed: '+e.message)}
-   $('#sy').disabled=false};
+   finally{const b=$('#sy');if(b)b.disabled=false}};
   $('#rl').onclick=async()=>{try{msg('Reloading…');await reloadData();msg('Data reloaded.')}catch(e){msg('Reload failed: '+e.message)}};
-  showRun(false);
  },
  async data(el){
   try{await loadAdv()}catch(e){}const r=await api('/api/availability');
@@ -682,6 +706,6 @@ async function route(){
   window.onhashchange=route;route();
  }catch(e){
   $('#lg').textContent='';
-  $('#app').innerHTML=`<div class="empty">No data yet. Run the Colab cell once (it starts the first sync), then reload this page.<br><span class="mu">${esc(e.message)}</span></div>`}
+  $('#app').innerHTML=`<div class="empty">No data yet. The first sync is running in the background, reload this page in a few minutes.<br><span class="mu">${esc(e.message)}</span></div>`}
 })();
 </script></body></html>
