@@ -483,6 +483,8 @@ def resolve_leagues(client):
         lg = by_id.get(str(lid_))
         if lg is None:
             log(f"  ✘ الـID {lid_} غير موجود")
+        elif is_blocked(lg):
+            add(lg)                  # يطبع رسالة الاستبعاد فقط
         else:
             log(f"  ✔ إضافي ← {lg.name} [{lg.id}]")
             add(lg)
@@ -570,6 +572,7 @@ def gh_setup(token, name):
     branch = info.get("default_branch", "main")
     return dict(token=token, repo=repo, branch=branch, pages=False,
                 url=f"https://{login}.github.io/{name}/")
+
 def git_blob_sha(b):
     return hashlib.sha1(b"blob %d\0" % len(b) + b).hexdigest()
 
@@ -765,9 +768,13 @@ def gh_dispatch(hub, force=True):
 def current_source():
     """نص الكود الحالي (من خلية Colab أو من الملف) لرفعه كـ sync.py."""
     try:
-        src = get_ipython().user_ns["_ih"][-1]          # noqa: F821  (خلية Colab الحالية)
+        ns = get_ipython().user_ns                       # noqa: F821
+        src = ns["_ih"][-1]                              # خلية Colab الحالية
         if "def main(" in src and "WORKFLOW_YML" in src:
             return src
+        ps = ns.get("_PL_PARTS")                         # النسخة المقسّمة على خلايا: الأجزاء السابقة محفوظة
+        if ps and "def main(" in src:
+            return "\n".join(ps) + "\n" + src
     except Exception:
         pass
     try:
@@ -1168,6 +1175,7 @@ async function route(){
   $('#app').innerHTML=`<div class="empty">No data yet. The first sync is running in the background, reload this page in a few minutes.<br><span class="mu">${esc(e.message)}</span></div>`}
 })();
 </script></body></html>"""
+
 # ---------------- التشغيل ----------------
 def get_secret(name, prompt):
     v = os.environ.get(name)
@@ -1663,6 +1671,7 @@ _TD_F = [("hto", "defending", "high_turnovers"), ("cpr", "defending", "counterpr
          ("blk", "defending", "blocks"), ("clr", "defending", "clearances"), ("duw", "defending", "duels_won"),
          ("aer", "defending", "aerials"), ("aerw", "defending", "aerials_won"), ("tilt", "territory", "field_tilt")]
 _TD_COLS = [c for c, _, _ in _TD_F]
+
 def _x_plrows(res):
     out = []
     for p in _g(res, "players") or []:
@@ -2156,6 +2165,7 @@ R.heatmaps=async function(el){
 };
 
 '''
+
 _X_JS += r'''
 /* ---------- Passing: pass network + pass-category counts ---------- */
 const PF=[['','All players (sort by passes)'],['pr','Progressive passes'],['kp','Key passes'],['tb','Through balls'],['cr','Crosses'],['bx','Passes into box'],['sw','Switches'],['as','Assists']];
@@ -2391,6 +2401,7 @@ R.looklike=async function(el){
  fillPlayers();
 };
 '''
+
 _X_JS += r'''
 /* ---------- Shots (reads data/*_sh.json: one row per shot, every field PitchAPI gives) ---------- */
 let SHD=null;
@@ -2448,6 +2459,9 @@ R.shots=async function(el){
  const draw=()=>{
   const out=$('#sout'),rows=filt(),flip=$('#fl').checked,s=shStats(rows),mn=num($('#sn').value)||1,sk=$('#sx').value;
   const ogN=ALLR.filter(x=>x.og&&(!$('#sm').value||x.m===$('#sm').value)).length;
+  const ogA=num($('#sf').value),ogB=num($('#sg').value);
+  const ogIn=ALLR.filter(x=>x.og&&(!$('#sm').value||x.m===$('#sm').value)&&(ogA==null||x.mn==null||x.mn>=ogA)&&(ogB==null||x.mn==null||x.mn<=ogB)).length;
+  const noF=!($('#st').value||$('#sp').value||$('#so').value||$('#ss').value||$('#sb').value||$('#sz').value);
   if(!rows.length){out.innerHTML='<div class="empty">No shots match this selection.</div>';return}
   const kp=(v,l)=>`<div class="kpi"><b>${v}</b><span>${l}</span></div>`;
   SHCUR=[...rows].sort((a,b)=>(b.xg??-1)-(a.xg??-1)).slice(0,800);
@@ -2460,7 +2474,7 @@ R.shots=async function(el){
   const goal=`<svg class="pitch" viewBox="26 0 16 6.6" style="max-width:520px"><rect x="26" y="0" width="16" height="6.6" fill="#12301f"/><line x1="26" y1="6" x2="42" y2="6" stroke="#4d8f6b" stroke-width=".08"/><rect x="30.34" y="3.56" width="7.32" height="2.44" fill="#e8eef5" fill-opacity=".06" stroke="#e8eef5" stroke-width=".12"/>${gv}</svg>`;
   const nG=SHCUR.filter(x=>x.gy!=null&&x.gz!=null).length;
   const legend=Object.entries(SHCOL).map(([k,c])=>`<span style="margin-right:10px"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${k==='Blocked'?'transparent':c};border:2px solid ${c};vertical-align:middle"></span> ${k}</span>`).join('');
-  out.innerHTML=`<div class="grid">${kp(s.n,'Shots')}${kp(s.g,'Goals')}${kp(pc(s.conv,1)+'%','Conversion (goals ÷ all shots)')}${kp(s.ot+' · '+pc(s.sot,0)+'%','On target (provider flag)')}${kp(pc(s.sotc,0)+'%','Goals ÷ on target')}${kp(s.sv,'Saved')}${kp(s.bl,'Blocked')}${kp(s.po,'Hit the post')}${kp(pc(s.xg,2),'xG')}${kp(pc(s.npxg,2),'npxG (no penalties)')}${kp(pc(s.xgps,3),'xG per shot')}${kp(pc(s.xo,2),'xGOT')}${kp(pc(s.gxg,2),'Goals − xG')}${kp(pc(s.ib,0)+'%','Inside the box')}${kp(pc(s.dist,1)+' m','Avg distance to goal (derived)')}${kp(s.pe,'Penalties')}</div>
+  out.innerHTML=`<div class="grid">${kp(s.n,'Shots')}${kp(s.g,'Goals')}${noF?kp(s.g+ogIn,'Goals incl. '+ogIn+' own goals (matches the scores)'):''}${kp(pc(s.conv,1)+'%','Conversion (goals ÷ all shots)')}${kp(s.ot+' · '+pc(s.sot,0)+'%','On target (provider flag)')}${kp(pc(s.sotc,0)+'%','Goals ÷ on target')}${kp(s.sv,'Saved')}${kp(s.bl,'Blocked')}${kp(s.po,'Hit the post')}${kp(pc(s.xg,2),'xG')}${kp(pc(s.npxg,2),'npxG (no penalties)')}${kp(pc(s.xgps,3),'xG per shot')}${kp(pc(s.xo,2),'xGOT')}${kp(pc(s.gxg,2),'Goals − xG')}${kp(pc(s.ib,0)+'%','Inside the box')}${kp(pc(s.dist,1)+' m','Avg distance to goal (derived)')}${kp(s.pe,'Penalties')}</div>
    <div class="mu" style="margin:8px 0">${legend}<br>Marker size = xG. ${SHCUR.length<rows.length?'Showing the '+SHCUR.length+' highest-xG shots of '+rows.length+'; narrow the filters to see all. ':''}Tap a shot for details. Every team attacks to the right.</div>${map}
    <h3>Goal view (where shots crossed the goal line)</h3><div class="mu" style="font-size:12px;margin-bottom:4px">${nG} of ${SHCUR.length} shown shots have goal-line coordinates (posts at the white frame; height above 6 m is drawn at 6 m).</div>${goal}
    <div class="card" id="shd" style="font-size:13px">Tap a shot for its details.</div>`+
@@ -2482,6 +2496,419 @@ R.shots=async function(el){
 '''
 
 
+_X_CSS += (".seg{display:inline-flex;border:1px solid var(--ln);border-radius:8px;overflow:hidden}"
+           ".seg button{background:var(--sf);color:var(--tx);border:0;border-radius:0;min-width:92px}"
+           ".seg button.on{background:var(--g);color:#06210f}"
+           ".chips{display:flex;flex-wrap:wrap;gap:6px}"
+           ".chp{display:inline-flex;align-items:center;gap:6px;background:var(--sf);border:1px solid var(--ln);border-radius:99px;padding:6px 11px;font-size:13px;cursor:pointer;min-height:34px;color:var(--tx)}"
+           ".chp.on{border-color:var(--g);box-shadow:inset 0 0 0 1px var(--g)}.chp.z{opacity:.45}"
+           ".ecard{display:flex;align-items:center;gap:8px;background:var(--sf);border:1px solid var(--ln);border-radius:10px;padding:8px 10px;flex:1 1 230px;max-width:100%}"
+           ".badge{display:inline-flex;flex:none;width:24px;height:24px;border-radius:50%;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#0d1520}"
+           ".dd{position:absolute;top:46px;left:0;right:0;max-height:300px;overflow:auto;background:var(--sf);border:1px solid var(--ln);border-radius:8px;z-index:20;display:none}"
+           ".dd div{padding:10px 12px;border-bottom:1px solid var(--ln);cursor:pointer}.dd div:hover{background:#1b2c40}"
+           ".clb{color:var(--g);font-weight:700}.clw{color:var(--r);font-weight:700}"
+           "summary{cursor:pointer;padding:4px 0}")
+
+_X_JS += r'''
+/* ===================== Comparison Lab (players / teams) =====================
+   Data comes only from files the sync already stores (PitchAPI): data/*_pl.json, *_adv.json, league file.
+   Percentiles are computed here against the loaded competition (not provider percentiles). */
+const CL_LIM={p:11,t:8};
+const CL_COL=['#E69F00','#56B4E9','#2BC48A','#F0E442','#6C8CFF','#FF6B5E','#E78AC3','#B8A1FF','#D9D9D9','#C98B5B','#1FB5C9'];
+const CL_DASH=['','7 3','2 3','9 3 2 3','1 4','5 2 1 2','12 4','3 6','8 8','1 2','4 2 1 2 1 2'];
+const CL_SHAPE=['c','s','d','t','c','s','d','t','c','s','d'];
+const CL_DEF={p:['xt','xg','gl','xag','kp','pr','tk','ic'],t:['gf','ga','xg','xt','ppda','hto','cpr','tk']};
+const CL_PRE={p:{ST:['npxg','gl','conv','ap','sh','xag','tkw','xt'],FW:['xg','gl','xag','sca','tkw','pc','xt'],CM:['kp','pr','pc','ps','tk','ic','duw','xt'],FB:['cr','pc','kp','tk','ic','duw','pr','xt'],CB:['cl','bl','ic','tk','aerw','ap','pr','ps'],GK:['xgf','ps','pr','cl']},
+ t:{Attack:['gf','xg','xt','tilt','hto'],Defence:['ga','tk','ic','blk','clr','aerp'],Pressing:['ppda','hto','cpr','z','da','ch']}};
+const CL={mode:'p',ids:{p:[],t:[]},mets:{p:null,t:null},norm:'pct',per:'p90',pop:'out',minMin:450,op:null,hid:new Set(),hcols:new Set(),open:new Set(['Attacking','Expected threat (xT)','Pressing']),mq:'',showPart:true,sort:{k:null,d:-1},msg:''};
+let CLC={},CLM=null;
+const clOk=v=>typeof v==='number'&&isFinite(v);
+const clEid=s=>encodeURIComponent(s).replace(/'/g,'%27');
+const clDe=s=>decodeURIComponent(s);
+const clNz=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+
+/* ---------- metric registries (every entry names its real API field) ---------- */
+function clPlReg(){
+ if(CLC.rp)return CLC.rp;
+ const L=[],add=(id,label,cat,src,kind,dir,get,calc)=>L.push({id,label,cat,src,kind,dir,get,calc:!!calc});
+ const c=k=>(a,per)=>per==='p90'?a.p90(k):(a.has(k)?a.s[k]:null);
+ const AP='advanced/players → ',SH='matches/{id}/shots → ';
+ add('xt','Total xT','Expected threat (xT)',AP+'possession_value.xt_total','count','higher',c('xt'));
+ add('vaep','VAEP total','Possession value',AP+'possession_value.vaep_total','count','higher',c('vaep'));
+ add('xg','xG','Attacking',SH+'expected_goals (summed per player)','count','higher',c('xg'));
+ add('npxg','npxG','Attacking',SH+'expected_goals, situation ≠ Penalty (summed)','count','higher',c('npxg'));
+ add('gl','Goals','Attacking',SH+'event_type = Goal (own goals excluded)','count','higher',c('gl'));
+ add('sh','Shots','Attacking',SH+'one row per shot (own goals excluded)','count','higher',c('sh'));
+ add('sot','Shots on target','Attacking',SH+'is_on_target (provider flag)','count','higher',c('sot'));
+ add('fin','Goals − xG','Attacking','calculated: goals − xG','count','higher',(a,per)=>(a.has('gl')&&a.has('xg'))?(per==='p90'?a.p90('gl')-a.p90('xg'):a.s.gl-a.s.xg):null,1);
+ add('conv','Goal conversion %','Attacking','calculated: goals ÷ shots','pct','higher',a=>(a.has('gl')&&a.has('sh')&&a.s.sh>0)?a.s.gl/a.s.sh*100:null,1);
+ add('ast','Assists','Creation',AP+'passing.assists','count','higher',c('ast'));
+ add('xag','xAG','Creation',AP+'creation.xag','count','higher',c('xag'));
+ add('sca','Shot-creating actions','Creation',AP+'creation.sca','count','higher',c('sca'));
+ add('gca','Goal-creating actions','Creation',AP+'creation.gca','count','higher',c('gca'));
+ add('xgc','xG chain','Creation',AP+'creation.xg_chain','count','higher',c('xgc'));
+ add('xgb','xG buildup','Creation',AP+'creation.xg_buildup','count','higher',c('xgb'));
+ add('kp','Key passes','Passing',AP+'passing.key_passes','count','higher',c('kp'));
+ add('ps','Passes','Passing',AP+'passing.passes','count','higher',c('ps'));
+ add('pr','Progressive passes','Passing',AP+'passing.progressive_passes','count','higher',c('pr'));
+ add('bx','Passes into box','Passing',AP+'passing.passes_into_box','count','higher',c('bx'));
+ add('tb','Through balls','Passing',AP+'passing.through_balls','count','higher',c('tb'));
+ add('cr','Crosses','Passing',AP+'passing.crosses','count','higher',c('cr'));
+ add('ca','Carries','Carrying',AP+'carrying.carries','count','higher',c('ca'));
+ add('pc','Progressive carries','Carrying',AP+'carrying.progressive_carries','count','higher',c('pc'));
+ add('cb','Carries into box','Carrying',AP+'carrying.carries_into_box','count','higher',c('cb'));
+ add('tko','Take-ons','Dribbling',AP+'carrying.take_ons','count','higher',c('tko'));
+ add('tkw','Take-ons won','Dribbling',AP+'carrying.take_ons_won','count','higher',c('tkw'));
+ add('tkr','Take-on success %','Dribbling','calculated: take-ons won ÷ take-ons','pct','higher',a=>(a.has('tko')&&a.has('tkw')&&a.s.tko>0)?a.s.tkw/a.s.tko*100:null,1);
+ add('tk','Tackles','Defensive',AP+'defending.tackles','count','higher',c('tk'));
+ add('ic','Interceptions','Defensive',AP+'defending.interceptions','count','higher',c('ic'));
+ add('bl','Blocks','Defensive',AP+'defending.blocks','count','higher',c('bl'));
+ add('cl','Clearances','Defensive',AP+'defending.clearances','count','higher',c('cl'));
+ add('dact','Defensive actions (tackles + interceptions + blocks + clearances)','Defensive','calculated: sum of the four fields above','count','higher',(a,per)=>['tk','ic','bl','cl'].every(k=>a.has(k))?['tk','ic','bl','cl'].reduce((x,k)=>x+(per==='p90'?a.p90(k):a.s[k]),0):null,1);
+ add('duw','Duels won','Duels',AP+'defending.duels_won','count','higher',c('duw'));
+ add('aer','Aerial duels','Duels',AP+'defending.aerials','count','ctx',c('aer'));
+ add('aerw','Aerial duels won','Duels',AP+'defending.aerials_won','count','higher',c('aerw'));
+ add('ap','Aerial win %','Duels','calculated: aerials won ÷ aerials','pct','higher',a=>(a.has('aer')&&a.has('aerw')&&a.s.aer>0)?a.s.aerw/a.s.aer*100:null,1);
+ add('gdw','Ground duels won','Duels','calculated: duels won − aerials won (assumes duels_won includes aerials; not stated in the provider docs)','count','higher',(a,per)=>(a.has('duw')&&a.has('aerw'))?(per==='p90'?a.p90('duw')-a.p90('aerw'):a.s.duw-a.s.aerw):null,1);
+ add('opp','Actions in opponent half %','Positioning','heatmaps: player cells with x ≥ half ÷ all cells','pct','ctx',a=>a.s.act>0?a.s.aco/a.s.act*100:null,1);
+ add('xgf','xG faced','Goalkeeping','players → xG faced (goalkeeper rows only)','count','ctx',(a,per)=>{const o=clXgf().get(a.id);if(!o||!o.n)return null;return per==='p90'?(o.mi>0?o.s/o.mi*90:null):o.s});
+ return CLC.rp=L;
+}
+function clXgf(){
+ if(CLC.xgf)return CLC.xgf;
+ const m=new Map();
+ for(const s of D.stats){if(s.xg_faced==null||!s.player_id)continue;let o=m.get(s.player_id);if(!o){o={s:0,mi:0,n:0};m.set(s.player_id,o)}o.s+=s.xg_faced;o.n++;if(s.minutes!=null)o.mi+=s.minutes}
+ return CLC.xgf=m;
+}
+function clTeamReg(){
+ if(CLC.rt)return CLC.rt;
+ const L=[],add=(id,label,cat,src,ut,dir,calc)=>L.push({id,label,cat,src,ut,kind:'avg',dir,calc:!!calc,get:e=>clOk(e.v[id])?e.v[id]:null});
+ const AD='advanced → ',TD='advanced → ';
+ add('gf','Goals scored','Results','matches → score (home/away goals)','per match','higher',0);
+ add('ga','Goals conceded','Results','matches → score (home/away goals)','per match','lower',0);
+ add('xg','xG','Attacking','calculated: sum of player xG (shots) per match, averaged','per match','higher',1);
+ add('xt','xT','Expected threat (xT)','calculated: sum of player possession_value.xt_total per match, averaged','per match','higher',1);
+ add('ppda','PPDA','Pressing',AD+'defending.ppda (Σ opponent passes ÷ Σ defensive actions)','ratio','lower',1);
+ add('hto','High turnovers','Pressing',TD+'defending.high_turnovers','per match','higher',0);
+ add('cpr','Counterpress regains (5 s)','Pressing',TD+'defending.counterpress_regains_5s','per match','higher',0);
+ add('z','Press zone fraction','Pressing',AD+'defending.press_zone_fraction','as reported','ctx',0);
+ add('op','Opponent passes (PPDA numerator)','Pressing',AD+'defending.opponent_passes','per match','ctx',0);
+ add('da','Defensive actions (PPDA denominator)','Pressing',AD+'defending.defensive_actions','per match','ctx',0);
+ add('ch','Challenges','Pressing',AD+'defending.challenges','per match','ctx',0);
+ add('tk','Tackles','Defensive',AD+'defending.tackles','per match','ctx',0);
+ add('ic','Interceptions','Defensive',AD+'defending.interceptions','per match','ctx',0);
+ add('blk','Blocks','Defensive',TD+'defending.blocks','per match','ctx',0);
+ add('clr','Clearances','Defensive',TD+'defending.clearances','per match','ctx',0);
+ add('duw','Duels won','Duels',TD+'defending.duels_won','per match','higher',0);
+ add('aer','Aerial duels','Duels',TD+'defending.aerials','per match','ctx',0);
+ add('aerw','Aerial duels won','Duels',TD+'defending.aerials_won','per match','higher',0);
+ add('aerp','Aerial win %','Duels','calculated: Σ aerials won ÷ Σ aerials','%','higher',1);
+ add('tilt','Field tilt','Territory',TD+'territory.field_tilt','as reported','ctx',0);
+ add('adx','Average defensive action x','Territory',TD+'defending.avg_defensive_action_x','m','ctx',0);
+ add('brt','Ball recovery time','Recovery',TD+'defending.ball_recovery_time','s','ctx',0);
+ return CLC.rt=L;
+}
+function clTeams(){
+ if(CLC.tm)return CLC.tm;
+ const T=new Map(),G=n=>{let t=T.get(n);if(!t){t={id:n,n,club:'',p:'',m:0,v:{},ac:{}};T.set(n,t)}return t};
+ const ac=(t,k,x)=>{if(clOk(x)){const a=t.ac[k]||(t.ac[k]={s:0,n:0});a.s+=x;a.n++}};
+ for(const m of D.matches){const p=String(m.score).split('-').map(Number);if(p.length!==2||p.some(x=>!clOk(x)))continue;
+  const h=G(m.home),a=G(m.away);ac(h,'gf',p[0]);ac(h,'ga',p[1]);ac(a,'gf',p[1]);ac(a,'ga',p[0])}
+ const cm=new Map();
+ for(const s of D.stats){if(!s.club||s.club==='Unknown')continue;const k=s.club+'|'+s.match_id;let o=cm.get(k);if(!o){o={c:s.club,xg:null,xt:null};cm.set(k,o)}
+  if(s.xg!=null)o.xg=(o.xg??0)+s.xg;if(s.xt!=null)o.xt=(o.xt??0)+s.xt}
+ cm.forEach(o=>{const t=G(o.c);ac(t,'xg',o.xg);ac(t,'xt',o.xt)});
+ const P=CLC.P,A=CLC.A;
+ for(const r of (P&&P.team)||[]){const t=G(r.n);['hto','cpr','brt','adx','blk','clr','duw','aer','aerw','tilt'].forEach(k=>ac(t,k,r[k]));if(clOk(r.aer)&&clOk(r.aerw)){ac(t,'aerS',r.aer);ac(t,'aerwS',r.aerw)}}
+ for(const r of (A&&A.team)||[]){const t=G(r.n);['op','da','ch','z','tk','ic'].forEach(k=>ac(t,k,r[k]));if(clOk(r.op)&&clOk(r.da)&&r.da>0){ac(t,'opS',r.op);ac(t,'daS',r.da)}}
+ const mean=['gf','ga','xg','xt','hto','cpr','brt','adx','blk','clr','duw','aer','aerw','tilt','op','da','ch','z','tk','ic'];
+ T.forEach(t=>{mean.forEach(k=>{const a=t.ac[k];if(a&&a.n)t.v[k]=a.s/a.n});
+  const a1=t.ac.aerS,a2=t.ac.aerwS;if(a1&&a1.s>0&&a2)t.v.aerp=a2.s/a1.s*100;
+  const o=t.ac.opS,d=t.ac.daS;if(o&&d&&d.s>0)t.v.ppda=o.s/d.s;
+  t.m=t.ac.gf?t.ac.gf.n:0});
+ return CLC.tm=[...T.values()].filter(t=>Object.keys(t.v).length).sort((a,b)=>a.n.localeCompare(b.n));
+}
+const clReg=()=>CL.mode==='p'?clPlReg():clTeamReg();
+const clEnts=()=>CL.mode==='p'?(CLC.ag||[]):clTeams();
+const clVal=(e,m)=>CL.mode==='p'?m.get(e,CL.per):m.get(e);
+const clUnit=m=>m.ut||(m.kind==='pct'?'%':(CL.per==='p90'?'per 90':'total'));
+function clFmt(v,m){
+ if(!clOk(v))return '—';
+ if(m.kind==='pct'||m.ut==='%')return v.toFixed(1);
+ if(Number.isInteger(v))return String(v);
+ return Math.abs(v)<10?v.toFixed(2):v.toFixed(1);
+}
+
+/* ---------- reference population, percentiles, normalization ---------- */
+function clPoolKey(e){if(CL.mode==='t')return 't';if(CL.pop==='all')return 'all';if(CL.pop==='pos'&&e.p)return 'pos:'+e.p;return e.p==='GK'?'gk':'out'}
+function clPool(e){
+ const all=clEnts();if(CL.mode==='t')return all;
+ const k=clPoolKey(e);let pool;
+ if(k==='all')pool=all;else if(k.startsWith('pos:'))pool=all.filter(x=>x.p===e.p);else if(k==='gk')pool=all.filter(x=>x.p==='GK');else pool=all.filter(x=>x.p!=='GK');
+ return pool.filter(x=>x.s.mi>=CL.minMin);
+}
+function clPopLabel(e){
+ if(CL.mode==='t')return 'all teams with data in '+D.name;
+ const k=clPoolKey(e),mm=CL.minMin+'+ min';
+ return (k==='all'?'all players':k.startsWith('pos:')?'players listed as '+e.p:k==='gk'?'goalkeepers':'outfield players')+' with '+mm+' in '+D.name;
+}
+function clSorted(m,e){
+ const key=[CL.mode,m.id,CL.per,clPoolKey(e),CL.minMin].join('|'),sv=CLC.sv||(CLC.sv={});
+ if(!sv[key])sv[key]=clPool(e).map(x=>clVal(x,m)).filter(clOk).sort((a,b)=>a-b);
+ return sv[key];
+}
+/* mid-rank percentile: share of the population below x, plus half of the ties */
+function clRank(arr,x){
+ let lo=0,hi=arr.length;
+ while(lo<hi){const mid=(lo+hi)>>1;if(arr[mid]<x)lo=mid+1;else hi=mid}
+ const a=lo;hi=arr.length;
+ while(lo<hi){const mid=(lo+hi)>>1;if(arr[mid]<=x)lo=mid+1;else hi=mid}
+ return (a+(lo-a)/2)/arr.length*100;
+}
+function clNorm(e,m,rg){
+ const raw=clVal(e,m);
+ if(!clOk(raw))return {raw:null,n:null,pct:null,why:'missing'};
+ const arr=clSorted(m,e),pm=CL.mode==='p'?10:6,pct=arr.length>=pm?clRank(arr,raw):null;
+ let n=null,why=null;
+ if(CL.norm==='pct'){if(pct==null)why='reference population too small';else n=pct}
+ else n=(rg&&rg.hi>rg.lo)?(raw-rg.lo)/(rg.hi-rg.lo)*100:50;
+ if(n!=null&&m.dir==='lower')n=100-n;
+ return {raw,n,pct,why};
+}
+function clAvail(){
+ const k=CL.mode+'|'+CL.per,av=CLC.av||(CLC.av={});
+ if(av[k])return av[k];
+ const s=new Set(),es=clEnts();
+ clReg().forEach(m=>{if(es.some(e=>clOk(clVal(e,m))))s.add(m.id)});
+ return av[k]=s;
+}
+function clModel(){
+ const all=clEnts(),by=new Map(all.map(e=>[e.id,e])),reg=clReg(),rm=new Map(reg.map(m=>[m.id,m])),av=clAvail();
+ const ents=CL.ids[CL.mode].filter(i=>by.has(i)).map(i=>by.get(i));
+ if(CL.mets[CL.mode]==null){let d=CL_DEF[CL.mode].filter(i=>av.has(i));if(d.length<3)d=reg.filter(m=>av.has(m.id)).slice(0,6).map(m=>m.id);CL.mets[CL.mode]=d}
+ const mets=CL.mets[CL.mode].filter(i=>rm.has(i)&&av.has(i)).map(i=>rm.get(i));
+ const cells=new Map(),cov=[];
+ mets.forEach(m=>{
+  const vs=ents.map(e=>clVal(e,m)).filter(clOk),rg={lo:Math.min(...vs),hi:Math.max(...vs)};
+  ents.forEach(e=>cells.set(e.id+'|'+m.id,clNorm(e,m,rg)));
+  cov.push({m,have:vs.length,n:ents.length});
+ });
+ const axes=[],excl=[];
+ cov.forEach(c=>{
+  if(!ents.length)return;
+  const miss=ents.filter(e=>!clOk(cells.get(e.id+'|'+c.m.id).raw)),noN=ents.filter(e=>cells.get(e.id+'|'+c.m.id).raw!=null&&cells.get(e.id+'|'+c.m.id).n==null);
+  if(!miss.length&&!noN.length)axes.push(c.m);
+  else excl.push({m:c.m,why:miss.length?'no value from PitchAPI for '+miss.map(e=>e.n).join(', '):'reference population too small for a percentile'});
+ });
+ return {all,by,reg,ents,mets,cells,cov,axes,excl};
+}
+function clSimilar(M){
+ if(!M.ents.length||M.axes.length<2)return null;
+ const f0=M.ents[M.ents.length-1],sel=new Set(M.ents.map(e=>e.id));
+ const arrs=M.axes.map(m=>clSorted(m,f0));
+ if(arrs.some(a=>a.length<(CL.mode==='p'?10:6)))return null;
+ const vec=e=>{const o=[];for(let j=0;j<M.axes.length;j++){const v=clVal(e,M.axes[j]);if(!clOk(v))return null;o.push(clRank(arrs[j],v))}return o};
+ const base=vec(f0);if(!base)return null;
+ const out=[];
+ clPool(f0).forEach(e=>{if(sel.has(e.id))return;const v=vec(e);if(!v)return;out.push({e,gap:Math.sqrt(v.reduce((s,x,j)=>s+(x-base[j])*(x-base[j]),0)/v.length)})});
+ out.sort((a,b)=>a.gap-b.gap);
+ return {f:f0,list:out.slice(0,5)};
+}
+
+/* ---------- radar (inline SVG, no library) ---------- */
+function clWrap(s,n){if(s.length<=n)return [s];let a='',b='';s.split(' ').forEach(x=>{if(!b&&(a+' '+x).trim().length<=n)a=(a+' '+x).trim();else b=(b+' '+x).trim()});return (a&&b)?[a,b]:[s]}
+function clMark(s,x,y,col,att,tt){
+ const r=4.6,f1=v=>v.toFixed(1);let sh;
+ if(s==='s')sh=`<rect x="${f1(x-r)}" y="${f1(y-r)}" width="${2*r}" height="${2*r}" fill="${col}" stroke="#0d1520"/>`;
+ else if(s==='d')sh=`<polygon points="${f1(x)},${f1(y-r-1.5)} ${f1(x+r+1.5)},${f1(y)} ${f1(x)},${f1(y+r+1.5)} ${f1(x-r-1.5)},${f1(y)}" fill="${col}" stroke="#0d1520"/>`;
+ else if(s==='t')sh=`<polygon points="${f1(x)},${f1(y-r-1.5)} ${f1(x+r+1.5)},${f1(y+r)} ${f1(x-r-1.5)},${f1(y+r)}" fill="${col}" stroke="#0d1520"/>`;
+ else sh=`<circle cx="${f1(x)}" cy="${f1(y)}" r="${r}" fill="${col}" stroke="#0d1520"/>`;
+ return `<g ${att}>${sh}<title>${esc(tt)}</title></g>`;
+}
+function clRadar(M,leg){
+ const ax=M.axes,n=ax.length,W=680,cx=340,cy=290,R=178;
+ const E=M.ents.map((e,i)=>({e,i})).filter(o=>!CL.hid.has(o.e.id));
+ const H=590+(leg?M.ents.length*22+10:0);
+ const P=(j,r)=>{const a=-Math.PI/2+2*Math.PI*j/n;return [cx+r*Math.cos(a),cy+r*Math.sin(a)]};
+ const pt=p=>p[0].toFixed(1)+','+p[1].toFixed(1);
+ let g=`<rect width="${W}" height="${H}" fill="#0d1520"/>`;
+ [25,50,75,100].forEach(p=>{g+=`<polygon points="${ax.map((_,j)=>pt(P(j,R*p/100))).join(' ')}" fill="${p===100?'#152130':'none'}" stroke="#25374d" stroke-width="1"/>`});
+ ax.forEach((m,j)=>{const q=P(j,R);g+=`<line x1="${cx}" y1="${cy}" x2="${q[0].toFixed(1)}" y2="${q[1].toFixed(1)}" stroke="#25374d"/>`});
+ [25,50,75].forEach(p=>{g+=`<text x="${cx+3}" y="${(cy-R*p/100).toFixed(1)}" font-size="10" fill="#5d6f85">${p}</text>`});
+ ax.forEach((m,j)=>{
+  const a=-Math.PI/2+2*Math.PI*j/n,q=P(j,R+16),c=Math.cos(a),anc=c>.3?'start':c<-.3?'end':'middle',ls=clWrap(m.label+(m.dir==='lower'?' ↓':''),14);
+  g+=`<text x="${q[0].toFixed(1)}" y="${(q[1]+5-(ls.length-1)*9.5).toFixed(1)}" text-anchor="${anc}" font-size="17" fill="#e8eef5">${ls.map((t,k)=>`<tspan x="${q[0].toFixed(1)}" dy="${k?19:0}">${esc(t)}</tspan>`).join('')}</text>`});
+ const op=CL.op==null?Math.max(.05,.32/Math.sqrt(Math.max(1,E.length))):CL.op/100;
+ const coords=o=>ax.map((m,j)=>P(j,R*Math.max(0,Math.min(100,M.cells.get(o.e.id+'|'+m.id).n))/100));
+ E.forEach(o=>{const col=CL_COL[o.i];g+=`<polygon points="${coords(o).map(pt).join(' ')}" fill="${col}" fill-opacity="${op.toFixed(2)}" stroke="${col}" stroke-width="2" stroke-dasharray="${CL_DASH[o.i]}" stroke-linejoin="round"/>`});
+ E.forEach(o=>{coords(o).forEach((q,j)=>{const m=ax[j],c=M.cells.get(o.e.id+'|'+m.id);
+  g+=clMark(CL_SHAPE[o.i],q[0],q[1],CL_COL[o.i],`onclick="clPick(${o.i},${j})" style="cursor:pointer"`,`${o.e.n} · ${m.label}: ${clFmt(c.raw,m)} ${clUnit(m)} · chart value ${c.n.toFixed(1)}${c.pct!=null?' · percentile '+c.pct.toFixed(1):''}`)})});
+ if(leg){M.ents.forEach((e,i)=>{const y=604+i*22;g+=`<line x1="24" y1="${y}" x2="62" y2="${y}" stroke="${CL_COL[i]}" stroke-width="2.5" stroke-dasharray="${CL_DASH[i]}"/>`+clMark(CL_SHAPE[i],43,y,CL_COL[i],'','')+`<text x="74" y="${y+4}" font-size="13" fill="#e8eef5">${i+1}. ${esc(e.n)}${e.club?' — '+esc(e.club):''}</text>`})}
+ return g;
+}
+function clPick(i,j){
+ const M=CLM,b=$('#cldet');if(!M||!b)return;
+ const e=M.ents[i],m=M.axes[j],c=M.cells.get(e.id+'|'+m.id);
+ b.innerHTML=`<b style="color:${CL_COL[i]}">${i+1}. ${esc(e.n)}</b> <span class="mu">${esc(e.club||'')}</span><div class="mu">${esc(m.label)}: <b style="color:var(--tx)">${clFmt(c.raw,m)}</b> ${esc(clUnit(m))}${c.pct!=null?' · percentile '+c.pct.toFixed(1)+' ('+esc(clPopLabel(e))+')':''} · chart value ${c.n.toFixed(1)}${m.dir==='lower'?' (inverted: lower is better)':''}<br>Source: ${esc(m.src)} · ${m.calc?'calculated':'direct'}</div>`;
+}
+
+/* ---------- actions ---------- */
+function clRender(){
+ CLM=clModel();
+ const set=(id,fn)=>{const el=$(id);if(el)fn(el)};
+ set('#clmsg',el=>el.textContent=CL.msg);
+ set('#clmp',el=>el.className=CL.mode==='p'?'on':'');set('#clmt',el=>el.className=CL.mode==='t'?'on':'');
+ clSelUI(CLM);clMetUI(CLM);clChartUI(CLM);clSimUI(CLM);clTblUI(CLM);
+}
+function clMode(m){CL.mode=m;CL.msg='';CL.sort={k:null,d:-1};const q=$('#clq');if(q){q.value='';q.placeholder=m==='p'?'Search a player or club…':'Search a team…'}const dd=$('#cldd');if(dd)dd.style.display='none';clCtl();clRender()}
+function clAdd(eid){
+ const id=clDe(eid),a=CL.ids[CL.mode],lim=CL_LIM[CL.mode];
+ if(a.includes(id))CL.msg='Already selected.';
+ else if(a.length>=lim)CL.msg='Maximum of '+lim+(CL.mode==='p'?' players':' teams')+' reached. Remove one to add another.';
+ else{a.push(id);CL.msg=''}
+ const q=$('#clq');if(q)q.value='';const dd=$('#cldd');if(dd)dd.style.display='none';
+ clRender();
+}
+function clRm(eid){const id=clDe(eid);CL.ids[CL.mode]=CL.ids[CL.mode].filter(x=>x!==id);CL.hid.delete(id);CL.msg='';clRender()}
+function clHide(eid){const id=clDe(eid);if(CL.hid.has(id))CL.hid.delete(id);else CL.hid.add(id);clRender()}
+function clReset(){CL.ids[CL.mode]=[];CL.hid=new Set();CL.msg='';clRender()}
+function clTogM(id){const a=CL.mets[CL.mode]||[];CL.mets[CL.mode]=a.includes(id)?a.filter(x=>x!==id):[...a,id];clRender()}
+function clClearM(){CL.mets[CL.mode]=[];clRender()}
+function clDefM(){CL.mets[CL.mode]=null;clRender()}
+function clPreset(k){const av=clAvail();CL.mets[CL.mode]=CL_PRE[CL.mode][k].filter(i=>av.has(i));clRender()}
+function clSet(k,v){
+ if(k==='minMin')v=Math.max(0,Number(v)||0);
+ if(k==='op')v=(v==null||v==='')?null:Number(v);
+ CL[k]=v;if(k==='per'||k==='pop'||k==='minMin'){CLC.sv={};CLC.av={}}
+ clCtl();clRender();
+}
+function clMq(v){CL.mq=v;const M=CLM;if(M)clMetUI(M)}
+function clTog(c,o){if(o)CL.open.add(c);else CL.open.delete(c)}
+function clSort(k){CL.sort=CL.sort.k===k?{k,d:-CL.sort.d}:{k,d:-1};if(CLM)clTblUI(CLM)}
+function clCol(id,on){if(on)CL.hcols.delete(id);else CL.hcols.add(id);if(CLM)clTblUI(CLM)}
+function clShowPart(on){CL.showPart=on;if(CLM)clTblUI(CLM)}
+function clDd(){
+ const qi=$('#clq'),dd=$('#cldd');if(!qi||!dd)return;
+ const q=clNz(qi.value).trim();if(!q){dd.style.display='none';return}
+ const sel=new Set(CL.ids[CL.mode]);
+ const l=clEnts().filter(e=>!sel.has(e.id)&&clNz(e.n+' '+(e.club||'')).includes(q)).sort((a,b)=>CL.mode==='p'?b.s.mi-a.s.mi:a.n.localeCompare(b.n)).slice(0,12);
+ dd.innerHTML=l.length?l.map(e=>`<div onmousedown="clAdd('${clEid(e.id)}')"><b>${esc(e.n)}</b> <span class="mu">${esc(e.club||'')}${e.p?' · '+esc(e.p):''}${CL.mode==='p'?' · '+Math.round(e.s.mi)+' min':''}</span></div>`).join(''):'<div class="mu">No match in this competition</div>';
+ dd.style.display='block';
+}
+
+/* ---------- rendering ---------- */
+function clCtl(){
+ const p=CL.mode==='p',el=$('#clctl');if(!el)return;
+ el.innerHTML=`<div class="ctl"><select onchange="clSet('norm',this.value)">${opts([['pct','Chart value: percentile in the competition'],['sel','Chart value: relative to the selection']],CL.norm)}</select>`+
+ (p?`<select onchange="clSet('per',this.value)">${opts([['p90','Per 90 minutes'],['tot','Season totals']],CL.per)}</select><select onchange="clSet('pop',this.value)">${opts([['out','Reference: outfield players (GK vs GK)'],['pos','Reference: same position'],['all','Reference: all players']],CL.pop)}</select><input type="number" min="0" value="${CL.minMin}" onchange="clSet('minMin',this.value)" style="width:140px" title="Minimum minutes for players in the reference population" placeholder="Min minutes">`:'')+
+ `<label class="mu" style="align-self:center">Fill <input type="range" min="2" max="60" value="${CL.op==null?20:CL.op}" onchange="clSet('op',this.value)" style="min-height:0;width:110px"></label><button class="s" onclick="clSet('op',null)">Auto fill</button></div>`;
+}
+function clSelUI(M){
+ const lim=CL_LIM[CL.mode],p=CL.mode==='p',el=$('#clsel');if(!el)return;
+ el.innerHTML=`<div class="mu" style="margin:6px 0"><b>${M.ents.length}/${lim}</b> ${p?'players':'teams'} selected <button class="s" onclick="clReset()" style="min-height:32px;padding:4px 10px;margin-left:8px">Reset</button></div><div class="chips">`+
+ M.ents.map((e,i)=>`<div class="ecard" style="${CL.hid.has(e.id)?'opacity:.5':''}"><span class="badge" style="background:${CL_COL[i]}">${i+1}</span><div style="flex:1;min-width:0"><b>${esc(e.n)}</b><div class="mu" style="font-size:12px">${esc(e.club||'')}${e.p?' · '+esc(e.p):''}${p?' · '+Math.round(e.s.mi)+' min':' · '+e.m+' matches'}</div></div><button class="s" title="Show or hide on the chart" onclick="clHide('${clEid(e.id)}')" style="min-height:32px;padding:4px 8px">${CL.hid.has(e.id)?'Show':'Hide'}</button><button class="s" title="Remove" onclick="clRm('${clEid(e.id)}')" style="min-height:32px;padding:4px 8px">✕</button></div>`).join('')+'</div>';
+}
+function clMetUI(M){
+ const el=$('#clmet');if(!el)return;
+ const reg=clReg(),av=clAvail(),sel=new Set(CL.mets[CL.mode]||[]),q=clNz(CL.mq).trim(),N=M.ents.length;
+ const cov=m=>N?M.ents.filter(e=>clOk(clVal(e,m))).length:null;
+ const chip=m=>{const cv=cov(m),part=cv!=null&&cv<N;return `<span class="chp ${sel.has(m.id)?'on':''} ${cv===0?'z':''}" title="${esc(m.src+(m.calc?' (calculated)':' (direct)')+(part?' · missing for some selected':''))}" onclick="clTogM('${m.id}')">${esc(m.label)}${part?` <span class="mu">⚠ ${cv}/${N}</span>`:''}</span>`};
+ const list=reg.filter(m=>av.has(m.id)&&(!q||clNz(m.label+' '+m.cat+' '+m.src).includes(q)));
+ const cats=[...new Set(list.map(m=>m.cat))];
+ const pre=Object.keys(CL_PRE[CL.mode]).map(k=>`<button class="s" onclick="clPreset('${k}')" style="min-height:34px;padding:4px 12px">${k}</button>`).join(' ');
+ el.innerHTML=`<div class="ctl"><span class="mu" style="align-self:center">Starting sets (not position limits):</span>${pre}<button class="s" onclick="clDefM()">Restore default</button><button class="s" onclick="clClearM()">Clear all</button></div>`+
+ `<div class="mu" style="margin-bottom:4px">Selected metrics (${(CL.mets[CL.mode]||[]).length})</div><div class="chips" style="margin-bottom:10px">${(CL.mets[CL.mode]||[]).map(id=>reg.find(m=>m.id===id)).filter(m=>m&&av.has(m.id)).map(m=>`<span class="chp on" onclick="clTogM('${m.id}')">${esc(m.label)} ✕</span>`).join('')||'<span class="mu">None selected</span>'}</div>`+
+ `<input placeholder="Search metrics…" value="${esc(CL.mq)}" oninput="clMq(this.value)" style="width:100%;margin-bottom:8px">`+
+ (cats.length?cats.map(c=>`<details ${(CL.open.has(c)||q)?'open':''} ontoggle="clTog('${esc(c).replace(/'/g,'&#39;')}',this.open)" style="margin-bottom:6px"><summary class="mu">${esc(c)} (${list.filter(m=>m.cat===c).length})</summary><div class="chips" style="margin:6px 0">${list.filter(m=>m.cat===c).sort((a,b)=>(cov(b)||0)-(cov(a)||0)).map(chip).join('')}</div></details>`).join(''):'<div class="empty">No metric matches. Only metrics with real PitchAPI data in this competition are listed.</div>');
+}
+function clChartUI(M){
+ const el=$('#clchart');if(!el)return;
+ const p=CL.mode==='p';
+ if(p&&!(CLC.ag||[]).length){el.innerHTML='<div class="empty">No player statistics for this competition yet. They appear after the next synchronization.</div>';return}
+ if(!M.ents.length){el.innerHTML=`<div class="empty">Search and add ${p?'players':'teams'} above. Nothing is drawn until you select at least one.</div>`;return}
+ const warn=M.excl.length?`<div class="card mu" style="font-size:13px"><b>Not on the radar</b> (a radar cannot draw a missing value, and missing is never turned into 0):<br>${M.excl.map(x=>'• '+esc(x.m.label)+': '+esc(x.why)).join('<br>')}<br>They stay in the table below.</div>`:'';
+ if(M.axes.length<3){el.innerHTML=`<div class="empty">A radar needs at least 3 metrics with complete data for every selected ${p?'player':'team'}. ${M.axes.length} qualify right now. Add more metrics, or use the table below.</div>`+warn;return}
+ const note=CL.norm==='pct'?`Chart value = percentile among ${esc(clPopLabel(M.ents[0]))}${p&&CL.pop==='pos'?' (reference depends on each player)':''}. Computed here from PitchAPI data, not a provider percentile.`:'Chart value = position between the lowest and highest selected value (0–100). It only compares the selected '+(p?'players':'teams')+' with each other.';
+ el.innerHTML=`<svg id="clsvg" viewBox="0 0 680 590" style="width:100%;max-width:760px;display:block;margin:0 auto">${clRadar(M,false)}</svg><div class="card" id="cldet" style="font-size:13px">Tap a point for its value, percentile and source.</div><div class="mu" style="font-size:12px;margin-bottom:8px">${note} ↓ marks a metric where lower is better (axis inverted). Colour, line style, marker shape and number together identify each ${p?'player':'team'}.</div>`+warn;
+}
+function clSimUI(M){
+ const el=$('#clsim');if(!el)return;
+ const s=clSimilar(M);if(!s||!s.list.length){el.innerHTML='';return}
+ el.innerHTML=`<div class="card"><h3 style="margin-top:0">Similar to <span style="color:${CL_COL[M.ents.length-1]}">${esc(s.f.n)}</span></h3><div class="mu" style="font-size:12px;margin-bottom:6px">Closest by average percentile gap on the ${M.axes.length} radar metrics. Tap to add.</div><div class="chips">${s.list.map(o=>`<span class="chp" onclick="clAdd('${clEid(o.e.id)}')">${esc(o.e.n)} <span class="mu">${esc(o.e.club||'')} · gap ${o.gap.toFixed(1)}</span></span>`).join('')}</div></div>`;
+}
+const clCols=M=>(CL.showPart?M.mets:M.axes).filter(m=>!CL.hcols.has(m.id));
+function clTblUI(M){
+ const el=$('#cltbl');if(!el)return;
+ if(!M.ents.length){el.innerHTML='';return}
+ const p=CL.mode==='p',cols=clCols(M),sk=CL.sort.k;
+ const cellRaw=(e,m)=>{const c=M.cells.get(e.id+'|'+m.id);return c?c.raw:null};
+ const key=(e)=>sk==='n'?e.n:sk==='mi'?(p?e.s.mi:e.m):(()=>{const m=cols.find(x=>x.id===sk);return m?cellRaw(e,m):null})();
+ const rows=M.ents.map((e,i)=>({e,i}));
+ if(sk)rows.sort((a,b)=>{const x=key(a.e),y=key(b.e);if(x==null&&y==null)return 0;if(x==null)return 1;if(y==null)return -1;return CL.sort.d*(typeof x==='string'?x.localeCompare(y):x-y)*(-1)});
+ const bw=cols.map(m=>{const v=M.ents.map(e=>cellRaw(e,m)).filter(clOk);if(v.length<2||m.dir==='ctx')return null;const hi=Math.max(...v),lo=Math.min(...v);if(hi===lo)return null;return m.dir==='higher'?{b:hi,w:lo}:{b:lo,w:hi}});
+ const arrow=k=>sk===k?(CL.sort.d<0?' ↓':' ↑'):'';
+ const th=(k,t,sub)=>`<th class="${k==='n'?'':'n'}" style="cursor:pointer" onclick="clSort('${k}')">${esc(t)}${arrow(k)}${sub?`<div class="mu" style="font-size:11px;font-weight:400">${esc(sub)}</div>`:''}</th>`;
+ el.innerHTML=`<div class="ctl"><button class="s" onclick="clCsv()">Download CSV</button><button class="s" onclick="clCopy()">Copy table</button><button class="s" onclick="clPng()">Radar image (PNG)</button><label class="mu" style="align-self:center"><input type="checkbox" ${CL.showPart?'checked':''} onchange="clShowPart(this.checked)" style="min-height:0"> Show metrics with partial data</label></div>`+
+ `<details style="margin-bottom:8px"><summary class="mu">Columns</summary><div class="chips" style="margin-top:6px">${M.mets.map(m=>`<label class="mu" style="font-size:13px"><input type="checkbox" ${CL.hcols.has(m.id)?'':'checked'} onchange="clCol('${m.id}',this.checked)" style="min-height:0"> ${esc(m.label)}</label>`).join(' ')}</div></details>`+
+ `<div class="wrap"><table><tr><th>#</th>${th('n','Name')}<th>Club</th><th>Pos</th>${th('mi',p?'Minutes':'Matches')}${cols.map(m=>th(m.id,m.label,clUnit(m)+(m.dir==='lower'?' · lower is better':''))).join('')}</tr>`+
+ rows.map(({e,i})=>`<tr><td><span class="badge" style="background:${CL_COL[i]}">${i+1}</span></td><td><b>${esc(e.n)}</b></td><td>${esc(e.club||'')}</td><td>${esc(e.p||'—')}</td><td class="n">${p?Math.round(e.s.mi):e.m}</td>${cols.map((m,k)=>{
+  const c=M.cells.get(e.id+'|'+m.id);
+  if(!c||c.raw==null)return '<td class="n mu" title="Missing: PitchAPI gave no value for this metric (this is not a zero)">—</td>';
+  const b=bw[k],cls=b&&c.raw===b.b?'clb':b&&c.raw===b.w?'clw':'',mk=cls==='clb'?'▲ ':cls==='clw'?'▼ ':'';
+  return `<td class="n ${cls}">${mk}${clFmt(c.raw,m)}${c.pct!=null?` <span class="mu" style="font-size:11px;font-weight:400">p${c.pct.toFixed(0)}</span>`:''}</td>`}).join('')}</tr>`).join('')+
+ `</table></div><div class="mu" style="font-size:12px;margin-top:6px">p = percentile in ${esc(clPopLabel(M.ents[0]))}. ▲ best / ▼ worst among the selected, shown only where higher or lower has a clear meaning. A dash means missing data.</div>`;
+}
+const clCsvEsc=v=>{const s=String(v??'');return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s};
+function clRows(M){
+ const p=CL.mode==='p',cols=clCols(M),head=['Name','Club','Position',p?'Minutes':'Matches'];
+ cols.forEach(m=>{head.push(m.label+' ('+clUnit(m)+')');head.push(m.label+' percentile')});
+ return [head,...M.ents.map(e=>{const r=[e.n,e.club||'',e.p||'',p?Math.round(e.s.mi):e.m];cols.forEach(m=>{const c=M.cells.get(e.id+'|'+m.id);r.push(c&&c.raw!=null?c.raw:'');r.push(c&&c.pct!=null?c.pct.toFixed(1):'')});return r})];
+}
+function clCsv(){
+ if(!CLM||!CLM.ents.length)return;
+ const t=clRows(CLM).map(r=>r.map(clCsvEsc).join(',')).join('\n'),a=document.createElement('a');
+ a.href=URL.createObjectURL(new Blob([t],{type:'text/csv'}));a.download='comparison.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+function clCopy(){
+ if(!CLM||!CLM.ents.length)return;
+ const t=clRows(CLM).map(r=>r.join('\t')).join('\n'),done=()=>{CL.msg='Table copied.';const m=$('#clmsg');if(m)m.textContent=CL.msg};
+ if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(done,()=>{CL.msg='Copy was blocked by the browser. Use Download CSV.';const m=$('#clmsg');if(m)m.textContent=CL.msg});
+ else{CL.msg='Copy is not available here. Use Download CSV.';const m=$('#clmsg');if(m)m.textContent=CL.msg}
+}
+function clPng(){
+ const M=CLM;if(!M||M.axes.length<3)return;
+ const H=590+M.ents.length*22+10,svg=`<svg xmlns="http://www.w3.org/2000/svg" width="1360" height="${H*2}" viewBox="0 0 680 ${H}" font-family="system-ui,Segoe UI,Roboto,sans-serif">${clRadar(M,true)}</svg>`;
+ const img=new Image();
+ img.onload=()=>{const c=document.createElement('canvas');c.width=1360;c.height=H*2;c.getContext('2d').drawImage(img,0,0);c.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='comparison-radar.png';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)})};
+ img.onerror=()=>{CL.msg='Could not create the image in this browser.';const m=$('#clmsg');if(m)m.textContent=CL.msg};
+ img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
+}
+
+/* ---------- page ---------- */
+async function clLoad(){
+ let P=null,A=null,err='';
+ try{P=await loadPl()}catch(e){err='Could not load player data: '+e.message}
+ try{A=await loadAdv()}catch(e){A=null}
+ if(CLC.D!==D.id||CLC.P!==P){CLC={D:D.id,P,A};CL.ids={p:[],t:[]};CL.mets={p:null,t:null};CL.hid=new Set();CL.hcols=new Set();CL.sort={k:null,d:-1};CL.msg=''}
+ if(P&&!CLC.ag)CLC.ag=aggPl(P);
+ if(!CLC.seeded){CLC.seeded=1;(CLC.ag?CMP:[]).forEach(k=>{const id=decodeURIComponent(k).split('||')[0],a=CLC.ag.find(x=>x.id===id);if(a&&!CL.ids.p.includes(a.id)&&CL.ids.p.length<CL_LIM.p)CL.ids.p.push(a.id)})}
+ return err;
+}
+R.compare=async function(el){
+ el.innerHTML='<h2>Comparison Lab</h2><div id="clroot"><div class="empty">Loading…</div></div>';
+ const err=await clLoad(),root=$('#clroot');
+ root.innerHTML=(err?`<div class="empty">${esc(err)}</div>`:'')+
+ `<div class="card"><div class="ctl"><div class="seg"><button id="clmp" onclick="clMode('p')">Players</button><button id="clmt" onclick="clMode('t')">Teams</button></div><span class="mu" style="align-self:center">${esc(D.name)} · season: current, as last synchronized</span></div>
+ <div class="ctl" style="position:relative;margin-bottom:0"><input id="clq" autocomplete="off" placeholder="Search a player or club…" style="flex:1;min-width:200px"><div id="cldd" class="dd"></div></div><div id="clmsg" class="mu" style="margin-top:4px"></div><div id="clsel"></div></div>
+ <div class="card"><h3 style="margin-top:0">Metrics</h3><div id="clmet"></div></div>
+ <div class="card"><div id="clctl"></div><div id="clchart"></div></div><div id="clsim"></div><div class="card"><h3 style="margin-top:0">Detailed comparison</h3><div id="cltbl"></div></div>`;
+ const q=$('#clq');q.oninput=clDd;q.onfocus=clDd;q.onblur=()=>setTimeout(()=>{const d=$('#cldd');if(d&&document.activeElement!==q)d.style.display='none'},150);
+ q.onkeydown=ev=>{if(ev.key==='Enter'){const f=$('#cldd').querySelector('div[onmousedown]');if(f)f.dispatchEvent(new MouseEvent('mousedown'))}};
+ clCtl();clRender();
+};
+'''
+
+
 def _x_patch_index(html):
     def sub(h, old, new):
         if h.count(old) != 1:
@@ -2491,6 +2918,7 @@ def _x_patch_index(html):
     h = html
     h = sub(h, ".chart{width:100%;height:140px}.mu{color:var(--mu)}",
             ".chart{width:100%;height:140px}.mu{color:var(--mu)}" + _X_CSS)
+    h = sub(h, "['compare','Compare']", "['compare','Comparison Lab']")
     h = sub(h, "['passing','Passing'],", "['passing','Passing'],['ppda','PPDA'],['defense','Defensive'],['looklike','Look Like'],")
     h = sub(h, "AGGC=null;try{localStorage.setItem('league',D.id)}catch(e){}",
             "AGGC=null;ADV=null;HEAT=null;PLD=null;SHD=null;try{localStorage.setItem('league',D.id)}catch(e){}")
@@ -2537,7 +2965,7 @@ def probe_api(pit_key):
             return
         mid = list(res.matches)[0].id
         log(f"فحص المباراة {mid}")
-        for nm_ in ("advanced", "advanced_network", "heatmaps"):
+        for nm_ in ("advanced", "advanced_players", "advanced_network", "heatmaps"):
             fn = getattr(client.matches, nm_, None)
             log("\n" + "=" * 40 + f"\n{nm_}")
             if fn is None:
