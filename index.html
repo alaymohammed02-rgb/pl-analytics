@@ -146,6 +146,74 @@ let CMP=[];
 const GH_REPO=()=>{try{const v=localStorage.getItem('gh_repo');if(v)return v}catch(e){}return location.hostname.split('.')[0]+'/'+(location.pathname.split('/')[1]||'')};
 const ghTok=()=>{try{return localStorage.getItem('gh_token')||''}catch(e){return ''}};
 const ghApi=(path,opt={})=>{const t=ghTok();return fetch('https://api.github.com'+path,{...opt,headers:{'Accept':'application/vnd.github+json',...(t?{'Authorization':'Bearer '+t}:{}),...(opt.headers||{})}})};
+/* ===== Fix 1: GitHub diagnostics for the Synchronize button ===== */
+async function ghWhy(repo,status){
+ try{
+  if(status===401)return 'GitHub rejected the token (401): it is wrong, expired or revoked. Create a new one, paste it above and press Save.';
+  if(status===403)return 'GitHub refused the request (403): the token needs "Actions: Read and write" on this repository (classic token: repo + workflow), or the rate limit was reached.';
+  const a=await ghApi('/repos/'+repo);
+  if(a.status===404)return 'Repository "'+repo+'" was not found (HTTP 404). Check the owner/repo field above. If the repository is private, the token must have access to it.';
+  if(a.status===401||a.status===403)return 'GitHub refused access to the repository ('+a.status+'). Check the token.';
+  if(!a.ok)return 'GitHub answered '+a.status+' when reading the repository.';
+  const br=(await a.json()).default_branch||'main';
+  const f=await ghApi('/repos/'+repo+'/contents/.github/workflows/sync.yml?ref='+encodeURIComponent(br));
+  if(f.status===404)return 'The repository exists, but .github/workflows/sync.yml is NOT in it (branch '+br+'). The automatic-sync setup did not finish. Re-run the last Colab cell and read its log: it now states what failed (usually the token lacks the workflow permission).';
+  const w=await ghApi('/repos/'+repo+'/actions/workflows/sync.yml');
+  if(w.status===404)return 'sync.yml exists but GitHub does not list it as a workflow. Check Settings > Actions > General: Actions must be allowed for this repository.';
+  if(w.ok){const j=await w.json();if(j.state&&j.state!=='active')return 'The workflow is "'+j.state+'". Open the Actions tab and enable it.'}
+ }catch(e){return 'Could not diagnose the problem ('+e.message+').'}
+ return 'GitHub answered '+status+', but the repository, the workflow file and the workflow all look fine. Open the Actions tab of the repository.';
+}
+async function ghFail(repo,id){
+ try{
+  const r=await ghApi('/repos/'+repo+'/actions/runs/'+id+'/jobs');if(!r.ok)return '';
+  const st=[];((await r.json()).jobs||[]).forEach(j=>(j.steps||[]).forEach(s=>{if(s.conclusion==='failure')st.push(s.name)}));
+  return st.length?'Failed step: '+st.join(', ')+'.':'';
+ }catch(e){return ''}
+}
+/* ===== Fix 2: goals in shots vs official scores ===== */
+let SHLAST=[];
+function shRecon(S){
+ const by=new Map();
+ S.rows.forEach(r=>{let o=by.get(r.m);if(!o){o={n:0,g:0,og:0,pd:{}};by.set(r.m,o)}
+  o.n++;
+  if(r.og)o.og++;
+  else if(r.ev==='Goal'){o.g++;const p=r.pd||'?';o.pd[p]=(o.pd[p]||0)+1}});
+ const sm=new Map((S.sm||[]).map(e=>[e.i,e.t]));
+ return D.matches.map(m=>{
+  const mt=/^(\d+)-(\d+)$/.exec(String(m.score)),tot=mt?+mt[1]+ +mt[2]:null,o=by.get(m.match_id)||null,got=o?o.g+o.og:null;
+  return {m,tot,o,got,sst:sm.get(m.match_id)||'not fetched',diff:(tot!=null&&got!=null)?got-tot:null,
+   state:tot==null?'noscore':!o?'noshots':got===tot?'ok':got<tot?'short':'over'}});
+}
+function shReconSum(S,mid){
+ const R=shRecon(S).filter(x=>!mid||x.m.match_id===mid),sc=R.filter(x=>x.tot!=null),cov=sc.filter(x=>x.o),miss=sc.filter(x=>!x.o);
+ const sum=(a,f)=>a.reduce((t,x)=>t+f(x),0),og=sum(cov,x=>x.o.og),got=sum(cov,x=>x.got);
+ return {cov,miss,bad:cov.filter(x=>x.diff!==0),off:sum(cov,x=>x.tot),got,og,gs:got-og,mg:sum(miss,x=>x.tot)};
+}
+function shReconKpi(S,mid,kp){
+ const r=shReconSum(S,mid);
+ return kp(r.gs+' + '+r.og,'Goals from shots + own goals (own goals are credited to no player)')+
+  kp(r.got+' / '+r.off,'Shot-data goals / official score goals, same '+r.cov.length+' matches')+
+  kp(r.bad.length,'Matches that do not reconcile')+
+  (r.miss.length?kp(r.miss.length+' · '+r.mg,'Matches with no shot data · their official goals'):'');
+}
+function shReconHtml(S,mid){
+ const r=shReconSum(S,mid),rows=[...r.bad,...r.miss];
+ if(!rows.length)return '<h3>Goal check</h3><div class="card" style="font-size:13px">Every match with shot data reconciles with its official score (goals in shots + own goals = score).</div>';
+ const why=x=>x.state==='noshots'?(x.sst==='not fetched'?'Shot data not fetched yet':'Shot data status: '+x.sst):
+  x.state==='short'?(x.o.og?'Fewer goals than the score although own-goal rows exist':'Fewer goals than the score and no own-goal rows: the feed may not list own goals, or shots are missing'):
+  'More goals in shots than in the score: see the periods column';
+ const per=x=>x.o?(Object.entries(x.o.pd).map(([k,v])=>k+': '+v).join(', ')||'-'):'-';
+ return '<h3>Goal check (shots vs official score)</h3>'+
+  tbl([['Date'],['Match'],['Score',1],['Goals in shots',1],['Own goals',1],['Diff',1],['Shot data'],['Goals by period'],['Why']],
+   rows.slice(0,60).map(x=>[esc(String(x.m.date).slice(0,10)),mlink(x.m),x.tot,x.o?x.o.g:'N/A',x.o?x.o.og:'N/A',x.diff==null?'N/A':(x.diff>0?'+':'')+x.diff,esc(x.sst),esc(per(x)),why(x)]))+
+  '<div class="mu" style="font-size:12px;margin-top:6px">'+(rows.length>60?'Showing 60 of '+rows.length+' matches. ':'')+'Difference = (goals in shots + own goals) minus the official score. Nothing is estimated: a match that differs is listed as it is.</div>';
+}
+function shCover(rows,what,mn){
+ const sh=SHLAST,sg=sh.reduce((a,o)=>a+o.s.g,0),n=new Set(rows.map(x=>what==='players'?x.pid:x.c)).size;
+ return '<div class="mu" style="font-size:12px;margin:4px 0 10px">This table lists '+sh.length+' of '+n+' '+what+' (top 40 with at least '+mn+' shots) and accounts for '+sg+' of the '+shStats(rows).g+' goals from shots in the current selection.'+(sg<shStats(rows).g?' The other goals belong to '+what+' outside this list, so adding up a table will not reach the total.':'')+'</div>';
+}
+
 async function reloadData(){
  const r=await fetch('data/index.json?'+Date.now());
  if(!r.ok)throw new Error('index.json HTTP '+r.status);
@@ -240,7 +308,7 @@ const R={
   const sleep=ms=>new Promise(r=>setTimeout(r,ms));
   $('#svtok').onclick=()=>{try{const v=$('#ghtok').value.trim();if(v&&!v.startsWith('•'))localStorage.setItem('gh_token',v);localStorage.setItem('gh_repo',repo());msg('Saved on this device.')}catch(e){msg('Could not save: '+e.message)}};
   $('#cltok').onclick=()=>{try{localStorage.removeItem('gh_token')}catch(e){}$('#ghtok').value='';msg('Token removed from this device.')};
-  const runs=async()=>{const r=await ghApi(`/repos/${repo()}/actions/workflows/sync.yml/runs?per_page=10`);if(!r.ok)throw new Error('HTTP '+r.status);return (await r.json()).workflow_runs||[]};
+  const runs=async()=>{const r=await ghApi(`/repos/${repo()}/actions/workflows/sync.yml/runs?per_page=10`);if(!r.ok)throw new Error(await ghWhy(repo(),r.status));return (await r.json()).workflow_runs||[]};
   const showRun=async()=>{
    try{
     const run=(await runs())[0];
@@ -259,9 +327,9 @@ const R={
     const send=inputs=>ghApi(`/repos/${repo()}/actions/workflows/sync.yml/dispatches`,{method:'POST',body:JSON.stringify(inputs?{ref,inputs}:{ref})});
     let r=await send({force:'true'});
     if(r.status===422)r=await send(null);
-    if(r.status===404){msg('Not found (404): check the repository name, or the token has no access to it.');return}
+    if(r.status===404){msg(await ghWhy(repo(),404));return}
     if(r.status===403||r.status===401){msg('Token not allowed ('+r.status+'): it needs Actions: Read and write on this repository.');return}
-    if(r.status!==204){msg('GitHub answered '+r.status+'.');return}
+    if(r.status!==204){let b='';try{b=(await r.json()).message||''}catch(e){}msg('GitHub answered '+r.status+(b?': '+b:'')+'.');return}
     msg('Sync requested. Waiting for GitHub to start it…');
     let run=null;const stop=Date.now()+45*60000;
     while(Date.now()<stop){
@@ -273,7 +341,7 @@ const R={
      msg(['queued','pending','waiting'].includes(run.status)?'Queued: another sync is still running, yours starts right after it…':'Syncing matches from PitchAPI… you can leave this page and come back.');
     }
     if(!run||run.status!=='completed'){msg('Still running. Check the Actions tab of the repository, then press Reload data.');return}
-    if(run.conclusion!=='success'){msg('Sync '+run.conclusion+'. Open the Actions tab of the repository to see why.');return}
+    if(run.conclusion!=='success'){msg('Sync '+run.conclusion+'. '+await ghFail(repo(),run.id)+' Open the Actions tab of the repository for the full log.');return}
     msg('Sync finished. Waiting for the site to publish the new data…');
     for(let i=0;i<24;i++){
      const x=await fetch('data/index.json?'+Date.now());
@@ -648,7 +716,7 @@ R.shots=async function(el){
  const tableBy=(rows,kf,nameOf,clubOf,mn,sk)=>{
   const g=[...grp(rows,kf).entries()].map(([k,r])=>({k,r,s:shStats(r)})).filter(o=>o.s.n>=mn);
   const val=o=>({g:o.s.g,n:o.s.n,xg:o.s.xg,conv:o.s.conv,gxg:o.s.gxg,xgps:o.s.xgps})[sk];
-  return g.sort((a,b)=>(val(b)??-1e18)-(val(a)??-1e18)).slice(0,40).map((o,i)=>[i+1,esc(nameOf(o)),esc(clubOf(o)),o.s.n,o.s.g,pc(o.s.conv,1),o.s.ot,pc(o.s.sot,0),pc(o.s.xg,2),pc(o.s.npxg,2),pc(o.s.xgps,3),pc(o.s.xo,2),pc(o.s.gxg,2),pc(o.s.ib,0),pc(o.s.dist,1)])};
+  return (SHLAST=g.sort((a,b)=>(val(b)??-1e18)-(val(a)??-1e18)).slice(0,40)).map((o,i)=>[i+1,esc(nameOf(o)),esc(clubOf(o)),o.s.n,o.s.g,pc(o.s.conv,1),o.s.ot,pc(o.s.sot,0),pc(o.s.xg,2),pc(o.s.npxg,2),pc(o.s.xgps,3),pc(o.s.xo,2),pc(o.s.gxg,2),pc(o.s.ib,0),pc(o.s.dist,1)])};
  const HEAD=[['#',1],['Name'],['Club'],['Shots',1],['Goals',1],['Conv. %',1],['On target',1],['SoT %',1],['xG',1],['npxG',1],['xG/shot',1],['xGOT',1],['G − xG',1],['Box %',1],['Avg dist (m)',1]];
  const draw=()=>{
   const out=$('#sout'),rows=filt(),flip=$('#fl').checked,s=shStats(rows),mn=num($('#sn').value)||1,sk=$('#sx').value;
@@ -668,13 +736,13 @@ R.shots=async function(el){
   const goal=`<svg class="pitch" viewBox="26 0 16 6.6" style="max-width:520px"><rect x="26" y="0" width="16" height="6.6" fill="#12301f"/><line x1="26" y1="6" x2="42" y2="6" stroke="#4d8f6b" stroke-width=".08"/><rect x="30.34" y="3.56" width="7.32" height="2.44" fill="#e8eef5" fill-opacity=".06" stroke="#e8eef5" stroke-width=".12"/>${gv}</svg>`;
   const nG=SHCUR.filter(x=>x.gy!=null&&x.gz!=null).length;
   const legend=Object.entries(SHCOL).map(([k,c])=>`<span style="margin-right:10px"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${k==='Blocked'?'transparent':c};border:2px solid ${c};vertical-align:middle"></span> ${k}</span>`).join('');
-  out.innerHTML=`<div class="grid">${kp(s.n,'Shots')}${kp(s.g,'Goals')}${noF?kp(s.g+ogIn,'Goals incl. '+ogIn+' own goals (matches the scores)'):''}${kp(pc(s.conv,1)+'%','Conversion (goals ÷ all shots)')}${kp(s.ot+' · '+pc(s.sot,0)+'%','On target (provider flag)')}${kp(pc(s.sotc,0)+'%','Goals ÷ on target')}${kp(s.sv,'Saved')}${kp(s.bl,'Blocked')}${kp(s.po,'Hit the post')}${kp(pc(s.xg,2),'xG')}${kp(pc(s.npxg,2),'npxG (no penalties)')}${kp(pc(s.xgps,3),'xG per shot')}${kp(pc(s.xo,2),'xGOT')}${kp(pc(s.gxg,2),'Goals − xG')}${kp(pc(s.ib,0)+'%','Inside the box')}${kp(pc(s.dist,1)+' m','Avg distance to goal (derived)')}${kp(s.pe,'Penalties')}</div>
+  out.innerHTML=`<div class="grid">${kp(s.n,'Shots')}${kp(s.g,'Goals')}${noF?((ogA==null&&ogB==null)?shReconKpi(S,$('#sm').value,kp):kp(ogIn,'Own goals in this minute range (credited to no player)')):''}${kp(pc(s.conv,1)+'%','Conversion (goals ÷ all shots)')}${kp(s.ot+' · '+pc(s.sot,0)+'%','On target (provider flag)')}${kp(pc(s.sotc,0)+'%','Goals ÷ on target')}${kp(s.sv,'Saved')}${kp(s.bl,'Blocked')}${kp(s.po,'Hit the post')}${kp(pc(s.xg,2),'xG')}${kp(pc(s.npxg,2),'npxG (no penalties)')}${kp(pc(s.xgps,3),'xG per shot')}${kp(pc(s.xo,2),'xGOT')}${kp(pc(s.gxg,2),'Goals − xG')}${kp(pc(s.ib,0)+'%','Inside the box')}${kp(pc(s.dist,1)+' m','Avg distance to goal (derived)')}${kp(s.pe,'Penalties')}</div>
    <div class="mu" style="margin:8px 0">${legend}<br>Marker size = xG. ${SHCUR.length<rows.length?'Showing the '+SHCUR.length+' highest-xG shots of '+rows.length+'; narrow the filters to see all. ':''}Tap a shot for details. Every team attacks to the right.</div>${map}
    <h3>Goal view (where shots crossed the goal line)</h3><div class="mu" style="font-size:12px;margin-bottom:4px">${nG} of ${SHCUR.length} shown shots have goal-line coordinates (posts at the white frame; height above 6 m is drawn at 6 m).</div>${goal}
    <div class="card" id="shd" style="font-size:13px">Tap a shot for its details.</div>`+
    brk('By situation',rows,x=>x.st||null,k=>SIT[k]||k)+brk('By body part',rows,x=>x.ty||null,k=>BODY[k]||k)+brk('By outcome',rows,shCls)+brk('By minute',rows,mb)+
-   `<h3>Players</h3>`+tbl([...HEAD.slice(0,1),['Player'],...HEAD.slice(2)],tableBy(rows,x=>x.pid,o=>o.r[0].pn,o=>o.r[0].c,mn,sk))+
-   `<h3>Teams</h3>`+tbl(HEAD,tableBy(rows,x=>x.c,o=>o.k,o=>'',mn,sk))+
+   `<h3>Players</h3>`+tbl([...HEAD.slice(0,1),['Player'],...HEAD.slice(2)],tableBy(rows,x=>x.pid,o=>o.r[0].pn,o=>o.r[0].c,mn,sk))+shCover(rows,'players',mn)+
+   `<h3>Teams</h3>`+tbl(HEAD,tableBy(rows,x=>x.c,o=>o.k,o=>'',mn,sk))+shCover(rows,'teams',mn)+((noF&&ogA==null&&ogB==null)?shReconHtml(S,$('#sm').value):'')+
    `<div class="mu" style="font-size:12px;margin-top:8px">On target is PitchAPI's flag (also true for blocked shots heading on target). Conversion divides goals by all shots, blocked ones included. Goals − xG uses only shots that have an xG. Average distance is computed here from the shot coordinates.${ogN?' '+ogN+' own goal(s) excluded.':''} Left/right: the team's left flank is at the top; untick "Flip left/right" if a shooter looks mirrored.</div>`};
  const fillPlayers=()=>{const old=$('#sp').value,t=$('#st').value,c=new Map();
   base().filter(s=>!t||s.c===t).forEach(s=>{if(!s.pid)return;const o=c.get(s.pid)||{n:s.pn,k:0};o.k++;c.set(s.pid,o)});
