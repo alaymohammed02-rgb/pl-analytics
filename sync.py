@@ -2988,5 +2988,277 @@ def main():
 # ======================== نهاية الإضافة ========================
 
 
+# ============================================================================
+# إصلاحات (FIX): 1) زر Synchronize (HTTP 404)   2) مطابقة الأهداف مع نتائج المباريات
+# (مدموجة في آخر الكود، قبل نقطة التشغيل. لا تكتب هنا اسم المتغيّر الخاص بالـworkflow
+#  حتى لا يختلط رفع sync.py في النسخة المقسّمة على خلايا)
+# ============================================================================
+
+# ---------------- 1) التحقق الفعلي من إعداد المزامنة على GitHub ----------------
+def _x_gh_get(hub, path):
+    r = requests.get(f"{GH}/repos/{hub['repo']}/{path}", headers=gh_headers(hub["token"]), timeout=30)
+    try:
+        msg = (r.json() or {}).get("message", "")
+    except Exception:
+        msg = ""
+    return r.status_code, msg, r
+
+
+def verify_automation(hub):
+    """يتحقق بطلبات حقيقية من كل ما يحتاجه زر Synchronize. يرجع قائمة مشاكل (فاضية = سليم). لا يطبع أي مفتاح."""
+    probs = []
+    src = current_source()
+    if not src or "def sync_shots(" not in src or "def run_pipeline(" not in src:
+        probs.append("نص الكود المرفوع كـ sync.py ناقص: لازم الأجزاء 1 و2 و3 تشتغل بالترتيب في نفس الجلسة (كل جزء في خلية).")
+    r = requests.get(f"{GH}/user", headers=gh_headers(hub["token"]), timeout=30)
+    scopes = r.headers.get("X-OAuth-Scopes")           # يظهر لتوكن Classic فقط
+    if scopes is not None and "workflow" not in [s.strip() for s in scopes.split(",")]:
+        probs.append("توكن Classic ما فيه صلاحية workflow، وبدونها GitHub يرفض رفع .github/workflows/sync.yml. "
+                     "أنشئ توكن جديد وعلّم repo + workflow.")
+    for path in ("sync.py", ".github/workflows/sync.yml"):
+        code, msg, _ = _x_gh_get(hub, f"contents/{path}?ref={hub['branch']}")
+        if code != 200:
+            probs.append(f"الملف {path} غير موجود في المستودع (GitHub رجّع {code}: {msg}).")
+    code, msg, r = 0, "", None
+    for _ in range(6):                                  # GitHub يتأخر ثواني قبل ما يسجّل الـworkflow الجديد
+        code, msg, r = _x_gh_get(hub, "actions/workflows/sync.yml")
+        if code == 200:
+            break
+        time.sleep(5)
+    if code != 200:
+        probs.append(f"GitHub ما يعتبر sync.yml workflow (رجّع {code}: {msg}). تأكد أن Actions مسموح: Settings ← Actions ← General.")
+    else:
+        state = r.json().get("state")
+        if state and state != "active":
+            e = requests.put(f"{GH}/repos/{hub['repo']}/actions/workflows/sync.yml/enable",
+                             headers=gh_headers(hub["token"]), timeout=30)
+            if e.status_code != 204:
+                probs.append(f"الـworkflow حالته {state} وما قدرت أفعّله (GitHub رجّع {e.status_code}). فعّله من تبويب Actions.")
+            else:
+                log(f"  الـworkflow كان {state}، فعّلته تلقائياً.")
+    code, msg, r = _x_gh_get(hub, "actions/permissions")
+    if code == 200 and r.json().get("enabled") is False:
+        probs.append("GitHub Actions معطّل لهذا المستودع: Settings ← Actions ← General ← Allow all actions.")
+    code, msg, _ = _x_gh_get(hub, "actions/secrets/PITCHAPI_KEY")   # يتحقق من الوجود فقط، القيمة لا تُقرأ أبداً
+    if code == 404:
+        probs.append("Secret باسم PITCHAPI_KEY غير موجود في المستودع (المزامنة ستفشل بدونه).")
+    elif code not in (200, 403):
+        probs.append(f"تعذر التحقق من Secret باسم PITCHAPI_KEY (GitHub رجّع {code}: {msg}).")
+    return probs
+
+
+_orig_setup_automation = setup_automation
+
+def setup_automation(hub, pit_key):
+    _orig_setup_automation(hub, pit_key)                # يرفع الملفات ويحفظ الـSecret (ويطبع أخطاءه)
+    probs = verify_automation(hub)                      # ثم نتحقق فعلياً بدل الاعتماد على رسالة النجاح
+    if probs:
+        log("\n⚠ زر Synchronize في الموقع لن يعمل (سيعطي HTTP 404 أو يفشل) بسبب:")
+        for p in probs:
+            log("  - " + p)
+        return False
+    log("تم التحقق من GitHub: sync.py و sync.yml و PITCHAPI_KEY موجودة والـworkflow فعّال ✔")
+    return True
+
+
+# ---------------- 2) مطابقة الأهداف مع النتائج ----------------
+_orig_x_shotrows = _x_shotrows
+
+def _x_shotrows(res):
+    """نفس الدالة الأصلية، لكن إذا تكرر shot_id داخل المباراة نجعله فريداً بدل أن تحذف INSERT OR REPLACE تسديدة (وربما هدف)."""
+    out = _orig_x_shotrows(res)
+    seen, dup = {}, 0
+    for x in out:
+        n = seen.get(x["sid"], 0)
+        seen[x["sid"]] = n + 1
+        if n:
+            x["sid"] = f"{x['sid']}#{n}"
+            dup += 1
+    if dup:
+        log(f"    تنبيه: {dup} تسديدة بنفس الـid داخل المباراة — حفظتها كلها بدل ما تنكتب فوق بعض")
+    return out
+
+
+def _x_goal_rows(L):
+    """لكل مباراة: أهداف النتيجة الرسمية مقابل أهداف أحداث التسديد (بدون عكسية) وعدد الأهداف العكسية."""
+    out = []
+    for r in q("SELECT m.match_id, m.date, m.home, m.away, m.score, s.status st, "
+               "(SELECT COUNT(*) FROM shot_rows z WHERE z.league_id=m.league_id AND z.match_id=m.match_id "
+               " AND COALESCE(z.og,0)=0 AND z.ev='Goal') g, "
+               "(SELECT COUNT(*) FROM shot_rows z WHERE z.league_id=m.league_id AND z.match_id=m.match_id "
+               " AND COALESCE(z.og,0)=1) o, "
+               "(SELECT COUNT(*) FROM shot_rows z WHERE z.league_id=m.league_id AND z.match_id=m.match_id) n "
+               "FROM matches m LEFT JOIN sm s ON s.league_id=m.league_id AND s.match_id=m.match_id "
+               "WHERE m.league_id=?", (L,)):
+        mt = re.fullmatch(r"(\d+)-(\d+)", str(r["score"]))
+        r["tot"] = int(mt.group(1)) + int(mt.group(2)) if mt else None
+        out.append(r)
+    return out
+
+
+def _x_requeue_short(L):
+    """مباراة 'ok' فيها أهداف أقل من النتيجة: نعتبرها ناقصة فتدخل في إعادة المحاولة (بنفس فواصل match_due)."""
+    short = [r for r in _x_goal_rows(L) if r["st"] == "ok" and r["tot"] is not None and r["g"] + r["o"] < r["tot"]]
+    if short:
+        c = db()
+        c.executemany("UPDATE sm SET status='short' WHERE league_id=? AND match_id=?",
+                      [(L, r["match_id"]) for r in short])
+        c.commit()
+        c.close()
+        log(f"  [فحص الأهداف] {len(short)} مباراة أهداف تسديداتها أقل من النتيجة — عُلّمت للمحاولة من جديد")
+
+
+def _x_goal_audit(L):
+    rows = _x_goal_rows(L)
+    chk = [r for r in rows if r["tot"] is not None and r["n"] > 0]
+    ok = [r for r in chk if r["g"] + r["o"] == r["tot"]]
+    short = [r for r in chk if r["g"] + r["o"] < r["tot"]]
+    over = [r for r in chk if r["g"] + r["o"] > r["tot"]]
+    none = [r for r in rows if r["tot"] is not None and r["n"] == 0]
+    log(f"  [فحص الأهداف] تطابق: {len(ok)} | أقل من النتيجة: {len(short)} | أكثر من النتيجة: {len(over)} | "
+        f"بدون بيانات تسديد: {len(none)} | أهداف عكسية موجودة في الـfeed: {sum(r['o'] for r in chk)}")
+    for r in (short + over)[:15]:
+        log(f"    {r['home']} {r['score']} {r['away']}: تسديدات={r['g']} + عكسي={r['o']} (الصفوف {r['n']}) [{r['st']}]")
+
+
+_orig_sync_shots = sync_shots
+
+def sync_shots(client, league_id, on_progress=None):
+    try:
+        _x_requeue_short(league_id)
+    except Exception as e:
+        log(f"  تعذر فحص الأهداف قبل الجلب: {type(e).__name__}: {e}")
+    _orig_sync_shots(client, league_id, on_progress)
+    try:
+        _x_goal_audit(league_id)
+    except Exception as e:
+        log(f"  تعذر فحص الأهداف: {type(e).__name__}: {e}")
+
+
+def probe_goals(pit_key, match_id):
+    """للتشخيص: يطبع من رد PitchAPI الحقيقي كل سطر هدف/هدف عكسي في مباراة معيّنة (وشكل events)."""
+    with PitchAPI(api_key=pit_key) as client:
+        res, err = call(client.matches.shots, match_id)
+        if res is None:
+            log("لا يوجد رد shots:", err)
+        for per in _g(res, "periods") or []:
+            for s in _g(per, "shots") or []:
+                ev, og = str(_g(s, "event_type")).split(".")[-1], _g(s, "is_own_goal")
+                if ev == "Goal" or og:
+                    log(f"  period={_g(per, 'period')} min={_g(s, 'minute')} player={_g(_g(s, 'player'), 'name')} "
+                        f"team_id={_g(s, 'team_id')} event_type={ev} is_own_goal={og}")
+        fn = getattr(client.matches, "events", None)       # قد لا تكون موجودة في نسخة pitchapi هذي
+        if fn is None:
+            log("\nevents: غير موجودة في نسخة pitchapi هذي — شغّل pip install -U pitchapi")
+            return
+        ev_, e2 = call(fn, match_id)
+        log("\nشكل events:" if ev_ is not None else f"events: {e2}")
+        if ev_ is not None:
+            _x_describe(ev_, "events", 0, 3)
+
+
+# ---------------- واجهة الموقع: تعديلات صغيرة (كل تعديل يتحقق أن النص الأصلي موجود مرة واحدة) ----------------
+_X_FIXJS = r"""/* ===== Fix 1: GitHub diagnostics for the Synchronize button ===== */
+async function ghWhy(repo,status){
+ try{
+  if(status===401)return 'GitHub rejected the token (401): it is wrong, expired or revoked. Create a new one, paste it above and press Save.';
+  if(status===403)return 'GitHub refused the request (403): the token needs "Actions: Read and write" on this repository (classic token: repo + workflow), or the rate limit was reached.';
+  const a=await ghApi('/repos/'+repo);
+  if(a.status===404)return 'Repository "'+repo+'" was not found (HTTP 404). Check the owner/repo field above. If the repository is private, the token must have access to it.';
+  if(a.status===401||a.status===403)return 'GitHub refused access to the repository ('+a.status+'). Check the token.';
+  if(!a.ok)return 'GitHub answered '+a.status+' when reading the repository.';
+  const br=(await a.json()).default_branch||'main';
+  const f=await ghApi('/repos/'+repo+'/contents/.github/workflows/sync.yml?ref='+encodeURIComponent(br));
+  if(f.status===404)return 'The repository exists, but .github/workflows/sync.yml is NOT in it (branch '+br+'). The automatic-sync setup did not finish. Re-run the last Colab cell and read its log: it now states what failed (usually the token lacks the workflow permission).';
+  const w=await ghApi('/repos/'+repo+'/actions/workflows/sync.yml');
+  if(w.status===404)return 'sync.yml exists but GitHub does not list it as a workflow. Check Settings > Actions > General: Actions must be allowed for this repository.';
+  if(w.ok){const j=await w.json();if(j.state&&j.state!=='active')return 'The workflow is "'+j.state+'". Open the Actions tab and enable it.'}
+ }catch(e){return 'Could not diagnose the problem ('+e.message+').'}
+ return 'GitHub answered '+status+', but the repository, the workflow file and the workflow all look fine. Open the Actions tab of the repository.';
+}
+async function ghFail(repo,id){
+ try{
+  const r=await ghApi('/repos/'+repo+'/actions/runs/'+id+'/jobs');if(!r.ok)return '';
+  const st=[];((await r.json()).jobs||[]).forEach(j=>(j.steps||[]).forEach(s=>{if(s.conclusion==='failure')st.push(s.name)}));
+  return st.length?'Failed step: '+st.join(', ')+'.':'';
+ }catch(e){return ''}
+}
+/* ===== Fix 2: goals in shots vs official scores ===== */
+let SHLAST=[];
+function shRecon(S){
+ const by=new Map();
+ S.rows.forEach(r=>{let o=by.get(r.m);if(!o){o={n:0,g:0,og:0,pd:{}};by.set(r.m,o)}
+  o.n++;
+  if(r.og)o.og++;
+  else if(r.ev==='Goal'){o.g++;const p=r.pd||'?';o.pd[p]=(o.pd[p]||0)+1}});
+ const sm=new Map((S.sm||[]).map(e=>[e.i,e.t]));
+ return D.matches.map(m=>{
+  const mt=/^(\d+)-(\d+)$/.exec(String(m.score)),tot=mt?+mt[1]+ +mt[2]:null,o=by.get(m.match_id)||null,got=o?o.g+o.og:null;
+  return {m,tot,o,got,sst:sm.get(m.match_id)||'not fetched',diff:(tot!=null&&got!=null)?got-tot:null,
+   state:tot==null?'noscore':!o?'noshots':got===tot?'ok':got<tot?'short':'over'}});
+}
+function shReconSum(S,mid){
+ const R=shRecon(S).filter(x=>!mid||x.m.match_id===mid),sc=R.filter(x=>x.tot!=null),cov=sc.filter(x=>x.o),miss=sc.filter(x=>!x.o);
+ const sum=(a,f)=>a.reduce((t,x)=>t+f(x),0),og=sum(cov,x=>x.o.og),got=sum(cov,x=>x.got);
+ return {cov,miss,bad:cov.filter(x=>x.diff!==0),off:sum(cov,x=>x.tot),got,og,gs:got-og,mg:sum(miss,x=>x.tot)};
+}
+function shReconKpi(S,mid,kp){
+ const r=shReconSum(S,mid);
+ return kp(r.gs+' + '+r.og,'Goals from shots + own goals (own goals are credited to no player)')+
+  kp(r.got+' / '+r.off,'Shot-data goals / official score goals, same '+r.cov.length+' matches')+
+  kp(r.bad.length,'Matches that do not reconcile')+
+  (r.miss.length?kp(r.miss.length+' · '+r.mg,'Matches with no shot data · their official goals'):'');
+}
+function shReconHtml(S,mid){
+ const r=shReconSum(S,mid),rows=[...r.bad,...r.miss];
+ if(!rows.length)return '<h3>Goal check</h3><div class="card" style="font-size:13px">Every match with shot data reconciles with its official score (goals in shots + own goals = score).</div>';
+ const why=x=>x.state==='noshots'?(x.sst==='not fetched'?'Shot data not fetched yet':'Shot data status: '+x.sst):
+  x.state==='short'?(x.o.og?'Fewer goals than the score although own-goal rows exist':'Fewer goals than the score and no own-goal rows: the feed may not list own goals, or shots are missing'):
+  'More goals in shots than in the score: see the periods column';
+ const per=x=>x.o?(Object.entries(x.o.pd).map(([k,v])=>k+': '+v).join(', ')||'-'):'-';
+ return '<h3>Goal check (shots vs official score)</h3>'+
+  tbl([['Date'],['Match'],['Score',1],['Goals in shots',1],['Own goals',1],['Diff',1],['Shot data'],['Goals by period'],['Why']],
+   rows.slice(0,60).map(x=>[esc(String(x.m.date).slice(0,10)),mlink(x.m),x.tot,x.o?x.o.g:'N/A',x.o?x.o.og:'N/A',x.diff==null?'N/A':(x.diff>0?'+':'')+x.diff,esc(x.sst),esc(per(x)),why(x)]))+
+  '<div class="mu" style="font-size:12px;margin-top:6px">'+(rows.length>60?'Showing 60 of '+rows.length+' matches. ':'')+'Difference = (goals in shots + own goals) minus the official score. Nothing is estimated: a match that differs is listed as it is.</div>';
+}
+function shCover(rows,what,mn){
+ const sh=SHLAST,sg=sh.reduce((a,o)=>a+o.s.g,0),n=new Set(rows.map(x=>what==='players'?x.pid:x.c)).size;
+ return '<div class="mu" style="font-size:12px;margin:4px 0 10px">This table lists '+sh.length+' of '+n+' '+what+' (top 40 with at least '+mn+' shots) and accounts for '+sg+' of the '+shStats(rows).g+' goals from shots in the current selection.'+(sg<shStats(rows).g?' The other goals belong to '+what+' outside this list, so adding up a table will not reach the total.':'')+'</div>';
+}
+"""
+
+
+def _x_fix_index(html):
+    def sub(h, old, new):
+        if h.count(old) != 1:
+            log(f"  تنبيه (إصلاح): ما لقيت نقطة التعديل بدقة، تخطيتها: {old[:60]}")
+            return h
+        return h.replace(old, new)
+    h = html
+    h = sub(h, "async function reloadData(){", _X_FIXJS + "\nasync function reloadData(){")
+    h = sub(h, "if(!r.ok)throw new Error('HTTP '+r.status);return (await r.json()).workflow_runs||[]};",
+            "if(!r.ok)throw new Error(await ghWhy(repo(),r.status));return (await r.json()).workflow_runs||[]};")
+    h = sub(h, "if(r.status===404){msg('Not found (404): check the repository name, or the token has no access to it.');return}",
+            "if(r.status===404){msg(await ghWhy(repo(),404));return}")
+    h = sub(h, "if(r.status!==204){msg('GitHub answered '+r.status+'.');return}",
+            "if(r.status!==204){let b='';try{b=(await r.json()).message||''}catch(e){}msg('GitHub answered '+r.status+(b?': '+b:'')+'.');return}")
+    h = sub(h, "if(run.conclusion!=='success'){msg('Sync '+run.conclusion+'. Open the Actions tab of the repository to see why.');return}",
+            "if(run.conclusion!=='success'){msg('Sync '+run.conclusion+'. '+await ghFail(repo(),run.id)+' Open the Actions tab of the repository for the full log.');return}")
+    h = sub(h, "${noF?kp(s.g+ogIn,'Goals incl. '+ogIn+' own goals (matches the scores)'):''}",
+            "${noF?((ogA==null&&ogB==null)?shReconKpi(S,$('#sm').value,kp):kp(ogIn,'Own goals in this minute range (credited to no player)')):''}")
+    h = sub(h, "return g.sort((a,b)=>(val(b)??-1e18)-(val(a)??-1e18)).slice(0,40).map((o,i)=>[i+1,",
+            "return (SHLAST=g.sort((a,b)=>(val(b)??-1e18)-(val(a)??-1e18)).slice(0,40)).map((o,i)=>[i+1,")
+    h = sub(h, "tableBy(rows,x=>x.pid,o=>o.r[0].pn,o=>o.r[0].c,mn,sk))+",
+            "tableBy(rows,x=>x.pid,o=>o.r[0].pn,o=>o.r[0].c,mn,sk))+shCover(rows,'players',mn)+")
+    h = sub(h, "tableBy(rows,x=>x.c,o=>o.k,o=>'',mn,sk))+",
+            "tableBy(rows,x=>x.c,o=>o.k,o=>'',mn,sk))+shCover(rows,'teams',mn)+"
+            "((noF&&ogA==null&&ogB==null)?shReconHtml(S,$('#sm').value):'')+")
+    return h
+
+
+INDEX = _x_fix_index(INDEX)
+# ======================== نهاية الإصلاحات ========================
+
+
 if __name__ == "__main__":
     main()
