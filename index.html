@@ -136,7 +136,7 @@ async function api(p){
 }
 
 /* ---------- الصفحات ---------- */
-const PAGES=[['overview','Overview'],['players','Players'],['teams','Teams'],['matches','Matches'],['compare','Comparison Lab'],['tactical','Tactical'],['shots','Shots'],['passing','Passing'],['ppda','PPDA'],['defense','Defensive'],['looklike','Look Like'],['heatmaps','Heatmaps'],['rankings','Rankings'],['data','Data Availability'],['settings','Settings']];
+const PAGES=[['overview','Overview'],['players','Players'],['teams','Teams'],['matches','Matches'],['compare','Comparison Lab'],['tactical','Tactical'],['shots','Shots'],['passing','Passing'],['ppda','PPDA'],['defense','Defensive'],['looklike','Look Like'],['heatmaps','Heatmaps'],['rankings','Rankings'],['fantasy','Fantasy'],['data','Data Availability'],['settings','Settings']];
 const PLAN={
  tactical:['Tactical Analysis','Formations, starting positions, build-up and defensive activity.','Needs lineup positions and event data. Not inspected yet.'],
  shots:['Shot Analysis','Shot map, shot table, xG per shot and outcome filters.','PitchAPI lists a shots endpoint, but its response has not been inspected in this app yet.'],
@@ -1151,6 +1151,204 @@ R.compare=async function(el){
  const q=$('#clq');q.oninput=clDd;q.onfocus=clDd;q.onblur=()=>setTimeout(()=>{const d=$('#cldd');if(d&&document.activeElement!==q)d.style.display='none'},150);
  q.onkeydown=ev=>{if(ev.key==='Enter'){const f=$('#cldd').querySelector('div[onmousedown]');if(f)f.dispatchEvent(new MouseEvent('mousedown'))}};
  clCtl();clRender();
+};
+
+/* ===== Fantasy (FPL) ===== */
+let FPD=null,FPK='',FPLINK=null;
+const FP={tab:'table',sel:[],sort:{k:'tp',d:-1},q:'',pos:'',team:'',maxp:'',minm:'0',av:'',sx:'price',sy:'tp',sp:'',sm:'90',vm:'pm',vp:'',vmin:'270',vmax:'',tm:'tp',cq:''};
+const FPPOS={1:'GKP',2:'DEF',3:'MID',4:'FWD'},FPCOL={1:'#e9b44c',2:'#5aa9e6',3:'#4cc38a',4:'#e5646b'};
+const FPPAL=['#E69F00','#56B4E9','#2BC48A','#F0E442','#FF6B5E','#B8A1FF'],FPDASH=['','7 3','2 3','9 3 2 3','1 4','5 2 1 2'];
+const fpOk=v=>typeof v==='number'&&isFinite(v);
+const fpNz=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+const FPAL={'man city':'manchester city','man utd':'manchester united','spurs':'tottenham','nott m forest':'nottingham forest','wolves':'wolverhampton'};
+const fpTeamEq=(a,b)=>{a=fpNz(a);b=fpNz(b);a=FPAL[a]||a;b=FPAL[b]||b;return !!a&&!!b&&(a===b||a.includes(b)||b.includes(a))};
+/* metric: [id, label, getter, digits]. A missing value stays null, it is never turned into 0 */
+const FPM=[
+ ['price','Price (£m)',p=>p.price,1],['tp','Total points',p=>p.total_points,0],['ppg','Points per game',p=>p.points_per_game,1],
+ ['p90','Points per 90',p=>p.minutes>0&&fpOk(p.total_points)?p.total_points/p.minutes*90:null,2],
+ ['pm','Points per £m',p=>p.price>0&&fpOk(p.total_points)?p.total_points/p.price:null,1],
+ ['form','Form',p=>p.form,1],['min','Minutes',p=>p.minutes,0],['own','Ownership %',p=>p.selected_by_percent,1],
+ ['g','Goals',p=>p.goals_scored,0],['a','Assists',p=>p.assists,0],['cs','Clean sheets',p=>p.clean_sheets,0],
+ ['bon','Bonus',p=>p.bonus,0],['bps','BPS',p=>p.bps,0],
+ ['xg','xG (FPL)',p=>p.expected_goals,2],['xa','xA (FPL)',p=>p.expected_assists,2],['xgi','xGI (FPL)',p=>p.expected_goal_involvements,2],
+ ['xgi90','xGI per 90 (FPL)',p=>p.minutes>0&&fpOk(p.expected_goal_involvements)?p.expected_goal_involvements/p.minutes*90:null,2],
+ ['xgipm','xGI per £m',p=>p.price>0&&fpOk(p.expected_goal_involvements)?p.expected_goal_involvements/p.price:null,2],
+ ['ict','ICT index',p=>p.ict_index,1],['inf','Influence',p=>p.influence,1],['cre','Creativity',p=>p.creativity,1],['thr','Threat',p=>p.threat,1],
+ ['chg','Price change since start (£m)',p=>p.chg,1],['tin','Transfers in (this GW)',p=>p.transfers_in_event,0],['tout','Transfers out (this GW)',p=>p.transfers_out_event,0],
+ ['pxt','xT per 90 (PitchAPI)',p=>p.px?p.px.xt90:null,3],['pxg','xG per 90 (PitchAPI)',p=>p.px?p.px.xg90:null,3]];
+const fpM=id=>FPM.find(m=>m[0]===id)||FPM[0];
+async function fpLoad(){
+ const m=ALL.fpl;if(!m||!m.file)return null;
+ if(FPD&&FPK===(m.v||''))return FPD;
+ const r=await fetch('data/'+m.file+'?v='+encodeURIComponent(m.v||''));
+ if(!r.ok)throw new Error(m.file+' (HTTP '+r.status+')');
+ const d=await r.json();d.T=new Map(d.teams.map(t=>[t.id,t]));
+ d.P=d.rows.map(r=>{const o={};d.cols.forEach((c,i)=>o[c]=r[i]);const t=d.T.get(o.tm)||{};
+  o.tn=t.s||'?';o.tf=t.n||'?';o.pos=o.ty;o.name=o.wn;o.price=fpOk(o.now_cost)?o.now_cost/10:null;o.chg=fpOk(o.cost_change_start)?o.cost_change_start/10:null;return o});
+ d.PB=new Map(d.P.map(p=>[p.id,p]));FPD=d;FPK=m.v||'';FPLINK=null;return d;
+}
+/* Links FPL players to PitchAPI players of the loaded Premier League data (by team + name). Only unique matches are used. */
+function fpLink(){
+ const key=(D?D.id:'')+'|'+(ALL.generated||'')+'|'+FPK;if(FPLINK&&FPLINK.key===key)return FPLINK;
+ const out={key,map:new Map(),on:false,n:0,tot:0},pl=ALL.leagues.find(l=>l.id===D.id)||{};
+ FPLINK=out;
+ if(!/premier league/i.test(D.name)||!/engl/i.test(pl.country||''))return out;
+ out.on=true;const rows=agg();
+ FPD.P.forEach(p=>{
+  const wantsIt=(p.minutes||0)>0;if(wantsIt)out.tot++;
+  const full=fpNz(p.fn+' '+p.sn),wn=fpNz(p.name),sn=fpNz(p.sn).split(' ').pop(),wl=wn.split(' ').pop(),fi=fpNz(p.fn).charAt(0);
+  const cands=rows.filter(r=>fpTeamEq(p.tf,r.club));let hit=null;
+  const ex=cands.filter(r=>{const n=fpNz(r.player);return n===full||n===wn});
+  if(ex.length===1)hit=ex[0];
+  else{
+   const c2=cands.filter(r=>{const t=fpNz(r.player).split(' '),l=t[t.length-1];return l===sn||l===wl});
+   if(c2.length===1)hit=c2[0];
+   else if(c2.length>1){const c3=c2.filter(r=>fpNz(r.player).charAt(0)===fi);if(c3.length===1)hit=c3[0]}
+  }
+  if(hit){out.map.set(p.id,hit);p.px=hit;if(wantsIt)out.n++}else p.px=null;
+ });
+ return out;
+}
+function fpFilt(P,o){
+ const q=fpNz(o.q||''),mm=+o.minm||0;
+ return P.filter(p=>(!o.pos||p.pos===+o.pos)&&(!o.team||p.tm===+o.team)&&(o.maxp===''||o.maxp==null||(p.price!=null&&p.price<=+o.maxp))&&(mm<=0||(p.minutes||0)>=mm)&&(!q||fpNz(p.fn+' '+p.sn+' '+p.name).includes(q))&&(!o.av||(o.av==='ok'?p.st==='a':p.st!=='a')));
+}
+const fpOpts=(a,s)=>a.map(([v,t])=>`<option value="${esc(v)}" ${String(v)===String(s)?'selected':''}>${esc(t)}</option>`).join('');
+const fpPosOpts=s=>fpOpts([['','All positions'],...[1,2,3,4].map(k=>[String(k),FPPOS[k]])],s);
+const fpTeamOpts=s=>fpOpts([['','All teams'],...FPD.teams.map(t=>[String(t.id),t.n])],s);
+const fpMetOpts=s=>fpOpts(FPM.filter(m=>FPLINK.on||!/PitchAPI/.test(m[1])).map(m=>[m[0],m[1]]),s);
+function fpMsg(t){const e=$('#fpmsg');if(e)e.textContent=t}
+function fpAdd(id){
+ if(FP.sel.includes(id))fpMsg('Already in the comparison.');
+ else if(FP.sel.length>=6)fpMsg('Maximum of 6 players. Remove one first.');
+ else{FP.sel.push(id);fpMsg((FPD.PB.get(id)||{}).name+' added to Compare ('+FP.sel.length+').')}
+ if(FP.tab==='compare')fpRender();
+}
+function fpRm(id){FP.sel=FP.sel.filter(x=>x!==id);fpRender()}
+function fpTab(k){FP.tab=k;fpRender()}
+const fpBars=(items)=>{const mx=Math.max(...items.map(i=>Math.abs(i.v)),1e-9);
+ return items.map(i=>`<div style="display:flex;align-items:center;gap:8px;margin:3px 0"><div style="width:42%;min-width:110px;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(i.l)} <span class="mu">${esc(i.s||'')}</span></div><div style="flex:1;background:var(--ln);border-radius:3px;height:12px"><div style="width:${(Math.abs(i.v)/mx*100).toFixed(1)}%;height:12px;border-radius:3px;background:${i.c||'#5aa9e6'}"></div></div><div style="width:64px;text-align:right;font-variant-numeric:tabular-nums">${esc(i.t)}</div></div>`).join('')};
+function fpScatter(pts,xm,ym){
+ if(pts.length<2)return '<div class="empty">Not enough players with a value for both metrics.</div>';
+ const W=680,H=430,L=54,B=42,T=12,Rr=16,xs=pts.map(a=>a.x),ys=pts.map(a=>a.y),x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
+ const sx=v=>L+(W-L-Rr)*(v-x0)/((x1-x0)||1),sy=v=>H-B-(H-B-T)*(v-y0)/((y1-y0)||1);
+ let g=`<rect width="${W}" height="${H}" fill="#0d1520"/>`;
+ for(let i=0;i<=5;i++){const xv=x0+(x1-x0)*i/5,yv=y0+(y1-y0)*i/5;
+  g+=`<line x1="${sx(xv).toFixed(1)}" y1="${T}" x2="${sx(xv).toFixed(1)}" y2="${H-B}" stroke="#25374d" stroke-width=".6"/><text x="${sx(xv).toFixed(1)}" y="${H-B+15}" text-anchor="middle" font-size="11" fill="#8a9bb0">${xv.toFixed(xm[3])}</text>`+
+  `<line x1="${L}" y1="${sy(yv).toFixed(1)}" x2="${W-Rr}" y2="${sy(yv).toFixed(1)}" stroke="#25374d" stroke-width=".6"/><text x="${L-6}" y="${(sy(yv)+4).toFixed(1)}" text-anchor="end" font-size="11" fill="#8a9bb0">${yv.toFixed(ym[3])}</text>`}
+ g+=`<text x="${(L+W-Rr)/2}" y="${H-6}" text-anchor="middle" font-size="12" fill="#e8eef5">${esc(xm[1])}</text><text transform="translate(13 ${(T+H-B)/2}) rotate(-90)" text-anchor="middle" font-size="12" fill="#e8eef5">${esc(ym[1])}</text>`;
+ pts.forEach(a=>{g+=`<circle onclick="fpPick(${a.p.id})" style="cursor:pointer" cx="${sx(a.x).toFixed(1)}" cy="${sy(a.y).toFixed(1)}" r="4.2" fill="${FPCOL[a.p.pos]||'#8a9bb0'}" fill-opacity=".75" stroke="#0d1520" stroke-width=".6"><title>${esc(a.p.name)} (${esc(a.p.tn)}): ${a.x.toFixed(xm[3])} / ${a.y.toFixed(ym[3])}</title></circle>`});
+ const nx=v=>(v-x0)/((x1-x0)||1),ny=v=>(v-y0)/((y1-y0)||1);
+ [...pts].sort((p,q)=>(nx(q.x)+ny(q.y))-(nx(p.x)+ny(p.y))).slice(0,8).forEach(a=>{g+=`<text x="${(sx(a.x)+6).toFixed(1)}" y="${(sy(a.y)-6).toFixed(1)}" font-size="10.5" fill="#e8eef5" stroke="#0d1520" stroke-width=".8" paint-order="stroke" style="pointer-events:none">${esc(a.p.name)}</text>`});
+ return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:760px;display:block;margin:0 auto">${g}</svg>`;
+}
+function fpPick(id){
+ const p=FPD.PB.get(id),b=$('#fpd');if(!p||!b)return;
+ b.innerHTML=`<b>${esc(p.fn+' '+p.sn)}</b> · ${esc(p.tf)} · ${FPPOS[p.pos]}<div class="mu">£${f(p.price,1)}m · ${f(p.total_points,0)} pts · form ${f(p.form,1)} · ${f(p.minutes,0)} min · owned ${f(p.selected_by_percent,1)}%${p.nw?'<br>News: '+esc(p.nw):''}</div><button class="s" onclick="fpAdd(${id})" style="margin-top:6px">Add to Compare</button>`;
+}
+function fpLines(series,gws,title,dig){
+ const vals=series.flatMap(s=>s.v.filter(fpOk));
+ if(!gws.length||!vals.length)return `<div class="empty">${esc(title)}: no match history yet.</div>`;
+ const W=680,H=250,L=46,B=28,T=10,Rr=12,lo=Math.min(...vals),hi=Math.max(...vals),sx=i=>L+(W-L-Rr)*(gws.length>1?i/(gws.length-1):.5),sy=v=>H-B-(H-B-T)*(v-lo)/((hi-lo)||1);
+ let g=`<rect width="${W}" height="${H}" fill="#0d1520"/>`;
+ for(let i=0;i<=4;i++){const v=lo+(hi-lo)*i/4;g+=`<line x1="${L}" y1="${sy(v).toFixed(1)}" x2="${W-Rr}" y2="${sy(v).toFixed(1)}" stroke="#25374d" stroke-width=".6"/><text x="${L-6}" y="${(sy(v)+4).toFixed(1)}" text-anchor="end" font-size="11" fill="#8a9bb0">${v.toFixed(dig)}</text>`}
+ const step=Math.max(1,Math.ceil(gws.length/12));gws.forEach((w,i)=>{if(i%step===0)g+=`<text x="${sx(i).toFixed(1)}" y="${H-10}" text-anchor="middle" font-size="11" fill="#8a9bb0">${w}</text>`});
+ series.forEach((s,k)=>{let d='',pen=false;s.v.forEach((v,i)=>{if(!fpOk(v)){pen=false;return}d+=(pen?'L':'M')+sx(i).toFixed(1)+' '+sy(v).toFixed(1)+' ';pen=true});
+  g+=`<path d="${d}" fill="none" stroke="${FPPAL[k]}" stroke-width="2.2" stroke-dasharray="${FPDASH[k]}" stroke-linejoin="round"/>`;
+  s.v.forEach((v,i)=>{if(fpOk(v))g+=`<circle cx="${sx(i).toFixed(1)}" cy="${sy(v).toFixed(1)}" r="3" fill="${FPPAL[k]}"><title>${esc(s.n)} · GW ${gws[i]}: ${v.toFixed(dig)}</title></circle>`})});
+ return `<div class="mu" style="margin:6px 0 2px">${esc(title)} (gameweek on the x axis)</div><svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:760px;display:block;margin:0 auto">${g}</svg>`;
+}
+/* per-gameweek values of one player from the stored history: points and minutes add up in a double gameweek, price takes the last row */
+function fpHist(id,k){
+ const idx={pts:1,val:2,min:3,xg:4,xa:5,bon:6}[k],m=new Map();
+ ((FPD.hist||{})[String(id)]||[]).forEach(h=>{const v=h[idx];if(!fpOk(v))return;const r=h[0];
+  m.set(r,(k==='val')?v/10:(m.get(r)||0)+v)});
+ return m;
+}
+function fpSeries(ids,k){
+ const ms=ids.map(id=>fpHist(id,k)),gws=[...new Set(ms.flatMap(m=>[...m.keys()]))].sort((a,b)=>a-b);
+ let series=ids.map((id,i)=>({n:FPD.PB.get(id).name,v:gws.map(g=>ms[i].has(g)?ms[i].get(g):null)}));
+ return {gws,series};
+}
+function fpHeader(d){
+ const cur=d.events.find(e=>e.cur)||d.events.filter(e=>e.fin).slice(-1)[0];
+ return `<div class="mu" style="margin-bottom:8px">Official Fantasy Premier League data, as of ${esc(d.generated)} UTC${cur?' · '+esc(cur.name):''}. Prices in £m. A dash or N/A means the source gave no value (never zero).${FPLINK.on?` PitchAPI link: ${FPLINK.n} of ${FPLINK.tot} players with minutes matched by team and name; the rest have no PitchAPI value.`:' PitchAPI metrics (xT, xG) appear when the Premier League is selected in the league picker.'}</div><div id="fpmsg" class="mu" style="min-height:18px"></div>`;
+}
+function fpRender(){
+ const d=FPD,T=[['table','Table'],['scatter','Scatter'],['value','Value'],['compare','Compare'],['teams','Teams'],['fixtures','Fixtures']];
+ $('#fproot').innerHTML=`<div class="ctl">${T.map(([k,n])=>`<button class="${k===FP.tab?'':'s'}" onclick="fpTab('${k}')">${n}</button>`).join('')}</div>`+fpHeader(d)+'<div id="fpbody"></div>';
+ ({table:fpTTable,scatter:fpTScatter,value:fpTValue,compare:fpTCompare,teams:fpTTeams,fixtures:fpTFix})[FP.tab]($('#fpbody'));
+}
+function fpSort(k){FP.sort=FP.sort.k===k?{k,d:-FP.sort.d}:{k,d:(k==='name'||k==='tn')?1:-1};fpTTableDraw()}
+function fpTTable(el){
+ el.innerHTML=`<div class="ctl"><input id="fq" placeholder="Search player" value="${esc(FP.q)}"><select id="fpos">${fpPosOpts(FP.pos)}</select><select id="ftm">${fpTeamOpts(FP.team)}</select><input id="fmx" type="number" step="0.1" placeholder="Max price" value="${esc(FP.maxp)}" style="width:110px"><input id="fmm" type="number" placeholder="Min minutes" value="${esc(FP.minm)}" style="width:120px"><select id="fav">${fpOpts([['','Any status'],['ok','Available'],['no','Doubtful or out']],FP.av)}</select></div><div id="fout"></div>`;
+ const rd=()=>{FP.q=$('#fq').value;FP.pos=$('#fpos').value;FP.team=$('#ftm').value;FP.maxp=$('#fmx').value;FP.minm=$('#fmm').value;FP.av=$('#fav').value;fpTTableDraw()};
+ ['fq','fmx','fmm'].forEach(i=>$('#'+i).oninput=rd);['fpos','ftm','fav'].forEach(i=>$('#'+i).onchange=rd);fpTTableDraw();
+}
+function fpTTableDraw(){
+ const P=fpFilt(FPD.P,FP),cols=['price','tp','ppg','form','pm','min','g','a','xgi','own'].concat(FPLINK.on?['pxt','pxg']:[]),k=FP.sort.k,dir=FP.sort.d;
+ const gk=p=>k==='name'?p.name:k==='tn'?p.tn:fpM(k)[2](p);
+ const rows=[...P].sort((a,b)=>{const x=gk(a),y=gk(b);if(x==null&&y==null)return 0;if(x==null)return 1;if(y==null)return -1;const c=typeof x==='string'?x.localeCompare(y):x-y;return dir>0?c:-c});
+ const th=(kk,t)=>`<th class="${kk==='name'||kk==='tn'?'':'n'}" style="cursor:pointer" onclick="fpSort('${kk}')">${esc(t)}${k===kk?(dir<0?' ↓':' ↑'):''}</th>`;
+ $('#fout').innerHTML=`<div class="mu" style="margin-bottom:6px">${rows.length} of ${FPD.P.length} players${rows.length>150?' (first 150)':''}. Tap a column to sort.</div><div class="wrap"><table><tr><th></th>${th('name','Player')}${th('tn','Team')}<th>Pos</th>${cols.map(c=>th(c,fpM(c)[1].replace(' (PitchAPI)','*').replace(' (FPL)',''))).join('')}</tr>`+
+  rows.slice(0,150).map(p=>`<tr><td><button class="s" onclick="fpAdd(${p.id})" style="min-height:30px;padding:2px 8px">+</button></td><td>${p.st!=='a'?`<span title="${esc(p.nw||'')}" style="color:var(--a)">⚠</span> `:''}${esc(p.name)}</td><td>${esc(p.tn)}</td><td>${FPPOS[p.pos]}</td>${cols.map(c=>{const m=fpM(c),v=m[2](p);return `<td class="n">${v==null?'N/A':v.toFixed(m[3])}</td>`}).join('')}</tr>`).join('')+`</table></div>${FPLINK.on?'<div class="mu" style="font-size:12px;margin-top:6px">* PitchAPI values per 90 minutes.</div>':''}`;
+}
+function fpTScatter(el){
+ el.innerHTML=`<div class="ctl"><select id="sx">${fpMetOpts(FP.sx)}</select><select id="sy">${fpMetOpts(FP.sy)}</select><select id="sp">${fpPosOpts(FP.sp)}</select><input id="sm" type="number" placeholder="Min minutes" value="${esc(FP.sm)}" style="width:120px"></div><div class="ctl"><button class="s" onclick="fpPre('price','tp')">Price vs points</button><button class="s" onclick="fpPre('price','pm')">Price vs value</button><button class="s" onclick="fpPre('own','tp')">Ownership vs points</button><button class="s" onclick="fpPre('xgi','tp')">xGI vs points</button><button class="s" onclick="fpPre('price','xgi90')">Price vs xGI/90</button>${FPLINK.on?'<button class="s" onclick="fpPre(\'price\',\'pxt\')">Price vs xT (PitchAPI)</button>':''}</div><div id="sout"></div><div class="card" id="fpd" style="font-size:13px">Tap a dot for details.</div>`;
+ const rd=()=>{FP.sx=$('#sx').value;FP.sy=$('#sy').value;FP.sp=$('#sp').value;FP.sm=$('#sm').value;draw()};
+ const draw=()=>{const xm=fpM(FP.sx),ym=fpM(FP.sy),P=fpFilt(FPD.P,{pos:FP.sp,minm:FP.sm}),pts=P.map(p=>({p,x:xm[2](p),y:ym[2](p)})).filter(a=>fpOk(a.x)&&fpOk(a.y));
+  $('#sout').innerHTML=`<div class="mu" style="margin-bottom:6px">${pts.length} of ${P.length} players have a value for both metrics. Colours: ${[1,2,3,4].map(k=>`<span style="color:${FPCOL[k]}">● ${FPPOS[k]}</span>`).join(' ')}. The 8 best on both axes are named.</div>`+fpScatter(pts,xm,ym)};
+ ['sx','sy','sp'].forEach(i=>$('#'+i).onchange=rd);$('#sm').oninput=rd;draw();
+}
+function fpPre(x,y){FP.sx=x;FP.sy=y;fpTScatter($('#fpbody'))}
+function fpTValue(el){
+ el.innerHTML=`<div class="ctl"><select id="vm">${fpMetOpts(FP.vm)}</select><select id="vp">${fpPosOpts(FP.vp)}</select><input id="vn" type="number" placeholder="Min minutes" value="${esc(FP.vmin)}" style="width:120px"><input id="vx" type="number" step="0.1" placeholder="Max price" value="${esc(FP.vmax)}" style="width:110px"></div><div id="vout"></div>`;
+ const rd=()=>{FP.vm=$('#vm').value;FP.vp=$('#vp').value;FP.vmin=$('#vn').value;FP.vmax=$('#vx').value;draw()};
+ const draw=()=>{const m=fpM(FP.vm),P=fpFilt(FPD.P,{pos:FP.vp,minm:FP.vmin,maxp:FP.vmax}).filter(p=>fpOk(m[2](p))).sort((a,b)=>m[2](b)-m[2](a)),top=P.slice(0,20);
+  const mv=fpFilt(FPD.P,{pos:FP.vp}).filter(p=>fpOk(p.chg)&&p.chg!==0),ris=[...mv].sort((a,b)=>b.chg-a.chg).slice(0,8),fal=[...mv].sort((a,b)=>a.chg-b.chg).slice(0,8);
+  const mk=a=>a.map(p=>({l:p.name,s:p.tn,v:p.chg,t:(p.chg>0?'+':'')+p.chg.toFixed(1),c:p.chg>0?'#4cc38a':'#e5646b'}));
+  $('#vout').innerHTML=`<h3>Top 20 by ${esc(m[1])}</h3>`+(top.length?fpBars(top.map(p=>({l:p.name,s:p.tn+' · £'+p.price.toFixed(1),v:m[2](p),t:m[2](p).toFixed(m[3]),c:FPCOL[p.pos]}))):'<div class="empty">No players match.</div>')+
+   `<h3>Biggest price rises since the start of the season (£m)</h3>`+(ris.length?fpBars(mk(ris)):'<div class="empty">No price changes yet.</div>')+`<h3>Biggest price falls (£m)</h3>`+(fal.length?fpBars(mk(fal)):'<div class="empty">No price changes yet.</div>')};
+ ['vm','vp'].forEach(i=>$('#'+i).onchange=rd);['vn','vx'].forEach(i=>$('#'+i).oninput=rd);draw();
+}
+function fpTCompare(el){
+ el.innerHTML=`<div class="ctl" style="position:relative"><input id="cq" autocomplete="off" placeholder="Search a player to add (max 6)" value="" style="flex:1;min-width:200px"></div><div id="cres" class="chips"></div><div id="cout"></div>`;
+ const res=()=>{const q=fpNz($('#cq').value);const r=q?FPD.P.filter(p=>!FP.sel.includes(p.id)&&fpNz(p.fn+' '+p.sn+' '+p.name+' '+p.tf).includes(q)).sort((a,b)=>(b.total_points||0)-(a.total_points||0)).slice(0,8):[];
+  $('#cres').innerHTML=r.map(p=>`<span class="chp" onclick="fpAdd(${p.id})">${esc(p.name)} <span class="mu">${esc(p.tn)} · ${FPPOS[p.pos]} · £${f(p.price,1)}</span></span>`).join('')};
+ $('#cq').oninput=res;
+ if(!FP.sel.length){$('#cout').innerHTML='<div class="empty">Search above, or press + next to a player in the Table tab. Selected players are compared on every metric, price over time and points per gameweek.</div>';return}
+ const S=FP.sel.map(id=>FPD.PB.get(id)).filter(Boolean),ids=S.map(p=>p.id);
+ const ms=FPM.filter(m=>FPLINK.on||!/PitchAPI/.test(m[1])),noBest=new Set(['price','chg','tin','tout','min']);
+ const best=m=>{if(noBest.has(m[0]))return null;const v=S.map(p=>m[2](p)).filter(fpOk);return v.length>1?Math.max(...v):null};
+ const hd=`<div class="chips" style="margin:6px 0">${S.map((p,i)=>`<span class="chp on" style="border-color:${FPPAL[i]}" onclick="fpRm(${p.id})"><span style="color:${FPPAL[i]}">●</span> ${esc(p.name)} ✕</span>`).join('')}</div>`;
+ const tb=`<div class="wrap"><table><tr><th></th>${S.map(p=>`<th>${esc(p.name)}<div class="mu" style="font-size:11px;font-weight:400">${esc(p.tn)} · ${FPPOS[p.pos]}</div></th>`).join('')}</tr>${ms.map(m=>{const b=best(m);return `<tr><td class="mu">${esc(m[1])}</td>${S.map(p=>{const v=m[2](p);return `<td class="n ${b!=null&&v===b?'clb':''}">${v==null?'N/A':(b!=null&&v===b?'▲ ':'')+v.toFixed(m[3])}</td>`}).join('')}</tr>`}).join('')}</table></div>`;
+ const pr=fpSeries(ids,'val'),pt=fpSeries(ids,'pts'),cu={gws:pt.gws,series:pt.series.map(s=>{let t=0;return {n:s.n,v:s.v.map(v=>{if(v==null)return null;t+=v;return t})}})};
+ $('#cout').innerHTML=hd+tb+fpLines(pr.series,pr.gws,'Price (£m) after each match',1)+fpLines(pt.series,pt.gws,'Points per gameweek',0)+fpLines(cu.series,cu.gws,'Cumulative points',0)+`<div class="mu" style="font-size:12px;margin:6px 0">${S.map((p,i)=>`<span style="color:${FPPAL[i]}">${'━ '}${esc(p.name)}</span>`).join(' · ')}. Price is the value recorded with each match, so a change between matches shows at the next one. ▲ marks the highest value among the selected players where higher is better.</div>`;
+ res();
+}
+function fpTTeams(el){
+ const ms=[['tp','Total points'],['g','Goals'],['a','Assists'],['cs','Clean sheets'],['bon','Bonus points'],['xgi','xGI (FPL)'],['ap','Average price of regular players (£m)'],['ppm','Points per £m, regular players']];
+ el.innerHTML=`<div class="ctl"><select id="tmm">${fpOpts(ms,FP.tm)}</select></div><div id="tout"></div>`;
+ const draw=()=>{FP.tm=$('#tmm').value;
+  const T=FPD.teams.map(t=>{const P=FPD.P.filter(p=>p.tm===t.id),sum=k=>P.some(p=>fpOk(p[k]))?P.reduce((s,p)=>s+(fpOk(p[k])?p[k]:0),0):null,reg=P.filter(p=>(p.minutes||0)>=270&&p.price!=null);
+   const rp=reg.reduce((s,p)=>s+p.price,0),rt=reg.reduce((s,p)=>s+(p.total_points||0),0);
+   return {t,tp:sum('total_points'),g:sum('goals_scored'),a:sum('assists'),cs:sum('clean_sheets'),bon:sum('bonus'),xgi:sum('expected_goal_involvements'),ap:reg.length?rp/reg.length:null,ppm:rp>0?rt/rp:null,n:reg.length}});
+  const k=FP.tm,dg=(k==='xgi'||k==='ap'||k==='ppm')?(k==='xgi'?1:2):0,L=T.filter(x=>fpOk(x[k])).sort((a,b)=>b[k]-a[k]);
+  $('#tout').innerHTML=fpBars(L.map(x=>({l:x.t.n,v:x[k],t:x[k].toFixed(dg),c:'#5aa9e6'})))+
+   `<div class="wrap" style="margin-top:10px"><table><tr><th>Team</th><th class="n">Points</th><th class="n">Goals</th><th class="n">Assists</th><th class="n">CS</th><th class="n">Bonus</th><th class="n">xGI</th><th class="n">Avg £m</th><th class="n">Pts/£m</th></tr>${[...T].sort((a,b)=>(b.tp??-1)-(a.tp??-1)).map(x=>`<tr><td>${esc(x.t.n)}</td><td class="n">${f(x.tp,0)}</td><td class="n">${f(x.g,0)}</td><td class="n">${f(x.a,0)}</td><td class="n">${f(x.cs,0)}</td><td class="n">${f(x.bon,0)}</td><td class="n">${f(x.xgi,1)}</td><td class="n">${f(x.ap,2)}</td><td class="n">${f(x.ppm,2)}</td></tr>`).join('')}</table></div><div class="mu" style="font-size:12px;margin-top:6px">Regular players = at least 270 minutes. Totals add the values the source gave; they include players who have since left.</div>`};
+ $('#tmm').onchange=draw;draw();
+}
+function fpTFix(el){
+ const d=FPD,nx=d.events.find(e=>e.nxt)||d.events.find(e=>!e.fin),s0=nx?nx.id:1,gws=[0,1,2,3,4].map(i=>s0+i).filter(g=>d.events.some(e=>e.id===g)),CL=['#2e7d4f','#4cc38a','#8a9bb0','#e9b44c','#e5646b'];
+ const cell=(t,g)=>d.fix.filter(x=>x[0]===g&&(x[1]===t||x[2]===t)).map(x=>{const h=x[1]===t,o=d.T.get(h?x[2]:x[1])||{};return {o:o.s||'?',h,df:h?x[3]:x[4]}});
+ const R=d.teams.map(t=>{const cs=gws.map(g=>cell(t.id,g)),ds=cs.flat().map(c=>c.df).filter(fpOk);return {t,cs,avg:ds.length?ds.reduce((a,b)=>a+b,0)/ds.length:null}}).sort((a,b)=>(a.avg??9)-(b.avg??9));
+ el.innerHTML=`<div class="mu" style="margin-bottom:6px">Next ${gws.length} gameweeks, easiest run first. Difficulty is the official FPL rating from 1 (easiest) to 5. Capital letters = home.</div><div class="wrap"><table><tr><th>Team</th>${gws.map(g=>`<th>GW ${g}</th>`).join('')}<th class="n">Avg</th></tr>${R.map(r=>`<tr><td>${esc(r.t.n)}</td>${r.cs.map(c=>`<td>${c.length?c.map(x=>`<span style="display:inline-block;padding:2px 7px;margin:1px;border-radius:6px;background:${CL[Math.min(4,Math.max(0,(x.df||3)-1))]};color:#06210f;font-weight:600;font-size:12px">${esc(x.h?x.o.toUpperCase():x.o.toLowerCase())}</span>`).join(''):'<span class="mu">—</span>'}</td>`).join('')}<td class="n">${f(r.avg,2)}</td></tr>`).join('')}</table></div>`;
+}
+R.fantasy=async function(el){
+ el.innerHTML='<h2>Fantasy</h2><div id="fproot"><div class="empty">Loading…</div></div>';
+ let d=null;try{d=await fpLoad()}catch(e){$('#fproot').innerHTML=`<div class="empty">Could not load Fantasy data: ${esc(e.message)}</div>`;return}
+ if(!d){$('#fproot').innerHTML='<div class="empty">No Fantasy data yet. It is fetched from the official Fantasy Premier League API during the next synchronization (at most once an hour). Press Synchronize in Settings.</div>';return}
+ fpLink();fpRender();
 };
 
 async function route(){
