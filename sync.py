@@ -3273,7 +3273,22 @@ _FPL_NUM = ["now_cost", "cost_change_start", "total_points", "event_points", "po
             "transfers_out_event", "yellow_cards", "red_cards", "own_goals", "penalties_missed", "penalties_saved",
             "defensive_contribution", "chance_of_playing_next_round", "ep_next"]
 _FPL_HIST = ["round", "total_points", "value", "minutes", "expected_goals", "expected_assists", "bonus",
-             "opponent_team", "was_home"]
+             "opponent_team", "was_home",
+             # الأعمدة الإضافية (المرحلة 0): تُخزَّن إذا أرجعها FPL فعلاً، وإلا تبقى فاضية (None) ولا تتحول لصفر
+             "starts", "goals_scored", "assists", "clean_sheets", "goals_conceded", "saves", "yellow_cards",
+             "red_cards", "own_goals", "penalties_missed", "penalties_saved", "bps", "expected_goals_conceded",
+             "defensive_contribution", "fixture"]
+_FPL_HIST_SHORT = ["r", "pts", "val", "min", "xg", "xa", "bon", "opp", "h",
+                   "st", "gl", "as", "cs", "gc", "sv", "yc", "rc", "og", "pmi", "psv", "bps", "xgc", "dc", "fx"]
+FPL_HIST_VER = 2                   # رقم صيغة سجل المباريات (للعرض فقط؛ التحديث يعتمد على طول الصفوف)
+
+
+def _fpl_hist_stale(old):
+    """هل في بيانات قديمة محفوظة بصيغة أقصر (9 أعمدة)؟ إذا نعم نعيد جلب سجلها مرة وحدة."""
+    for rs in ((old or {}).get("hist") or {}).values():
+        if any(len(r) < len(_FPL_HIST) for r in rs):
+            return True
+    return False
 
 
 def _fpl_get(path, tries=3):
@@ -3356,7 +3371,8 @@ def _fpl_build(boot, fixtures, old, fetch):
             continue
         o = old_rows.get(pid_)
         same = o is not None and o[ix["minutes"]] == r[ix["minutes"]] and o[ix["total_points"]] == r[ix["total_points"]]
-        if str(pid_) not in hist or not same:
+        stale = any(len(x) < len(_FPL_HIST) for x in hist.get(str(pid_), []))
+        if str(pid_) not in hist or not same or stale:
             todo.append(pid_)
     log(f"  [Fantasy] لاعبين: {len(rows)} | سجل المباريات المطلوب جلبه: {len(todo)}")
     for n, pid_ in enumerate(todo, 1):
@@ -3368,6 +3384,15 @@ def _fpl_build(boot, fixtures, old, fetch):
         if n % 100 == 0:
             log(f"    {n}/{len(todo)}")
         time.sleep(FPL_DELAY)
+    n_hist, audit = 0, {}
+    for rs in hist.values():
+        for rw in rs:
+            n_hist += 1
+            for k_, v_ in zip(_FPL_HIST_SHORT, rw):
+                if v_ is not None:
+                    audit[k_] = audit.get(k_, 0) + 1
+    absent = [k_ for k_ in _FPL_HIST_SHORT if n_hist and not audit.get(k_)]
+    log(f"  [Fantasy] فحص حقول سجل المباريات: {n_hist} صف | حقول لم يرجعها FPL إطلاقاً: {absent or 'لا يوجد'}")
     teams = [dict(id=t["id"], n=t.get("name"), s=t.get("short_name"), st=t.get("strength")) for t in boot.get("teams", [])]
     events = [dict(id=e["id"], name=e.get("name"), fin=bool(e.get("finished")), cur=bool(e.get("is_current")),
                    nxt=bool(e.get("is_next")), dl=e.get("deadline_time"), avg=e.get("average_entry_score"))
@@ -3395,7 +3420,7 @@ def _fpl_build(boot, fixtures, old, fetch):
                 scoring, scoring_gw = derived, max(done)
                 log(f"  [Fantasy] قواعد التسجيل مستخرجة من الجولة {scoring_gw}: {len(derived)} فئة")
     return dict(generated=now(), cols=cols, rows=rows, teams=teams, events=events, fix=fix,
-                hist=hist, hcols=["r", "pts", "val", "min", "xg", "xa", "bon", "opp", "h"],
+                hist=hist, hcols=list(_FPL_HIST_SHORT), hv=FPL_HIST_VER, haudit=dict(rows=n_hist, f=audit),
                 rules=rules, scoring=scoring or {}, scoring_gw=scoring_gw, postponed=postponed)
 
 
@@ -3407,7 +3432,7 @@ def sync_fpl(hub):
     if old and old.get("generated"):
         FPL_INDEX = dict(file="fpl.json", v=old["generated"])
         t = _parse_ts(old["generated"])
-        if (not FORCE_SYNC and t is not None
+        if (not FORCE_SYNC and t is not None and not _fpl_hist_stale(old)
                 and (datetime.datetime.now(datetime.timezone.utc) - t).total_seconds() / 60 < FPL_MIN_INTERVAL_MIN):
             log("  [Fantasy] البيانات حديثة — تخطيت الجلب")
             return
@@ -3569,9 +3594,9 @@ function fpHeader(d){
  return `<div class="mu" style="margin-bottom:8px">Official Fantasy Premier League data, as of ${esc(d.generated)} UTC${cur?' · '+esc(cur.name):''}. Prices in £m. A dash or N/A means the source gave no value (never zero).${FPLINK.on?` PitchAPI link: ${FPLINK.n} of ${FPLINK.tot} players with minutes matched by team and name; the rest have no PitchAPI value.`:' PitchAPI metrics (xT, xG) appear when the Premier League is selected in the league picker.'}</div><div id="fpmsg" class="mu" style="min-height:18px"></div>`;
 }
 function fpRender(){
- const d=FPD,T=[['table','Table'],['pred','Predicted Points'],['best','Best Team'],['scatter','Scatter'],['value','Value'],['compare','Compare'],['teams','Teams'],['fixtures','Fixtures']];
+ const d=FPD,T=[['table','Table'],['pred','Predicted Points'],['best','Best Team'],['scatter','Scatter'],['value','Value'],['compare','Compare'],['teams','Teams'],['fixtures','Fixtures'],['backtest','Backtest']];
  $('#fproot').innerHTML=`<div class="ctl">${T.map(([k,n])=>`<button class="${k===FP.tab?'':'s'}" onclick="fpTab('${k}')">${n}</button>`).join('')}</div>`+fpHeader(d)+'<div id="fpbody"></div>';
- ({table:fpTTable,pred:fpTPred,best:fpTBest,scatter:fpTScatter,value:fpTValue,compare:fpTCompare,teams:fpTTeams,fixtures:fpTFix})[FP.tab]($('#fpbody'));
+ ({table:fpTTable,pred:fpTPred,best:fpTBest,scatter:fpTScatter,value:fpTValue,compare:fpTCompare,teams:fpTTeams,fixtures:fpTFix,backtest:fpTBack})[FP.tab]($('#fpbody'));
 }
 function fpSort(k){FP.sort=FP.sort.k===k?{k,d:-FP.sort.d}:{k,d:(k==='name'||k==='tn')?1:-1};fpTTableDraw()}
 function fpTTable(el){
@@ -4038,6 +4063,221 @@ function pmDrawW7(out,d,R,C,forms,res){
 """
 
 
+_X_FPJS3 = r"""/* ===== Backtest (leak-free): replays every finished gameweek using ONLY data from earlier gameweeks ===== */
+const BT={start:4,key:'',res:null,busy:false,line:null,lineBusy:false};
+/* [field name the live model reads on a player, short column name in the stored match history] */
+const BT_MAP=[['minutes','min'],['expected_goals','xg'],['goals_scored','gl'],['expected_assists','xa'],['assists','as'],['bonus','bon'],['yellow_cards','yc'],['red_cards','rc'],['own_goals','og'],['penalties_missed','pmi'],['penalties_saved','psv'],['saves','sv'],['defensive_contribution','dc']];
+const btIx=d=>{const m={};(d.hcols||[]).forEach((c,i)=>m[c]=i);return m};
+/* sum of the values that exist; null (missing) when no row has the value. Missing is never turned into 0. */
+const btSum=(rows,j)=>{let s=null;if(j===undefined)return s;for(const x of rows){const v=x[j];if(fpOk(v))s=(s||0)+v}return s};
+const btAvg=a=>a.length?a.reduce((s,x)=>s+x,0)/a.length:null;
+const btYield=()=>new Promise(r=>setTimeout(r,0));
+/* the club a player really played for in gameweek r (from his opponent + home flag in that round); falls back to his current club */
+function btTeamAt(p,rr,fixR,ix){
+ const x0=rr[0],o=x0[ix.opp],h=x0[ix.h];
+ if(!fpOk(o)||(h!==0&&h!==1))return p.tm;
+ const c=fixR.filter(x=>h===1?x[2]===o:x[1]===o).map(x=>h===1?x[1]:x[2]);
+ if(!c.length)return p.tm;
+ return c.includes(p.tm)?p.tm:c[0];
+}
+/* One gameweek r. Everything the model sees is rebuilt from rows with round < r:
+   player totals, team strengths, league averages, position priors, finished fixtures. Round r fixtures are marked unplayed with no score. */
+function btRound(d,P,H,ix,fixAll,r){
+ const ev=d.events.filter(e=>e.id<=r).map(e=>Object.assign({},e,{fin:e.id<r,cur:false,nxt:e.id===r}));
+ const fixR=fixAll.filter(x=>x[0]===r);
+ const fix=fixAll.filter(x=>x[0]<r).concat(fixR.map(x=>{const y=x.slice();y[5]=0;y[6]=null;y[7]=null;return y}));
+ const sh=[],tg=[],Hp={};
+ for(const p of P){
+  const rows=H[String(p.id)];if(!rows)continue;
+  const rr=rows.filter(x=>x[0]===r),prior=rows.filter(x=>x[0]<r),tm=rr.length?btTeamAt(p,rr,fixR,ix):p.tm;
+  const o={id:p.id,ty:p.ty,tm,st:'a',nw:'',chance_of_playing_next_round:null,name:p.name};
+  for(const [pf,hc] of BT_MAP)o[pf]=btSum(prior,ix[hc]);
+  Hp[String(p.id)]=prior;sh.push(o);
+  if(rr.length)tg.push({p,o,rr,prior});
+ }
+ const dd=Object.assign({},d,{events:ev,fix,P:sh,hist:Hp});delete dd._pm;delete dd._pmPred;
+ const C=pmCtx(dd),out=[];let excl=0,nofx=0;
+ for(const t of tg){
+  const m=pmPlayer(t.o,C,dd);
+  if(m.q==='nodata'){excl++;continue}
+  const g=m.gws[0];if(!g||g.none||!g.fx.length){nofx++;continue}
+  const act=btSum(t.rr,ix.pts);if(act==null)continue;
+  const amin=btSum(t.rr,ix.min),n=g.fx.length;
+  const pts=t.prior.map(x=>x[ix.pts]).filter(fpOk),mins=t.prior.map(x=>x[ix.min]).filter(fpOk);
+  const bs=btAvg(pts),b5=btAvg(pts.slice(-5)),m5=btAvg(mins.slice(-5)),l5=mins.slice(-5),q5=l5.length?l5.filter(x=>x>0).length/l5.length:null;
+  if(bs==null||b5==null||m5==null||q5==null)continue;
+  const pv=t.rr[t.rr.length-1][ix.val];
+  out.push({r,id:t.p.id,name:t.p.name,pos:t.p.ty,club:t.o.tm,pred:g.pts,bs:bs*n,b5:b5*n,act,amin,eMin:g.eMin,mb:m5*n,
+   pp:1-g.fx.reduce((s,x)=>s*(1-x.pPlay),1),pb:1-Math.pow(1-q5,n),played:amin==null?null:(amin>0?1:0),pr:t.o.minutes,price:fpOk(pv)?pv:null,n,q:m.q});
+ }
+ return {rows:out,excl,nofx,targets:tg.length};
+}
+async function btRun(d,onP){
+ const ix=btIx(d);
+ for(const k of ['r','pts','min','opp','h','val'])if(ix[k]===undefined)throw new Error('the stored match history has no "'+k+'" column: press Synchronize once');
+ const H={};Object.keys(d.hist||{}).forEach(k=>{H[k]=d.hist[k].slice().sort((a,b)=>a[0]-b[0])});
+ const fixAll=d.fix.filter(x=>x[0]),rounds=d.events.filter(e=>e.fin&&e.id>=2).map(e=>e.id).sort((a,b)=>a-b);
+ const rows=[];let excl=0,nofx=0,targets=0;
+ for(const r of rounds){
+  const x=btRound(d,d.P,H,ix,fixAll,r);
+  x.rows.forEach(y=>rows.push(y));excl+=x.excl;nofx+=x.nofx;targets+=x.targets;
+  if(onP)onP(r);await btYield();
+ }
+ return {rows,rounds,excl,nofx,targets,at:d.generated};
+}
+
+/* ---------- metrics (pure functions) ---------- */
+function btStat(rows,k){
+ const v=rows.filter(x=>fpOk(x[k]));const n=v.length;if(!n)return null;
+ let a=0,s=0,b=0;v.forEach(x=>{const e=x[k]-x.act;a+=Math.abs(e);s+=e*e;b+=e});
+ return {n,mae:a/n,rmse:Math.sqrt(s/n),bias:b/n};
+}
+/* paired by gameweek: mean MAE gain of model a over baseline b (positive = a better), its standard error across gameweeks, and the number of gameweeks a won */
+function btCmp(rows,a,b,minN){
+ const by=new Map();
+ rows.forEach(x=>{let o=by.get(x.r);if(!o){o={n:0,a:0,b:0};by.set(x.r,o)}o.n++;o.a+=Math.abs(x[a]-x.act);o.b+=Math.abs(x[b]-x.act)});
+ const ds=[...by.values()].filter(o=>o.n>=minN).map(o=>(o.b-o.a)/o.n),k=ds.length;
+ if(!k)return null;
+ const mu=btAvg(ds),sd=k>1?Math.sqrt(ds.reduce((s,x)=>s+(x-mu)*(x-mu),0)/(k-1)):null;
+ return {k,mu,se:sd==null?null:sd/Math.sqrt(k),wins:ds.filter(x=>x>0).length};
+}
+function btBrier(rows,k){
+ const v=rows.filter(x=>x.played!=null&&fpOk(x[k]));
+ return v.length?{n:v.length,b:v.reduce((s,x)=>s+(x[k]-x.played)*(x[k]-x.played),0)/v.length}:null;
+}
+function btCalib(rows){
+ return [[0,.2],[.2,.4],[.4,.6],[.6,.8],[.8,1.0001]].map(([lo,hi])=>{
+  const v=rows.filter(x=>x.played!=null&&x.pp>=lo&&x.pp<hi);
+  return {lo,hi:Math.min(hi,1),n:v.length,pred:v.length?btAvg(v.map(x=>x.pp)):null,obs:v.length?btAvg(v.map(x=>x.played)):null};
+ });
+}
+/* Captain: each gameweek every method picks the single highest-predicted player of a pool (players with enough earlier minutes). */
+function btCaptain(rows,minPrior,minPool){
+ const by=new Map();
+ rows.forEach(x=>{if((x.pr||0)<minPrior)return;if(!by.has(x.r))by.set(x.r,[]);by.get(x.r).push(x)});
+ const keys=['pred','b5','bs'],res={};keys.forEach(k=>res[k]={n:0,pts:0,reg:0,top10:0});
+ const detail=[];let rounds=0,orc=0;
+ [...by.keys()].sort((a,b)=>a-b).forEach(r=>{
+  const L=by.get(r);if(L.length<minPool)return;
+  rounds++;
+  const sorted=[...L].sort((a,b)=>b.act-a.act||a.id-b.id),best=sorted[0];orc+=best.act;
+  const row={r,best};
+  keys.forEach(k=>{
+   const pick=L.reduce((a,b)=>(b[k]>a[k]||(b[k]===a[k]&&b.id<a.id))?b:a);
+   const rank=sorted.findIndex(x=>x.id===pick.id)+1,o=res[k];
+   o.n++;o.pts+=pick.act;o.reg+=best.act-pick.act;if(rank<=10)o.top10++;row[k]=pick;
+  });
+  detail.push(row);
+ });
+ return {rounds,oracle:rounds?orc/rounds:null,res,detail};
+}
+/* Team selection: each gameweek, build the best legal squad/XI from scratch with the real optimizer, valuing players by the model / last-5 average / (hindsight) actual points. Prices are the price recorded for that gameweek. */
+async function btLineup(d,rows,start,onP){
+ const R=pmRules(d);
+ if(!R||R.club==null||R.budget==null)throw new Error('game constraints (budget / club limit / squad structure) are missing from the data');
+ const forms=pmForms(R),by=new Map();
+ rows.forEach(x=>{if(x.price==null)return;if(!by.has(x.r))by.set(x.r,[]);by.get(x.r).push(x)});
+ const out=[];
+ for(const r of [...by.keys()].sort((a,b)=>a-b).filter(r=>r>=start)){
+  const L=by.get(r),act=new Map(L.map(x=>[x.id,x.act])),res={r};
+  for(const [k,key] of [['model','pred'],['b5','b5'],['oracle','act']]){
+   const m=pmMode1(L.map(x=>({id:x.id,t:x.pos,c:x.price,club:x.club,v:x[key]})),R,forms);
+   if(!m.best){res[k]=null;continue}
+   const t=m.best.team;
+   res[k]={pts:t.xi.reduce((s,i)=>s+act.get(i.id),0)+(t.cap?act.get(t.cap.id):0),form:t.form.name,bad:pmValidate(t,R,forms).length,cap:t.cap?t.cap.id:null};
+  }
+  out.push(res);if(onP)onP(r);await btYield();
+ }
+ return out;
+}
+
+/* ---------- UI ---------- */
+function fpTBack(el){
+ const d=FPD,ix=btIx(d),au=(d.haudit||{}).f||{},tot=(d.haudit||{}).rows||0;
+ const done=d.events.filter(e=>e.fin).map(e=>e.id).filter(r=>r>=2),mx=done.length?Math.max(...done):0;
+ const intro=`<div class="card mu" style="font-size:12px"><b>What this tests.</b> Every finished gameweek is replayed as if it had not been played: the model sees only matches from <b>earlier</b> gameweeks (player totals, team strengths, league averages and position priors are all rebuilt from those rows), then its prediction is compared with the points the player actually scored. Baselines: the player's average points per match over his last 5 matches, and over the season so far, multiplied by his number of fixtures. Model tested: <b>v1 = the model used in Predicted Points</b>, unchanged.</div>`;
+ if(!Object.keys(d.hist||{}).length||ix.gl===undefined){el.innerHTML=intro+'<div class="empty">The stored match history is in the old short format, so most inputs of the model cannot be replayed. Press Synchronize in Settings once: it re-downloads every player history (a few minutes), then reopen this tab.</div>';return}
+ if(mx<2){el.innerHTML=intro+'<div class="empty">A backtest needs at least 2 finished gameweeks (one to learn from, one to predict).</div>';return}
+ const miss=BT_MAP.filter(([pf,hc])=>!(au[hc]>0)).map(([pf])=>pf);
+ BT.start=Math.max(2,Math.min(BT.start,mx));
+ el.innerHTML=intro+(miss.length?`<div class="card" style="font-size:12px;color:var(--a)">History fields FPL did not return at all (these inputs are missing, not zero): ${miss.map(esc).join(', ')}. Components that need them are left out of the replay, exactly as in the live model.</div>`:'')+
+  `<div class="ctl"><select id="btst">${fpOpts(Array.from({length:mx-1},(_,i)=>[String(i+2),'Evaluate from GW'+(i+2)]),String(BT.start))}</select><button class="s" id="btrun">Re-run</button></div><div id="btout"><div class="empty">Replaying gameweeks…</div></div>`;
+ $('#btst').onchange=()=>{BT.start=+$('#btst').value;btDraw()};
+ $('#btrun').onclick=()=>{BT.res=null;BT.line=null;btGo()};
+ btGo();
+}
+async function btGo(){
+ const d=FPD,key=d.generated;
+ if(BT.res&&BT.key===key){btDraw();return}
+ if(BT.busy)return;
+ BT.busy=true;
+ try{
+  BT.res=await btRun(d,r=>{const e=$('#btout');if(e)e.innerHTML=`<div class="empty">Replaying gameweek ${r}… (no future data is used)</div>`});
+  BT.key=key;BT.line=null;
+ }catch(e){const o=$('#btout');if(o)o.innerHTML=`<div class="empty">Backtest failed: ${esc(e.message)}</div>`;BT.busy=false;return}
+ BT.busy=false;btDraw();
+}
+async function btLine(){
+ if(BT.lineBusy||!BT.res)return;
+ BT.lineBusy=true;
+ try{const res=await btLineup(FPD,BT.res.rows,BT.start,r=>{const e=$('#btlmsg');if(e)e.textContent='Optimizing gameweek '+r+'…'});BT.line={start:BT.start,res}}
+ catch(e){BT.line={start:BT.start,err:e.message}}
+ BT.lineBusy=false;btDraw();
+}
+function btLineHtml(){
+ const L=BT.line,head='<h3>Team selection test</h3>';
+ const intro='<div class="mu" style="font-size:12px;margin-bottom:6px">Each gameweek the real Best Team optimizer (budget, 3-per-club rule, legal formations, captain) builds a team from scratch, once valuing players by the model and once by the last-5 average. "Hindsight" values players by the points they actually scored: an unreachable ceiling that shows how much is left. Team points = starting XI + captain bonus; the bench and automatic substitutions are not counted. The price used is the one recorded for that gameweek.</div>';
+ if(!L||L.start!==BT.start)return head+intro+`<div class="ctl"><button class="s" onclick="btLine()" ${BT.lineBusy?'disabled':''}>Run team selection test</button></div><div class="mu" style="font-size:12px">This one is slow: about 5 seconds per gameweek on a computer in my synthetic test, probably longer on a phone. The page stays usable between gameweeks.</div><div class="ctl" style="display:none"></div><div id="btlmsg" class="mu">${BT.lineBusy?'Working…':''}</div>`;
+ if(L.err)return head+`<div class="empty">Could not run: ${esc(L.err)}</div>`;
+ const R=L.res.filter(x=>x.model&&x.b5&&x.oracle);
+ if(!R.length)return head+'<div class="empty">No gameweek produced a valid team for all three methods.</div>';
+ const m=a=>btAvg(R.map(x=>x[a].pts)),bad=R.reduce((s,x)=>s+x.model.bad+x.b5.bad+x.oracle.bad,0),w=R.filter(x=>x.model.pts>x.b5.pts).length,t=R.filter(x=>x.model.pts===x.b5.pts).length;
+ return head+intro+`<div class="grid"><div class="kpi"><b>${f(m('model'),1)}</b><span>Model team, mean points per GW</span></div><div class="kpi"><b>${f(m('b5'),1)}</b><span>Last-5 average team</span></div><div class="kpi"><b>${f(m('oracle'),1)}</b><span>Hindsight ceiling</span></div><div class="kpi"><b>${w} / ${R.length}</b><span>GWs where the model team beat last-5${t?' ('+t+' ties)':''}</span></div></div>`+
+  tbl([['GW',1],['Model',1],['Last-5',1],['Hindsight',1],['Model formation']],R.map(x=>[x.r,f(x.model.pts,0),f(x.b5.pts,0),f(x.oracle.pts,0),esc(x.model.form)]))+
+  `<div class="mu" style="font-size:12px;margin-top:6px">Rule violations found by the validator in the ${R.length*3} teams: ${bad}.</div>`;
+}
+function btDraw(){
+ const o=$('#btout');if(!o||!BT.res)return;
+ const rows=BT.res.rows.filter(x=>x.r>=BT.start);
+ if(!rows.length){o.innerHTML='<div class="empty">No player-gameweeks in this range.</div>';return}
+ const rs=[...new Set(rows.map(x=>x.r))].sort((a,b)=>a-b),pl=new Set(rows.map(x=>x.id)).size;
+ const S={pred:btStat(rows,'pred'),b5:btStat(rows,'b5'),bs:btStat(rows,'bs')};
+ const c5=btCmp(rows,'pred','b5',20),cS=btCmp(rows,'pred','bs',20);
+ const imp=(a,b)=>a&&b?(1-a.mae/b.mae)*100:null,sg=v=>v==null?'N/A':(v>0?'+':'')+v.toFixed(1)+'%';
+ const sr=(n,s,b)=>[n,s.n,f(s.mae,3),f(s.rmse,3),(s.bias>0?'+':'')+f(s.bias,3),b?sg(imp(S.pred,s)):''];
+ const cmpTxt=(c,n)=>c?`vs ${n}: the model had the lower average error in <b>${c.wins} of ${c.k}</b> gameweeks; mean MAE gain ${f(c.mu,3)} points${c.se!=null?' ± '+f(1.96*c.se,3)+' (95% interval across gameweeks)':''}.`:`vs ${n}: not enough data.`;
+ const warn=rs.length<5?`<div class="card" style="font-size:13px;color:var(--a)"><b>Small sample:</b> only ${rs.length} gameweek${rs.length>1?'s':''}. Treat every number below as provisional; it becomes meaningful as the season grows.</div>`:'';
+ const pos=[1,2,3,4].map(t=>{const L=rows.filter(x=>x.pos===t);if(!L.length)return null;const a=btStat(L,'pred'),b=btStat(L,'b5');return [FPPOS[t],a.n,f(a.mae,3),f(b.mae,3),sg(imp(a,b)),f(a.rmse,3),f(b.rmse,3),(a.bias>0?'+':'')+f(a.bias,3)]}).filter(Boolean);
+ const byR=rs.map(r=>{const L=rows.filter(x=>x.r===r);return {r,n:L.length,a:btStat(L,'pred'),b:btStat(L,'b5'),c:btStat(L,'bs')}});
+ /* minutes */
+ const mr=rows.filter(x=>x.amin!=null),mm=btStat(mr.map(x=>({pred:x.eMin,b5:x.mb,act:x.amin})),'pred'),mb=btStat(mr.map(x=>({pred:x.eMin,b5:x.mb,act:x.amin})),'b5');
+ const br=btBrier(rows,'pp'),bb=btBrier(rows,'pb'),pr0=mr.length?btAvg(mr.map(x=>x.played)):null,b0=pr0==null?null:btAvg(mr.map(x=>(pr0-x.played)*(pr0-x.played)));
+ const cal=btCalib(rows).filter(x=>x.n>0);
+ /* captain */
+ const cp=btCaptain(rows,180,20),cr=cp.res;
+ const ct=cp.rounds?tbl([['Method'],['Mean points of the pick',1],['Mean regret vs best player',1],['Pick in the actual top 10',1]],
+  [['Model (v1)','pred'],['Last-5 average','b5'],['Season average','bs']].map(([n,k])=>[n,f(cr[k].pts/cr[k].n,2),f(cr[k].reg/cr[k].n,2),cr[k].top10+' / '+cr[k].n])
+  .concat([['Hindsight best player',f(cp.oracle,2),'0.00','—']]))
+  +`<div class="mu" style="font-size:12px;margin:6px 0">Pool: players with at least 180 minutes before that gameweek (at least 20 such players). Points are single (not doubled). The model is also compared with the last-5 pick gameweek by gameweek below.</div>`+
+  tbl([['GW',1],['Model pick'],['Pts',1],['Last-5 pick'],['Pts',1],['Best in pool'],['Pts',1]],cp.detail.map(x=>[x.r,esc(x.pred.name),f(x.pred.act,0),esc(x.b5.name),f(x.b5.act,0),esc(x.best.name),f(x.best.act,0)]))
+  :'<div class="empty">Not enough players in the pool to test captain picks yet.</div>';
+ o.innerHTML=warn+`<div class="grid"><div class="kpi"><b>${rows.length}</b><span>Player-gameweeks tested</span></div><div class="kpi"><b>${pl}</b><span>Different players</span></div><div class="kpi"><b>GW${rs[0]}–${rs[rs.length-1]}</b><span>${rs.length} gameweeks</span></div><div class="kpi"><b style="font-size:13px">${esc(BT.res.at||'')}</b><span>Data version (UTC)</span></div></div>
+ <div class="mu" style="font-size:12px;margin:6px 0">Not in the sample: ${BT.res.excl} player-gameweeks where the model had no estimate (no earlier minutes) and ${BT.res.nofx} where no matching fixture was found. Players with no minutes all season are not in the stored history.</div>
+ <h3>Points accuracy (lower error is better)</h3>`+
+ tbl([['Method'],['N',1],['MAE',1],['RMSE',1],['Bias (pred − actual)',1],['Model MAE gain',1]],[sr('Model v1',S.pred,false),sr('Last-5 average',S.b5,true),sr('Season average',S.bs,true)])+
+ `<div class="mu" style="font-size:12px;margin:6px 0">${cmpTxt(c5,'last-5 average')}<br>${cmpTxt(cS,'season average')}<br>MAE = mean absolute error, RMSE = root mean squared error (punishes big misses), both in FPL points per player-gameweek. A positive "gain" means the model's average error is smaller than the baseline's. Errors are large for every method because single-match points are very noisy.</div>
+ <h3>By position</h3>`+tbl([['Pos'],['N',1],['MAE model',1],['MAE last-5',1],['Gain',1],['RMSE model',1],['RMSE last-5',1],['Bias',1]],pos)+
+ `<h3>By gameweek</h3>`+fpLines([{n:'Model',v:byR.map(x=>x.a?x.a.mae:null)},{n:'Last-5',v:byR.map(x=>x.b?x.b.mae:null)},{n:'Season avg',v:byR.map(x=>x.c?x.c.mae:null)}],rs,'MAE per gameweek (lower is better)',2)+
+ `<div class="mu" style="font-size:12px;margin:4px 0">Colour order: model, last-5, season average.</div>`+tbl([['GW',1],['N',1],['MAE model',1],['MAE last-5',1],['MAE season',1],['RMSE model',1]],byR.map(x=>[x.r,x.n,f(x.a&&x.a.mae,3),f(x.b&&x.b.mae,3),f(x.c&&x.c.mae,3),f(x.a&&x.a.rmse,3)]))+
+ `<h3>Minutes and playing probability</h3>`+(mm?tbl([['Method'],['N',1],['Minutes MAE',1],['Brier score (P(play))',1]],[['Model v1',mm.n,f(mm.mae,1),f(br&&br.b,4)],['Last-5 average',mb.n,f(mb.mae,1),f(bb&&bb.b,4)],['Constant (overall rate '+(pr0==null?'N/A':Math.round(pr0*100)+'%')+')','',' ',f(b0,4)]]):'<div class="empty">No minutes data.</div>')+
+ `<div class="mu" style="font-size:12px;margin:6px 0">Minutes MAE: average gap between expected and actual minutes in the gameweek. Brier score: mean squared gap between the predicted probability of playing at all and what happened (0 = perfect; lower is better). Calibration: among players given about X% chance to play, how many played.</div>`+
+ (cal.length?tbl([['Predicted chance'],['N',1],['Average predicted',1],['Played',1]],cal.map(x=>[Math.round(x.lo*100)+'–'+Math.round(x.hi*100)+'%',x.n,f(x.pred*100,0)+'%',f(x.obs*100,0)+'%'])):'')+
+ `<h3>Captain picks</h3>`+ct+btLineHtml()+
+ `<h3>Not tested here</h3><div class="card mu" style="font-size:12px">Injuries, suspensions and news: FPL keeps no historical record of them, so every player is treated as available in the replay (the live model does adjust for them). Transfers, chips and price changes are not tested. Scoring rules are assumed constant through the season. A player who changed club is placed in his real club for the gameweek being predicted, but his earlier matches count toward his current club's data. The replay uses FPL fields only (xG, xA, minutes, bonus and the other history columns); PitchAPI data is not used. No model version other than v1 exists yet, and the model has not been tuned on these results, so nothing here is an in-sample fit.</div>`;
+}
+"""
+
+
 def _x_fpl_index(html):
     def sub(h, old, new):
         if h.count(old) != 1:
@@ -4046,7 +4286,7 @@ def _x_fpl_index(html):
         return h.replace(old, new)
     h = html
     h = sub(h, "['rankings','Rankings'],", "['rankings','Rankings'],['fantasy','Fantasy'],")
-    h = sub(h, "async function route(){", _X_FPJS + _X_FPJS2 + "\nasync function route(){")
+    h = sub(h, "async function route(){", _X_FPJS + _X_FPJS2 + _X_FPJS3 + "\nasync function route(){")
     return h
 
 
