@@ -4294,6 +4294,707 @@ INDEX = _x_fpl_index(INDEX)
 # ======================== نهاية إضافة Fantasy ========================
 
 
+# ============================================================================
+# إضافة: التشكيلة المثالية (Optimal Starting XI) + بنّاء تشكيلتي + المقارنة + توقعات عدة جولات + الكرات الثابتة
+# الصقها بعد إضافة Fantasy، قبل السطر:  if __name__ == "__main__":
+# ما تغيّر أي سطر سابق: تضيف أعمدة FPL جديدة (ترتيب منفذي الكرات الثابتة) وتعدّل INDEX بتعديلات صغيرة متحقق منها.
+# ============================================================================
+# ترتيب منفذي ركلات الجزاء / الركلات الحرة المباشرة / الركنيات حسب FPL نفسه (حقول bootstrap-static).
+# إذا ما أرجعها FPL تبقى فاضية (None) والموقع يكتب أنها غير متوفرة — ما نخترع منفذين.
+_OX_SP = ["penalties_order", "direct_freekicks_order", "corners_and_indirect_freekicks_order"]
+_FPL_NUM += [k for k in _OX_SP if k not in _FPL_NUM]
+
+_orig_fpl_build_ox = _fpl_build
+
+
+def _fpl_build(boot, fixtures, old, fetch):
+    out = _orig_fpl_build_ox(boot, fixtures, old, fetch)
+    try:
+        ix = {c: i for i, c in enumerate(out["cols"])}
+        got = {k: sum(1 for r in out["rows"] if r[ix[k]] is not None) for k in _OX_SP if k in ix}
+        out["sp_audit"] = got
+        log(f"  [Fantasy] الكرات الثابتة (FPL): لاعبين لهم ترتيب مسجّل = {got}")
+    except Exception as e:      # الفحص للعرض فقط؛ ما يوقف بناء الملف
+        log(f"  [Fantasy] تعذر فحص حقول الكرات الثابتة: {e}")
+    return out
+
+
+# ---------------- الواجهة ----------------
+_X_OXJS = r"""/* ===== Optimal Starting XI · My XI builder · My XI vs Optimal XI · multi-gameweek forecast =====
+   Extends the Fantasy page. Every number comes from the prediction model above (pmPlayer, availability-adjusted
+   expected points per fixture) and the rules downloaded from FPL (pmRules). Nothing here is hardcoded. */
+const OX={mode:'budget',gi:0,hz:3,src:'cur',ver:'v1',btVer:'v1',N:2000,cache:{},my:null,sel:null,pq:'',ppos:'',pteam:'',msg:'',pen:undefined,penBusy:null,bt:null,btBusy:false,fcSeq:0};
+const OXCOL=['#3987e5','#d95926','#199e70'],OXDASH=['','7 4','2 3'];
+const OX_LS={cur:'fpl_myxi_cur_v1',saved:'fpl_myxi_saved_v1',log:'fpl_ox_log_v1',cal:'fpl_ox_cal_v1'};
+/* Lineup ranges are widened by kappa around their mean. Default 1.25: in the leak-free replay of 2026/27 (checked 2026-10-20),
+   simulated XI totals were too narrow (80% ranges held 71% of real totals); kappa fitted on GW2-4 restored 79% coverage on
+   GW5-6. Running the calibration in the Backtest tab refits kappa on all finished gameweeks and stores it on this device. */
+const OX_KAPPA=1.25;
+const oxKs=fm=>({1:fm.g,2:fm.d,3:fm.m,4:fm.f});
+const oxYield=()=>new Promise(r=>setTimeout(r,0));
+const oxLsGet=(k,def)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):def}catch(e){return def}};
+const oxLsSet=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){return false}};
+const oxSeason=d=>{const e=(d.events||[])[0];return e&&e.dl?String(e.dl).slice(0,4):'?'};
+const oxR1=v=>Math.round(v*10)/10;
+const oxP=v=>v==null?'N/A':Math.round(v*100)+'%';
+
+/* ---------- inputs ---------- */
+function oxReady(){
+ const d=FPD;
+ if(!d.rules||!d.fix.length||d.fix[0].length<9)return {err:'Projections need game rules, fixture results and kickoff times that the next synchronization downloads. Press Synchronize in Settings once, then reopen this tab.'};
+ const RU=pmRules(d);
+ if(!RU||RU.club==null)return {err:'The game constraints (club limit, positions per formation) are missing from the downloaded data, so no valid lineup can be built. They come from FPL\'s game settings; press Synchronize again.'};
+ pmPredictAll(d);const C=pmCtx(d);
+ if(!C.gws.length)return {err:'No upcoming gameweek with fixtures was found in the data.'};
+ if(RU.budget==null&&OX.mode==='budget')OX.mode='any';
+ OX.gi=Math.max(0,Math.min(OX.gi,C.gws.length-1));
+ return {d,C,RU,forms:pmForms(RU)};
+}
+const oxG=(p,gi)=>p&&p.pm&&p.pm.gws&&p.pm.gws[gi]?p.pm.gws[gi]:null;
+const oxV=(p,gi)=>{const g=oxG(p,gi);return g?g.pts:null};
+const oxHasPred=p=>!!(p&&p.pm&&p.pm.q!=='nodata'&&p.pm.gws&&p.pm.gws.length);
+const oxPPlay=g=>g&&g.fx.length?1-g.fx.reduce((s,x)=>s*(1-x.pPlay),1):0;
+function oxFdr(d,ev,tm,opp){const x=d.fix.find(y=>y[0]===ev&&((y[1]===tm&&y[2]===opp)||(y[2]===tm&&y[1]===opp)));return x?(x[1]===tm?x[3]:x[4]):null}
+function oxFx(d,p,gi,long){const g=oxG(p,gi);if(!g)return '—';if(g.none)return long?'No fixture (blank)':'blank';
+ return g.fx.map(x=>{const df=oxFdr(d,g.ev,p.tm,x.opp);return pmTeamS(x.opp)+(x.home?' (H)':' (A)')+(long&&df!=null?' · FDR '+df:'')}).join(' + ')}
+/* share of the last 6 team matches the player started (FPL history "st" column) */
+function oxStarts(d,p){const ix=btIx(d);if(ix.st===undefined)return null;const rows=((d.hist||{})[String(p.id)]||[]).slice().sort((a,b)=>a[0]-b[0]).slice(-6);
+ if(!rows.length)return null;const v=rows.map(r=>r[ix.st]).filter(fpOk);return v.length?{k:v.filter(x=>x>0).length,n:v.length}:null}
+
+/* ---------- optimizer: starting XI only (no bench, no budget) ----------
+   Exact: maximise Σ expected points + captain's points (captain scores double) over every legal formation,
+   with at most "club" players per club. Best-first branch and bound: the relaxation (top k per position,
+   ignoring the club limit) is an upper bound; a node over the limit branches by banning one player of the
+   offending club (any valid XI omits at least one of them), so the first valid node taken is optimal. */
+function oxSolveXI(items,RU,forms){
+ const byT={1:[],2:[],3:[],4:[]};items.forEach(i=>{if(byT[i.t])byT[i.t].push(i)});for(const t of [1,2,3,4])byT[t].sort((a,b)=>b.v-a.v||a.id-b.id);
+ const all=[];let proven=true;
+ for(const fm of forms){const ks=oxKs(fm);
+  const relax=bans=>{const xi=[];for(const t of [1,2,3,4]){let n=0;for(const i of byT[t]){if(n>=ks[t])break;if(bans.has(i.id))continue;xi.push(i);n++}if(n<ks[t])return null}
+   let s=0,mx=-Infinity;xi.forEach(i=>{s+=i.v;if(i.v>mx)mx=i.v});return {xi,val:s+mx,bans}};
+  const open=[],seen=new Set();let nodes=0,sol=null;
+  const push=b=>{const k=[...b].sort((x,y)=>x-y).join(',');if(seen.has(k))return;seen.add(k);nodes++;const r=relax(b);if(r)open.push(r)};
+  push(new Set());
+  while(open.length){
+   let bi=0;for(let i=1;i<open.length;i++)if(open[i].val>open[bi].val)bi=i;const n=open.splice(bi,1)[0],cnt=new Map();
+   n.xi.forEach(i=>{if(!cnt.has(i.club))cnt.set(i.club,[]);cnt.get(i.club).push(i)});
+   let viol=null;cnt.forEach(a=>{if(a.length>RU.club&&(!viol||a.length>viol.length))viol=a});
+   if(!viol){sol=n;break}
+   if(nodes>20000){proven=false;break}
+   for(const it of viol){const nb=new Set(n.bans);nb.add(it.id);push(nb)}
+  }
+  if(sol)all.push({form:fm,team:oxTeam(sol.xi,fm),nodes});
+ }
+ all.sort((a,b)=>b.team.total-a.team.total||a.team.cost-b.team.cost);
+ return {all,best:all[0]||null,proven};
+}
+/* captain = highest expected starter, vice = second (ties: lower FPL id, so the result is reproducible) */
+function oxTeam(xi,form){
+ const ord=[...xi].sort((x,y)=>y.v-x.v||x.id-y.id),cap=ord[0]||null,vice=ord[1]||null,s=xi.reduce((a,i)=>a+i.v,0);
+ return {form,xi,cap,vice,bench:[],xiPts:s,total:s+(cap?cap.v:0),cost:xi.reduce((a,i)=>a+i.c,0)};
+}
+/* the model's XI for gameweek index gi. mode 'any' = best XI at any price; 'budget' = XI of the best squad of 15 within the FPL budget
+   (existing exact squad optimizer, bench valued only as a tie-break). Cached per data version, model version, mode and gameweek. */
+function oxOptimal(X,gi,mode){
+ const key=[X.d.generated,OX.ver,mode,gi].join('|');if(!OX.cache[key])OX.cache[key]=oxOptimal0(X,gi,mode);return OX.cache[key];
+}
+async function oxOptimal0(X,gi,mode){
+ const {d,RU,forms}=X,pool=pmPoolOf(d,p=>{const g=oxG(p,gi);return g?g.pts:null});let res;
+ if(mode==='budget'){await oxYield();const m=pmMode1(pool,RU,forms);
+  if(!m.best)res={err:'No valid squad of '+RU.squad+' exists within the budget with the players that have projections.'};
+  else{const b=m.best.team,xi=b.xi.map(i=>({...i}));const fm=b.form,t=oxTeam(xi,fm);
+   t.cap=xi.find(i=>i.id===b.cap.id)||t.cap;t.vice=b.vice?xi.find(i=>i.id===b.vice.id)||t.vice:t.vice;t.total=t.xiPts+(t.cap?t.cap.v:0);
+   t.bench=b.bench.map(i=>({...i}));t.squadCost=b.cost;
+   res={team:t,all:m.all.map(r=>({form:r.form,team:{total:r.team.total,cost:r.team.cost}})),pool:m.poolSize,full:m.full,proven:true,mode,gi}}}
+ else{const m=oxSolveXI(pool,RU,forms);res=m.best?{team:m.best.team,all:m.all,pool:pool.length,full:pool.length,proven:m.proven,mode,gi}:{err:'No legal starting XI exists with the players that have projections.'}}
+ if(!res.err)res.bad=oxCheckXI(res.team.xi.map(i=>i.id),res.team.cap&&res.team.cap.id,res.team.vice&&res.team.vice.id,X);
+ if(gi===0&&!res.err)oxLogRecord(X,res);return res;
+}
+
+/* ---------- validity of any XI (model or user) ---------- */
+function oxFormOf(ids,d){const c={1:0,2:0,3:0,4:0};ids.forEach(id=>{const p=d.PB.get(id);if(p)c[p.ty]++});return c}
+function oxCheckXI(ids,cap,vice,X){
+ const {d,RU,forms}=X,bad=[],c=oxFormOf(ids,d);
+ if(ids.length!==RU.play)bad.push(ids.length+' of '+RU.play+' starters selected');
+ if(new Set(ids).size!==ids.length)bad.push('a player is selected twice');
+ if(ids.some(id=>!d.PB.get(id)))bad.push('a selected player is no longer in the FPL data');
+ if(ids.length===RU.play&&!forms.some(f=>f.g===c[1]&&f.d===c[2]&&f.m===c[3]&&f.f===c[4]))bad.push('formation '+c[1]+' GKP, '+c[2]+'-'+c[3]+'-'+c[4]+' is not legal');
+ const cc=new Map();ids.forEach(id=>{const p=d.PB.get(id);if(p)cc.set(p.tm,(cc.get(p.tm)||0)+1)});cc.forEach((n,t)=>{if(n>RU.club)bad.push(n+' players from '+pmTeamS(t)+' (limit '+RU.club+')')});
+ if(cap==null)bad.push('no captain chosen');else if(!ids.includes(cap))bad.push('captain is not in the XI');
+ if(vice!=null&&(vice===cap||!ids.includes(vice)))bad.push('vice-captain must be a different starter');
+ return bad;
+}
+/* cheapest legal bench that completes this XI into a squad of 15 (positions + club limit). Greedy by price; returns null if none. */
+function oxCheapBench(ids,X){
+ const {d,RU}=X,c=oxFormOf(ids,d),cc=new Map(),inX=new Set(ids),bench=[];
+ ids.forEach(id=>{const p=d.PB.get(id);if(p)cc.set(p.tm,(cc.get(p.tm)||0)+1)});
+ for(const t of [1,2,3,4]){let need=RU.T[t].sel-c[t];if(need<0)return null;
+  const L=d.P.filter(p=>p.ty===t&&!inX.has(p.id)&&fpOk(p.now_cost)&&p.st!=='u'&&p.st!=='n').sort((a,b)=>a.now_cost-b.now_cost||a.id-b.id);
+  for(const p of L){if(!need)break;if((cc.get(p.tm)||0)>=RU.club)continue;bench.push(p);cc.set(p.tm,(cc.get(p.tm)||0)+1);need--}
+  if(need)return null}
+ return {bench,cost:bench.reduce((s,p)=>s+p.now_cost,0)};
+}
+
+/* ---------- uncertainty: Monte Carlo of the same model ----------
+   Each player-fixture is simulated with exactly the inputs pmPlayer used, so the simulated mean equals the expected points shown:
+   plays ~ Bernoulli(P(play) incl. availability); 60+ min ~ Bernoulli(q60); goals, assists, saves, defensive actions, cards ~ Poisson;
+   bonus = 2 × Poisson(rate/2) (same mean); goals against are drawn ONCE per team and fixture and thinned by the player's share of
+   the match, so team-mates' clean sheets and goals-conceded deductions move together. Attacking returns of team-mates are drawn
+   independently (their positive correlation is ignored, which makes team ranges slightly too narrow). */
+function oxRng(seed){let a=seed>>>0;return ()=>{a=(a+0x6D2B79F5)>>>0;let t=a;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return ((t^(t>>>14))>>>0)/4294967296}}
+function oxBin(n,p,u){let k=0;for(let i=0;i<n;i++)if(u()<p)k++;return k}
+function oxParams(p,gi,d,C){
+ const m=p.pm;if(!m._ox)m._ox={};if(m._ox[gi])return m._ox[gi];
+ const g=m.gws[gi];if(!g||!m.rates){m._ox[gi]=[];return []}
+ const r=m.rates,t=p.ty,RL=m.rules,Rt=r.R,rr=id=>pmRule(d,id,t);
+ const cards=[[Rt.yc,rr('yellow_cards').pts],[Rt.rc,rr('red_cards').pts],[Rt.og,rr('own_goals').pts],[Rt.pmi,rr('penalties_missed').pts]].concat(t===1?[[Rt.psv,rr('penalties_saved').pts]]:[]).filter(([a,b])=>a>0&&b);
+ const out=g.fx.map(x=>{const So=C.S.get(x.opp),St=C.S.get(p.tm),saveF=(C.mu&&So&&St)?So.A*(x.home?C.muA:C.muH)/C.mu:1;
+  return {gk:p.tm+'|'+g.ev+'|'+x.opp+'|'+(x.home?1:0)+'|'+(x.ko||''),pPlay:x.pPlay,q60:r.q60,e:r.ePlay/90,e60:r.e60,lo:RL.mr.lo,hi:RL.mr.hi,
+   lg:r.lamG*x.fa,la:r.lamA*x.fa,pG:RL.rG.pts,pA:RL.rA.pts,lc:x.lc,pCS:(x.lc!=null&&t<=3)?RL.rCS.pts:0,gcStep:(x.lc!=null&&t<=2)?RL.rGC.step:0,gcPts:RL.rGC.pts,
+   sv:(t===1&&Rt.sv!=null)?Rt.sv*saveF:null,svStep:RL.rSV.step,svPts:RL.rSV.pts,dc:(t!==1&&Rt.dc!=null&&RL.rDC.pts)?Rt.dc:null,dcStep:RL.rDC.step,dcPts:RL.rDC.pts,
+   bon:Rt.bon!=null?Rt.bon:0,bPts:RL.rB.pts,cards}});
+ /* exp(-rate) of every Poisson count, computed once (null = rate 0, nothing to draw) */
+ const ex=l=>l>0?Math.exp(-l):null;
+ out.forEach(q=>{q.xG=ex(q.e*q.lg);q.xA=ex(q.e*q.la);q.xS=q.sv!=null?ex(q.sv*q.e):null;q.xD=q.dc!=null?ex(q.dc*q.e):null;q.xB=q.bon>0?ex(q.e*q.bon/2):null;q.xC=q.cards.map(([a,b])=>[ex(a*q.e),b]).filter(c=>c[0]!=null);q.xL=q.lc!=null?ex(q.lc):null});
+ m._ox[gi]=out;return out;
+}
+/* Poisson draw from a precomputed exp(-rate) (Knuth); cap = stop counting at cap (only "at least cap" matters) */
+function oxPx(L,u,cap){if(L==null)return 0;let k=0,p=u();while(p>L){k++;if(cap&&k>=cap)return k;p*=u()}return k}
+function oxDraw(q,G,u){
+ if(!(u()<q.pPlay))return 0;
+ const s60=u()<q.q60;let v=s60?q.hi:q.lo;
+ if(q.xG!=null)v+=oxPx(q.xG,u)*q.pG;if(q.xA!=null)v+=oxPx(q.xA,u)*q.pA;
+ if(G){if(q.pCS&&s60&&oxBin(G,q.e60/90,u)===0)v+=q.pCS;if(q.gcStep)v+=Math.floor(oxBin(G,q.e,u)/q.gcStep)*q.gcPts}
+ else if(q.pCS&&s60&&G===0)v+=q.pCS;
+ if(q.xS!=null)v+=Math.floor(oxPx(q.xS,u)/q.svStep)*q.svPts;
+ if(q.xD!=null&&oxPx(q.xD,u,q.dcStep)>=q.dcStep)v+=q.dcPts;
+ if(q.xB!=null)v+=2*oxPx(q.xB,u)*q.bPts;
+ for(let i=0;i<q.xC.length;i++)v+=oxPx(q.xC[i][0],u)*q.xC[i][1];
+ return v;
+}
+/* lineups: [{per:[{ids,cap}|null per gameweek of gis]}]. Common random numbers: each player's and each team's draws are shared by all lineups. */
+function oxSim(d,C,lineups,gis,N,seed){
+ const u=oxRng(seed),out=lineups.map(()=>({gw:gis.map(()=>new Float64Array(N)),tot:new Float64Array(N),ok:true}));
+ lineups.forEach((L,j)=>{if(L.per.some(e=>!e))out[j].ok=false});
+ const union=gis.map((gi,k)=>{const s=new Set();lineups.forEach(L=>{const e=L.per[k];if(e)e.ids.forEach(id=>s.add(id))});return [...s].map(id=>({id,fx:oxParams(d.PB.get(id),gi,d,C)}))});
+ for(let s=0;s<N;s++)for(let k=0;k<gis.length;k++){
+  const G=new Map(),pts=new Map();
+  for(const pl of union[k]){let v=0;for(const q of pl.fx){let g=null;if(q.lc!=null){g=G.get(q.gk);if(g===undefined){g=oxPx(q.xL,u);G.set(q.gk,g)}}v+=oxDraw(q,g,u)}pts.set(pl.id,v)}
+  lineups.forEach((L,j)=>{const e=L.per[k];if(!e)return;let v=0;for(const id of e.ids)v+=pts.get(id);if(e.cap!=null&&e.ids.includes(e.cap))v+=pts.get(e.cap);out[j].gw[k][s]=v;out[j].tot[s]+=v});
+ }
+ return out;
+}
+function oxK(){const c=oxLsGet(OX_LS.cal,null);return c&&FPD&&c.season===oxSeason(FPD)&&fpOk(c.kappa)?Math.min(2,Math.max(1,c.kappa)):OX_KAPPA}
+function oxWiden(a,k){let m=0;for(const v of a)m+=v;m/=a.length;return k===1?a:a.map(v=>m+k*(v-m))}
+/* lineup-level quantiles and differences, with the calibrated widening */
+const oxQs=a=>oxQ(oxWiden(a,oxK()));
+function oxDiffS(a,b){const n=a.length,dd=new Float64Array(n);for(let i=0;i<n;i++)dd[i]=a[i]-b[i];const w=oxWiden(dd,oxK());let p=0,t=0;for(const v of w){if(v>1e-9)p++;else if(Math.abs(v)<=1e-9)t++}return Object.assign(oxQ(w),{pWin:p/n,pTie:t/n})}
+function oxQ(a){const s=Float64Array.from(a).sort(),q=x=>s[Math.min(s.length-1,Math.max(0,Math.round(x*(s.length-1))))];let m=0;for(const v of a)m+=v;return {mean:m/a.length,p10:q(.1),p50:q(.5),p90:q(.9)}}
+function oxDiff(a,b){const n=a.length,dd=new Float64Array(n);let w=0,t=0;for(let i=0;i<n;i++){dd[i]=a[i]-b[i];if(dd[i]>1e-9)w++;else if(Math.abs(dd[i])<=1e-9)t++}return Object.assign(oxQ(dd),{pWin:w/n,pTie:t/n})}
+/* analytic expectation of a lineup in gameweek gi (the number shown everywhere; the simulation only supplies the range) */
+function oxExp(d,ids,cap,gi){let s=0;for(const id of ids)s+=oxV(d.PB.get(id),gi)||0;if(cap!=null&&ids.includes(cap))s+=oxV(d.PB.get(cap),gi)||0;return s}
+
+/* ---------- set pieces: verified evidence from PitchAPI shots (Premier League) + FPL's own taker order ---------- */
+const oxNz=s=>fpNz(s);
+function oxPLClubOverlap(names){const u=[...new Set(names)];return FPD.teams.filter(t=>u.some(n=>fpTeamEq(t.n,n))).length}
+function oxTeamOf(name){const t=FPD.teams.filter(x=>fpTeamEq(x.n,name));return t.length===1?t[0].id:null}
+/* FPL player for a PitchAPI name + club: unique match only (same rules as the PitchAPI link of the Table tab), else null */
+function oxMatchName(name,tm){
+ const P=FPD.P,n=oxNz(name),tk=n.split(' '),last=tk[tk.length-1],fi=n.charAt(0);
+ const pick=(L)=>{const ex=L.filter(p=>oxNz(p.fn+' '+p.sn)===n||oxNz(p.name)===n);if(ex.length===1)return ex[0];
+  const c2=L.filter(p=>{const sn=oxNz(p.sn).split(' ').pop(),wl=oxNz(p.name).split(' ').pop();return last===sn||last===wl});if(c2.length===1)return c2[0];
+  if(c2.length>1){const c3=c2.filter(p=>oxNz(p.fn).charAt(0)===fi);if(c3.length===1)return c3[0]}return null};
+ const inClub=tm!=null?pick(P.filter(p=>p.tm===tm)):null;if(inClub)return inClub;
+ const ex=P.filter(p=>oxNz(p.fn+' '+p.sn)===n);return ex.length===1?ex[0]:null;   /* moved club: exact full name, unique in the whole game */
+}
+async function oxPenLoad(){
+ if(OX.pen!==undefined)return OX.pen;if(OX.penBusy)return OX.penBusy;
+ OX.penBusy=(async()=>{
+  try{
+   const L=(ALL.leagues||[]).filter(l=>/premier league/i.test(l.name)&&l.sh_file&&l.file);let best=null;
+   for(const l of L){const r=await fetch('data/'+l.sh_file+'?v='+encodeURIComponent(l.sh_v||ALL.generated||''));if(!r.ok)continue;const sh=await r.json();
+    const ix={};sh.cols.forEach((c,i)=>ix[c]=i);if(ix.st===undefined||ix.c===undefined)continue;
+    const ov=oxPLClubOverlap(sh.rows.map(x=>x[ix.c]));if(ov>=15&&(!best||ov>best.ov))best={l,sh,ix,ov}}
+   if(!best)return OX.pen={ok:false,why:'No PitchAPI Premier League shot file whose clubs match the FPL teams was found.'};
+   const lr=await fetch('data/'+best.l.file+'?v='+encodeURIComponent(ALL.generated||''));if(!lr.ok)return OX.pen={ok:false,why:'Premier League match file missing (HTTP '+lr.status+').'};
+   const lg=await lr.json(),round=new Map();let unm=0;
+   for(const m of lg.matches||[]){const h=oxTeamOf(m.h),a=oxTeamOf(m.a);const x=h&&a?FPD.fix.filter(y=>y[1]===h&&y[2]===a):[];if(x.length===1)round.set(m.i,{r:x[0][0],h,a});else unm++}
+   const {sh,ix}=best,cache=new Map(),idOf=(nm,tm)=>{const k=nm+'|'+tm;if(!cache.has(k)){const p=nm?oxMatchName(nm,tm):null;cache.set(k,p?p.id:null)}return cache.get(k)};
+   const shots=[],nameMiss=new Set();
+   for(const x of sh.rows){const st=x[ix.st];if(st!=='Penalty'&&st!=='FreeKick'&&st!=='FromCorner'&&st!=='SetPiece')continue;if(ix.og!==undefined&&x[ix.og])continue;
+    /* kid/kn in this file is the goalkeeper facing the shot, not the passer, so shots say nothing about who took a corner */
+    const mr=round.get(x[ix.m]);const tm=oxTeamOf(x[ix.c]);const fid=idOf(x[ix.pn],tm);
+    if(fid==null&&st==='Penalty')nameMiss.add(x[ix.pn]+' ('+x[ix.c]+')');
+    shots.push({r:mr?mr.r:null,m:x[ix.m],st,tm,fid,pn:x[ix.pn],xg:fpOk(x[ix.xg])?x[ix.xg]:null,goal:x[ix.ev]==='Goal'})}
+   const by=new Map(),get=id=>{if(!by.has(id))by.set(id,{pen:[],fk:[],crn:[]});return by.get(id)};
+   shots.forEach(s=>{if(s.fid==null)return;if(s.st==='Penalty')get(s.fid).pen.push(s);if(s.st==='FreeKick')get(s.fid).fk.push(s);if(s.st==='FromCorner')get(s.fid).crn.push(s)});
+   const pens=shots.filter(s=>s.st==='Penalty');
+   return OX.pen={ok:true,league:best.l.name,lid:best.l.id,matches:(lg.matches||[]).length,mapped:round.size,unmapped:unm,round,shots,pens,by,penUnlinked:[...nameMiss],
+    penLinked:pens.filter(s=>s.fid!=null).length};
+  }catch(e){return OX.pen={ok:false,why:'Could not read PitchAPI shot data: '+e.message}}
+  finally{OX.penBusy=null}
+ })();
+ return OX.penBusy;
+}
+/* team-level penalty facts before round r (r = null: everything) */
+function oxPenTeam(tm,r){const P=OX.pen;if(!P||!P.ok)return null;const L=P.pens.filter(s=>s.tm===tm&&(r==null||(s.r!=null&&s.r<r)));return L}
+function oxSPText(p){
+ const out=[],P=OX.pen,o=(k,l)=>{const v=p[k];if(fpOk(v))out.push(l+' #'+v+' (FPL)')};
+ o('penalties_order','Penalties');o('direct_freekicks_order','Direct FKs');o('corners_and_indirect_freekicks_order','Corners/indirect FKs');
+ if(P&&P.ok){const e=P.by.get(p.id);if(e){
+  if(e.pen.length){const tp=oxPenTeam(p.tm,null).length,mine=e.pen.filter(s=>s.tm===p.tm).length;out.push('took '+e.pen.length+' penalt'+(e.pen.length>1?'ies':'y')+' ('+e.pen.filter(s=>s.goal).length+' scored)'+(tp?'; '+mine+' of '+tp+' '+pmTeamS(p.tm)+' penalties':''))}
+  if(e.fk.length)out.push(e.fk.length+' direct free-kick shot'+(e.fk.length>1?'s':''));
+}}
+ return out;
+}
+
+/* ---------- model v2: penalty regression (optional; v1 stays the default) ----------
+   FPL xG includes penalty xG, so a player who happened to take penalties carries his realised penalty xG as if it were a rate.
+   v2 removes his observed penalty xG/goals (PitchAPI shots, situation "Penalty") and adds back the expected penalty xG of his
+   minutes: league penalties per team-match × his observed share of his club's penalties × mean penalty xG.
+   Only shots from rounds before the round being predicted are used, so the backtest stays leak-free. */
+function oxPenAdj(p,r){
+ const P=OX.pen;if(!P||!P.ok||!fpOk(p.expected_goals)||!fpOk(p.goals_scored)||!(p.minutes>0))return p;
+ const e=P.by.get(p.id);if(!e)return p;const mine=e.pen.filter(s=>s.r!=null&&s.r<r);if(!mine.length)return p;
+ const all=P.pens.filter(s=>s.r!=null&&s.r<r),nm=[...P.round.values()].filter(x=>x.r<r).length;if(!nm||!all.length)return p;
+ const lam=all.length/(2*nm),xgs=all.map(s=>s.xg).filter(fpOk),xpen=xgs.length?xgs.reduce((a,b)=>a+b,0)/xgs.length:null;if(xpen==null)return p;
+ const club=all.filter(s=>s.tm===p.tm),share=club.length?club.filter(s=>s.fid===p.id).length/club.length:0;
+ const obsX=mine.reduce((a,s)=>a+(s.xg||0),0),obsG=mine.filter(s=>s.goal).length,E=p.minutes/90*lam*share*xpen;
+ return Object.assign({},p,{expected_goals:Math.max(0,p.expected_goals-obsX)+E,goals_scored:Math.max(0,p.goals_scored-obsG)+E,_pen:{obsX,obsG,E,share,lam}});
+}
+const oxPmPlayer0=pmPlayer;
+pmPlayer=function(p,C,dd){const v=dd===FPD?OX.ver:OX.btVer;return oxPmPlayer0(v==='v2'?oxPenAdj(p,C.next):p,C,dd)};
+async function oxSetVer(v){
+ if(v==='v2'){const P=await oxPenLoad();if(!P||!P.ok){OX.msg='Model v2 needs PitchAPI Premier League shot data: '+((P&&P.why)||'not available');v='v1'}}
+ OX.ver=v;FPD._pmPred=null;FPD.P.forEach(p=>{p.pm=null});FPBEST={};OX.cache={};fpRender();
+}
+
+/* ---------- explanations ---------- */
+const OX_CL={app:'Minutes',goal:'Goals',ast:'Assists',cs:'Clean sheet',gc:'Goals conc.',sv:'Saves',dc:'Def. contr.',bon:'Bonus',card:'Cards/other'};
+const OX_COMP=Object.keys(OX_CL);
+function oxCS(p,gi){const g=oxG(p,gi);if(!g||p.ty>3)return null;const r=p.pm.rates;let any=false,pn=1;
+ g.fx.forEach(x=>{if(x.lc==null)return;any=true;pn*=1-x.pPlay*r.q60*Math.exp(-x.lc*r.e60/90)});return any?1-pn:null}
+function oxReason(d,C,p,gi){
+ const g=oxG(p,gi);if(!g)return '';if(g.none)return 'No fixture this gameweek (blank): 0 expected.';
+ const top=OX_COMP.map(k=>[k,g.parts[k]||0]).filter(x=>x[1]>0.05).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k,v])=>OX_CL[k]+' '+v.toFixed(1));
+ const s=[top.join(' · ')],x=g.fx[0],So=x?C.S.get(x.opp):null,r=p.pm.rates;
+ if(g.fx.length>1)s.push('double gameweek ('+g.fx.length+' fixtures)');
+ if(So&&C.mu){if(p.ty>=3&&So.xga!=null&&So.D>1.08)s.push(pmTeamS(x.opp)+' concede '+So.xga.toFixed(2)+' xG/match (avg '+C.mu.toFixed(2)+')');
+  if(p.ty<=2&&So.xgf!=null&&So.A<0.92)s.push(pmTeamS(x.opp)+' create only '+So.xgf.toFixed(2)+' xG/match')}
+ const cs=oxCS(p,gi);if(cs!=null&&p.ty<=2)s.push('clean-sheet chance '+oxP(cs));
+ if(r&&r.xg90!=null&&C.pri[p.ty].xg!=null&&r.xg90>C.pri[p.ty].xg*1.5&&p.ty>=2)s.push('xG/90 '+r.xg90.toFixed(2)+' vs '+C.pri[p.ty].xg.toFixed(2)+' for the position');
+ const sp=oxSPText(p).filter(t=>/penalt|Penalties/.test(t));if(sp.length)s.push(sp[0]);
+ if(p.st!=='a')s.push('availability: '+pmStLabel(p));
+ return s.filter(Boolean).join('; ');
+}
+function oxPartsRow(g){return OX_COMP.map(k=>(g.parts[k]||0))}
+
+/* ---------- prediction log (this device): what the model recommended, and what those players then scored ---------- */
+function oxLogRecord(X,res){
+ const {d,C}=X,t=res.team,lg=oxLsGet(OX_LS.log,[]),gw=C.gws[0];
+ if(lg.some(e=>e.gw===gw&&e.gen===d.generated&&e.ver===OX.ver&&e.mode===res.mode))return;
+ lg.push({gw,gen:d.generated,ver:OX.ver,mode:res.mode,at:new Date().toISOString().slice(0,16).replace('T',' ')+' UTC',ids:t.xi.map(i=>i.id),cap:t.cap?t.cap.id:null,total:+t.total.toFixed(2),form:t.form.name,season:oxSeason(d)});
+ while(lg.length>60)lg.shift();oxLsSet(OX_LS.log,lg);
+}
+function oxActual(d,id,r){const ix=btIx(d);let s=null;((d.hist||{})[String(id)]||[]).forEach(h=>{if(h[0]===r&&fpOk(h[ix.pts]))s=(s||0)+h[ix.pts]});return s}
+function oxLogHtml(d){
+ const lg=oxLsGet(OX_LS.log,[]).filter(e=>e.season===oxSeason(d));if(!lg.length)return '';
+ const fin=new Set(d.events.filter(e=>e.fin).map(e=>e.id)),rows=[...lg].reverse().slice(0,15).map(e=>{let act=null;
+  if(fin.has(e.gw)){act=0;for(const id of e.ids){const a=oxActual(d,id,e.gw);act+=a||0}if(e.cap!=null)act+=oxActual(d,e.cap,e.gw)||0}
+  return ['GW'+e.gw,esc(e.at),esc(e.gen),esc(e.ver),e.mode==='budget'?'budget':'any price',esc(e.form),e.total.toFixed(1),act==null?'<span class="mu">not played yet</span>':act.toFixed(0)]});
+ return `<details class="card" style="font-size:12px"><summary class="mu"><b>Prediction log (kept on this device)</b> — ${lg.length} recorded recommendation${lg.length>1?'s':''}</summary><div class="mu" style="margin:6px 0">Each time an optimal XI for the next gameweek is computed with new data, it is recorded here with its time, data version and model version. After the gameweek finishes, "actual" adds the real points of those 11 players plus the captain's (no automatic substitutions). The leak-free Backtest tab is the systematic test.</div>${tbl([['GW'],['Recorded'],['Data version'],['Model'],['Constraint'],['Formation'],['Predicted',1],['Actual',1]],rows)}</details>`;
+}
+
+/* ---------- shared UI pieces ---------- */
+function oxCtl(X,o){
+ const {C,RU}=X,gw=o.gw!==false?`<select onchange="OX.gi=+this.value;fpRender()">${fpOpts(C.gws.map((g,i)=>[String(i),'GW'+g+(i===0?' (next)':'')]),String(OX.gi))}</select>`:'';
+ const md=o.mode!==false?`<select onchange="OX.mode=this.value;fpRender()">${fpOpts([['budget','Fits a '+(RU.budget!=null?pmMoney(RU.budget):'')+' squad of '+RU.squad],['any','Any price (best possible XI)']].filter(x=>x[0]!=='budget'||RU.budget!=null),OX.mode)}</select>`:'';
+ const v2=OX.pen&&OX.pen.ok;
+ const vr=`<select onchange="oxSetVer(this.value)" title="Prediction model">${fpOpts([['v1','Model v1 (default)'],...(v2||OX.ver==='v2'?[['v2','Model v2: penalty-regressed']]:[])],OX.ver)}</select>`;
+ return `<div class="ctl">${gw}${md}${o.extra||''}${vr}</div>`+(OX.msg?`<div class="card" style="color:var(--a);font-size:13px">${esc(OX.msg)}</div>`:'');
+}
+function oxHead(X,gi,txt){
+ const {d,C}=X,e=d.events.find(x=>x.id===C.gws[gi]),dl=e&&e.dl?new Date(e.dl):null;
+ return `<div class="mu" style="font-size:12px;margin:-4px 0 8px">GW${C.gws[gi]}${dl?' · deadline '+esc(dl.toUTCString().slice(0,22))+' UTC':''} · data ${esc(d.generated)} UTC · model ${esc(OX.ver)} · ${txt||'all points are projections (expected values), not guarantees'}</div>`;
+}
+const oxNm=(d,id)=>{const p=d.PB.get(id);return p?`<a href="javascript:void(0)" onclick="fpPredPick(${id})">${esc(p.name)}</a>`:'?'};
+const oxRange=s=>s?`${s.p10.toFixed(0)}–${s.p90.toFixed(0)}`:'N/A';
+const oxTbl=(h,rows,empty)=>rows.length?tbl(h,rows):`<div class="mu" style="font-size:13px">${empty}</div>`;
+
+/* PitchAPI set-piece evidence is read once, before the first draw (it decides whether model v2 can be offered), so nothing redraws later */
+function oxWaitPen(el,tab,fn){if(OX.pen!==undefined)return false;el.innerHTML='<div class="empty">Loading…</div>';oxPenLoad().then(()=>{if(FP.tab===tab&&$('#fpbody'))fn($('#fpbody'))});return true}
+/* ---------- tab: Optimal XI ---------- */
+function oxTXI(el){
+ if(oxWaitPen(el,'xi',oxTXI))return;
+ const X=oxReady();if(X.err){el.innerHTML=`<div class="empty">${esc(X.err)}</div>`;return}
+ el.innerHTML=`<h3 style="margin-top:4px;color:var(--tx);font-size:17px">Optimal Starting XI — Next Gameweek</h3>`+oxCtl(X,{})+oxHead(X,OX.gi)+`<div id="oxout"><div class="empty">Optimizing every legal formation${OX.mode==='budget'?' within the budget (a few seconds)':''}…</div></div><div id="pdet"></div>`;
+ const gi=OX.gi,mode=OX.mode,seq=++OX.fcSeq;
+ setTimeout(async()=>{const res=await oxOptimal(X,gi,mode);if(seq!==OX.fcSeq||!$('#oxout'))return;oxDrawXI(X,res,gi)},20);
+}
+function oxDrawXI(X,res,gi){
+ const {d,C,RU,forms}=X,out=$('#oxout');if(!out)return;
+ if(res.err){out.innerHTML=`<div class="empty">${esc(res.err)}</div>`;return}
+ const t=res.team,ids=t.xi.map(i=>i.id),cap=d.PB.get(t.cap.id),vc=t.vice?d.PB.get(t.vice.id):null,g=C.gws[gi];
+ const sim=oxSim(d,C,[{per:[{ids,cap:t.cap.id}]}],[gi],OX.N,7001)[0],st=oxQs(sim.tot);
+ const capPlay=oxPPlay(oxG(cap,gi)),viceX=vc?(1-capPlay)*oxV(vc,gi):0;
+ const second=res.all[1],omit=[];
+ const sel=new Set(ids),byT={1:[],2:[],3:[],4:[]};t.xi.forEach(i=>byT[i.t].push(i));
+ const minT=tt=>Math.min(...byT[tt].map(i=>i.v)),cc=new Map();t.xi.forEach(i=>cc.set(i.club,(cc.get(i.club)||0)+1));
+ d.P.filter(p=>oxHasPred(p)&&!sel.has(p.id)&&p.st!=='u'&&p.st!=='n').map(p=>({p,v:oxV(p,gi)})).filter(o=>o.v!=null).sort((a,b)=>b.v-a.v).slice(0,40).forEach(o=>{
+  const p=o.p,tt=p.ty;if(omit.length>=6)return;let why=null;
+  if(byT[tt].length&&o.v>minT(tt)+1e-9){if((cc.get(p.tm)||0)>=RU.club)why='club limit: '+pmTeamS(p.tm)+' already has '+RU.club+' in the XI';else if(res.mode==='budget')why='budget: the squad cannot afford him together with the rest';else why='tie-break'}
+  else if(!byT[tt].length||o.v>Math.min(...t.xi.map(i=>i.v))+1e-9)why='formation: '+t.form.name+' uses '+byT[tt].length+' '+FPPOS[tt]+(byT[tt].length>=RU.T[tt].mx?' (the maximum)':'')+'; his '+o.v.toFixed(1)+' beats the lowest starter elsewhere, but adding a '+FPPOS[tt]+' costs more at another position';
+  if(why)omit.push([oxNm(d,p.id),esc(p.tn),FPPOS[tt],o.v.toFixed(2),esc(why)])});
+ const ord=[...t.xi].sort((a,b)=>a.t-b.t||b.v-a.v);
+ const rows=ord.map(i=>{const p=d.PB.get(i.id),gg=oxG(p,gi),stt=oxStarts(d,p),pr=oxPartsRow(gg),sum=pr.reduce((a,b)=>a+b,0);
+  return [FPPOS[p.ty],oxNm(d,p.id)+(t.cap===i?' <b style="color:var(--a)">(C)</b>':t.vice===i?' <span class="mu">(V)</span>':''),esc(p.tn),f(p.price,1),esc(oxFx(d,p,gi,true)),Math.round(gg.eMin),oxP(oxPPlay(gg)),stt?stt.k+'/'+stt.n:'N/A',`<span style="color:${pmQCol[p.pm.q]}">${pmQLab[p.pm.q]}</span>`,esc(oxSPText(p).join('; ')||'—'),...pr.map(v=>v.toFixed(2)),`<b>${sum.toFixed(2)}</b>`,`<span style="white-space:normal;display:inline-block;min-width:260px">${esc(oxReason(d,C,p,gi))}</span>`]});
+ const used=OX_COMP;
+ const fmRows=res.all.map((r,k)=>[r.form.name,r.team.total.toFixed(2),pmMoney(r.team.cost),k===0?'<span class="tag ok">chosen</span>':(r.team.total-res.all[0].team.total).toFixed(2)]);
+ const bad=res.bad||[];
+ const bench=t.bench&&t.bench.length?`<div class="mu" style="font-size:12px;margin:6px 0">Budget check: this XI is the starting XI of the best ${RU.squad}-player squad within ${pmMoney(RU.budget)} (squad cost ${pmMoney(t.squadCost)}). The 4 bench players are chosen by the squad optimizer only to make the squad legal and affordable: ${t.bench.map(i=>esc(d.PB.get(i.id).name)+' '+pmMoney(i.c)).join(', ')}. Full squad and bench order: Best Team tab.</div>`:`<div class="mu" style="font-size:12px;margin:6px 0">Any-price mode: the best possible starting XI regardless of price (XI cost ${pmMoney(t.cost)}${RU.budget!=null?'; an FPL squad of '+RU.squad+' must cost at most '+pmMoney(RU.budget):''}). Bench and budget are not part of this answer.</div>`;
+ const sumParts=ord.reduce((s,i)=>s+oxPartsRow(oxG(d.PB.get(i.id),gi)).reduce((a,b)=>a+b,0),0);
+ out.innerHTML=`<div class="grid"><div class="kpi"><b>${t.form.name}</b><span>Formation</span></div><div class="kpi"><b style="color:var(--g)">${t.total.toFixed(1)}</b><span>Expected points, XI incl. captain, GW${g}</span></div><div class="kpi"><b>${oxRange(st)}</b><span>80% range (10th–90th percentile, simulated)</span></div><div class="kpi"><b>${pmMoney(t.cost)}</b><span>XI cost${t.squadCost?' · squad '+pmMoney(t.squadCost):''}</span></div><div class="kpi"><b style="font-size:16px">${esc(cap.name)} (C)</b><span>Captain · vice ${vc?esc(vc.name):'—'}</span></div></div>
+ ${pmPitchHtml(t,d,i=>i.v.toFixed(1),i=>{const p=d.PB.get(i.id);return oxFx(d,p,gi,false)})}
+ <div class="card" style="font-size:13px"><b>Key selection decisions</b><ul style="margin:6px 0 0 18px;padding:0">
+ <li>Formation <b>${t.form.name}</b>: its best legal XI has the highest expected total${second?`; the next best formation, ${esc(second.form.name)}, is ${(t.total-second.team.total).toFixed(2)} points lower`:''}.</li>
+ <li>Captain <b>${esc(cap.name)}</b> has the highest expected points of the XI (${oxV(cap,gi).toFixed(2)}, doubled); P(plays) ${oxP(capPlay)}. Vice-captain ${vc?'<b>'+esc(vc.name)+'</b> takes the armband only if the captain does not play (expected extra '+viceX.toFixed(2)+', not included in the total)':'—'}.</li>
+ ${omit.length?'<li>Highest-projected players left out, and why: see the table below.</li>':''}
+ ${t.xi.filter(i=>d.PB.get(i.id).st!=='a').map(i=>{const p=d.PB.get(i.id);return `<li style="color:var(--a)">${esc(p.name)}: ${esc(pmStLabel(p))}${p.nw?' — '+esc(p.nw):''}; expected ${i.v.toFixed(2)} vs ${oxG(p,gi).fit.toFixed(2)} if fully fit.</li>`}).join('')}
+ </ul></div>${bench}
+ <div class="card" style="font-size:12px">${bad.length?'<span style="color:var(--r)">✗ '+bad.map(esc).join('; ')+'</span>':`<span style="color:var(--g)">✓ ${t.xi.length} unique players · legal formation ${t.form.name} · at most ${Math.max(...cc.values())} per club (limit ${RU.club}) · captain and vice are starters</span>`}${res.proven===false?' <span style="color:var(--a)">· search limit reached: optimality not proven</span>':''}</div>
+ <h3>Why each player (GW${g}; components add up to the player total)</h3>${tbl([['Pos'],['Player'],['Club'],['£m',1],['Fixture'],['Exp. min',1],['P(play)',1],['Started (last 6)',1],['Data'],['Set pieces'],...used.map(k=>[OX_CL[k],1]),['Total',1],['Main reasons']],rows)}
+ <div class="mu" style="font-size:12px;margin:6px 0">Sum of the 11 player totals ${sumParts.toFixed(2)} + captain ${oxV(cap,gi).toFixed(2)} = ${(sumParts+oxV(cap,gi)).toFixed(2)} (shown rounded as ${t.total.toFixed(1)}). Component values are FPL scoring inputs (expected points per category); xG, xA, team xG and opponent strength are only the predictive signals behind them and earn no points by themselves. Tap a name for the full prediction details.</div>
+ ${omit.length?`<h3>Notable players left out</h3>${oxTbl([['Player'],['Club'],['Pos'],['Expected',1],['Why not selected']],omit,'')}`:''}
+ <h3>Formation comparison (exact optimum for each)</h3>${tbl([['Formation'],['Expected XI + captain',1],[res.mode==='budget'?'Squad cost':'XI cost',1],['']],fmRows)}
+ ${oxLogHtml(d)}
+ <details class="card" style="font-size:12px"><summary class="mu"><b>How the optimal XI and its range are calculated</b></summary>
+ <p>Player values are the availability-adjusted expected points of the Predicted Points model for GW${g} (a double gameweek adds both fixtures; a blank gameweek is 0). ${res.mode==='budget'?`The XI comes from the exact squad optimizer of the Best Team tab (dynamic programming over the budget with branch and bound for the club limit, ${res.pool} of ${res.full} players after a lossless dominance prune): it maximises the XI's expected points plus the captain's, subject to a legal ${RU.squad}-player squad within the budget.`:`Every legal formation (${forms.map(x=>x.name).join(', ')}, from FPL's game settings) is solved exactly by branch and bound: maximise the XI's expected points plus the captain's, at most ${RU.club} players per club; ${res.pool} players with a projection are considered.`} Players marked unavailable or not in a squad are excluded.</p>
+ <p>The 80% range comes from ${OX.N.toLocaleString()} simulations of the same model (fixed seed, so it does not change between visits): minutes, goals, assists, saves, defensive actions, bonus and cards are drawn per player; goals against are drawn once per team and fixture, so team-mates' clean sheets move together. Team-mates' attacking returns are drawn independently. In the leak-free replay these lineup ranges came out too narrow, so they are widened by a factor of ${oxK().toFixed(2)} around the expected total (${oxK()===OX_KAPPA?'default fitted on GW2–4 and validated on GW5–6':'refitted on this device in the Backtest tab'}); the Backtest tab shows the current check. Projections of the very top players have been optimistic (a selection effect: the highest projections include the largest over-estimates), so read the XI total as an upper-leaning estimate${(()=>{const c=oxLsGet(OX_LS.cal,null);return c&&c.season===oxSeason(FPD)&&c.top11?`: in the replay the 11 highest-projected players per gameweek averaged ${c.top11.pred.toFixed(2)} projected vs ${c.top11.act.toFixed(2)} actual points`:''})()}.</p>
+ <p>Set pieces: FPL taker order (when the data has it) and PitchAPI shot evidence (penalties taken and scored, direct free-kick shots) are shown for information. PitchAPI shots do not record who took a corner or a free-kick cross, so corner duty is only known from FPL's own taker order. Model v1 already counts penalty xG inside FPL xG; model v2 regresses each taker's realised penalty xG toward the league penalty rate (see Backtest).${OX.pen&&OX.pen.ok?` PitchAPI evidence: ${OX.pen.pens.length} penalties in ${OX.pen.matches} ${esc(OX.pen.league)} matches, ${OX.pen.penLinked} linked to an FPL player by club and name${OX.pen.penUnlinked.length?'; not linked: '+OX.pen.penUnlinked.map(esc).join(', '):''}.`:OX.pen&&!OX.pen.ok?' PitchAPI set-piece evidence unavailable: '+esc(OX.pen.why):''}${FPD.cols.includes('penalties_order')?'':' FPL taker order is not in the downloaded data yet; it is added at the next synchronization.'}</p></details>`;
+}
+
+/* ---------- My XI (builder) ---------- */
+function oxMyInit(X){
+ if(OX.my)return;const {d,forms}=X,s=oxLsGet(OX_LS.cur,null);
+ const def={form:(forms.find(f=>f.name==='3-4-3')||forms[0]).name,ids:[],cap:null,vice:null};
+ if(!s||s.season!==oxSeason(d)){OX.my=def;return}
+ const ids=(s.ids||[]).filter(id=>d.PB.get(id)),lost=(s.ids||[]).length-ids.length;
+ OX.my={form:forms.some(f=>f.name===s.form)?s.form:def.form,ids,cap:ids.includes(s.cap)?s.cap:null,vice:ids.includes(s.vice)?s.vice:null};
+ if(lost)OX.msg=lost+' saved player(s) are no longer in the FPL data and were removed.';
+}
+function oxMyStore(){const d=FPD;oxLsSet(OX_LS.cur,Object.assign({season:oxSeason(d)},OX.my))}
+const oxFormBy=(X,n)=>X.forms.find(f=>f.name===n)||X.forms[0];
+function oxMyMsg(t){OX.msg='';const e=$('#oxmsg');if(e)e.textContent=t}
+function oxMyAdd(id){
+ const X=oxReady();if(X.err)return;const {d,RU}=X,p=d.PB.get(id),my=OX.my,ks=oxKs(oxFormBy(X,my.form));if(!p)return;
+ if(my.ids.includes(id))return oxMyMsg(p.name+' is already in your XI.');
+ const n=my.ids.filter(x=>d.PB.get(x).ty===p.ty).length;
+ if(n>=ks[p.ty])return oxMyMsg('All '+ks[p.ty]+' '+FPPOS[p.ty]+' places of '+my.form+' are filled. Remove one, or pick a formation with more '+FPPOS[p.ty]+'.');
+ const cl=my.ids.filter(x=>d.PB.get(x).tm===p.tm).length;if(cl>=RU.club)return oxMyMsg('You already have '+RU.club+' players from '+p.tf+' (FPL limit).');
+ if(!oxHasPred(p))return oxMyMsg(p.name+' has no projection (no minutes this season), so he cannot be scored.');
+ my.ids.push(id);oxMyStore();OX.sel=null;oxDrawMy(X);oxMyMsg(p.name+' added ('+my.ids.length+'/'+RU.play+').');
+}
+function oxMyRm(id){const my=OX.my;my.ids=my.ids.filter(x=>x!==id);if(my.cap===id)my.cap=null;if(my.vice===id)my.vice=null;OX.sel=null;oxMyStore();const X=oxReady();oxDrawMy(X)}
+function oxMyRole(id,k){const my=OX.my;if(k==='cap'){if(my.vice===id)my.vice=my.cap;my.cap=id}else{if(my.cap===id)return oxMyMsg('The captain cannot also be vice-captain.');my.vice=id}OX.sel=null;oxMyStore();oxDrawMy(oxReady())}
+function oxMyReplace(id){const p=FPD.PB.get(id);oxMyRm(id);OX.ppos=String(p.ty);const e=$('#oxpp');if(e)e.value=OX.ppos;oxPickDraw(oxReady());const q=$('#oxq');if(q){q.focus();q.scrollIntoView({behavior:'smooth',block:'center'})}oxMyMsg('Removed '+p.name+'. Pick a replacement '+FPPOS[p.ty]+' below.')}
+function oxMyTap(id){OX.sel=OX.sel===id?null:id;oxDrawMy(oxReady())}
+function oxMySlot(t){OX.ppos=String(t);const e=$('#oxpp');if(e)e.value=OX.ppos;oxPickDraw(oxReady());const q=$('#oxq');if(q)q.scrollIntoView({behavior:'smooth',block:'center'})}
+function oxMyForm(n){
+ const X=oxReady(),{d}=X,ks=oxKs(oxFormBy(X,n)),c=oxFormOf(OX.my.ids,d),over=[1,2,3,4].filter(t=>c[t]>ks[t]);
+ if(over.length){fpRender();return oxMyMsg('Cannot switch to '+n+': remove '+over.map(t=>(c[t]-ks[t])+' '+FPPOS[t]).join(' and ')+' first.')}
+ OX.my.form=n;oxMyStore();oxDrawMy(X);
+}
+async function oxMyFromOpt(){
+ const X=oxReady();if(X.err)return;oxMyMsg('Computing the optimal XI…');const res=await oxOptimal(X,OX.gi,OX.mode);if(res.err)return oxMyMsg(res.err);
+ const t=res.team;OX.my={form:t.form.name,ids:t.xi.map(i=>i.id),cap:t.cap.id,vice:t.vice?t.vice.id:null};OX.sel=null;oxMyStore();oxDrawMy(X);oxMyMsg('Loaded the model\'s optimal XI for GW'+X.C.gws[OX.gi]+'. Change any player to test your own ideas.');
+}
+function oxMyClear(){OX.my={form:OX.my.form,ids:[],cap:null,vice:null};OX.sel=null;oxMyStore();oxDrawMy(oxReady());oxMyMsg('Cleared.')}
+function oxMySave(){
+ const nm=($('#oxsn')&&$('#oxsn').value.trim())||('My XI '+new Date().toISOString().slice(0,10));const L=oxLsGet(OX_LS.saved,[]),i=L.findIndex(x=>x.name===nm);
+ const e=Object.assign({name:nm,at:new Date().toISOString().slice(0,16).replace('T',' '),season:oxSeason(FPD)},JSON.parse(JSON.stringify(OX.my)));
+ if(i>=0)L[i]=e;else L.push(e);while(L.length>20)L.shift();oxMyMsg(oxLsSet(OX_LS.saved,L)?'Saved "'+nm+'" on this device.':'Could not save (browser storage blocked).');oxDrawMy(oxReady());
+}
+function oxMyLoad(){const s=$('#oxsl');if(!s||s.value==='')return;const e=oxLsGet(OX_LS.saved,[])[+s.value];if(!e)return;const X=oxReady(),{d}=X;
+ if(e.season!==oxSeason(d))return oxMyMsg('That lineup is from another season.');const ids=e.ids.filter(id=>d.PB.get(id));
+ OX.my={form:e.form,ids,cap:ids.includes(e.cap)?e.cap:null,vice:ids.includes(e.vice)?e.vice:null};OX.sel=null;oxMyStore();oxDrawMy(X);oxMyMsg('Loaded "'+e.name+'"'+(ids.length<e.ids.length?' ('+(e.ids.length-ids.length)+' player(s) no longer in the data were dropped)':'')+'.')}
+function oxMyDel(){const s=$('#oxsl');if(!s||s.value==='')return;const L=oxLsGet(OX_LS.saved,[]),e=L.splice(+s.value,1)[0];oxLsSet(OX_LS.saved,L);oxDrawMy(oxReady());if(e)oxMyMsg('Deleted "'+e.name+'".')}
+function oxMyCard(p,i,o){
+ const sel=OX.sel===p.id,badge=o.cap?'C':o.vice?'V':'';
+ return `<div style="position:absolute;left:${o.x.toFixed(1)}%;top:${o.y}%;transform:translate(-50%,-50%);width:${o.w}%;min-width:60px;max-width:98px;background:rgba(13,21,32,.92);border:1.5px solid ${sel?'#e8eef5':pmStCol(p)};${sel?'box-shadow:0 0 0 2px #e8eef5;':''}border-radius:8px;padding:3px 3px 4px;font-size:11px;line-height:1.25;text-align:center;cursor:pointer" onclick="oxMyTap(${p.id})" title="${esc(pmStLabel(p)+(p.nw?' — '+p.nw:''))}">${badge?`<span style="position:absolute;top:-7px;right:-5px;background:${badge==='C'?'#e9b44c':'#8a9bb0'};color:#0d1520;border-radius:50%;width:17px;height:17px;font-size:10px;font-weight:800;line-height:17px">${badge}</span>`:''}<div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.name)}</div><div class="mu" style="font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.tn)} · ${pmMoney(p.now_cost)}</div><div><b style="color:var(--g)">${o.pts}</b> <span class="mu" style="font-size:10px">${esc(o.sub)}</span></div>${p.st!=='a'?`<div style="font-size:10px;color:${pmStCol(p)}">${esc(pmStLabel(p))}</div>`:''}</div>`;
+}
+function oxMyPitch(X,gi){
+ const {d}=X,my=OX.my,ks=oxKs(oxFormBy(X,my.form)),by={1:[],2:[],3:[],4:[]},yp={4:15,3:40,2:65,1:88};my.ids.forEach(id=>{const p=d.PB.get(id);if(p)by[p.ty].push(p)});
+ let cards='';
+ for(const t of [4,3,2,1]){const n=ks[t],w=Math.min(19,92/Math.max(n,1));for(let k=0;k<n;k++){const x=(k+.5)/n*100,p=by[t][k];
+  if(p){const v=oxV(p,gi);cards+=oxMyCard(p,null,{x,y:yp[t],w,cap:my.cap===p.id,vice:my.vice===p.id,pts:v==null?'N/A':v.toFixed(1),sub:oxFx(d,p,gi,false)})}
+  else cards+=`<div onclick="oxMySlot(${t})" style="position:absolute;left:${x.toFixed(1)}%;top:${yp[t]}%;transform:translate(-50%,-50%);width:${w}%;min-width:60px;max-width:98px;min-height:44px;border:1.5px dashed rgba(255,255,255,.6);border-radius:8px;background:rgba(13,21,32,.45);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;cursor:pointer">+ ${FPPOS[t]}</div>`}}
+ const ln='position:absolute;border:1.5px solid rgba(255,255,255,.35);';
+ return `<div style="position:relative;width:100%;max-width:560px;margin:8px auto;aspect-ratio:5/6;border-radius:10px;overflow:hidden;background:repeating-linear-gradient(0deg,#1d6b43 0 8.33%,#1a5f3b 8.33% 16.66%);border:2px solid rgba(255,255,255,.4)"><div style="${ln}left:0;right:0;top:50%;border-width:1.5px 0 0"></div><div style="${ln}left:35%;width:30%;top:38%;height:24%;border-radius:50%"></div><div style="${ln}left:22%;width:56%;top:0;height:16%;border-top:0"></div><div style="${ln}left:22%;width:56%;bottom:0;height:16%;border-bottom:0"></div>${cards}</div>`;
+}
+function oxTMy(el){
+ if(oxWaitPen(el,'my',oxTMy))return;
+ const X=oxReady();if(X.err){el.innerHTML=`<div class="empty">${esc(X.err)}</div>`;return}
+ oxMyInit(X);const {d,C}=X,sv=oxLsGet(OX_LS.saved,[]);
+ el.innerHTML=`<h3 style="margin-top:4px;color:var(--tx);font-size:17px">My XI — starting-XI builder</h3>`+oxCtl(X,{mode:false,extra:`<select id="oxfm" onchange="oxMyForm(this.value)">${fpOpts(X.forms.map(f=>[f.name,'Formation '+f.name]),OX.my.form)}</select>`})+oxHead(X,OX.gi,'a starting XI of '+X.RU.play+' (not a full squad of '+X.RU.squad+'); points are projections')+
+  `<div class="ctl"><button class="s" onclick="oxMyFromOpt()">Start from the optimal XI</button><button class="s" onclick="oxMyClear()">Clear</button><input id="oxsn" placeholder="Lineup name" style="width:150px"><button class="s" onclick="oxMySave()">Save</button><select id="oxsl">${fpOpts([['','Saved lineups ('+sv.length+')'],...sv.map((e,i)=>[String(i),e.name+' · '+e.at])],'')}</select><button class="s" onclick="oxMyLoad()">Load</button><button class="s" onclick="oxMyDel()">Delete</button></div>
+  <div id="oxmsg" class="mu" style="min-height:20px;font-size:13px">${esc(OX.msg)}</div><div id="oxmy"></div>
+  <h3>Add players</h3><div class="ctl"><input id="oxq" placeholder="Search player or club" value="${esc(OX.pq)}" style="flex:1;min-width:160px"><select id="oxpp">${fpPosOpts(OX.ppos)}</select><select id="oxpt">${fpTeamOpts(OX.pteam)}</select></div><div id="oxpick"></div><div id="pdet"></div>`;
+ OX.msg='';
+ const rd=()=>{OX.pq=$('#oxq').value;OX.ppos=$('#oxpp').value;OX.pteam=$('#oxpt').value;oxPickDraw(X)};$('#oxq').oninput=rd;$('#oxpp').onchange=rd;$('#oxpt').onchange=rd;
+ oxDrawMy(X);oxPickDraw(X);
+}
+function oxDrawMy(X){
+ const o=$('#oxmy');if(!o||X.err)return;const {d,C,RU}=X,my=OX.my,gi=OX.gi,ids=my.ids,bad=oxCheckXI(ids,my.cap,my.vice,X);
+ const exp=oxExp(d,ids,my.cap,gi),full=ids.length===RU.play,st=ids.length?oxQs(oxSim(d,C,[{per:[{ids,cap:my.cap}]}],[gi],OX.N,7002)[0].tot):null;
+ const cost=ids.reduce((s,id)=>s+(d.PB.get(id).now_cost||0),0),bn=full&&RU.budget!=null?oxCheapBench(ids,X):null;
+ const sp=OX.sel!=null?d.PB.get(OX.sel):null;
+ const act=sp?`<div class="card" style="font-size:13px"><b>${esc(sp.name)}</b> · ${esc(sp.tn)} · ${FPPOS[sp.ty]} · ${pmMoney(sp.now_cost)} · expected ${f(oxV(sp,gi),2)} in GW${C.gws[gi]}<div class="ctl" style="margin:8px 0 0"><button onclick="oxMyRole(${sp.id},'cap')" ${my.cap===sp.id?'disabled':''}>Make captain</button><button class="s" onclick="oxMyRole(${sp.id},'vice')" ${my.vice===sp.id||my.cap===sp.id?'disabled':''}>Make vice-captain</button><button class="s" onclick="oxMyReplace(${sp.id})">Replace</button><button class="s" onclick="oxMyRm(${sp.id})">Remove</button><button class="s" onclick="fpPredPick(${sp.id})">Details</button></div></div>`:'';
+ const ok=(b,t)=>`<div style="color:${b?'var(--g)':'var(--r)'}">${b?'✓':'✗'} ${t}</div>`;
+ o.innerHTML=`<div class="grid"><div class="kpi"><b>${ids.length} / ${RU.play}</b><span>Players selected (${my.form})</span></div><div class="kpi"><b style="color:var(--g)">${exp.toFixed(1)}</b><span>Expected points GW${C.gws[gi]}${my.cap!=null?' incl. captain':' (no captain yet)'}${full?'':' · partial XI'}</span></div><div class="kpi"><b>${st?oxRange(st):'—'}</b><span>80% range (simulated)</span></div><div class="kpi"><b>${pmMoney(cost)}</b><span>XI cost${bn?' · cheapest legal squad '+pmMoney(cost+bn.cost):''}</span></div></div>
+ ${oxMyPitch(X,gi)}<div class="mu" style="text-align:center;font-size:12px">Tap a player for captain, vice-captain, replace or remove; tap an empty place to add a player of that position.</div>${act}
+ <div class="card" style="font-size:12px"><b>Checks</b>${ok(full,ids.length+' of '+RU.play+' starters')}${ok(!bad.some(x=>/twice|no longer/.test(x)),'no duplicates; every player exists in the FPL data')}${ok(full&&!bad.some(x=>/formation/.test(x)),'legal formation '+my.form)}${ok(!bad.some(x=>/limit/.test(x)),'at most '+RU.club+' players per club')}${ok(my.cap!=null&&!bad.some(x=>/captain is/.test(x)),'captain chosen'+(my.cap!=null?' ('+esc(d.PB.get(my.cap).name)+')':''))}${ok(my.vice!=null&&!bad.some(x=>/vice/.test(x)),'vice-captain chosen'+(my.vice!=null?' ('+esc(d.PB.get(my.vice).name)+')':''))}
+ ${RU.budget!=null?(full?(bn?(cost+bn.cost<=RU.budget?ok(true,'fits the budget: XI '+pmMoney(cost)+' + cheapest legal bench '+pmMoney(bn.cost)+' = '+pmMoney(cost+bn.cost)+' ≤ '+pmMoney(RU.budget)):`<div style="color:var(--a)">! over budget as a full squad: XI ${pmMoney(cost)} + cheapest legal bench ${pmMoney(bn.cost)} = ${pmMoney(cost+bn.cost)} > ${pmMoney(RU.budget)}. Fine for a what-if; compare it with the any-price optimum.</div>`):'<div style="color:var(--a)">! no legal bench completes this XI into a squad (club limit)</div>'):''):''}
+ ${ids.some(id=>d.PB.get(id).st!=='a')?`<div style="color:var(--a)">! ${ids.filter(id=>d.PB.get(id).st!=='a').map(id=>esc(d.PB.get(id).name)+' ('+esc(pmStLabel(d.PB.get(id)))+')').join(', ')}: projection reduced for availability</div>`:''}</div>
+ ${ids.length?tbl([['Pos'],['Player'],['Club'],['£m',1],['Fixture'],['Exp. min',1],['Expected',1]],[...ids].sort((a,b)=>d.PB.get(a).ty-d.PB.get(b).ty).map(id=>{const p=d.PB.get(id),g=oxG(p,gi);return [FPPOS[p.ty],oxNm(d,id)+(my.cap===id?' <b style="color:var(--a)">(C ×2)</b>':my.vice===id?' <span class="mu">(V)</span>':''),esc(p.tn),f(p.price,1),esc(oxFx(d,p,gi,false)),g?Math.round(g.eMin):'—',f(oxV(p,gi),2)]})):''}`;
+}
+function oxPickDraw(X){
+ const o=$('#oxpick');if(!o||X.err)return;const {d,C}=X,gi=OX.gi,my=OX.my,q=fpNz(OX.pq);
+ const L=d.P.filter(p=>oxHasPred(p)&&(!OX.ppos||p.ty===+OX.ppos)&&(!OX.pteam||p.tm===+OX.pteam)&&(!q||fpNz(p.fn+' '+p.sn+' '+p.name+' '+p.tf).includes(q))).sort((a,b)=>(oxV(b,gi)||0)-(oxV(a,gi)||0)).slice(0,60);
+ o.innerHTML=`<div class="mu" style="font-size:12px;margin-bottom:4px">Sorted by expected points in GW${C.gws[gi]}. Players without a projection (no minutes this season) are not listed.</div>`+(L.length?`<div class="wrap"><table><tr><th></th><th>Player</th><th>Club</th><th>Pos</th><th class="n">£m</th><th>Fixture</th><th class="n">Exp. min</th><th class="n">Expected</th></tr>${L.map(p=>{const g=oxG(p,gi),inn=my.ids.includes(p.id);return `<tr><td><button class="${inn?'s':''}" ${inn?'disabled':''} onclick="oxMyAdd(${p.id})" style="min-height:34px;padding:2px 10px" aria-label="Add ${esc(p.name)}">${inn?'✓':'+'}</button></td><td>${pmDot(p)}<a href="javascript:void(0)" onclick="fpPredPick(${p.id})">${esc(p.name)}</a></td><td>${esc(p.tn)}</td><td>${FPPOS[p.ty]}</td><td class="n">${f(p.price,1)}</td><td>${esc(oxFx(d,p,gi,false))}</td><td class="n">${g?Math.round(g.eMin):'—'}</td><td class="n"><b>${f(oxV(p,gi),2)}</b></td></tr>`}).join('')}</table></div>`:'<div class="empty">No players match.</div>');
+}
+
+/* ---------- lineup sources (current builder XI or a saved one) ---------- */
+function oxSrcOpts(){const sv=oxLsGet(OX_LS.saved,[]);return [['cur','My XI (current builder)'],...sv.map((e,i)=>['s'+i,'Saved: '+e.name])]}
+function oxSrc(X){
+ const {d}=X;if(OX.src==='cur'){oxMyInit(X);return Object.assign({name:'My XI'},OX.my)}
+ const e=oxLsGet(OX_LS.saved,[])[+OX.src.slice(1)];if(!e||e.season!==oxSeason(d)){OX.src='cur';oxMyInit(X);return Object.assign({name:'My XI'},OX.my)}
+ const ids=e.ids.filter(id=>d.PB.get(id));return {name:e.name,form:e.form,ids,cap:ids.includes(e.cap)?e.cap:null,vice:ids.includes(e.vice)?e.vice:null};
+}
+const oxSrcSel=()=>`<select onchange="OX.src=this.value;fpRender()">${fpOpts(oxSrcOpts(),OX.src)}</select>`;
+function oxNeedXI(X,L){const bad=oxCheckXI(L.ids,L.cap,L.vice,X).filter(x=>!/vice/.test(x));return bad.length?`<div class="empty">${esc(L.name)} is not a complete, valid starting XI yet: ${esc(bad.join('; '))}. Build it in the <a href="javascript:void(0)" onclick="fpTab('my')">My XI</a> tab (or press "Start from the optimal XI" there and change players).</div>`:''}
+
+/* ---------- tab: My XI vs Optimal XI ---------- */
+function oxTVs(el){
+ if(oxWaitPen(el,'vs',oxTVs))return;
+ const X=oxReady();if(X.err){el.innerHTML=`<div class="empty">${esc(X.err)}</div>`;return}
+ const L=oxSrc(X);
+ el.innerHTML=`<h3 style="margin-top:4px;color:var(--tx);font-size:17px">My XI vs Optimal XI</h3>`+oxCtl(X,{extra:oxSrcSel()})+oxHead(X,OX.gi,'both lineups use the same gameweek, predictions and scoring rules; projections, not guarantees')+`<div id="oxvs"></div><div id="pdet"></div>`;
+ const nd=oxNeedXI(X,L);if(nd){$('#oxvs').innerHTML=nd;return}
+ $('#oxvs').innerHTML='<div class="empty">Computing the optimal XI…</div>';
+ const gi=OX.gi,mode=OX.mode,seq=++OX.fcSeq;
+ setTimeout(async()=>{const res=await oxOptimal(X,gi,mode);if(seq!==OX.fcSeq||!$('#oxvs'))return;oxDrawVs(X,L,res,gi)},20);
+}
+function oxDrawVs(X,L,res,gi){
+ const {d,C,RU}=X,o=$('#oxvs');if(res.err){o.innerHTML=`<div class="empty">${esc(res.err)}</div>`;return}
+ const t=res.team,M={ids:t.xi.map(i=>i.id),cap:t.cap.id},U={ids:L.ids,cap:L.cap};
+ const eU=oxExp(d,U.ids,U.cap,gi),eM=oxExp(d,M.ids,M.cap,gi),dU=oxR1(eU),dM=oxR1(eM),diff=oxR1(dM-dU);
+ const sm=oxSim(d,C,[{per:[U]},{per:[M]}],[gi],OX.N,7003),sU=oxQs(sm[0].tot),sM=oxQs(sm[1].tot),sd=oxDiffS(sm[0].tot,sm[1].tot);
+ const both=U.ids.filter(id=>M.ids.includes(id)),onlyU=U.ids.filter(id=>!M.ids.includes(id)),onlyM=M.ids.filter(id=>!U.ids.includes(id));
+ const v=id=>oxV(d.PB.get(id),gi)||0,pos=id=>d.PB.get(id).ty;
+ /* pair the differences by position, best first; leftovers are formation changes */
+ const pairs=[],lu=[...onlyU].sort((a,b)=>v(b)-v(a)),lm=[...onlyM].sort((a,b)=>v(b)-v(a));
+ for(const t of [1,2,3,4]){const a=lu.filter(id=>pos(id)===t),b=lm.filter(id=>pos(id)===t);for(let k=0;k<Math.max(a.length,b.length);k++)pairs.push({t,u:a[k]??null,m:b[k]??null})}
+ pairs.sort((x,y)=>((x.m!=null?v(x.m):0)-(x.u!=null?v(x.u):0)<((y.m!=null?v(y.m):0)-(y.u!=null?v(y.u):0))?1:-1));
+ const why=(a,b)=>{if(a==null||b==null)return 'formation change ('+L.form+' → '+t.form.name+')';const ga=oxG(d.PB.get(a),gi),gb=oxG(d.PB.get(b),gi);
+  const ds=OX_COMP.map(k=>[k,(gb.parts[k]||0)-(ga.parts[k]||0)]).filter(x=>Math.abs(x[1])>=0.05).sort((x,y)=>Math.abs(y[1])-Math.abs(x[1])).slice(0,3);
+  const s=ds.map(([k,x])=>OX_CL[k]+' '+(x>0?'+':'')+x.toFixed(2));const ea=ga.eMin,eb=gb.eMin;if(Math.abs(eb-ea)>=10)s.push('exp. minutes '+Math.round(ea)+' → '+Math.round(eb));
+  return s.join(', ')||'about equal'};
+ const capU=U.cap!=null?v(U.cap):0,capM=v(M.cap);
+ let sumRows=0;const prow=pairs.map(x=>{const a=x.u!=null?v(x.u):0,b=x.m!=null?v(x.m):0;sumRows+=b-a;
+  return [FPPOS[x.t],x.u!=null?oxNm(d,x.u)+' <span class="mu">'+esc(d.PB.get(x.u).tn)+'</span>':'<span class="mu">—</span>',x.u!=null?a.toFixed(2):'',x.m!=null?oxNm(d,x.m)+' <span class="mu">'+esc(d.PB.get(x.m).tn)+'</span>':'<span class="mu">—</span>',x.m!=null?b.toFixed(2):'',`<b>${(b-a>=0?'+':'')+(b-a).toFixed(2)}</b>`,`<span style="white-space:normal;display:inline-block;min-width:220px">${esc(why(x.u,x.m))}</span>`]});
+ const capD=capM-capU;
+ o.innerHTML=`<div class="grid"><div class="kpi"><b style="color:${OXCOL[0]}">■</b><b>${dU.toFixed(1)}</b><span>${esc(L.name)} · expected (80% range ${oxRange(sU)})</span></div><div class="kpi"><b style="color:${OXCOL[1]}">■</b><b>${dM.toFixed(1)}</b><span>Optimal XI (${res.mode==='budget'?'within budget':'any price'}) · expected (80% range ${oxRange(sM)})</span></div><div class="kpi"><b>${(diff>=0?'+':'')+diff.toFixed(1)}</b><span>Projected difference (optimal − yours)</span></div><div class="kpi"><b>${oxP(sd.pWin)}</b><span>Chance your XI outscores it${sd.pTie>0.005?' ('+oxP(sd.pTie)+' tie)':''} (simulated)</span></div></div>
+ <div class="mu" style="font-size:12px;margin:8px 0">The difference is the difference of the two totals shown (${dM.toFixed(1)} − ${dU.toFixed(1)}). 80% of simulated outcomes of the difference lie between ${sd.p10.toFixed(0)} and ${sd.p90.toFixed(0)}: the optimal XI has the higher <i>expected</i> score, but it can lose in a single gameweek. Players common to both lineups are simulated once and cancel out.${res.mode==='budget'&&U.ids.length===RU.play?(()=>{const bn=oxCheapBench(U.ids,X),c=U.ids.reduce((s,id)=>s+d.PB.get(id).now_cost,0);return bn&&c+bn.cost>RU.budget?' <span style="color:var(--a)">Your XI would not fit the budget as part of a full squad, while the optimal XI does: switch the constraint to "Any price" for a like-for-like comparison.</span>':''})():''}</div>
+ <h3>Where the ${(diff>=0?'+':'')+diff.toFixed(1)} comes from</h3>${pairs.length?tbl([['Pos'],['Yours'],['Exp.',1],['Model'],['Exp.',1],['Gain',1],['Main differences (model − yours)']],prow):'<div class="card">Both lineups have the same 11 players.</div>'}
+ <div class="mu" style="font-size:12px;margin:6px 0">Captain: yours ${U.cap!=null?esc(d.PB.get(U.cap).name)+' (+'+capU.toFixed(2)+')':'—'}, model ${esc(d.PB.get(M.cap).name)} (+${capM.toFixed(2)}): ${(capD>=0?'+':'')+capD.toFixed(2)}. Player swaps ${(sumRows>=0?'+':'')+sumRows.toFixed(2)} + captain ${(capD>=0?'+':'')+capD.toFixed(2)} = ${(sumRows+capD>=0?'+':'')+(sumRows+capD).toFixed(2)} (unrounded difference ${(eM-eU).toFixed(2)}). Tap any name to see why the model rates him as it does.</div>
+ <h3>In both lineups (${both.length})</h3>${oxTbl([['Pos'],['Player'],['Club'],['Expected',1]],[...both].sort((a,b)=>pos(a)-pos(b)).map(id=>[FPPOS[pos(id)],oxNm(d,id),esc(d.PB.get(id).tn),v(id).toFixed(2)]),'No player in common.')}
+ <div class="grid" style="margin-top:8px"><div><h3>Only in ${esc(L.name)} (${onlyU.length})</h3>${oxTbl([['Player'],['Expected',1]],onlyU.map(id=>[oxNm(d,id)+(U.cap===id?' (C)':''),v(id).toFixed(2)]),'None.')}</div><div><h3>Only in the optimal XI (${onlyM.length})</h3>${oxTbl([['Player'],['Expected',1]],onlyM.map(id=>[oxNm(d,id)+(M.cap===id?' (C)':''),v(id).toFixed(2)]),'None.')}</div></div>`;
+}
+
+/* ---------- tab: multi-gameweek forecast ---------- */
+function oxTFc(el){
+ if(oxWaitPen(el,'fc',oxTFc))return;
+ const X=oxReady();if(X.err){el.innerHTML=`<div class="empty">${esc(X.err)}</div>`;return}
+ const {C}=X,hs=[1,3,5,7].filter(h=>h<=C.gws.length);if(C.gws.length>1&&!hs.includes(C.gws.length)&&C.gws.length<7)hs.push(C.gws.length);if(!hs.includes(OX.hz))OX.hz=hs.filter(h=>h<=OX.hz).pop()||1;
+ const L=oxSrc(X);
+ el.innerHTML=`<h3 style="margin-top:4px;color:var(--tx);font-size:17px">Forecast — next ${OX.hz} gameweek${OX.hz>1?'s':''}</h3>`+oxCtl(X,{gw:false,extra:`<select onchange="OX.hz=+this.value;fpRender()">${fpOpts(hs.map(h=>[String(h),h===1?'Next gameweek':'Next '+h+' gameweeks']),String(OX.hz))}</select>`+oxSrcSel()})+oxHead(X,0,'GW'+C.gws[0]+'–GW'+C.gws[OX.hz-1]+' · projections; uncertainty grows with distance')+`<div id="oxfc"></div><div id="pdet"></div>`;
+ const nd=oxNeedXI(X,L);if(nd){$('#oxfc').innerHTML=nd;return}
+ const seq=++OX.fcSeq,hz=OX.hz,mode=OX.mode;
+ (async()=>{const per=[];for(let k=0;k<hz;k++){const e=$('#oxfc');if(seq!==OX.fcSeq||!e)return;e.innerHTML=`<div class="empty">Optimizing GW${C.gws[k]} (${k+1} of ${hz})…</div>`;await oxYield();per.push(await oxOptimal(X,k,mode))}
+  if(seq!==OX.fcSeq||!$('#oxfc'))return;oxDrawFc(X,L,per,hz)})();
+}
+function oxDrawFc(X,L,per,hz){
+ const {d,C}=X,o=$('#oxfc'),gis=Array.from({length:hz},(_,k)=>k),gws=gis.map(k=>C.gws[k]);
+ const U={per:gis.map(()=>({ids:L.ids,cap:L.cap}))},Mw={per:per.map(r=>r.err?null:{ids:r.team.xi.map(i=>i.id),cap:r.team.cap.id})},M0=per[0].err?null:{ids:per[0].team.xi.map(i=>i.id),cap:per[0].team.cap.id},Mf={per:gis.map(()=>M0)};
+ const LS=[U,Mw,Mf],names=[L.name+' (fixed)','Optimal XI, re-picked each GW','GW'+gws[0]+' optimal XI kept fixed'];
+ const ex=LS.map(x=>gis.map(k=>x.per[k]?oxExp(d,x.per[k].ids,x.per[k].cap,k):null));
+ const sm=oxSim(d,C,LS,gis,OX.N,7004),q=sm.map(s=>s.gw.map(a=>oxQs(a))),qt=sm.map(s=>s.ok?oxQs(s.tot):null),tot=ex.map(a=>a.some(v=>v==null)?null:a.reduce((s,v)=>s+v,0));
+ const dfx=sm[1].ok?oxDiffS(sm[0].tot,sm[1].tot):null;
+ /* blanks and doubles touching any player in these lineups */
+ const ids=new Set([...L.ids,...per.flatMap(r=>r.err?[]:r.team.xi.map(i=>i.id))]),bd=[];
+ gis.forEach(k=>{const ts=new Map();ids.forEach(id=>{const p=d.PB.get(id),g=oxG(p,k);if(g&&(g.none||g.fx.length>1))ts.set(p.tm,g.none?'blank':'double')});ts.forEach((v,tm)=>bd.push('GW'+gws[k]+': '+pmTeamS(tm)+' '+v))});
+ const S=[0,1,2].map(j=>({n:names[j],short:['Yours','Re-picked','Fixed opt.'][j],v:ex[j],lo:j<2?q[j].map((x,k)=>LS[j].per[k]?x.p10:null):null,hi:j<2?q[j].map((x,k)=>LS[j].per[k]?x.p90:null):null,c:OXCOL[j],dash:OXDASH[j]}));
+ const chart=hz>1?oxChart('oxch',gws,S):oxRangePlot(S.map((s,j)=>({n:s.n,mean:ex[j][0],lo:qt[j]?qt[j].p10:null,hi:qt[j]?qt[j].p90:null,c:s.c})));
+ const r1=x=>x==null?'N/A':x.toFixed(1);
+ const dU=tot[0]==null?null:oxR1(tot[0]),dM=tot[1]==null?null:oxR1(tot[1]);
+ o.innerHTML=`<div class="grid"><div class="kpi"><b>${r1(dU)}</b><span>${esc(L.name)}: expected over ${hz} GW (80% range ${qt[0]?oxRange(qt[0]):'N/A'})</span></div><div class="kpi"><b>${r1(dM)}</b><span>Optimal XI re-picked each GW (80% range ${qt[1]?oxRange(qt[1]):'N/A'})</span></div><div class="kpi"><b>${dU!=null&&dM!=null?((dM-dU>=0?'+':'')+(dM-dU).toFixed(1)):'N/A'}</b><span>Projected difference over the period</span></div><div class="kpi"><b>${r1(tot[2]==null?null:oxR1(tot[2]))}</b><span>GW${gws[0]} optimal XI if never changed</span></div></div>
+ <div class="ctl" style="margin:10px 0 2px;font-size:13px;gap:14px">${S.map(s=>`<span style="display:inline-flex;align-items:center;gap:6px"><svg width="26" height="10" aria-hidden="true"><line x1="1" y1="5" x2="25" y2="5" stroke="${s.c}" stroke-width="2.5" stroke-dasharray="${s.dash}"/></svg>${esc(s.n)}</span>`).join('')}${hz>1?'<span class="mu">shaded = 80% range</span>':''}</div>
+ ${chart}
+ <h3>Per gameweek (expected, 80% range)</h3>${tbl([['GW'],...names.map(n=>[esc(n),1])],gis.map(k=>['GW'+gws[k],...[0,1,2].map(j=>ex[j][k]==null?'N/A':`${ex[j][k].toFixed(1)} <span class="mu">(${q[j][k].p10.toFixed(0)}–${q[j][k].p90.toFixed(0)})</span>`)]))}
+ ${tbl([['Period total'],...names.map(n=>[esc(n),1])],[['GW'+gws[0]+'–'+gws[hz-1],...[0,1,2].map(j=>tot[j]==null?'N/A':`<b>${tot[j].toFixed(1)}</b> <span class="mu">(${qt[j].p10.toFixed(0)}–${qt[j].p90.toFixed(0)})</span>`)]])}
+ <div class="mu" style="font-size:12px;margin:6px 0">${dfx?`Chance that ${esc(L.name)} outscores the re-picked optimal XI over the period: ${oxP(dfx.pWin)} (simulated). `:''}Your lineup and captain are held fixed for every gameweek (no transfers or captain changes); the re-picked optimum is a ceiling that assumes unlimited free changes, and the fixed GW${gws[0]} optimum is the like-for-like reference for an unchanged lineup. Period ranges are percentiles of the simulated <i>sum</i> over all ${hz} gameweeks, not ${hz} single-week ranges added up. ${bd.length?'Blank/double gameweeks for these players: '+esc(bd.join('; '))+'. ':''}Later gameweeks are less certain: injury news and FPL's chance of playing only exist for the next gameweek (carried forward unchanged), and fixtures can still move.</div>
+ ${per.filter(r=>r.err).length?`<div class="card" style="color:var(--a)">${per.map((r,k)=>r.err?'GW'+gws[k]+': '+esc(r.err):'').filter(Boolean).join('<br>')}</div>`:''}`;
+ if(hz>1)oxChartWire('oxch',gws,S);
+}
+/* line chart: expected points per gameweek, optional 80% band; missing values break the line */
+function oxChart(id,gws,S){
+ const W=680,H=270,L=42,B=30,T=14,Rr=84,vals=S.flatMap(s=>[...s.v,...(s.lo||[]),...(s.hi||[])]).filter(fpOk);
+ if(!vals.length)return '<div class="empty">No values to draw.</div>';
+ /* rounded ticks (1, 2, 2.5 or 5 × 10^k) on a domain fitted to the values and ranges */
+ const v0=Math.min(...vals),v1=Math.max(...vals),raw=((v1-v0)||1)/4,mag=Math.pow(10,Math.floor(Math.log10(raw))),st=[1,2,2.5,5,10].map(x=>x*mag).find(x=>x>=raw);
+ const lo=Math.max(0,Math.floor(v0/st)*st),hi=Math.ceil(v1/st)*st,sx=i=>L+(W-L-Rr)*(gws.length>1?i/(gws.length-1):.5),sy=v=>H-B-(H-B-T)*(v-lo)/((hi-lo)||1);
+ let g=`<rect width="${W}" height="${H}" fill="#0d1520"/>`;
+ for(let v=lo;v<=hi+1e-9;v+=st){g+=`<line x1="${L}" y1="${sy(v).toFixed(1)}" x2="${W-Rr}" y2="${sy(v).toFixed(1)}" stroke="#25374d" stroke-width=".6"/><text x="${L-6}" y="${(sy(v)+4).toFixed(1)}" text-anchor="end" font-size="11" fill="#8a9bb0">${+v.toFixed(2)}</text>`}
+ gws.forEach((w,i)=>{g+=`<text x="${sx(i).toFixed(1)}" y="${H-10}" text-anchor="middle" font-size="11" fill="#8a9bb0">GW${w}</text>`});
+ S.forEach(s=>{if(!s.lo)return;let seg=[];const flush=()=>{if(seg.length>1)g+=`<path d="${seg.map((i,k)=>(k?'L':'M')+sx(i).toFixed(1)+' '+sy(s.hi[i]).toFixed(1)).join(' ')} ${[...seg].reverse().map(i=>'L'+sx(i).toFixed(1)+' '+sy(s.lo[i]).toFixed(1)).join(' ')} Z" fill="${s.c}" fill-opacity=".13" stroke="none"/>`;seg=[]};
+  s.v.forEach((v,i)=>{if(fpOk(v)&&fpOk(s.lo[i]))seg.push(i);else flush()});flush()});
+ S.forEach(s=>{let dd='',pen=false;s.v.forEach((v,i)=>{if(!fpOk(v)){pen=false;return}dd+=(pen?'L':'M')+sx(i).toFixed(1)+' '+sy(v).toFixed(1)+' ';pen=true});
+  g+=`<path d="${dd}" fill="none" stroke="${s.c}" stroke-width="2" stroke-dasharray="${s.dash}" stroke-linejoin="round"/>`;
+  s.v.forEach((v,i)=>{if(fpOk(v))g+=`<circle cx="${sx(i).toFixed(1)}" cy="${sy(v).toFixed(1)}" r="4" fill="${s.c}" stroke="#0d1520" stroke-width="2"/>`})});
+ /* direct labels at the last value of each line, nudged apart so they never overlap */
+ const lab=S.map(s=>{let i=s.v.length-1;while(i>=0&&!fpOk(s.v[i]))i--;return i<0?null:{s,i,y:sy(s.v[i])}}).filter(Boolean).sort((a,b)=>a.y-b.y);
+ for(let k=1;k<lab.length;k++)if(lab[k].y-lab[k-1].y<13)lab[k].y=lab[k-1].y+13;
+ lab.forEach(o=>{g+=`<text x="${(sx(o.i)+8).toFixed(1)}" y="${(o.y+4).toFixed(1)}" font-size="11" fill="#e8eef5">${esc(o.s.short||'')}</text>`});
+ g+=`<line id="${id}x" x1="0" y1="${T}" x2="0" y2="${H-B}" stroke="#e8eef5" stroke-opacity=".5" stroke-width="1" style="display:none"/><rect id="${id}h" x="${L}" y="${T}" width="${W-L-Rr}" height="${H-B-T}" fill="transparent" style="cursor:crosshair"/>`;
+ return `<div style="position:relative;max-width:760px;margin:0 auto" id="${id}"><svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block;touch-action:pan-y" role="img" aria-label="Expected points per gameweek">${g}</svg><div id="${id}t" style="position:absolute;display:none;pointer-events:none;background:#152130;border:1px solid #25374d;border-radius:8px;padding:6px 8px;font-size:12px;line-height:1.4;min-width:150px;z-index:2"></div></div><div class="mu" style="font-size:11px;text-align:center">Expected points per gameweek (y) by gameweek (x). Hover or tap for values; the tables below hold every number.</div>`;
+}
+function oxChartWire(id,gws,S){
+ const box=document.getElementById(id);if(!box)return;const svg=box.querySelector('svg'),hit=document.getElementById(id+'h'),ln=document.getElementById(id+'x'),tip=document.getElementById(id+'t');
+ const W=680,L=42,Rr=84,sx=i=>L+(W-L-Rr)*(gws.length>1?i/(gws.length-1):.5);
+ const show=ev=>{const r=svg.getBoundingClientRect(),xv=(ev.clientX-r.left)/r.width*W;let bi=0,bd=1e9;gws.forEach((_,i)=>{const dd=Math.abs(sx(i)-xv);if(dd<bd){bd=dd;bi=i}});
+  ln.setAttribute('x1',sx(bi));ln.setAttribute('x2',sx(bi));ln.style.display='';tip.textContent='';
+  const h=document.createElement('div');h.style.cssText='color:#8a9bb0;margin-bottom:2px';h.textContent='GW'+gws[bi];tip.appendChild(h);
+  S.forEach(s=>{const row=document.createElement('div');row.style.cssText='display:flex;align-items:center;gap:6px';const k=document.createElementNS('http://www.w3.org/2000/svg','svg');k.setAttribute('width','16');k.setAttribute('height','6');k.innerHTML=`<line x1="0" y1="3" x2="16" y2="3" stroke="${s.c}" stroke-width="2.5" stroke-dasharray="${s.dash}"/>`;
+   const b=document.createElement('b');const v=s.v[bi];b.textContent=fpOk(v)?v.toFixed(1)+(s.lo&&fpOk(s.lo[bi])?' ('+s.lo[bi].toFixed(0)+'–'+s.hi[bi].toFixed(0)+')':''):'N/A';const n=document.createElement('span');n.style.color='#8a9bb0';n.textContent=s.n;row.append(k,b,n);tip.appendChild(row)});
+  const px=sx(bi)/W*r.width;tip.style.display='block';tip.style.top='8px';tip.style.left=(px>r.width/2?Math.max(0,px-tip.offsetWidth-10):px+10)+'px'};
+ hit.addEventListener('pointermove',show);hit.addEventListener('pointerdown',show);hit.addEventListener('pointerleave',()=>{ln.style.display='none';tip.style.display='none'});
+}
+/* one-gameweek view: expected value (dot) and 80% range (bar) per lineup */
+function oxRangePlot(rows){
+ const W=680,rh=46,L=10,Rr=20,H=rows.length*rh+30,vals=rows.flatMap(r=>[r.mean,r.lo,r.hi]).filter(fpOk);if(!vals.length)return '';
+ const hi=Math.max(...vals)*1.08,sx=v=>L+(W-L-Rr)*v/(hi||1);let g=`<rect width="${W}" height="${H}" fill="#0d1520"/>`;
+ for(let i=0;i<=5;i++){const v=hi*i/5;g+=`<line x1="${sx(v).toFixed(1)}" y1="6" x2="${sx(v).toFixed(1)}" y2="${H-22}" stroke="#25374d" stroke-width=".6"/><text x="${sx(v).toFixed(1)}" y="${H-8}" text-anchor="middle" font-size="11" fill="#8a9bb0">${v.toFixed(0)}</text>`}
+ rows.forEach((r,k)=>{const y=14+k*rh;g+=`<text x="${L}" y="${y}" font-size="12" fill="#e8eef5">${esc(r.n)}: ${fpOk(r.mean)?r.mean.toFixed(1):'N/A'}${fpOk(r.lo)?' (80% range '+r.lo.toFixed(0)+'–'+r.hi.toFixed(0)+')':''}</text>`;
+  if(fpOk(r.lo))g+=`<line x1="${sx(r.lo).toFixed(1)}" y1="${y+16}" x2="${sx(r.hi).toFixed(1)}" y2="${y+16}" stroke="${r.c}" stroke-width="6" stroke-linecap="round" stroke-opacity=".55"/>`;
+  if(fpOk(r.mean))g+=`<circle cx="${sx(r.mean).toFixed(1)}" cy="${y+16}" r="6" fill="${r.c}" stroke="#0d1520" stroke-width="2"/>`});
+ return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:760px;display:block;margin:0 auto" role="img" aria-label="Expected points and 80% range per lineup">${g}</svg>`;
+}
+
+/* ---------- Backtest additions: range calibration + model v2 vs v1 (same leak-free replay) ---------- */
+async function oxBtRun(d,onP){
+ await oxPenLoad();
+ const cap=new Map(),orig=pmPlayer;
+ const runV=async v=>{OX.btVer=v;cap.clear();try{
+   pmPlayer=function(p,C,dd){const m=orig(p,C,dd);if(dd!==FPD)cap.set(C.next+'|'+p.id,{p,m,C,dd});return m};
+   const r=await btRun(d,x=>onP&&onP(v,x));return {r,cap:new Map(cap)}}finally{pmPlayer=orig;OX.btVer='v1'}};
+ const a=await runV('v1'),b=OX.pen&&OX.pen.ok?await runV('v2'):null;
+ /* calibration of v1 ranges: per player-gameweek, simulate his points and compare the actual with the 10th/90th percentiles */
+ const u=oxRng(99),N=300,cal=[];let k=0;
+ for(const x of a.r.rows){const c=a.cap.get(x.r+'|'+x.id);if(!c)continue;const q=oxParams(Object.assign({},c.p,{pm:c.m}),0,c.dd,c.C);
+  const s=new Float64Array(N);for(let i=0;i<N;i++){let v=0;for(const z of q){const G=z.lc!=null?oxPx(z.xL,u):null;v+=oxDraw(z,G,u)}s[i]=v}
+  const st=oxQ(s);let bl=0,ab=0;for(const v of s){if(v<st.p10)bl++;if(v>st.p90)ab++}
+  cal.push({r:x.r,pos:x.pos,act:x.act,pred:x.pred,mean:st.mean,p10:st.p10,p90:st.p90,eb:bl/N,ea:ab/N});
+  if(++k%300===0){onP&&onP('cal',k);await oxYield()}}
+ /* lineup level: per finished gameweek, 60 random legal XIs of players with 90+ earlier minutes and the model's optimal XI */
+ const X=oxReady(),RU=X.err?null:X.RU,forms=X.err?[]:X.forms,lin=[],by=new Map();a.r.rows.forEach(x=>{if(!by.has(x.r))by.set(x.r,[]);by.get(x.r).push(x)});
+ if(RU)for(const [rd,L] of [...by].sort((x,y)=>x[0]-y[0])){
+  const pool=L.filter(x=>x.pr>=90),act=new Map(L.map(x=>[x.id,x.act])),ls=[];
+  const opt=oxSolveXI(pool.map(x=>({id:x.id,t:x.pos,c:x.price||0,club:x.club,v:x.pred})),RU,forms).best;if(opt)ls.push({kind:'opt',ids:opt.team.xi.map(i=>i.id),cap:opt.team.cap.id});
+  for(let j=0;j<60;j++){const fm=forms[Math.floor(u()*forms.length)],ks=oxKs(fm),ids=[];let okk=true;
+   for(const t of [1,2,3,4]){const A=pool.filter(x=>x.pos===t);for(let i=0;i<ks[t];i++){if(!A.length){okk=false;break}ids.push(A.splice(Math.floor(u()*A.length),1)[0].id)}}
+   if(okk)ls.push({kind:'rand',ids,cap:ids[Math.floor(u()*ids.length)]})}
+  for(const Lx of ls){const q=Lx.ids.map(id=>{const c=a.cap.get(rd+'|'+id);return {id,fx:c?oxParams(Object.assign({},c.p,{pm:c.m}),0,c.dd,c.C):[]}}),M=500,s=new Float64Array(M);
+   for(let i=0;i<M;i++){const G=new Map();let tot=0;for(const pl of q){let v=0;for(const z of pl.fx){let g=null;if(z.lc!=null){g=G.get(z.gk);if(g===undefined){g=oxPx(z.xL,u);G.set(z.gk,g)}}v+=oxDraw(z,g,u)}tot+=v;if(pl.id===Lx.cap)tot+=v}s[i]=tot}
+   const st=oxQ(s);let v2=0;for(const v of s)v2+=(v-st.mean)**2;
+   lin.push({r:rd,kind:Lx.kind,act:Lx.ids.reduce((x,id)=>x+(act.get(id)||0),0)+(act.get(Lx.cap)||0),mean:st.mean,p10:st.p10,p90:st.p90,sd:Math.sqrt(v2/M)})}
+  onP&&onP('xi',rd);await oxYield()}
+ const zsd=L=>L.length?Math.sqrt(L.reduce((x,o)=>x+((o.act-o.mean)/o.sd)**2,0)/L.length):null,rr=lin.filter(x=>x.kind==='rand');
+ const kappa=zsd(rr),rows=a.r.rows,mx=rows.reduce((x,o)=>x+o.pred,0)/rows.length,my=rows.reduce((x,o)=>x+o.act,0)/rows.length;let sxy=0,sxx=0;rows.forEach(o=>{sxy+=(o.pred-mx)*(o.act-my);sxx+=(o.pred-mx)**2});
+ const top=[];by.forEach(L=>[...L].sort((x,y)=>y.pred-x.pred||x.id-y.id).slice(0,11).forEach(o=>top.push(o)));
+ const top11=top.length?{n:top.length,pred:top.reduce((x,o)=>x+o.pred,0)/top.length,act:top.reduce((x,o)=>x+o.act,0)/top.length}:null;
+ const rs=[...by.keys()].sort((x,y)=>x-y),half=rs[Math.floor(rs.length/2)],fit=rr.filter(x=>x.r<half),val=rr.filter(x=>x.r>=half),kf=zsd(fit);
+ const cov=(L,k)=>L.length?L.filter(o=>o.act>=o.mean-k*(o.mean-o.p10)&&o.act<=o.mean+k*(o.p90-o.mean)).length/L.length:null;
+ const lc={n:rr.length,rounds:rs,kappa,cov1:cov(rr,1),covK:cov(rr,Math.min(2,Math.max(1,kappa||1))),split:fit.length&&val.length?{half,kf,cov1:cov(val,1),covK:cov(val,Math.min(2,Math.max(1,kf))),n:val.length}:null,opt:lin.filter(x=>x.kind==='opt')};
+ if(fpOk(kappa))oxLsSet(OX_LS.cal,{season:oxSeason(d),gen:d.generated,kappa:Math.min(2,Math.max(1,kappa)),top11,slope:sxx>0?sxy/sxx:null,rounds:rs,n:rr.length});
+ return {at:d.generated,v1:a.r,v2:b?b.r:null,cal,lc,slope:sxx>0?sxy/sxx:null,top11};
+}
+function oxBtHtml(){
+ const head='<h3>Points range calibration and model v2 (penalty regression)</h3>';
+ if(!OX.bt)return head+`<div class="mu" style="font-size:12px;margin-bottom:6px">Checks the 80% ranges shown in Optimal XI, My XI and Forecast: in the same leak-free replay, how often did a player's actual points fall below the 10th or above the 90th percentile of his simulated distribution? Also replays model v2, which regresses penalty xG (PitchAPI shots), and compares it with v1 on the same player-gameweeks.</div><div class="ctl"><button class="s" onclick="oxBtGo()" ${OX.btBusy?'disabled':''}>Run calibration and v2 comparison</button></div><div id="oxbtmsg" class="mu"></div>`;
+ if(OX.bt.err)return head+`<div class="empty">Could not run: ${esc(OX.bt.err)}</div>`;
+ const B=OX.bt,st=BT.start,cal=B.cal.filter(x=>x.r>=st);if(!cal.length)return head+'<div class="empty">No player-gameweeks in this range.</div>';
+ const avg=a=>a.reduce((s,x)=>s+x,0)/a.length,below=avg(cal.map(x=>x.act<x.p10?1:0)),above=avg(cal.map(x=>x.act>x.p90?1:0)),eb=avg(cal.map(x=>x.eb)),ea=avg(cal.map(x=>x.ea));
+ const pc=v=>(v*100).toFixed(1)+'%',mean=avg(cal.map(x=>x.mean)),pred=avg(cal.map(x=>x.pred));
+ const byPos=[1,2,3,4].map(t=>{const L=cal.filter(x=>x.pos===t);if(!L.length)return null;return [FPPOS[t],L.length,pc(avg(L.map(x=>x.act<x.p10?1:0))),pc(avg(L.map(x=>x.eb))),pc(avg(L.map(x=>x.act>x.p90?1:0))),pc(avg(L.map(x=>x.ea)))]}).filter(Boolean);
+ let v2='';
+ if(B.v2){const k=x=>x.r+'|'+x.id,m2=new Map(B.v2.rows.map(x=>[k(x),x])),pr=B.v1.rows.filter(x=>x.r>=st&&m2.has(k(x))).map(x=>({r:x.r,id:x.id,act:x.act,a:x.pred,b:m2.get(k(x)).pred}));
+  const mae=(L,f)=>L.length?avg(L.map(x=>Math.abs(x[f]-x.act))):null,ch=pr.filter(x=>Math.abs(x.a-x.b)>1e-6),by=new Map();
+  ch.forEach(x=>{let o=by.get(x.r);if(!o){o={n:0,g:0};by.set(x.r,o)}o.n++;o.g+=Math.abs(x.a-x.act)-Math.abs(x.b-x.act)});
+  const gs=[...by.values()].map(o=>o.g/o.n),wins=gs.filter(x=>x>0).length;
+  v2=`<h3>Model v2 vs v1</h3>`+tbl([['Sample'],['N',1],['MAE v1',1],['MAE v2',1]],[['All player-gameweeks',pr.length,f(mae(pr,'a'),3),f(mae(pr,'b'),3)],['Only where v2 changes the prediction (penalty takers)',ch.length,f(mae(ch,'a'),3),f(mae(ch,'b'),3)]])+
+   `<div class="mu" style="font-size:12px;margin:6px 0">On the changed player-gameweeks v2 had the lower average error in ${wins} of ${gs.length} gameweeks. ${ch.length<100?'<b>The sample is far too small to conclude anything</b> (penalties are rare), so v1 stays the default; v2 can be selected in the Optimal XI tab.':'v1 stays the default until v2 shows a consistent gain over more gameweeks.'} Penalty shots of round r are used only when predicting later rounds.</div>`}
+ else v2=`<div class="mu" style="font-size:12px">Model v2 not tested: ${esc((OX.pen&&OX.pen.why)||'no PitchAPI penalty data')}.</div>`;
+ return head+tbl([['Check'],['Model says',1],['Actual',1]],[['Actual below the 10th percentile',pc(eb),pc(below)],['Actual above the 90th percentile',pc(ea),pc(above)],['Mean points per player-gameweek',mean.toFixed(3),avg(cal.map(x=>x.act)).toFixed(3)]])+
+  `<div class="mu" style="font-size:12px;margin:6px 0">${cal.length} player-gameweeks from GW${st}. "Model says" is the share of the model's own simulated outcomes beyond each percentile (points are whole numbers, so it is not exactly 10%); a calibrated model matches it. Simulated mean ${mean.toFixed(3)} vs analytic expectation ${pred.toFixed(3)} (difference = Monte Carlo error). Single-player check only: lineup ranges also depend on correlations between team-mates.</div>`+
+  tbl([['Pos'],['N',1],['Below P10: actual',1],['model',1],['Above P90: actual',1],['model',1]],byPos)+oxBtLineHtml(B)+v2;
+}
+function oxBtLineHtml(B){
+ const L=B.lc;if(!L||!L.n)return '';const pc=v=>v==null?'N/A':(v*100).toFixed(1)+'%',S=L.split;
+ const opt=L.opt.map(o=>['GW'+o.r,o.mean.toFixed(1),o.p10.toFixed(0)+'–'+o.p90.toFixed(0),o.act.toFixed(0)]);
+ return `<h3>Lineup ranges (11 players + captain)</h3>`+tbl([['Check'],['Value',1]],[
+  ['Random legal XIs tested (GW'+L.rounds[0]+'–'+L.rounds[L.rounds.length-1]+')',L.n],
+  ['Real totals inside the unwidened 80% range',pc(L.cov1)],
+  ['Spread of real totals vs simulated (sd of z; 1 = calibrated)',f(L.kappa,2)],
+  ['Inside the 80% range after widening by that factor (same data)',pc(L.covK)],
+  ...(S?[['Out-of-sample: factor fitted before GW'+S.half+' ('+f(S.kf,2)+'), coverage on GW'+S.half+'+ ('+S.n+' XIs)',pc(S.cov1)+' → '+pc(S.covK)]]:[]),
+  ['Calibration slope of actual on predicted points (1 = calibrated; below 1 = too spread out)',f(B.slope,3)],
+  ...(B.top11?[['11 highest-projected players per gameweek: mean projected vs actual',B.top11.pred.toFixed(2)+' vs '+B.top11.act.toFixed(2)]]:[])])+
+  `<div class="mu" style="font-size:12px;margin:6px 0">The factor (${f(L.kappa,2)}, kept between 1 and 2) is now stored on this device and widens every lineup range in Optimal XI, My XI, the comparison and the forecast (default before this run: ${OX_KAPPA}). Random XIs are a stand-in for "any lineup": the XIs of one gameweek share fixtures, so the effective sample is closer to the number of gameweeks than to the number of XIs. Highest projections are optimistic on average (selection effect), so the model's own optimal XI usually scores below its projection:</div>`+
+  tbl([['GW'],['Optimal XI projected',1],['Simulated 80% range',1],['Actual',1]],opt);
+}
+async function oxBtGo(){
+ if(OX.btBusy)return;OX.btBusy=true;const m=()=>$('#oxbtmsg');if(m())m().textContent='Replaying…';
+ try{OX.bt=await oxBtRun(FPD,(v,x)=>{const e=m();if(e)e.textContent=v==='cal'?'Simulating player ranges… '+x:v==='xi'?'Simulating lineup ranges, gameweek '+x+'…':'Replaying model '+v+', gameweek '+x+'…'})}
+ catch(e){OX.bt={err:e.message}}
+ OX.btBusy=false;if(FP.tab==='backtest')btDraw();
+}
+"""
+
+
+def _x_ox_index(html):
+    def sub(h, old, new):
+        if h.count(old) != 1:
+            log(f"  تنبيه (Optimal XI): ما لقيت نقطة التعديل بدقة، تخطيتها: {old[:60]}")
+            return h
+        return h.replace(old, new)
+    h = html
+    # التبويبات الجديدة أول شي في صفحة Fantasy، والتشكيلة المثالية هي التبويب الافتراضي
+    h = sub(h, "const FP={tab:'table',", "const FP={tab:'xi',")
+    h = sub(h, "const d=FPD,T=[['table','Table'],",
+            "const d=FPD,T=[['xi','★ Optimal XI'],['my','My XI'],['vs','My XI vs Optimal'],['fc','Forecast'],['table','Table'],")
+    h = sub(h, "({table:fpTTable,", "({xi:oxTXI,my:oxTMy,vs:oxTVs,fc:oxTFc,table:fpTTable,")
+    # ربط PitchAPI بـ FPL: الدوري الإنجليزي اسمه موجود لكن الدولة فاضية في PitchAPI، فنتحقق من أسماء الأندية بدلها
+    h = sub(h, "if(!/premier league/i.test(D.name)||!/engl/i.test(pl.country||''))return out;",
+            "if(!/premier league/i.test(D.name)||!(/engl/i.test(pl.country||'')||oxPLClubOverlap(D.stats.map(s=>s.club))>=15))return out;")
+    h = sub(h, "+btLineHtml()+", "+btLineHtml()+oxBtHtml()+")
+    h = sub(h, "async function route(){", _X_OXJS + "\nasync function route(){")
+    return h
+
+
+INDEX = _x_ox_index(INDEX)
+# ======================== نهاية إضافة Optimal XI ========================
+
+
 
 if __name__ == "__main__":
     main()
