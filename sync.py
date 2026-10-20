@@ -3293,6 +3293,48 @@ def _fpl_get(path, tries=3):
     return None, last
 
 
+def _fpl_fit_rule(ident, lst):
+    """يستنتج قاعدة النقاط من ملاحظات (قيمة, نقاط): عتبة الدقائق، أو نقاط لكل step وحدة."""
+    if ident == "minutes":
+        lo = {p for v, p in lst if 0 < v < 60}
+        hi = {p for v, p in lst if v >= 60}
+        if len(lo) <= 1 and len(hi) <= 1 and (lo or hi):
+            return dict(kind="threshold", at=60, lo=(lo.pop() if lo else None), hi=(hi.pop() if hi else None), n=len(lst))
+        return None
+    best = None
+    for step in range(1, 16):                       # نختار أكبر step متسق مع كل الملاحظات
+        pts, ok = set(), True
+        for v, p in lst:
+            k = int(v // step)
+            if k == 0:
+                if p != 0:
+                    ok = False
+                    break
+            else:
+                pts.add(round(p / k, 6))
+        if ok and len(pts) == 1:
+            best = dict(kind="step", step=step, pts=next(iter(pts)), n=len(lst))
+    return best
+
+
+def _fpl_derive_scoring(live, types):
+    obs = {}
+    for el in (live or {}).get("elements", []):
+        t = types.get(el.get("id"))
+        for ex in el.get("explain", []) or []:
+            items = ex.get("stats") if isinstance(ex, dict) and isinstance(ex.get("stats"), list) else [ex]
+            for s_ in items:
+                ident, v, p = s_.get("identifier"), s_.get("value"), s_.get("points")
+                if ident and isinstance(v, (int, float)) and isinstance(p, (int, float)) and t:
+                    obs.setdefault((ident, t), []).append((v, p))
+    out = {}
+    for (ident, t), lst in obs.items():
+        r = _fpl_fit_rule(ident, lst)
+        if r:
+            out.setdefault(ident, {})[str(t)] = r
+    return out
+
+
 def _fpl_build(boot, fixtures, old, fetch):
     """يبني ملف data/fpl.json. fetch(path) ترجع json أو None (لتسهّل الاختبار)."""
     cols = ["id", "wn", "fn", "sn", "tm", "ty", "st", "nw"] + _FPL_NUM
@@ -3331,10 +3373,30 @@ def _fpl_build(boot, fixtures, old, fetch):
                    nxt=bool(e.get("is_next")), dl=e.get("deadline_time"), avg=e.get("average_entry_score"))
               for e in boot.get("events", [])]
     fix = [[f.get("event"), f.get("team_h"), f.get("team_a"), f.get("team_h_difficulty"),
-            f.get("team_a_difficulty"), 1 if f.get("finished") else 0]
+            f.get("team_a_difficulty"), 1 if f.get("finished") else 0,
+            f.get("team_h_score"), f.get("team_a_score"), f.get("kickoff_time")]
            for f in (fixtures or []) if f.get("event")]
+    postponed = sum(1 for f in (fixtures or []) if not f.get("event"))
+    gs = boot.get("game_settings", {}) or {}
+    rules = dict(squad=gs.get("squad_squadsize"), play=gs.get("squad_squadplay"), club=gs.get("squad_team_limit"),
+                 budget=gs.get("squad_total_spend"), transfers_cap=gs.get("transfers_cap"),
+                 types={str(t["id"]): dict(n=t.get("singular_name_short"), sel=t.get("squad_select"),
+                                           mn=t.get("squad_min_play"), mx=t.get("squad_max_play"))
+                        for t in boot.get("element_types", [])})
+    # قواعد التسجيل الفعلية: تُستخرج من نقاط آخر جولة منتهية (event/{gw}/live: explain) بدل افتراضها
+    done = [e["id"] for e in boot.get("events", []) if e.get("finished")]
+    scoring, scoring_gw = (old or {}).get("scoring"), (old or {}).get("scoring_gw")
+    if done and (not scoring or scoring_gw != max(done)):
+        live = fetch(f"event/{max(done)}/live/")
+        if live:
+            types = {e["id"]: e.get("element_type") for e in boot.get("elements", [])}
+            derived = _fpl_derive_scoring(live, types)
+            if derived:
+                scoring, scoring_gw = derived, max(done)
+                log(f"  [Fantasy] قواعد التسجيل مستخرجة من الجولة {scoring_gw}: {len(derived)} فئة")
     return dict(generated=now(), cols=cols, rows=rows, teams=teams, events=events, fix=fix,
-                hist=hist, hcols=["r", "pts", "val", "min", "xg", "xa", "bon", "opp", "h"])
+                hist=hist, hcols=["r", "pts", "val", "min", "xg", "xa", "bon", "opp", "h"],
+                rules=rules, scoring=scoring or {}, scoring_gw=scoring_gw, postponed=postponed)
 
 
 def sync_fpl(hub):
@@ -3507,9 +3569,9 @@ function fpHeader(d){
  return `<div class="mu" style="margin-bottom:8px">Official Fantasy Premier League data, as of ${esc(d.generated)} UTC${cur?' · '+esc(cur.name):''}. Prices in £m. A dash or N/A means the source gave no value (never zero).${FPLINK.on?` PitchAPI link: ${FPLINK.n} of ${FPLINK.tot} players with minutes matched by team and name; the rest have no PitchAPI value.`:' PitchAPI metrics (xT, xG) appear when the Premier League is selected in the league picker.'}</div><div id="fpmsg" class="mu" style="min-height:18px"></div>`;
 }
 function fpRender(){
- const d=FPD,T=[['table','Table'],['scatter','Scatter'],['value','Value'],['compare','Compare'],['teams','Teams'],['fixtures','Fixtures']];
+ const d=FPD,T=[['table','Table'],['pred','Predicted Points'],['best','Best Team'],['scatter','Scatter'],['value','Value'],['compare','Compare'],['teams','Teams'],['fixtures','Fixtures']];
  $('#fproot').innerHTML=`<div class="ctl">${T.map(([k,n])=>`<button class="${k===FP.tab?'':'s'}" onclick="fpTab('${k}')">${n}</button>`).join('')}</div>`+fpHeader(d)+'<div id="fpbody"></div>';
- ({table:fpTTable,scatter:fpTScatter,value:fpTValue,compare:fpTCompare,teams:fpTTeams,fixtures:fpTFix})[FP.tab]($('#fpbody'));
+ ({table:fpTTable,pred:fpTPred,best:fpTBest,scatter:fpTScatter,value:fpTValue,compare:fpTCompare,teams:fpTTeams,fixtures:fpTFix})[FP.tab]($('#fpbody'));
 }
 function fpSort(k){FP.sort=FP.sort.k===k?{k,d:-FP.sort.d}:{k,d:(k==='name'||k==='tn')?1:-1};fpTTableDraw()}
 function fpTTable(el){
@@ -3585,6 +3647,397 @@ R.fantasy=async function(el){
 """
 
 
+_X_FPJS2 = r"""/* ===== Predicted points + Best Team: model, optimizer, UI (extends the Fantasy page) ===== */
+const PM={N:7,PRIOR_MIN:450,K_FIN:3,N0:4,RECENT:6,EPS:.001,MAXNODES:4000};
+const pmAll=v=>({1:v,2:v,3:v,4:v});
+/* Fallback scoring, used ONLY for a rule the live data did not reveal (the UI labels each rule live/default). [step, points] */
+const PM_DEF={goals_scored:{1:[1,10],2:[1,6],3:[1,5],4:[1,4]},assists:pmAll([1,3]),clean_sheets:{1:[1,4],2:[1,4],3:[1,1],4:[1,0]},goals_conceded:{1:[2,-1],2:[2,-1]},saves:{1:[3,1]},
+ penalties_saved:{1:[1,5]},penalties_missed:pmAll([1,-2]),yellow_cards:pmAll([1,-1]),red_cards:pmAll([1,-3]),own_goals:pmAll([1,-2]),bonus:pmAll([1,1]),defensive_contribution:{2:[10,2],3:[12,2],4:[12,2]}};
+function pmRule(d,id,t){const r=((d.scoring||{})[id]||{})[String(t)];
+ if(r&&r.kind==='step')return {step:r.step,pts:r.pts,src:'live'};
+ const f=(PM_DEF[id]||{})[t];return f?{step:f[0],pts:f[1],src:'default'}:{step:1,pts:0,src:'none'}}
+function pmMinRule(d,t){const r=((d.scoring||{}).minutes||{})[String(t)];
+ if(r&&r.kind==='threshold'&&r.lo!=null&&r.hi!=null)return {lo:r.lo,hi:r.hi,src:'live'};return {lo:1,hi:2,src:'default'}}
+function pmPois(l,kmax){const p=[Math.exp(-l)];for(let k=1;k<=kmax;k++)p.push(p[k-1]*l/k);return p}
+/* E[floor(X/step)]*pts for X~Poisson(l) */
+function pmEStep(l,step,pts){if(!(l>0)||!pts)return 0;const p=pmPois(l,Math.max(25,Math.ceil(l*5+15)));let e=0;for(let k=step;k<p.length;k++)e+=Math.floor(k/step)*p[k];return e*pts}
+/* P(X>=k) for X~Poisson(l) */
+function pmPGE(l,k){if(!(l>0))return 0;let s=0,p=Math.exp(-l);for(let i=0;i<k;i++){s+=p;p*=l/(i+1)}return Math.max(0,1-s)}
+const PM_MON={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+/* Return date, ONLY when the FPL news text states one ("Expected back 12 Nov", "Suspended until 25 Oct") */
+function pmReturn(p,gen){
+ const m=/(?:expected back|suspended until|back on|return(?:s|ing)?(?: on| date)?)\D{0,12}(\d{1,2})\s+([A-Za-z]{3})/i.exec(p.nw||'');if(!m)return null;
+ const mon=PM_MON[m[2].toLowerCase()];if(mon==null)return null;
+ const base=Date.parse(String(gen).replace(' ','T')+'Z'),y=new Date(base).getUTCFullYear();let t=Date.UTC(y,mon,+m[1]);if(t<base-60*864e5)t=Date.UTC(y+1,mon,+m[1]);return t}
+const PM_ST={a:'Available',d:'Doubtful',i:'Injured',s:'Suspended',u:'Unavailable',n:'Not in squad'};
+const pmStLabel=p=>{const b=PM_ST[p.st]||p.st;return (p.st==='d'&&fpOk(p.chance_of_playing_next_round))?b+' ('+p.chance_of_playing_next_round+'%)':b};
+const pmStCol=p=>p.st==='a'?'#4cc38a':p.st==='d'?'#e9b44c':'#e5646b';
+/* probability the player is fit for ONE fixture, from published data only */
+function pmAvail(p,x,C,d){
+ if(p.st==='a')return {a:1,src:'available'};
+ const ko=x.ko?Date.parse(x.ko):null,ret=pmReturn(p,d.generated);
+ if(ret!=null&&ko!=null)return {a:ko>=ret?1:0,src:'return date in news',ret};
+ if(p.st==='u'||p.st==='n')return {a:0,src:'unavailable'};
+ const c=p.chance_of_playing_next_round;
+ if(fpOk(c))return {a:c/100,src:x.ev===C.next?'published chance (next gameweek)':'published chance carried forward (no later data)'};
+ return {a:0,src:'no chance or return date published: treated as unavailable'};
+}
+function pmCtx(d){
+ if(d._pm)return d._pm;
+ const H=d.hist||{},ev=d.events,nx=ev.find(e=>e.nxt)||ev.find(e=>!e.fin)||null,next=nx?nx.id:null;
+ const gws=next==null?[]:Array.from({length:PM.N},(_,i)=>next+i).filter(g=>ev.some(e=>e.id===g));
+ const tm=new Map();
+ for(const p of d.P){const rows=H[String(p.id)];if(!rows)continue;
+  for(const r of rows){if(!(r[3]>0)||!fpOk(r[4]))continue;const k=p.tm+'|'+r[0]+'|'+r[7];let o=tm.get(k);if(!o){o={t:p.tm,o:r[7],r:r[0],h:r[8],xg:0};tm.set(k,o)}o.xg+=r[4]}}
+ const T=new Map(d.teams.map(t=>[t.id,{n:0,f:0,a:0}]));let sA=0,nA=0,sH=0,nH=0,sW=0,nW=0;
+ for(const o of tm.values()){const q=tm.get(o.o+'|'+o.r+'|'+o.t),t=T.get(o.t);if(!q||!t)continue;t.n++;t.f+=o.xg;t.a+=q.xg;sA+=o.xg;nA++;if(o.h===1){sH+=o.xg;nH++}else{sW+=o.xg;nW++}}
+ const mu=nA?sA/nA:null,muH=nH?sH/nH:mu,muA=nW?sW/nW:mu,S=new Map();
+ T.forEach((t,id)=>S.set(id,{n:t.n,A:mu?((t.f+mu*PM.N0)/(t.n+PM.N0))/mu:1,D:mu?((t.a+mu*PM.N0)/(t.n+PM.N0))/mu:1,xgf:t.n?t.f/t.n:null,xga:t.n?t.a/t.n:null}));
+ let gl=0,xs=0,nSc=0;
+ for(const x of d.fix){if(!x[5]||!fpOk(x[6])||!fpOk(x[7]))continue;const a=tm.get(x[1]+'|'+x[0]+'|'+x[2]),b=tm.get(x[2]+'|'+x[0]+'|'+x[1]);if(a&&b){gl+=x[6]+x[7];xs+=a.xg+b.xg;nSc++}}
+ const pri={};
+ for(const t of [1,2,3,4]){const L=d.P.filter(p=>p.ty===t&&p.minutes>0);
+  const f=k=>{const v=L.filter(p=>fpOk(p[k])),n=v.reduce((s,p)=>s+p.minutes/90,0);return n>0?v.reduce((s,p)=>s+p[k],0)/n:null};
+  pri[t]={xg:f('expected_goals'),xa:f('expected_assists'),g:f('goals_scored'),a:f('assists'),bon:f('bonus'),yc:f('yellow_cards'),rc:f('red_cards'),og:f('own_goals'),pm:f('penalties_missed'),ps:f('penalties_saved'),sv:f('saves'),dc:f('defensive_contribution')}}
+ const fx=new Map();
+ for(const x of d.fix){if(x[5])continue;for(const [tm_,home,opp] of [[x[1],true,x[2]],[x[2],false,x[1]]]){const k=tm_+'|'+x[0];if(!fx.has(k))fx.set(k,[]);fx.get(k).push({ev:x[0],opp,home,ko:x[8]||null})}}
+ return d._pm={next,gws,S,mu,muH,muA,gr:xs>0?gl/xs:1,grN:nSc,pri,fx,nm:nx?nx.name:'',teamMatches:nA};
+}
+function pmPlayer(p,C,d){
+ const t=p.ty,H=d.hist||{},rows=(H[String(p.id)]||[]).slice().sort((a,b)=>a[0]-b[0]),out={id:p.id,flags:[],gws:[],tot:null,avg:null,q:'low'};
+ const fit=p.st!=='a',rec=fit?rows.filter(r=>r[3]>0).slice(-PM.RECENT):rows.slice(-PM.RECENT),pl=rec.filter(r=>r[3]>0);
+ if(!(p.minutes>0)||!pl.length){out.q='nodata';out.flags.push(p.minutes>0?'No recent appearances to estimate playing time':'No minutes played this season: no rate can be estimated');return out}
+ const n90=p.minutes/90,pm0=PM.PRIOR_MIN/90,P=C.pri[t];
+ const shr=(x,pr)=>fpOk(x)&&fpOk(pr)?(x+pr*pm0)/(n90+pm0):null,fin=(g,x)=>fpOk(g)&&fpOk(x)?(g+PM.K_FIN)/(x+PM.K_FIN):null;
+ let lamG,lamA;
+ const xg90=shr(p.expected_goals,P.xg),fg=fin(p.goals_scored,p.expected_goals),xa90=shr(p.expected_assists,P.xa),fa_=fin(p.assists,p.expected_assists);
+ if(xg90!=null&&fg!=null)lamG=xg90*fg;else{lamG=shr(p.goals_scored,P.g);out.flags.push('No xG in the data: goal rate uses goals only')}
+ if(xa90!=null&&fa_!=null)lamA=xa90*fa_;else{lamA=shr(p.assists,P.a);out.flags.push('No xA in the data: assist rate uses assists only')}
+ if(lamG==null||lamA==null){out.q='nodata';out.flags.push('Goal or assist data missing');return out}
+ const R={bon:shr(p.bonus,P.bon),yc:shr(p.yellow_cards,P.yc),rc:shr(p.red_cards,P.rc),og:shr(p.own_goals,P.og),pmi:shr(p.penalties_missed,P.pm),psv:shr(p.penalties_saved,P.ps),sv:shr(p.saves,P.sv),dc:shr(p.defensive_contribution,P.dc)};
+ const miss=[];if(R.bon==null)miss.push('bonus');if(R.yc==null)miss.push('cards');if(t===1&&R.sv==null)miss.push('saves');if(t!==1&&R.dc==null)miss.push('defensive contribution');
+ if(miss.length)out.flags.push('Not in the data, excluded from the estimate: '+miss.join(', '));
+ const pPlay0=fit?1:pl.length/rec.length,p60n=rec.filter(r=>r[3]>=60).length,q60=p60n/pl.length,ePlay=pl.reduce((s,r)=>s+r[3],0)/pl.length;
+ const g60=rec.filter(r=>r[3]>=60),e60=g60.length?g60.reduce((s,r)=>s+r[3],0)/g60.length:90;
+ if(rec.length<4)out.flags.push('Fewer than 4 recent matches to estimate playing time');
+ if(p.minutes<270)out.flags.push('Under 270 minutes this season: rates lean on the position average');
+ const mr=pmMinRule(d,t),rG=pmRule(d,'goals_scored',t),rA=pmRule(d,'assists',t),rCS=pmRule(d,'clean_sheets',t),rGC=pmRule(d,'goals_conceded',t),rSV=pmRule(d,'saves',t),rDC=pmRule(d,'defensive_contribution',t),rB=pmRule(d,'bonus',t),rY=pmRule(d,'yellow_cards',t),rR=pmRule(d,'red_cards',t),rO=pmRule(d,'own_goals',t),rM=pmRule(d,'penalties_missed',t),rP=pmRule(d,'penalties_saved',t);
+ const venue=h=>h?C.muH:C.muA;
+ const core=(a,x)=>{
+  const St=C.S.get(p.tm),So=C.S.get(x.opp),pPlay=Math.min(1,pPlay0*a),p60=pPlay*q60,e=ePlay/90;
+  let fa=1,lc=null,saveF=1;
+  if(C.mu&&St&&So){fa=So.D*venue(x.home)/C.mu;lc=venue(!x.home)*So.A*St.D*C.gr;saveF=So.A*venue(!x.home)/C.mu}
+  const parts={app:pPlay*(1-q60)*mr.lo+p60*mr.hi,goal:pPlay*e*lamG*fa*rG.pts,ast:pPlay*e*lamA*fa*rA.pts,cs:0,gc:0,sv:0,dc:0,bon:0,card:0};
+  if(lc!=null){if(t<=3)parts.cs=rCS.pts*p60*Math.exp(-lc*e60/90);if(t<=2)parts.gc=pPlay*pmEStep(lc*e,rGC.step,rGC.pts)}
+  if(t===1&&R.sv!=null)parts.sv=pPlay*pmEStep(R.sv*e*saveF,rSV.step,rSV.pts);
+  if(t!==1&&R.dc!=null&&rDC.pts)parts.dc=rDC.pts*pPlay*pmPGE(R.dc*e,rDC.step);
+  if(R.bon!=null)parts.bon=pPlay*e*R.bon*rB.pts;
+  parts.card=pPlay*e*((R.yc||0)*rY.pts+(R.rc||0)*rR.pts+(R.og||0)*rO.pts+(R.pmi||0)*rM.pts+(t===1?(R.psv||0)*rP.pts:0));
+  return {parts,pts:Object.values(parts).reduce((s,v)=>s+v,0),fa,lc,pPlay,e:pPlay*ePlay};
+ };
+ let anyFew=false,noTeam=!C.mu;
+ for(const g of C.gws){const list=C.fx.get(p.tm+'|'+g)||[],items=[];let tot=0,fitTot=0,minE=0;const parts={};
+  for(const x of list){const av=pmAvail(p,x,C,d),r=core(av.a,x),rf=core(1,x),So=C.S.get(x.opp),St=C.S.get(p.tm);
+   if(So&&St&&(So.n<3||St.n<3))anyFew=true;
+   items.push({opp:x.opp,home:x.home,ko:x.ko,av,pts:r.pts,fit:rf.pts,parts:r.parts,fa:r.fa,lc:r.lc,pPlay:r.pPlay,eMin:r.e});tot+=r.pts;fitTot+=rf.pts;minE+=r.e;for(const k in r.parts)parts[k]=(parts[k]||0)+r.parts[k]}
+  out.gws.push({ev:g,fx:items,pts:tot,fit:fitTot,none:!list.length,eMin:minE,parts})}
+ out.tot=out.gws.reduce((s,g)=>s+g.pts,0);out.fit=out.gws.reduce((s,g)=>s+g.fit,0);out.avg=C.gws.length?out.tot/C.gws.length:null;
+ out.g1=out.gws.length?out.gws[0].pts:null;
+ out.rates={lamG,lamA,xg90,xa90,finG:fg,finA:fa_,R,pPlay0,q60,ePlay,e60,recN:rec.length,fit};
+ out.rules={mr,rG,rA,rCS,rGC,rSV,rDC,rB};
+ if(noTeam)out.flags.push('No team xG data yet: opponent factors set to 1 and clean-sheet/goals-conceded points excluded');
+ if(anyFew)out.flags.push('An opponent or own team has fewer than 3 matches of team data');
+ let q='high';const why=[];
+ if(p.st!=='a'){const cp=p.chance_of_playing_next_round;const known=pmReturn(p,d.generated)!=null||fpOk(cp);why.push('Availability: '+pmStLabel(p));q=known?'medium':'low'}
+ if(p.minutes<270)q='low';else if(p.minutes<900&&q==='high')q='medium';
+ if(rec.length<4&&q==='high')q='medium';
+ out.q=q;out.why=why;return out;
+}
+function pmPredictAll(d){
+ if(d._pmPred)return d._pmPred;const C=pmCtx(d);
+ d.P.forEach(p=>{p.pm=pmPlayer(p,C,d)});
+ return d._pmPred=true;
+}
+
+/* ---------- Optimizer ---------- */
+function pmRules(d){
+ const r=d.rules;if(!r||!r.types)return null;const T={};
+ for(const k of [1,2,3,4]){const t=r.types[String(k)];if(!t||!fpOk(t.sel)||!fpOk(t.mn)||!fpOk(t.mx))return null;T[k]={sel:t.sel,mn:t.mn,mx:t.mx}}
+ const squad=[1,2,3,4].reduce((s,k)=>s+T[k].sel,0);
+ return {T,squad,play:fpOk(r.play)?r.play:11,playSrc:fpOk(r.play)?'game settings':'11, the standard value (not in the API response)',club:fpOk(r.club)?r.club:null,budget:fpOk(r.budget)?r.budget:null};
+}
+function pmForms(R){
+ const o=[];
+ for(let g=R.T[1].mn;g<=R.T[1].mx;g++)for(let df=R.T[2].mn;df<=R.T[2].mx;df++)for(let m=R.T[3].mn;m<=R.T[3].mx;m++)for(let f=R.T[4].mn;f<=R.T[4].mx;f++){
+  if(g+df+m+f!==R.play||g>R.T[1].sel||df>R.T[2].sel||m>R.T[3].sel||f>R.T[4].sel)continue;o.push({g,d:df,m,f,name:df+'-'+m+'-'+f})}
+ return o;
+}
+/* pool items: {id,t,c(cost, tenths),club,v}. A player is dropped only if at least sel_t+5 players of other clubs-or-same
+   (counted by DISTINCT club) are at least as valuable and no more expensive: any squad using him can swap one of them in
+   (at most sel_t-1 are already in the squad and at most 5 clubs can be at the club limit). */
+function pmPrune(pool,R){
+ const by={1:[],2:[],3:[],4:[]};pool.forEach(i=>by[i.t].push(i));const keep=[];
+ for(const t of [1,2,3,4]){const L=by[t],need=R.T[t].sel+Math.floor(R.squad/R.club)+1;
+  for(const i of L){const cl=new Set();
+   for(const j of L){if(j===i)continue;if((j.v>i.v&&j.c<=i.c)||(j.v>=i.v&&j.c<i.c)||(j.v===i.v&&j.c===i.c&&j.id<i.id))cl.add(j.club)}
+   if(cl.size<need)keep.push(i)}}
+ return keep;
+}
+function pmDPpos(items,ks,kb,B,dbl,eps){
+ const k=ks+kb,n=items.length;if(n<k)return null;
+ const NEG=-Infinity,dp=[];for(let j=0;j<=k;j++)dp.push(new Float64Array(B+1).fill(NEG));dp[0][0]=0;
+ const ch=new Uint8Array(n*(k+1)*(B+1));
+ for(let it=0;it<n;it++){const c=items[it].c,v=items[it].v;
+  for(let j=Math.min(k,it+1);j>=1;j--){const val=(j-1<ks)?((dbl&&j===1)?2*v:v):eps*v,prev=dp[j-1],cur=dp[j],base=(it*(k+1)+j)*(B+1);
+   for(let b=B;b>=c;b--){const pv=prev[b-c];if(pv===NEG)continue;const cand=pv+val;if(cand>cur[b]){cur[b]=cand;ch[base+b]=1}}}}
+ return {F:dp[k],ch,k,n,B,items};
+}
+function pmBack(r,b){const out=[];let j=r.k;for(let it=r.n-1;it>=0&&j>0;it--){if(r.ch[(it*(r.k+1)+j)*(r.B+1)+b]){out.push(r.items[it]);b-=r.items[it].c;j--}}return out}
+function pmConv(F1,F2,B){
+ const out=new Float64Array(B+1).fill(-Infinity),arg=new Int16Array(B+1);
+ for(let b1=0;b1<=B;b1++){const v1=F1[b1];if(v1===-Infinity)continue;for(let b2=0;b1+b2<=B;b2++){const v2=F2[b2];if(v2===-Infinity)continue;const v=v1+v2;if(v>out[b1+b2]){out[b1+b2]=v;arg[b1+b2]=b1}}}
+ return {F:out,arg};
+}
+function pmNode(P,R,form,tc,bans,cache){
+ const ks={1:form.g,2:form.d,3:form.m,4:form.f},rs=[];
+ for(const t of [1,2,3,4]){const kb=R.T[t].sel-ks[t],bk=[...bans].filter(id=>P.pos.get(id)===t).sort((a,b)=>a-b).join(','),key=t+'|'+ks[t]+'|'+kb+'|'+(t===tc?1:0)+'|'+bk;
+  let r=cache.get(key);if(r===undefined){r=pmDPpos(P.byT[t].filter(i=>!bans.has(i.id)),ks[t],kb,R.budget,t===tc,PM.EPS);cache.set(key,r)}
+  if(!r)return null;rs.push(r)}
+ const c1=pmConv(rs[0].F,rs[1].F,R.budget),c2=pmConv(c1.F,rs[2].F,R.budget),c3=pmConv(c2.F,rs[3].F,R.budget);
+ let bb=-1,bv=-Infinity;for(let b=0;b<=R.budget;b++)if(c3.F[b]>bv){bv=c3.F[b];bb=b}
+ if(bv===-Infinity)return null;
+ const b3=bb,b2f=b3-c3.arg[b3],b2=c2.arg[c3.arg[b3]],b1=c1.arg[b2],bG=b1,bD=b2-b1,bM=c3.arg[b3]-b2;
+ const costs=[bG,bD,bM,b2f];
+ const picks={};[1,2,3,4].forEach((t,i)=>{picks[t]=pmBack(rs[i],costs[i])});
+ return {val:bv,picks,cost:bb,form,tc};
+}
+function pmSolveForm(P,R,form,cache){
+ const open=[],seen=new Set();let nodes=0;
+ const mk=(tc,bans)=>{const key=tc+':'+[...bans].sort((a,b)=>a-b).join(',');if(seen.has(key))return;seen.add(key);nodes++;const r=pmNode(P,R,form,tc,bans,cache);if(r){r.bans=bans;open.push(r)}};
+ for(const tc of [1,2,3,4])mk(tc,new Set());
+ while(open.length){
+  let bi=0;for(let i=1;i<open.length;i++)if(open[i].val>open[bi].val)bi=i;const n=open.splice(bi,1)[0],cnt=new Map();
+  for(const t of [1,2,3,4])for(const it of n.picks[t]){if(!cnt.has(it.club))cnt.set(it.club,[]);cnt.get(it.club).push(it)}
+  let viol=null;cnt.forEach(a=>{if(a.length>R.club&&(!viol||a.length>viol.length))viol=a});
+  if(!viol){n.nodes=nodes;return n}
+  if(nodes>PM.MAXNODES)return null;
+  for(const it of viol){const nb=new Set(n.bans);nb.add(it.id);mk(n.tc,nb)}
+ }
+ return null;
+}
+/* turns picked players into a team: starters = top k per position by value, bench = the rest, captain = best starter */
+function pmTeam(picks,form,R,vOf){
+ const ks={1:form.g,2:form.d,3:form.m,4:form.f},xi=[],bench=[];
+ for(const t of [1,2,3,4]){const a=[...picks[t]].sort((x,y)=>vOf(y)-vOf(x)||x.id-y.id);a.forEach((it,i)=>(i<ks[t]?xi:bench).push(it))}
+ bench.sort((x,y)=>(x.t===1?-1:0)-(y.t===1?-1:0)||vOf(y)-vOf(x));
+ const ord=[...xi].sort((x,y)=>vOf(y)-vOf(x)||x.id-y.id),cap=ord[0],vice=ord[1]||null;
+ const xiPts=xi.reduce((s,i)=>s+vOf(i),0);
+ return {form,xi,bench,cap,vice,xiPts,capBonus:cap?vOf(cap):0,total:xiPts+(cap?vOf(cap):0),cost:[...xi,...bench].reduce((s,i)=>s+i.c,0)};
+}
+function pmValidate(team,R,forms){
+ const bad=[],all=[...team.xi,...team.bench],ids=new Set(all.map(i=>i.id));
+ if(ids.size!==all.length)bad.push('a player appears twice');
+ if(all.length!==R.squad)bad.push('squad size '+all.length+' != '+R.squad);
+ if(team.xi.length!==R.play)bad.push('starting XI size '+team.xi.length+' != '+R.play);
+ for(const t of [1,2,3,4]){const n=all.filter(i=>i.t===t).length,s=team.xi.filter(i=>i.t===t).length;
+  if(n!==R.T[t].sel)bad.push('position '+t+': '+n+' in squad, required '+R.T[t].sel);if(s<R.T[t].mn||s>R.T[t].mx)bad.push('position '+t+': '+s+' starters outside '+R.T[t].mn+'-'+R.T[t].mx)}
+ if(forms&&!forms.some(f=>f.g===team.xi.filter(i=>i.t===1).length&&f.d===team.xi.filter(i=>i.t===2).length&&f.m===team.xi.filter(i=>i.t===3).length&&f.f===team.xi.filter(i=>i.t===4).length))bad.push('formation is not a legal one');
+ const cc=new Map();all.forEach(i=>cc.set(i.club,(cc.get(i.club)||0)+1));cc.forEach((n,c)=>{if(n>R.club)bad.push('club '+c+' has '+n+' players (limit '+R.club+')')});
+ if(team.cost>R.budget)bad.push('cost '+team.cost+' exceeds budget '+R.budget);
+ if(!team.cap||!team.xi.includes(team.cap))bad.push('captain is not a starter');
+ if(team.vice&&(team.vice===team.cap||!team.xi.includes(team.vice)))bad.push('vice-captain invalid');
+ if(team.bench.length!==R.squad-R.play)bad.push('bench size '+team.bench.length);
+ for(const t of [1,2,3,4]){const nb=team.bench.filter(i=>i.t===t).length,exp=R.T[t].sel-team.xi.filter(i=>i.t===t).length;if(nb!==exp)bad.push('bench has '+nb+' of position '+t+', expected '+exp)}
+ return bad;
+}
+function pmPoolOf(d,valOf){
+ const pool=[];d.P.forEach(p=>{if(!p.pm||p.pm.q==='nodata'||p.st==='u'||p.st==='n'||!fpOk(p.now_cost))return;const v=valOf(p);if(v==null||!isFinite(v))return;pool.push({id:p.id,t:p.ty,c:p.now_cost,club:p.tm,v})});
+ return pool;
+}
+function pmPrep(pool,R){const P={byT:{1:[],2:[],3:[],4:[]},pos:new Map()};
+ pmPrune(pool,R).forEach(i=>{P.byT[i.t].push(i);P.pos.set(i.id,i.t)});for(const t of [1,2,3,4])P.byT[t].sort((a,b)=>b.v-a.v||a.id-b.id);return P}
+/* Mode 1: one gameweek (or any single value per player). Exact within the pruned pool, for every legal formation. */
+function pmMode1(pool,R,forms){
+ const P=pmPrep(pool,R),cache=new Map(),vOf=i=>i.v,res=[];
+ for(const f of forms){const n=pmSolveForm(P,R,f,cache);if(n){const tm=pmTeam(n.picks,f,R,vOf);res.push({form:f,team:tm,nodes:n.nodes})}}
+ res.sort((a,b)=>b.team.total+PM.EPS*0-a.team.total||b.team.cost-a.team.cost);
+ return {all:res,best:res[0]||null,poolSize:P.pos.size,full:pool.length};
+}
+/* Mode 2: one fixed squad for several gameweeks, with the best lineup chosen each week (no transfers). Local search. */
+function pmEvalSquad(sq,Vs,R,forms){
+ let total=0;const per=[];
+ for(let g=0;g<Vs.length;g++){const V=Vs[g],by={1:[],2:[],3:[],4:[]};sq.forEach(i=>by[i.t].push(V.get(i.id)||0));for(const t of [1,2,3,4])by[t].sort((a,b)=>b-a);
+  let best=-Infinity,bf=null;
+  for(const f of forms){const ks={1:f.g,2:f.d,3:f.m,4:f.f};let s=0,mx=-Infinity;for(const t of [1,2,3,4]){for(let i=0;i<ks[t];i++)s+=by[t][i];if(ks[t]>0&&by[t][0]>mx)mx=by[t][0]}const v=s+mx;if(v>best){best=v;bf=f}}
+  per.push({v:best,form:bf});total+=best}
+ return {total,per};
+}
+function pmMode2(d,R,forms,gwIdx){
+ const Vs=gwIdx.map(g=>{const m=new Map();d.P.forEach(p=>{if(p.pm&&p.pm.q!=='nodata')m.set(p.id,p.pm.gws[g].pts)});return m});
+ const sum=p=>gwIdx.reduce((s,g)=>s+p.pm.gws[g].pts,0),pool=pmPoolOf(d,sum),m1=pmMode1(pool,R,forms);
+ if(!m1.best)return null;
+ const byId=new Map(pool.map(i=>[i.id,i])),start=[...m1.best.team.xi,...m1.best.team.bench];
+ let sq=start.map(i=>({...i})),ev=pmEvalSquad(sq,Vs,R,forms);const base=ev.total;
+ const cand=pmPrune(pool,R).sort((a,b)=>b.v-a.v);
+ for(let iter=0;iter<60;iter++){
+  const cnt=new Map();sq.forEach(i=>cnt.set(i.club,(cnt.get(i.club)||0)+1));const cost=sq.reduce((s,i)=>s+i.c,0);let bestMove=null,bestV=ev.total+1e-9;
+  for(let k=0;k<sq.length;k++){const m=sq[k];
+   for(const c of cand){if(c.t!==m.t||sq.some(x=>x.id===c.id))continue;if(cost-m.c+c.c>R.budget)continue;
+    const cc=(cnt.get(c.club)||0)-(c.club===m.club?1:0);if(cc+1>R.club)continue;
+    const t=sq.slice();t[k]=c;const e=pmEvalSquad(t,Vs,R,forms);if(e.total>bestV){bestV=e.total;bestMove={k,c,e}}}}
+  if(!bestMove)break;sq[bestMove.k]={...bestMove.c};ev=bestMove.e;
+ }
+ return {squad:sq,eval:ev,start:base,fixedLineupTeam:m1.best.team,improved:ev.total-base,poolSize:m1.poolSize};
+}
+
+/* ---------- UI: Predicted Points ---------- */
+Object.assign(FP,{pq:'',ppos:'',pteam:'',pmax:'',pav:'',pqual:'',pshow:false,psort:{k:'tot',d:-1},pdet:null,bm:'gw1',bg:0});
+let FPBEST={};
+const pmQLab={high:'Higher',medium:'Medium',low:'Low',nodata:'No data'},pmQCol={high:'#4cc38a',medium:'#e9b44c',low:'#e5646b',nodata:'#8a9bb0'};
+const pmTeamS=id=>((FPD.T.get(id)||{}).s)||'?';
+const pmFxLab=g=>g.none?'—':g.fx.map(x=>pmTeamS(x.opp)+(x.home?' (H)':' (A)')).join(' + ');
+const pmDot=p=>`<span title="${esc(pmStLabel(p)+(p.nw?' — '+p.nw:''))}" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${pmStCol(p)};margin-right:5px"></span>`;
+const pmNote=()=>`<div class="card mu" style="font-size:12px"><b>Predicted points are model estimates</b> for the next ${pmCtx(FPD).gws.length} gameweeks. They are not historical points: <b>actual season points</b> appear only in the details panel and the Table tab. Estimates are expected values (probability-weighted), so a player who may miss a match carries a fraction of the points he would score if fit.</div>`;
+function fpTPred(el){
+ const d=FPD;
+ if(!d.rules||!d.fix.length||d.fix[0].length<9){el.innerHTML='<div class="empty">Predictions need game rules, fixture results and kickoff times that the next synchronization downloads. Press Synchronize in Settings once, then reopen this tab.</div>';return}
+ pmPredictAll(d);const C=pmCtx(d);
+ if(!C.gws.length){el.innerHTML='<div class="empty">No upcoming gameweek found in the data.</div>';return}
+ el.innerHTML=pmNote()+`<div class="ctl"><input id="pq" placeholder="Search player" value="${esc(FP.pq)}"><select id="ppos">${fpPosOpts(FP.ppos)}</select><select id="ptm">${fpTeamOpts(FP.pteam)}</select><input id="pmx" type="number" step="0.1" placeholder="Max price" value="${esc(FP.pmax)}" style="width:110px"><select id="pav">${fpOpts([['','Any availability'],['ok','Available only'],['no','Doubtful, injured or suspended']],FP.pav)}</select><select id="pql">${fpOpts([['','Any data quality'],['high','Higher only'],['medium','Medium or higher']],FP.pqual)}</select><label class="mu" style="align-self:center"><input type="checkbox" id="psh" ${FP.pshow?'checked':''} style="min-height:0"> include players without data</label></div><div id="pout"></div><div id="pdet"></div><div id="pinfo"></div>`;
+ const rd=()=>{FP.pq=$('#pq').value;FP.ppos=$('#ppos').value;FP.pteam=$('#ptm').value;FP.pmax=$('#pmx').value;FP.pav=$('#pav').value;FP.pqual=$('#pql').value;FP.pshow=$('#psh').checked;fpPredDraw()};
+ ['pq','pmx'].forEach(i=>$('#'+i).oninput=rd);['ppos','ptm','pav','pql','psh'].forEach(i=>$('#'+i).onchange=rd);
+ $('#pinfo').innerHTML=pmInfoHtml(d,C);fpPredDraw();if(FP.pdet!=null)fpPredPick(FP.pdet);
+}
+function fpPredSort(k){FP.psort=FP.psort.k===k?{k,d:-FP.psort.d}:{k,d:(k==='name'||k==='club')?1:-1};fpPredDraw()}
+function fpPredDraw(){
+ const d=FPD,C=pmCtx(d),rank={high:3,medium:2,low:1,nodata:0};
+ let P=fpFilt(d.P,{q:FP.pq,pos:FP.ppos,team:FP.pteam,maxp:FP.pmax,av:FP.pav}).filter(p=>p.pm&&(FP.pshow||p.pm.q!=='nodata'));
+ if(FP.pqual)P=P.filter(p=>rank[p.pm.q]>=rank[FP.pqual]);
+ const ppm=p=>p.pm.tot!=null&&p.price>0?p.pm.tot/p.price:null,ppm1=p=>p.pm.g1!=null&&p.price>0?p.pm.g1/p.price:null;
+ const key=k=>{const m=/^g(\d)$/.exec(k);if(m)return p=>p.pm.gws[+m[1]]?p.pm.gws[+m[1]].pts:null;
+  return {name:p=>p.name,club:p=>p.tn,price:p=>p.price,tot:p=>p.pm.tot,avg:p=>p.pm.avg,ppm,ppm1,em:p=>p.pm.gws[0]?p.pm.gws[0].eMin:null,q:p=>rank[p.pm.q]}[k]};
+ const kf=key(FP.psort.k),dir=FP.psort.d;
+ const rows=[...P].sort((a,b)=>{const x=kf(a),y=kf(b);if(x==null&&y==null)return 0;if(x==null)return 1;if(y==null)return -1;const c=typeof x==='string'?x.localeCompare(y):x-y;return dir>0?c:-c});
+ const th=(k,t,n)=>`<th class="${n?'n':''}" style="cursor:pointer" onclick="fpPredSort('${k}')">${t}${FP.psort.k===k?(dir<0?' ↓':' ↑'):''}</th>`;
+ const gh=C.gws.map((g,i)=>th('g'+i,'GW'+g+'<div class="mu" style="font-size:10px;font-weight:400">predicted</div>',1)).join('');
+ const cell=g=>g?(g.none?'<span class="mu" title="No fixture in this gameweek">—</span>':`<div class="mu" style="font-size:10px">${esc(pmFxLab(g))}</div><b>${g.pts.toFixed(1)}</b>`):'';
+ $('#pout').innerHTML=`<div class="mu" style="margin-bottom:6px">${rows.length} players. Tap a column to sort, tap a name for the factors behind the prediction. Value = predicted points ÷ price in £m.</div><div class="wrap"><table><tr>${th('name','Player')}${th('club','Club')}<th>Pos</th>${th('price','£',1)}${gh}${th('tot','Σ'+C.gws.length+' GW',1)}${th('avg','Avg / GW',1)}${th('ppm','Pts/£m<div class="mu" style="font-size:10px;font-weight:400">'+C.gws.length+' GW</div>',1)}${th('ppm1','Pts/£m<div class="mu" style="font-size:10px;font-weight:400">GW'+C.gws[0]+'</div>',1)}${th('em','Exp. min<div class="mu" style="font-size:10px;font-weight:400">GW'+C.gws[0]+'</div>',1)}${th('q','Data')}</tr>`+
+  rows.slice(0,200).map(p=>`<tr><td>${pmDot(p)}<a href="javascript:void(0)" onclick="fpPredPick(${p.id})">${esc(p.name)}</a></td><td>${esc(p.tn)}</td><td>${FPPOS[p.pos]}</td><td class="n">${p.price==null?'N/A':p.price.toFixed(1)}</td>${p.pm.q==='nodata'?`<td colspan="${C.gws.length+5}" class="mu">${esc(p.pm.flags[0]||'No data')}</td>`:C.gws.map((g,i)=>`<td class="n">${cell(p.pm.gws[i])}</td>`).join('')+`<td class="n"><b>${p.pm.tot.toFixed(1)}</b></td><td class="n">${p.pm.avg.toFixed(2)}</td><td class="n">${f(ppm(p),2)}</td><td class="n">${f(ppm1(p),2)}</td><td class="n">${p.pm.gws[0].eMin>0?Math.round(p.pm.gws[0].eMin):'0'}</td>`}<td><span style="color:${pmQCol[p.pm.q]}">● ${pmQLab[p.pm.q]}</span></td></tr>`).join('')+'</table></div>'+(rows.length>200?'<div class="mu">Showing the first 200.</div>':'');
+}
+function fpPredPick(id){
+ const d=FPD,p=d.PB.get(id),b=$('#pdet');FP.pdet=id;if(!p||!b||!p.pm)return;const m=p.pm,C=pmCtx(d);
+ if(m.q==='nodata'){b.innerHTML=`<div class="card"><b>${esc(p.fn+' '+p.sn)}</b><div class="mu">${m.flags.map(esc).join('<br>')}</div></div>`;return}
+ const r=m.rates,P=C.pri[p.ty],ts=C.S.get(p.tm)||{},pc=v=>v==null?'N/A':v.toFixed(2);
+ const comp=['app','goal','ast','cs','gc','sv','dc','bon','card'],cl={app:'Appear.',goal:'Goals',ast:'Assists',cs:'Clean sheet',gc:'Goals conc.',sv:'Saves',dc:'Def. contr.',bon:'Bonus',card:'Cards/other'};
+ const used=comp.filter(k=>m.gws.some(g=>Math.abs(g.parts[k]||0)>1e-9));
+ const nextFx=m.gws.find(g=>g.fx.length),nf=nextFx?nextFx.fx[0]:null,so=nf?C.S.get(nf.opp):null;
+ const str=[],weak=[];
+ if(r.xg90!=null&&P.xg!=null){(r.xg90>P.xg*1.3?str:r.xg90<P.xg*.7?weak:[]).push('xG per 90 '+pc(r.xg90)+' vs '+pc(P.xg)+' for the position')}
+ if(r.xa90!=null&&P.xa!=null){(r.xa90>P.xa*1.3?str:r.xa90<P.xa*.7?weak:[]).push('xA per 90 '+pc(r.xa90)+' vs '+pc(P.xa))}
+ if(r.finG!=null)(r.finG>1.1?str:r.finG<.9?weak:[]).push('finishing ratio (goals+3)/(xG+3) = '+pc(r.finG));
+ if(r.pPlay0<.8&&!r.fit)weak.push('played in '+Math.round(r.pPlay0*100)+'% of his last '+r.recN+' matches');else if(r.pPlay0>=.9&&r.q60>=.8)str.push('regular starter: '+Math.round(r.q60*100)+'% of appearances at 60+ minutes');
+ if(so){(so.D>1.1?str:so.D<.9?weak:[]).push('next opponent '+pmTeamS(nf.opp)+' concedes '+pc(so.xga)+' xG per match (league average '+pc(C.mu)+')');(so.A>1.1&&p.ty<=3?weak:[]).push('next opponent '+pmTeamS(nf.opp)+' creates '+pc(so.xgf)+' xG per match')}
+ const li=a=>a.length?a.map(x=>'<li>'+esc(x)+'</li>').join(''):'<li class="mu">none notable</li>';
+ b.innerHTML=`<div class="card" style="font-size:13px"><b style="font-size:15px">${esc(p.fn+' '+p.sn)}</b> · ${esc(p.tf)} · ${FPPOS[p.pos]} · £${f(p.price,1)}m
+ <div style="margin:6px 0">${pmDot(p)}<b>${esc(pmStLabel(p))}</b>${p.nw?' — '+esc(p.nw):''} <span class="mu">(FPL status, updated at each synchronization; kept separate from ability)</span></div>
+ <div class="grid" style="margin:8px 0"><div class="kpi"><b>${f(p.total_points,0)}</b><span>Actual season points (history)</span></div><div class="kpi"><b>${m.tot.toFixed(1)}</b><span>Predicted, next ${C.gws.length} GW (availability-adjusted)</span></div><div class="kpi"><b>${m.fit.toFixed(1)}</b><span>Predicted if fully fit</span></div><div class="kpi"><b style="color:${pmQCol[m.q]}">${pmQLab[m.q]}</b><span>Data quality</span></div></div>
+ ${m.fit-m.tot>0.5?`<div style="color:var(--a);margin-bottom:6px">Availability lowers this player's prediction by ${(m.fit-m.tot).toFixed(1)} points over the period (${esc([...new Set(m.gws.flatMap(g=>g.fx.map(x=>x.av.src)))].join('; '))}).</div>`:''}
+ <div class="wrap"><table><tr><th>GW</th><th>Opponent</th><th class="n">Fit prob.</th><th class="n">Exp. min</th>${used.map(k=>`<th class="n">${cl[k]}</th>`).join('')}<th class="n">Predicted</th><th class="n">If fit</th></tr>${m.gws.map(g=>`<tr><td>${g.ev}</td><td>${esc(pmFxLab(g))}</td><td class="n">${g.none?'—':g.fx.map(x=>Math.round(x.av.a*100)+'%').join(' + ')}</td><td class="n">${g.none?'0':Math.round(g.eMin)}</td>${used.map(k=>`<td class="n">${(g.parts[k]||0).toFixed(2)}</td>`).join('')}<td class="n"><b>${g.pts.toFixed(2)}</b></td><td class="n">${g.fit.toFixed(2)}</td></tr>`).join('')}</table></div>
+ <div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:8px"><div style="flex:1;min-width:200px"><b>Strengths</b><ul style="margin:4px 0 0 18px;padding:0">${li(str)}</ul></div><div style="flex:1;min-width:200px"><b>Weaknesses</b><ul style="margin:4px 0 0 18px;padding:0">${li(weak)}</ul></div></div>
+ <div class="mu" style="margin-top:8px">Rates used (per 90, shrunk toward the position average): goals ${pc(r.lamG)}, assists ${pc(r.lamA)}${p.ty===1?', saves '+pc(r.R.sv):(r.R.dc!=null?', defensive contribution '+pc(r.R.dc):'')}, bonus ${pc(r.R.bon)}. Playing time: ${r.fit?'recent appearances while fit':'last '+r.recN+' matches'}; P(play) ${Math.round(r.pPlay0*100)}%, P(60+ | plays) ${Math.round(r.q60*100)}%, ${Math.round(r.ePlay)} min when playing.${p.px?` PitchAPI cross-check (not used in the prediction): xG/90 ${f(p.px.xg90,2)}, xT/90 ${f(p.px.xt90,2)}.`:''}</div>
+ ${m.flags.length?`<div style="margin-top:8px;color:var(--a)"><b>Uncertainty</b><ul style="margin:4px 0 0 18px;padding:0">${m.flags.map(x=>'<li>'+esc(x)+'</li>').join('')}</ul></div>`:''}</div>`;
+ b.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function pmInfoHtml(d,C){
+ const rows=[['minutes','Appearance'],['goals_scored','Goal'],['assists','Assist'],['clean_sheets','Clean sheet'],['goals_conceded','Goals conceded'],['saves','Saves'],['defensive_contribution','Defensive contribution'],['bonus','Bonus'],['yellow_cards','Yellow card'],['red_cards','Red card'],['own_goals','Own goal'],['penalties_missed','Penalty missed'],['penalties_saved','Penalty saved']];
+ const cellR=(id,t)=>{if(id==='minutes'){const m=pmMinRule(d,t);return m.lo+' / '+m.hi+(m.src==='default'?' (default)':'')}const r=pmRule(d,id,t);return r.src==='none'?'—':(r.step>1?r.pts+' per '+r.step:String(r.pts))+(r.src==='default'?' (default)':'')};
+ const nSc=C.grN;
+ return `<details class="card" style="font-size:12px"><summary class="mu"><b>How predictions are calculated, scoring rules and data limits</b></summary>
+ <p>Each fixture is predicted separately: <b>expected points = Σ over scoring categories of (expected events × points per event)</b>. Expected events come from per-90 rates shrunk toward the position average (pseudo-evidence of ${PM.PRIOR_MIN} minutes), scaled by expected minutes, and adjusted for the opponent. Goals use xG once (no separate shot-conversion term), multiplied by a finishing ratio (goals+${PM.K_FIN})/(xG+${PM.K_FIN}). Opponent effect for attackers = the opponent's xG conceded per match relative to the league (team strengths shrunk with ${PM.N0} pseudo-matches), with a home/away league average. Clean sheets use a Poisson goal model: P(0 goals) with the opponent's expected xG, calibrated by league goals ÷ xG (${C.gr.toFixed(3)}, from ${nSc} matches). Saves, goals-conceded deductions and defensive-contribution points are expectations of stepwise rules under Poisson counts. A double gameweek adds both fixtures; a blank gameweek is 0 because there is no match.</p>
+ <p><b>Scoring rules</b> (points; "(default)" = this rule was not observed in the live data, so the published FPL value is used; the rest were derived from gameweek ${d.scoring_gw==null?'—':d.scoring_gw} live data):</p>
+ <div class="wrap"><table><tr><th>Category</th>${[1,2,3,4].map(t=>`<th>${FPPOS[t]}</th>`).join('')}</tr>${rows.map(([id,l])=>`<tr><td>${l}</td>${[1,2,3,4].map(t=>`<td>${cellR(id,t)}</td>`).join('')}</tr>`).join('')}</table></div>
+ <p><b>Limits:</b> FPL data has no shots or shots-on-target per player and no opponent shot counts, so xG/xA and team xG (from per-match player xG) are used instead; PitchAPI shots are not used in the model. Defensive-contribution counts are modelled as Poisson from season totals. Injury data is FPL's own status, news text and published chance of playing (next gameweek only); a return date is used only when the news text states one. Beyond the next gameweek a published chance is carried forward unchanged, and a player with no chance or date published is treated as unavailable. Data quality: <i>Higher</i> = 900+ minutes and available; <i>Medium</i> = 270–899 minutes, doubtful with a published chance, or under 4 recent matches; <i>Low</i> = under 270 minutes, or unavailable without a return date. These are data-sufficiency labels, not accuracy percentages; the model has not been backtested here.${d.postponed?` ${d.postponed} postponed fixture(s) have no gameweek yet and are not counted.`:''}</p></details>`;
+}
+
+/* ---------- UI: Best Team ---------- */
+const pmMoney=c=>'£'+(c/10).toFixed(1)+'m';
+function pmCard(p,m,o){
+ const sty=o.abs?`position:absolute;left:${o.x.toFixed(1)}%;top:${o.y}%;transform:translate(-50%,-50%);width:${o.w||19}%;min-width:60px;max-width:98px;`:'flex:1 1 0;min-width:62px;max-width:110px;';
+ const badge=o.cap?'<span style="position:absolute;top:-7px;right:-5px;background:#e9b44c;color:#0d1520;border-radius:50%;width:17px;height:17px;font-size:10px;font-weight:800;line-height:17px">C</span>':o.vice?'<span style="position:absolute;top:-7px;right:-5px;background:#8a9bb0;color:#0d1520;border-radius:50%;width:17px;height:17px;font-size:10px;font-weight:800;line-height:17px">V</span>':'';
+ return `<div style="${sty}${o.abs?'':'position:relative;'}background:rgba(13,21,32,.9);border:1.5px solid ${pmStCol(p)};border-radius:8px;padding:3px 3px 4px;font-size:11px;line-height:1.25;text-align:center;cursor:pointer" onclick="fpPredPick(${p.id})" title="${esc(pmStLabel(p)+(p.nw?' — '+p.nw:''))}">${badge}<div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.name)}</div><div class="mu" style="font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.tn)} · ${o.abs?'':FPPOS[p.pos]+' · '}${pmMoney(p.now_cost)}</div><div><b style="color:var(--g)">${o.pts}</b>${o.sub?`<span class="mu" style="font-size:10px"> ${o.sub}</span>`:''}</div>${p.st!=='a'?`<div style="font-size:10px;color:${pmStCol(p)}">${esc(pmStLabel(p))}</div>`:''}</div>`;
+}
+function pmPitchHtml(team,d,ptsOf,subOf){
+ const rows={1:[],2:[],3:[],4:[]};team.xi.forEach(i=>rows[i.t].push(i));const yp={4:15,3:40,2:65,1:88};let cards='';
+ for(const t of [4,3,2,1]){const a=rows[t];a.forEach((i,k)=>{cards+=pmCard(d.PB.get(i.id),i,{abs:true,x:(k+.5)/a.length*100,y:yp[t],w:Math.min(19,92/Math.max(a.length,1)),cap:team.cap===i,vice:team.vice===i,pts:ptsOf(i),sub:subOf?subOf(i):''})})}
+ const ln='position:absolute;border:1.5px solid rgba(255,255,255,.35);';
+ return `<div style="position:relative;width:100%;max-width:560px;margin:8px auto;aspect-ratio:5/6;border-radius:10px;overflow:hidden;background:repeating-linear-gradient(0deg,#1d6b43 0 8.33%,#1a5f3b 8.33% 16.66%);border:2px solid rgba(255,255,255,.4)"><div style="${ln}left:0;right:0;top:50%;border-width:1.5px 0 0"></div><div style="${ln}left:35%;width:30%;top:38%;height:24%;border-radius:50%"></div><div style="${ln}left:22%;width:56%;top:0;height:16%;border-top:0"></div><div style="${ln}left:22%;width:56%;bottom:0;height:16%;border-bottom:0"></div>${cards}</div>`;
+}
+function pmBenchHtml(team,d,ptsOf,subOf){
+ return `<div class="mu" style="margin:4px 0">Bench (in order; goalkeeper first)</div><div style="display:flex;gap:6px;flex-wrap:wrap">${team.bench.map((i,k)=>pmCard(d.PB.get(i.id),i,{pts:ptsOf(i),sub:subOf?subOf(i):'',abs:false})).join('')}</div>`;
+}
+function pmChecks(team,R,forms){
+ const bad=pmValidate(team,R,forms),all=[...team.xi,...team.bench],cc=new Map();all.forEach(i=>cc.set(i.club,(cc.get(i.club)||0)+1));
+ const mx=Math.max(...cc.values()),mc=[...cc].filter(([c,n])=>n===mx).map(([c])=>pmTeamS(c)).join(', '),cnt=t=>all.filter(i=>i.t===t).length;
+ const ok=(b,t)=>`<div style="color:${b?'var(--g)':'var(--r)'}">${b?'✓':'✗'} ${t}</div>`;
+ return `<div class="card" style="font-size:12px"><b>Rule checks (computed on this team)</b>${ok(all.length===R.squad&&[1,2,3,4].every(t=>cnt(t)===R.T[t].sel),'Squad of '+all.length+': '+[1,2,3,4].map(t=>cnt(t)+' '+FPPOS[t]).join(', '))}${ok(team.cost<=R.budget,'Cost '+pmMoney(team.cost)+' of '+pmMoney(R.budget)+' budget')}${ok(mx<=R.club,'At most '+mx+' from one club (limit '+R.club+'; '+mc+')')}${ok(team.xi.length===R.play&&!bad.some(x=>/formation|starters/.test(x)),'Legal formation '+team.form.name+' ('+R.play+' starters, source: '+R.playSrc+')')}${ok(!bad.some(x=>/captain|bench/.test(x)),'Captain and vice-captain are starters; bench of '+team.bench.length)}${bad.length?'<div style="color:var(--r)">'+bad.map(esc).join('<br>')+'</div>':''}</div>`;
+}
+function fpTBest(el){
+ const d=FPD;
+ if(!d.rules||!d.fix.length||d.fix[0].length<9){el.innerHTML='<div class="empty">The team builder needs game rules, fixture results and kickoff times that the next synchronization downloads. Press Synchronize in Settings once, then reopen this tab.</div>';return}
+ const R=pmRules(d);if(!R||R.club==null||R.budget==null){el.innerHTML='<div class="empty">The game constraints (budget, club limit, squad structure) are missing from the downloaded data, so no valid team can be built. They come from FPL\'s game settings; press Synchronize again.</div>';return}
+ pmPredictAll(d);const C=pmCtx(d);if(!C.gws.length){el.innerHTML='<div class="empty">No upcoming gameweek found.</div>';return}
+ el.innerHTML=pmNote()+`<div class="ctl"><select id="bm">${fpOpts([['gw1','Best team for the next gameweek (GW'+C.gws[0]+')'],['w7','Best squad for the next '+C.gws.length+' gameweeks']],FP.bm)}</select><select id="bgw" style="${FP.bm==='w7'?'':'display:none'}">${fpOpts(C.gws.map((g,i)=>[String(i),'Lineup for GW'+g]),String(FP.bg))}</select></div><div id="bout"><div class="empty">Optimizing every legal formation…</div></div>`;
+ $('#bm').onchange=()=>{FP.bm=$('#bm').value;fpTBest($('#fpbody'))};$('#bgw').onchange=()=>{FP.bg=+$('#bgw').value;fpBestDraw()};
+ setTimeout(fpBestDraw,30);
+}
+function fpBestDraw(){
+ const d=FPD,R=pmRules(d),C=pmCtx(d),forms=pmForms(R),out=$('#bout');if(!out)return;
+ const key=d.generated+'|'+FP.bm;let res=FPBEST[key];
+ if(!res){
+  if(FP.bm==='gw1'){const pool=pmPoolOf(d,p=>p.pm.gws[0].pts),r1=pmMode1(pool,R,forms),r2=pmMode1(pmPoolOf(d,p=>p.pm.gws[0].fit),R,forms);res={r1,r2}}
+  else{const idx=C.gws.map((_,i)=>i);res={m2:pmMode2(d,R,forms,idx),idx}}
+  FPBEST[key]=res;
+ }
+ if(FP.bm==='gw1')return pmDrawGw1(out,d,R,C,forms,res);
+ return pmDrawW7(out,d,R,C,forms,res);
+}
+function pmDrawGw1(out,d,R,C,forms,res){
+ const b=res.r1.best;if(!b){out.innerHTML='<div class="empty">No valid team exists under the rules with the players that have data.</div>';return}
+ const t=b.team,g=C.gws[0],val=i=>d.PB.get(i.id).pm.gws[0].pts,fitv=i=>d.PB.get(i.id).pm.gws[0].fit;
+ const second=res.r1.all[1],all=[...t.xi,...t.bench],adj=all.filter(i=>d.PB.get(i.id).st!=='a');
+ let cf='';const c=res.r2.best;
+ if(c){const ids=new Set(all.map(i=>i.id)),cids=[...c.team.xi,...c.team.bench],add=cids.filter(i=>!ids.has(i.id)),cset=new Set(cids.map(i=>i.id)),drop=all.filter(i=>!cset.has(i.id));
+  const picks={1:[],2:[],3:[],4:[]};cids.forEach(i=>picks[i.t].push({...i,v:val(i)}));const blind=pmTeam(picks,c.team.form,R,i=>i.v);
+  cf=add.length?`<div class="card" style="font-size:13px"><b>Availability changed the selection.</b> If injuries and doubts were ignored the optimizer would pick ${add.map(i=>esc(d.PB.get(i.id).name)+' ('+esc(pmStLabel(d.PB.get(i.id)))+')').join(', ')} instead of ${drop.map(i=>esc(d.PB.get(i.id).name)).join(', ')}. That availability-blind team is expected to score ${blind.total.toFixed(1)} points once their fitness is counted, against ${t.total.toFixed(1)} for the chosen team.</div>`:'<div class="card mu" style="font-size:13px">Availability did not change the selection: the same 15 players are optimal with and without the injury adjustment.</div>';}
+ const sc=i=>val(i).toFixed(1),cap=d.PB.get(t.cap.id),vc=t.vice?d.PB.get(t.vice.id):null;
+ const capPlay=(()=>{const gg=cap.pm.gws[0];return gg.fx.length?1-gg.fx.reduce((s,x)=>s*(1-x.pPlay),1):0})(),viceExtra=vc?(1-capPlay)*val(t.vice):0;
+ out.innerHTML=`<div class="grid"><div class="kpi"><b>${t.form.name}</b><span>Formation chosen</span></div><div class="kpi"><b>${t.total.toFixed(1)}</b><span>Predicted points, starting XI incl. captain, GW${g}</span></div><div class="kpi"><b>${pmMoney(t.cost)}</b><span>Squad cost</span></div><div class="kpi"><b>${pmMoney(R.budget-t.cost)}</b><span>Budget remaining</span></div><div class="kpi"><b>${(all.reduce((s,i)=>s+val(i),0)).toFixed(1)}</b><span>Predicted, whole squad (bench included, no captain bonus)</span></div></div>
+ <div class="mu" style="margin:8px 0">Period: gameweek ${g} only. Captain ${esc(cap.name)} scores double (expected extra ${val(t.cap).toFixed(1)}); vice-captain ${vc?esc(vc.name):'—'} takes over only if the captain does not play${vc?` (P(captain plays) ${Math.round(capPlay*100)}%, expected vice bonus ${viceExtra.toFixed(2)}, not included in the total)`:''}.</div>
+ ${pmPitchHtml(t,d,sc,i=>'')}${pmBenchHtml(t,d,sc)}
+ <h3>Formation comparison (each is the exact optimum for that formation)</h3>${tbl([['Formation'],['Predicted XI + captain',1],['Cost',1],['']],res.r1.all.map(r=>[r.form.name,r.team.total.toFixed(2),pmMoney(r.team.cost),r===res.r1.all[0]?'<span class="tag ok">chosen</span>':(r.team.total-res.r1.all[0].team.total).toFixed(2)]))}
+ <div class="mu" style="font-size:12px;margin:6px 0">${esc(t.form.name)} is chosen because its best valid team has the highest predicted total${second?`; the next best, ${esc(second.form.name)}, is ${(t.total-second.team.total).toFixed(2)} points lower`:''}. The objective is total expected points within the budget and rules, not points per £.</div>
+ ${cf}${adj.length?`<div class="card" style="font-size:12px"><b>Players with an availability flag in this squad</b><br>${adj.map(i=>{const p=d.PB.get(i.id);return esc(p.name)+' — '+esc(pmStLabel(p))+': '+val(i).toFixed(2)+' predicted vs '+fitv(i).toFixed(2)+' if fully fit'+(p.nw?' ('+esc(p.nw)+')':'')}).join('<br>')}</div>`:''}
+ ${pmChecks(t,R,forms)}
+ <h3>Squad value (period = GW${g})</h3>${tbl([['Player'],['Club'],['Pos'],['£',1],['Role'],['Predicted GW'+g,1],['Pts/£m (GW'+g+')',1]],[...t.xi,...t.bench].map(i=>{const p=d.PB.get(i.id);return [esc(p.name),esc(p.tn),FPPOS[p.pos],(p.now_cost/10).toFixed(1),t.xi.includes(i)?(t.cap===i?'XI · captain':t.vice===i?'XI · vice':'XI'):'Bench',val(i).toFixed(2),(val(i)/(p.now_cost/10)).toFixed(2)]}))}
+ <div class="mu" style="font-size:12px;margin:6px 0">Optimization: exact for the candidate pool (${res.r1.poolSize} of ${res.r1.full} players after a lossless dominance prune), using dynamic programming over the budget with branch and bound for the club limit. Bench order breaks ties among equal-value squads (weight ${PM.EPS}); FPL automatic substitutions are not simulated.</div>`;
+}
+function pmDrawW7(out,d,R,C,forms,res){
+ const m=res.m2;if(!m){out.innerHTML='<div class="empty">No valid squad exists under the rules with the players that have data.</div>';return}
+ const gi=Math.min(FP.bg,C.gws.length-1),g=C.gws[gi],vOf=i=>d.PB.get(i.id).pm.gws[gi].pts,per=m.eval.per[gi],picks={1:[],2:[],3:[],4:[]};m.squad.forEach(i=>picks[i.t].push(i));
+ const t=pmTeam(picks,per.form,R,vOf),sum7=i=>d.PB.get(i.id).pm.tot,all=[...t.xi,...t.bench];
+ const adj=m.squad.filter(i=>d.PB.get(i.id).st!=='a');
+ out.innerHTML=`<div class="grid"><div class="kpi"><b>${m.eval.total.toFixed(1)}</b><span>Predicted points over ${C.gws.length} GW (best lineup each week, incl. captain)</span></div><div class="kpi"><b>${pmMoney(t.cost)}</b><span>Squad cost</span></div><div class="kpi"><b>${pmMoney(R.budget-t.cost)}</b><span>Budget remaining</span></div><div class="kpi"><b>${t.form.name}</b><span>Formation for GW${g}</span></div><div class="kpi"><b>${t.total.toFixed(1)}</b><span>GW${g} starting XI incl. captain</span></div></div>
+ <div class="mu" style="margin:8px 0">This mode picks <b>one fixed 15-player squad</b> and chooses the best legal lineup, formation and captain for every gameweek. <b>Transfers, chips, free-transfer limits and price changes are not modelled</b> because the app does not know your current team. Pitch: lineup for GW${g}. Cards show the GW${g} prediction and, in grey, the ${C.gws.length}-GW total.</div>
+ ${pmPitchHtml(t,d,i=>vOf(i).toFixed(1),i=>'Σ'+sum7(i).toFixed(0))}${pmBenchHtml(t,d,i=>vOf(i).toFixed(1),i=>'Σ'+sum7(i).toFixed(0))}
+ <h3>Lineup by gameweek</h3>${tbl([['GW'],['Formation'],['Predicted XI + captain',1]],C.gws.map((gw,k)=>[gw,m.eval.per[k].form.name,m.eval.per[k].v.toFixed(2)]))}
+ ${adj.length?`<div class="card" style="font-size:12px"><b>Players with an availability flag in this squad</b><br>${adj.map(i=>{const p=d.PB.get(i.id);return esc(p.name)+' — '+esc(pmStLabel(p))+': '+p.pm.tot.toFixed(1)+' predicted vs '+p.pm.fit.toFixed(1)+' if fully fit over the period'}).join('<br>')}</div>`:''}
+ ${pmChecks(t,R,forms)}
+ <h3>Squad value (period = ${C.gws.length} GW)</h3>${tbl([['Player'],['Club'],['Pos'],['£',1],['Predicted '+C.gws.length+' GW',1],['Pts/£m ('+C.gws.length+' GW)',1],['Availability']],m.squad.map(i=>{const p=d.PB.get(i.id);return [esc(p.name),esc(p.tn),FPPOS[p.pos],(p.now_cost/10).toFixed(1),p.pm.tot.toFixed(1),(p.pm.tot/(p.now_cost/10)).toFixed(2),esc(pmStLabel(p))]}))}
+ <div class="mu" style="font-size:12px;margin:6px 0">Optimization: the squad starts from the exact optimum when one lineup is used for all ${C.gws.length} weeks (${m.start.toFixed(1)} predicted points), then improves by single-player swaps with weekly rotation (+${m.improved.toFixed(1)}). This is a local search: it respects every rule but is not proven globally optimal. Predicted totals for ${C.gws.length} gameweeks carry more uncertainty than the next gameweek.</div>`;
+}
+"""
+
+
 def _x_fpl_index(html):
     def sub(h, old, new):
         if h.count(old) != 1:
@@ -3593,7 +4046,7 @@ def _x_fpl_index(html):
         return h.replace(old, new)
     h = html
     h = sub(h, "['rankings','Rankings'],", "['rankings','Rankings'],['fantasy','Fantasy'],")
-    h = sub(h, "async function route(){", _X_FPJS + "\nasync function route(){")
+    h = sub(h, "async function route(){", _X_FPJS + _X_FPJS2 + "\nasync function route(){")
     return h
 
 
