@@ -4554,7 +4554,7 @@ function oxSPText(p){
    minutes: league penalties per team-match × his observed share of his club's penalties × mean penalty xG.
    Only shots from rounds before the round being predicted are used, so the backtest stays leak-free. */
 function oxPenAdj(p,r){
- const P=OX.pen;if(!P||!P.ok||!fpOk(p.expected_goals)||!fpOk(p.goals_scored)||!(p.minutes>0))return p;
+ const P=OX.pen;if(!P||!P.ok||(FPD&&FPD.archive)||!fpOk(p.expected_goals)||!fpOk(p.goals_scored)||!(p.minutes>0))return p;
  const e=P.by.get(p.id);if(!e)return p;const mine=e.pen.filter(s=>s.r!=null&&s.r<r);if(!mine.length)return p;
  const all=P.pens.filter(s=>s.r!=null&&s.r<r),nm=[...P.round.values()].filter(x=>x.r<r).length;if(!nm||!all.length)return p;
  const lam=all.length/(2*nm),xgs=all.map(s=>s.xg).filter(fpOk),xpen=xgs.length?xgs.reduce((a,b)=>a+b,0)/xgs.length:null;if(xpen==null)return p;
@@ -4897,7 +4897,7 @@ async function oxBtRun(d,onP){
  const runV=async v=>{OX.btVer=v;cap.clear();try{
    pmPlayer=function(p,C,dd){const m=orig(p,C,dd);if(dd!==FPD)cap.set(C.next+'|'+p.id,{p,m,C,dd});return m};
    const r=await btRun(d,x=>onP&&onP(v,x));return {r,cap:new Map(cap)}}finally{pmPlayer=orig;OX.btVer='v1'}};
- const a=await runV('v1'),b=OX.pen&&OX.pen.ok?await runV('v2'):null;
+ const a=await runV('v1'),b=OX.pen&&OX.pen.ok&&!d.archive?await runV('v2'):null;
  /* calibration of v1 ranges: per player-gameweek, simulate his points and compare the actual with the 10th/90th percentiles */
  const u=oxRng(99),N=300,cal=[];let k=0;
  for(const x of a.r.rows){const c=a.cap.get(x.r+'|'+x.id);if(!c)continue;const q=oxParams(Object.assign({},c.p,{pm:c.m}),0,c.dd,c.C);
@@ -4925,7 +4925,7 @@ async function oxBtRun(d,onP){
  const rs=[...by.keys()].sort((x,y)=>x-y),half=rs[Math.floor(rs.length/2)],fit=rr.filter(x=>x.r<half),val=rr.filter(x=>x.r>=half),kf=zsd(fit);
  const cov=(L,k)=>L.length?L.filter(o=>o.act>=o.mean-k*(o.mean-o.p10)&&o.act<=o.mean+k*(o.p90-o.mean)).length/L.length:null;
  const lc={n:rr.length,rounds:rs,kappa,cov1:cov(rr,1),covK:cov(rr,Math.min(2,Math.max(1,kappa||1))),split:fit.length&&val.length?{half,kf,cov1:cov(val,1),covK:cov(val,Math.min(2,Math.max(1,kf))),n:val.length}:null,opt:lin.filter(x=>x.kind==='opt')};
- if(fpOk(kappa))oxLsSet(OX_LS.cal,{season:oxSeason(d),gen:d.generated,kappa:Math.min(2,Math.max(1,kappa)),top11,slope:sxx>0?sxy/sxx:null,rounds:rs,n:rr.length});
+ if(fpOk(kappa)&&!d.archive)oxLsSet(OX_LS.cal,{season:oxSeason(d),gen:d.generated,kappa:Math.min(2,Math.max(1,kappa)),top11,slope:sxx>0?sxy/sxx:null,rounds:rs,n:rr.length});
  return {at:d.generated,v1:a.r,v2:b?b.r:null,cal,lc,slope:sxx>0?sxy/sxx:null,top11};
 }
 function oxBtHtml(){
@@ -4993,6 +4993,235 @@ def _x_ox_index(html):
 
 INDEX = _x_ox_index(INDEX)
 # ======================== نهاية إضافة Optimal XI ========================
+
+
+# ============================================================================
+# إضافة: مواسم الفانتازي السابقة (2022/23 → 2025/26) — الصقها قبل إضافة الواجهة العربية
+# المصدر: الأرشيف العام vaastav/Fantasy-Premier-League (بيانات FPL الرسمية لكل لاعب في كل جولة).
+# المواسم المنتهية ما تتغير، فتُجلب مرة وحدة فقط وتُحفظ في data/fpl_<season>.json، وقائمتها في data/fpl_archive.json.
+# قبل الحفظ نتحقق أن قوانين نقاط الموسم تعيد حساب نقاط FPL الرسمية لكل لاعب في كل جولة.
+# ============================================================================
+import csv as _csv, io as _io, collections as _collections
+
+FPL_ARCHIVE = ["2022-23", "2023-24", "2024-25", "2025-26"]
+FPL_ARCHIVE_URL = "https://raw.githubusercontent.com/vaastav/Fantasy-Premier-League/master/data/{season}/{name}"
+FPL_ARCHIVE_VER = 1                 # يتغير فقط إذا تغيرت طريقة التحويل (يعيد بناء الملفات)
+FPL_SEASONS = []                    # يدخل في data/index.json → fpl.seasons
+_FPL_NUM += [k for k in ["code"] if k not in _FPL_NUM]     # رقم اللاعب الثابت بين المواسم (لربط الموسم الحالي بالسابقة)
+_FPA_HIST = ["round", "total_points", "value", "minutes", "expected_goals", "expected_assists", "bonus", "opponent_team", "was_home",
+             "starts", "goals_scored", "assists", "clean_sheets", "goals_conceded", "saves", "yellow_cards", "red_cards", "own_goals",
+             "penalties_missed", "penalties_saved", "bps", "expected_goals_conceded", "defensive_contribution", "fixture"]
+
+
+def _fpa_num(v):
+    if v is None or v == "" or v == "None":
+        return None
+    try:
+        x = float(v)
+    except ValueError:
+        return None
+    return int(x) if x == int(x) and "." not in str(v) else x
+
+
+def _fpa_rules(season):
+    """قوانين نقاط الموسم: identifier → {نوع اللاعب: (كل كم, نقاط)}"""
+    r = {"goals_scored": {1: (1, 6), 2: (1, 6), 3: (1, 5), 4: (1, 4)}, "assists": {t: (1, 3) for t in (1, 2, 3, 4)},
+         "clean_sheets": {1: (1, 4), 2: (1, 4), 3: (1, 1)}, "goals_conceded": {1: (2, -1), 2: (2, -1)}, "saves": {1: (3, 1)},
+         "penalties_saved": {1: (1, 5)}, "penalties_missed": {t: (1, -2) for t in (1, 2, 3, 4)},
+         "yellow_cards": {t: (1, -1) for t in (1, 2, 3, 4)}, "red_cards": {t: (1, -3) for t in (1, 2, 3, 4)},
+         "own_goals": {t: (1, -2) for t in (1, 2, 3, 4)}, "bonus": {t: (1, 1) for t in (1, 2, 3, 4)}}
+    if season >= "2025-26":
+        r["goals_scored"][1] = (1, 10)
+        r["defensive_contribution"] = {2: (10, 2), 3: (12, 2), 4: (12, 2)}
+    return r
+
+
+def _fpa_score(h, t, R):
+    m = h["minutes"] or 0
+    p = 0 if m == 0 else (1 if m < 60 else 2)
+    for ident, by in R.items():
+        if t in by and h.get(ident) is not None:
+            step, pts = by[t]
+            p += int(h[ident] // step) * pts
+    return p
+
+
+def _fpa_build(season, get):
+    """يبني ملف الموسم بنفس صيغة data/fpl.json. get(name) ترجع صفوف CSV (قائمة dict)."""
+    teams, pr, fx, gw = get("teams.csv"), get("players_raw.csv"), get("fixtures.csv"), get("gws/merged_gw.csv")
+    types = {int(p["id"]): int(p["element_type"]) for p in pr}
+    pr = [p for p in pr if int(p["element_type"]) <= 4]                  # 2024-25: المدربون (Assistant Manager) ليسوا لاعبين
+    cols = ["id", "wn", "fn", "sn", "tm", "ty", "st", "nw"] + _FPL_NUM
+    rows = [[int(p["id"]), p["web_name"], p["first_name"], p["second_name"], int(p["team"]), int(p["element_type"]),
+             p.get("status") or "a", p.get("news") or ""] + [_fpa_num(p.get(k)) for k in _FPL_NUM] for p in pr]
+    keep = {r[0] for r in rows}
+    hist, R, ok, bad = _collections.defaultdict(list), _fpa_rules(season), 0, 0
+    for g in gw:
+        e = int(g["element"])
+        if e not in keep:
+            continue
+        h = {k: (_fpa_num(g.get(k)) if k != "was_home" else (1 if g.get("was_home") in ("True", "true", "1") else 0)) for k in _FPA_HIST}
+        h["round"] = int(float(g["round"]))
+        hist[str(e)].append([h[k] for k in _FPA_HIST])
+        if _fpa_score(h, types[e], R) == h["total_points"]:
+            ok += 1
+        else:
+            bad += 1
+    for v in hist.values():
+        v.sort(key=lambda x: (x[0], x[-1] or 0))
+    ko = _collections.defaultdict(list)
+    for f in fx:
+        if f["event"]:
+            ko[int(float(f["event"]))].append(f["kickoff_time"])
+    events = []
+    for e in sorted(ko):
+        k0 = datetime.datetime.fromisoformat(min(ko[e]).replace("Z", "+00:00")) - datetime.timedelta(minutes=90)
+        events.append(dict(id=e, name=f"Gameweek {e}", fin=True, cur=False, nxt=False, dl=k0.strftime("%Y-%m-%dT%H:%M:%SZ"), avg=None))
+    fix = [[int(float(f["event"])), int(f["team_h"]), int(f["team_a"]), _fpa_num(f["team_h_difficulty"]), _fpa_num(f["team_a_difficulty"]),
+            1 if f["finished"] == "True" else 0, _fpa_num(f["team_h_score"]), _fpa_num(f["team_a_score"]), f["kickoff_time"]]
+           for f in fx if f["event"]]
+    sc = {ident: {str(t): dict(kind="step", step=st, pts=float(pt), n=0) for t, (st, pt) in by.items()} for ident, by in R.items()}
+    sc["minutes"] = {str(t): dict(kind="threshold", at=60, lo=1, hi=2, n=0) for t in (1, 2, 3, 4)}
+    n_h = sum(len(v) for v in hist.values())
+    audit = {k: sum(1 for v in hist.values() for r in v if r[i] is not None) for i, k in enumerate(_FPL_HIST_SHORT)}
+    return dict(generated=f"{season} archive", archive=season, av=FPL_ARCHIVE_VER, source="vaastav/Fantasy-Premier-League",
+                cols=cols, rows=rows,
+                teams=[dict(id=int(t["id"]), n=t["name"], s=t["short_name"], st=_fpa_num(t.get("strength")), code=_fpa_num(t.get("code")))
+                       for t in teams],
+                events=events, fix=fix, hist=dict(hist), hcols=list(_FPL_HIST_SHORT), hv=FPL_HIST_VER, haudit=dict(rows=n_h, f=audit),
+                rules=dict(squad=15, play=11, club=3, budget=1000, transfers_cap=20,
+                           types={"1": dict(n="GKP", sel=2, mn=1, mx=1), "2": dict(n="DEF", sel=5, mn=3, mx=5),
+                                  "3": dict(n="MID", sel=5, mn=2, mx=5), "4": dict(n="FWD", sel=3, mn=1, mx=3)}),
+                scoring=sc, scoring_gw=None, postponed=sum(1 for f in fx if not f["event"]),
+                check=dict(rows=ok + bad, reproduced=ok))
+
+
+def _fpa_get(season):
+    def get(name):
+        url = FPL_ARCHIVE_URL.format(season=season, name=name)
+        last = None
+        for i in range(3):
+            try:
+                r = requests.get(url, timeout=60)
+                if r.status_code == 200:
+                    return list(_csv.DictReader(_io.StringIO(r.content.decode("utf-8", errors="replace"))))
+                last = r.status_code
+            except Exception as e:
+                last = type(e).__name__
+            time.sleep(5 * (i + 1))
+        raise RuntimeError(f"{name}: {last}")
+    return get
+
+
+def sync_fpl_archive(hub):
+    global FPL_SEASONS
+    man = gh_get_json(hub, "data/fpl_archive.json") or {}
+    have = {x["season"]: x for x in man.get("seasons", []) if x.get("av") == FPL_ARCHIVE_VER}
+    added = False
+    for s in FPL_ARCHIVE:
+        if s in have:
+            continue
+        try:
+            d = _fpa_build(s, _fpa_get(s))
+            chk = d["check"]
+            if not chk["rows"] or chk["reproduced"] / chk["rows"] < 0.99:
+                log(f"  [Fantasy archive] {s}: القوانين ما تطابق نقاط FPL ({chk}) — ما حفظته")
+                continue
+            gh_put(hub, f"data/fpl_{s}.json", json.dumps(d, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
+                   f"Add Fantasy season {s}")
+            have[s] = dict(season=s, file=f"fpl_{s}.json", av=FPL_ARCHIVE_VER, rows=chk["rows"],
+                           reproduced=round(chk["reproduced"] / chk["rows"] * 100, 2))
+            added = True
+            log(f"  [Fantasy archive] {s}: {chk['rows']} صف، القوانين تطابق {have[s]['reproduced']}% من نقاط FPL")
+        except Exception as e:
+            log(f"  [Fantasy archive] تعذر جلب {s} ({type(e).__name__}: {e}) — نحاول في المزامنة القادمة")
+    FPL_SEASONS = [have[s] for s in FPL_ARCHIVE if s in have]
+    if added:
+        gh_put(hub, "data/fpl_archive.json", json.dumps(dict(seasons=FPL_SEASONS), ensure_ascii=False).encode("utf-8"),
+               "Update Fantasy archive list")
+
+
+_orig_run_pipeline_fpa = run_pipeline
+
+
+def run_pipeline(hub, pit_key):
+    try:
+        sync_fpl_archive(hub)
+    except Exception as e:      # أي خطأ في الأرشيف ما يوقف بقية المزامنة
+        log(f"  [Fantasy archive] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
+    return _orig_run_pipeline_fpa(hub, pit_key)
+
+
+_orig_gh_put_fpa = gh_put
+
+
+def gh_put(hub, path, content, message):
+    if path == "data/index.json" and FPL_INDEX and FPL_SEASONS:
+        FPL_INDEX["seasons"] = FPL_SEASONS      # إضافة Fantasy تكتب FPL_INDEX في الفهرس
+    return _orig_gh_put_fpa(hub, path, content, message)
+
+
+# ---------------- الواجهة: اختيار الموسم في صفحة الفانتازي ----------------
+_X_SEASONJS = r"""/* ===== Fantasy seasons: the current season (live) or an archived season (2022-23 → 2025-26) ===== */
+const FPS={cur:'',cache:{}};
+const FPS_ARCH_TABS=new Set(['table','scatter','value','compare','teams','fixtures','backtest']);
+const fpsList=()=>((ALL&&ALL.fpl&&ALL.fpl.seasons)||[]);
+const fpsLabel=s=>s.replace('-','/');
+const fpsTabOk=t=>!(FPD&&FPD.archive)||FPS_ARCH_TABS.has(t[0]);
+async function fpsLoad(s){
+ const m=fpsList().find(x=>x.season===s);if(!m)throw new Error('season '+s+' is not in the data');
+ if(FPD&&FPK==='arch:'+s)return FPD;
+ let d=FPS.cache[s];
+ if(!d){const r=await fetch('data/'+m.file+'?v='+encodeURIComponent(m.av||''));if(!r.ok)throw new Error(m.file+' (HTTP '+r.status+')');d=await r.json();
+  d.T=new Map(d.teams.map(t=>[t.id,t]));
+  d.P=d.rows.map(r=>{const o={};d.cols.forEach((c,i)=>o[c]=r[i]);const t=d.T.get(o.tm)||{};
+   o.tn=t.s||'?';o.tf=t.n||'?';o.pos=o.ty;o.name=o.wn;o.price=fpOk(o.now_cost)?o.now_cost/10:null;o.chg=fpOk(o.cost_change_start)?o.cost_change_start/10:null;return o});
+  d.PB=new Map(d.P.map(p=>[p.id,p]));d.archive=s;FPS.cache[s]=d}
+ FPD=d;FPK='arch:'+s;FPLINK=null;return d;
+}
+function fpsSet(v){
+ FPS.cur=v;FP.sel=[];FP.pdet=null;FPBEST={};OX.cache={};OX.bt=null;BT.res=null;BT.line=null;
+ if(v&&!FPS_ARCH_TABS.has(FP.tab))FP.tab='table';
+ R.fantasy($('#app'));
+}
+function fpsSel(){
+ const L=fpsList();if(!L.length)return '';
+ return `<div class="ctl" style="margin-bottom:6px"><select onchange="fpsSet(this.value)" aria-label="Season">${fpOpts([['','Current season'],...[...L].reverse().map(x=>[x.season,'Season '+fpsLabel(x.season)])],FPS.cur)}</select></div>`;
+}
+function fpsHead(d){
+ const m=fpsList().find(x=>x.season===d.archive)||{};
+ return `<div class="mu" style="margin-bottom:8px">Archived season ${esc(fpsLabel(d.archive))}: official FPL data per player and gameweek from the public vaastav/Fantasy-Premier-League archive (prices, status and totals as at the end of that season). The season's scoring rules reproduce FPL's own points for ${m.reproduced!=null?esc(m.reproduced)+'%':'N/A'} of ${m.rows!=null?esc(m.rows):'N/A'} player-gameweeks. The Backtest tab replays the whole season with today's model, using only earlier gameweeks for each prediction. The Optimal XI, My XI, Forecast and prediction tabs belong to the current season.</div><div id="fpmsg" class="mu" style="min-height:18px"></div>`;
+}
+function fpsNoLink(){FPLINK={key:'arch:'+FPD.archive,map:new Map(),on:false,n:0,tot:0};FPD.P.forEach(p=>{p.px=null});return FPLINK}
+"""
+
+_AR_SEASON = {
+    "Current season": "الموسم الحالي", "Season #/#": "موسم #/#", "Season": "الموسم",
+    "## archive": "أرشيف ##",
+    "Archived season #/#: official FPL data per player and gameweek from the public vaastav/Fantasy-Premier-League archive (prices, status and totals as at the end of that season). The season's scoring rules reproduce FPL's own points for #% of # player-gameweeks. The Backtest tab replays the whole season with today's model, using only earlier gameweeks for each prediction. The Optimal XI, My XI, Forecast and prediction tabs belong to the current season": "موسم مؤرشف #/#: بيانات FPL الرسمية لكل لاعب في كل جولة من الأرشيف العام vaastav/Fantasy-Premier-League (الأسعار والحالة والمجاميع كما كانت في نهاية الموسم). قوانين نقاط ذاك الموسم تعيد حساب نقاط FPL نفسها في #% من # (لاعب × جولة). تبويب الاختبار التاريخي يعيد الموسم كاملاً بموديل اليوم، وكل توقع يستخدم الجولات السابقة فقط. تبويبات التشكيلة المثالية وتشكيلتي والتوقعات تخص الموسم الحالي",
+}
+
+
+def _x_season_index(html):
+    def sub(h, old, new):
+        if h.count(old) != 1:
+            log(f"  تنبيه (المواسم): ما لقيت نقطة التعديل بدقة، تخطيتها: {old[:60]}")
+            return h
+        return h.replace(old, new)
+    h = html
+    h = sub(h, "async function fpLoad(){\n const m=ALL.fpl;", "async function fpLoad(){\n if(FPS.cur)return fpsLoad(FPS.cur);\n const m=ALL.fpl;")
+    h = sub(h, "function fpLink(){\n", "function fpLink(){\n if(FPD&&FPD.archive)return fpsNoLink();\n")
+    h = sub(h, "function fpHeader(d){\n", "function fpHeader(d){\n if(d.archive)return fpsSel()+fpsHead(d);\n")
+    h = sub(h, " return `<div class=\"mu\" style=\"margin-bottom:8px\">Official Fantasy Premier League data, as of ",
+            " return fpsSel()+`<div class=\"mu\" style=\"margin-bottom:8px\">Official Fantasy Premier League data, as of ")
+    h = sub(h, "function fpRender(){\n const d=FPD,T=[", "function fpRender(){\n if(FPD&&FPD.archive&&!fpsTabOk([FP.tab]))FP.tab='table';\n const d=FPD,T=[")
+    h = sub(h, "$('#fproot').innerHTML=`<div class=\"ctl\">${T.map(", "$('#fproot').innerHTML=`<div class=\"ctl\">${T.filter(fpsTabOk).map(")
+    h = sub(h, "async function route(){", _X_SEASONJS + "\nasync function route(){")
+    return h
+
+
+INDEX = _x_season_index(INDEX)
+# ======================== نهاية إضافة مواسم الفانتازي ========================
 
 
 # ============================================================================
@@ -5456,6 +5685,7 @@ _AR_DICT.update({
     "PitchAPI data is not used. No model version other than v# exists yet, and the model has not been tuned on these results, so nothing here is an in-sample fit": "وبيانات PitchAPI غير مستخدمة. النموذج v# ما عُدّل بناءً على هذه النتائج، فلا شيء هنا ملائمة على نفس العينة",
     "Players selected": "اللاعبون المختارون", "Fixed opt.": "المثالية الثابتة",
 })
+_AR_DICT.update(globals().get("_AR_SEASON", {}))     # نصوص إضافة المواسم
 _AR_INJ = {"Calf": "إصابة في الساق", "Ankle": "إصابة في الكاحل", "Groin": "إصابة في الفخذ", "Hamstring": "إصابة في العضلة الخلفية",
            "Muscular": "إصابة عضلية", "Foot": "إصابة في القدم", "Knee": "إصابة في الركبة", "Unspecified": "إصابة غير محددة",
            "Back": "إصابة في الظهر", "Hip": "إصابة في الورك", "Thigh": "إصابة في الفخذ", "Shoulder": "إصابة في الكتف",
