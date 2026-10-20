@@ -4336,6 +4336,7 @@ const oxLsGet=(k,def)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(
 const oxLsSet=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){return false}};
 const oxSeason=d=>{const e=(d.events||[])[0];return e&&e.dl?String(e.dl).slice(0,4):'?'};
 const oxR1=v=>Math.round(v*10)/10;
+const oxVerLabel=()=>(typeof PM_VERSION!=='undefined'?PM_VERSION:'v1')+(OX.ver==='v2'?' + penalty regression':'');
 const oxP=v=>v==null?'N/A':Math.round(v*100)+'%';
 
 /* ---------- inputs ---------- */
@@ -4565,7 +4566,7 @@ function oxPenAdj(p,r){
 const oxPmPlayer0=pmPlayer;
 pmPlayer=function(p,C,dd){const v=dd===FPD?OX.ver:OX.btVer;return oxPmPlayer0(v==='v2'?oxPenAdj(p,C.next):p,C,dd)};
 async function oxSetVer(v){
- if(v==='v2'){const P=await oxPenLoad();if(!P||!P.ok){OX.msg='Model v2 needs PitchAPI Premier League shot data: '+((P&&P.why)||'not available');v='v1'}}
+ if(v==='v2'){const P=await oxPenLoad();if(!P||!P.ok){OX.msg='Penalty regression needs PitchAPI Premier League shot data: '+((P&&P.why)||'not available');v='v1'}}
  OX.ver=v;FPD._pmPred=null;FPD.P.forEach(p=>{p.pm=null});FPBEST={};OX.cache={};fpRender();
 }
 
@@ -4593,7 +4594,7 @@ function oxPartsRow(g){return OX_COMP.map(k=>(g.parts[k]||0))}
 function oxLogRecord(X,res){
  const {d,C}=X,t=res.team,lg=oxLsGet(OX_LS.log,[]),gw=C.gws[0];
  if(lg.some(e=>e.gw===gw&&e.gen===d.generated&&e.ver===OX.ver&&e.mode===res.mode))return;
- lg.push({gw,gen:d.generated,ver:OX.ver,mode:res.mode,at:new Date().toISOString().slice(0,16).replace('T',' ')+' UTC',ids:t.xi.map(i=>i.id),cap:t.cap?t.cap.id:null,total:+t.total.toFixed(2),form:t.form.name,season:oxSeason(d)});
+ lg.push({gw,gen:d.generated,ver:oxVerLabel(),mode:res.mode,at:new Date().toISOString().slice(0,16).replace('T',' ')+' UTC',ids:t.xi.map(i=>i.id),cap:t.cap?t.cap.id:null,total:+t.total.toFixed(2),form:t.form.name,season:oxSeason(d)});
  while(lg.length>60)lg.shift();oxLsSet(OX_LS.log,lg);
 }
 function oxActual(d,id,r){const ix=btIx(d);let s=null;((d.hist||{})[String(id)]||[]).forEach(h=>{if(h[0]===r&&fpOk(h[ix.pts]))s=(s||0)+h[ix.pts]});return s}
@@ -4610,12 +4611,12 @@ function oxCtl(X,o){
  const {C,RU}=X,gw=o.gw!==false?`<select onchange="OX.gi=+this.value;fpRender()">${fpOpts(C.gws.map((g,i)=>[String(i),'GW'+g+(i===0?' (next)':'')]),String(OX.gi))}</select>`:'';
  const md=o.mode!==false?`<select onchange="OX.mode=this.value;fpRender()">${fpOpts([['budget','Fits a '+(RU.budget!=null?pmMoney(RU.budget):'')+' squad of '+RU.squad],['any','Any price (best possible XI)']].filter(x=>x[0]!=='budget'||RU.budget!=null),OX.mode)}</select>`:'';
  const v2=OX.pen&&OX.pen.ok;
- const vr=`<select onchange="oxSetVer(this.value)" title="Prediction model">${fpOpts([['v1','Model v1 (default)'],...(v2||OX.ver==='v2'?[['v2','Model v2: penalty-regressed']]:[])],OX.ver)}</select>`;
+ const vr=`<select onchange="oxSetVer(this.value)" title="Prediction model">${fpOpts([['v1','Model '+PM_VERSION+' (default)'],...(v2||OX.ver==='v2'?[['v2','Model '+PM_VERSION+' + penalty regression']]:[])],OX.ver)}</select>`;
  return `<div class="ctl">${gw}${md}${o.extra||''}${vr}</div>`+(OX.msg?`<div class="card" style="color:var(--a);font-size:13px">${esc(OX.msg)}</div>`:'');
 }
 function oxHead(X,gi,txt){
  const {d,C}=X,e=d.events.find(x=>x.id===C.gws[gi]),dl=e&&e.dl?new Date(e.dl):null;
- return `<div class="mu" style="font-size:12px;margin:-4px 0 8px">GW${C.gws[gi]}${dl?' · deadline '+esc(dl.toUTCString().slice(0,22))+' UTC':''} · data ${esc(d.generated)} UTC · model ${esc(OX.ver)} · ${txt||'all points are projections (expected values), not guarantees'}</div>`;
+ return `<div class="mu" style="font-size:12px;margin:-4px 0 8px">GW${C.gws[gi]}${dl?' · deadline '+esc(dl.toUTCString().slice(0,22))+' UTC':''} · data ${esc(d.generated)} UTC · model ${esc(oxVerLabel())} · ${txt||'all points are projections (expected values), not guarantees'}</div>`;
 }
 const oxNm=(d,id)=>{const p=d.PB.get(id);return p?`<a href="javascript:void(0)" onclick="fpPredPick(${id})">${esc(p.name)}</a>`:'?'};
 const oxRange=s=>s?`${s.p10.toFixed(0)}–${s.p90.toFixed(0)}`:'N/A';
@@ -4670,7 +4671,7 @@ function oxDrawXI(X,res,gi){
  <details class="card" style="font-size:12px"><summary class="mu"><b>How the optimal XI and its range are calculated</b></summary>
  <p>Player values are the availability-adjusted expected points of the Predicted Points model for GW${g} (a double gameweek adds both fixtures; a blank gameweek is 0). ${res.mode==='budget'?`The XI comes from the exact squad optimizer of the Best Team tab (dynamic programming over the budget with branch and bound for the club limit, ${res.pool} of ${res.full} players after a lossless dominance prune): it maximises the XI's expected points plus the captain's, subject to a legal ${RU.squad}-player squad within the budget.`:`Every legal formation (${forms.map(x=>x.name).join(', ')}, from FPL's game settings) is solved exactly by branch and bound: maximise the XI's expected points plus the captain's, at most ${RU.club} players per club; ${res.pool} players with a projection are considered.`} Players marked unavailable or not in a squad are excluded.</p>
  <p>The 80% range comes from ${OX.N.toLocaleString()} simulations of the same model (fixed seed, so it does not change between visits): minutes, goals, assists, saves, defensive actions, bonus and cards are drawn per player; goals against are drawn once per team and fixture, so team-mates' clean sheets move together. Team-mates' attacking returns are drawn independently. In the leak-free replay these lineup ranges came out too narrow, so they are widened by a factor of ${oxK().toFixed(2)} around the expected total (${oxK()===OX_KAPPA?'default fitted on GW2–4 and validated on GW5–6':'refitted on this device in the Backtest tab'}); the Backtest tab shows the current check. Projections of the very top players have been optimistic (a selection effect: the highest projections include the largest over-estimates), so read the XI total as an upper-leaning estimate${(()=>{const c=oxLsGet(OX_LS.cal,null);return c&&c.season===oxSeason(FPD)&&c.top11?`: in the replay the 11 highest-projected players per gameweek averaged ${c.top11.pred.toFixed(2)} projected vs ${c.top11.act.toFixed(2)} actual points`:''})()}.</p>
- <p>Set pieces: FPL taker order (when the data has it) and PitchAPI shot evidence (penalties taken and scored, direct free-kick shots) are shown for information. PitchAPI shots do not record who took a corner or a free-kick cross, so corner duty is only known from FPL's own taker order. Model v1 already counts penalty xG inside FPL xG; model v2 regresses each taker's realised penalty xG toward the league penalty rate (see Backtest).${OX.pen&&OX.pen.ok?` PitchAPI evidence: ${OX.pen.pens.length} penalties in ${OX.pen.matches} ${esc(OX.pen.league)} matches, ${OX.pen.penLinked} linked to an FPL player by club and name${OX.pen.penUnlinked.length?'; not linked: '+OX.pen.penUnlinked.map(esc).join(', '):''}.`:OX.pen&&!OX.pen.ok?' PitchAPI set-piece evidence unavailable: '+esc(OX.pen.why):''}${FPD.cols.includes('penalties_order')?'':' FPL taker order is not in the downloaded data yet; it is added at the next synchronization.'}</p></details>`;
+ <p>Set pieces: FPL taker order (when the data has it) and PitchAPI shot evidence (penalties taken and scored, direct free-kick shots) are shown for information. PitchAPI shots do not record who took a corner or a free-kick cross, so corner duty is only known from FPL's own taker order. The base model counts penalty xG inside FPL xG; the penalty-regression option regresses each taker's realised penalty xG toward the league penalty rate (see Backtest).${OX.pen&&OX.pen.ok?` PitchAPI evidence: ${OX.pen.pens.length} penalties in ${OX.pen.matches} ${esc(OX.pen.league)} matches, ${OX.pen.penLinked} linked to an FPL player by club and name${OX.pen.penUnlinked.length?'; not linked: '+OX.pen.penUnlinked.map(esc).join(', '):''}.`:OX.pen&&!OX.pen.ok?' PitchAPI set-piece evidence unavailable: '+esc(OX.pen.why):''}${FPD.cols.includes('penalties_order')?'':' FPL taker order is not in the downloaded data yet; it is added at the next synchronization.'}</p></details>`;
 }
 
 /* ---------- My XI (builder) ---------- */
@@ -4890,7 +4891,7 @@ function oxRangePlot(rows){
  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:760px;display:block;margin:0 auto" role="img" aria-label="Expected points and 80% range per lineup">${g}</svg>`;
 }
 
-/* ---------- Backtest additions: range calibration + model v2 vs v1 (same leak-free replay) ---------- */
+/* ---------- Backtest additions: range calibration + penalty regression vs base model (same leak-free replay) ---------- */
 async function oxBtRun(d,onP){
  await oxPenLoad();
  const cap=new Map(),orig=pmPlayer;
@@ -4929,8 +4930,8 @@ async function oxBtRun(d,onP){
  return {at:d.generated,v1:a.r,v2:b?b.r:null,cal,lc,slope:sxx>0?sxy/sxx:null,top11};
 }
 function oxBtHtml(){
- const head='<h3>Points range calibration and model v2 (penalty regression)</h3>';
- if(!OX.bt)return head+`<div class="mu" style="font-size:12px;margin-bottom:6px">Checks the 80% ranges shown in Optimal XI, My XI and Forecast: in the same leak-free replay, how often did a player's actual points fall below the 10th or above the 90th percentile of his simulated distribution? Also replays model v2, which regresses penalty xG (PitchAPI shots), and compares it with v1 on the same player-gameweeks.</div><div class="ctl"><button class="s" onclick="oxBtGo()" ${OX.btBusy?'disabled':''}>Run calibration and v2 comparison</button></div><div id="oxbtmsg" class="mu"></div>`;
+ const head='<h3>Points range calibration and the penalty-regression option</h3>';
+ if(!OX.bt)return head+`<div class="mu" style="font-size:12px;margin-bottom:6px">Checks the 80% ranges shown in Optimal XI, My XI and Forecast: in the same leak-free replay, how often did a player's actual points fall below the 10th or above the 90th percentile of his simulated distribution? Also replays the penalty-regression option (PitchAPI penalty shots) and compares it with the base model on the same player-gameweeks.</div><div class="ctl"><button class="s" onclick="oxBtGo()" ${OX.btBusy?'disabled':''}>Run calibration and penalty-regression comparison</button></div><div id="oxbtmsg" class="mu"></div>`;
  if(OX.bt.err)return head+`<div class="empty">Could not run: ${esc(OX.bt.err)}</div>`;
  const B=OX.bt,st=BT.start,cal=B.cal.filter(x=>x.r>=st);if(!cal.length)return head+'<div class="empty">No player-gameweeks in this range.</div>';
  const avg=a=>a.reduce((s,x)=>s+x,0)/a.length,below=avg(cal.map(x=>x.act<x.p10?1:0)),above=avg(cal.map(x=>x.act>x.p90?1:0)),eb=avg(cal.map(x=>x.eb)),ea=avg(cal.map(x=>x.ea));
@@ -4941,9 +4942,9 @@ function oxBtHtml(){
   const mae=(L,f)=>L.length?avg(L.map(x=>Math.abs(x[f]-x.act))):null,ch=pr.filter(x=>Math.abs(x.a-x.b)>1e-6),by=new Map();
   ch.forEach(x=>{let o=by.get(x.r);if(!o){o={n:0,g:0};by.set(x.r,o)}o.n++;o.g+=Math.abs(x.a-x.act)-Math.abs(x.b-x.act)});
   const gs=[...by.values()].map(o=>o.g/o.n),wins=gs.filter(x=>x>0).length;
-  v2=`<h3>Model v2 vs v1</h3>`+tbl([['Sample'],['N',1],['MAE v1',1],['MAE v2',1]],[['All player-gameweeks',pr.length,f(mae(pr,'a'),3),f(mae(pr,'b'),3)],['Only where v2 changes the prediction (penalty takers)',ch.length,f(mae(ch,'a'),3),f(mae(ch,'b'),3)]])+
-   `<div class="mu" style="font-size:12px;margin:6px 0">On the changed player-gameweeks v2 had the lower average error in ${wins} of ${gs.length} gameweeks. ${ch.length<100?'<b>The sample is far too small to conclude anything</b> (penalties are rare), so v1 stays the default; v2 can be selected in the Optimal XI tab.':'v1 stays the default until v2 shows a consistent gain over more gameweeks.'} Penalty shots of round r are used only when predicting later rounds.</div>`}
- else v2=`<div class="mu" style="font-size:12px">Model v2 not tested: ${esc((OX.pen&&OX.pen.why)||'no PitchAPI penalty data')}.</div>`;
+  v2=`<h3>Penalty regression vs base model</h3>`+tbl([['Sample'],['N',1],['MAE base',1],['MAE with penalty regression',1]],[['All player-gameweeks',pr.length,f(mae(pr,'a'),3),f(mae(pr,'b'),3)],['Only where the option changes the prediction (penalty takers)',ch.length,f(mae(ch,'a'),3),f(mae(ch,'b'),3)]])+
+   `<div class="mu" style="font-size:12px;margin:6px 0">On the changed player-gameweeks the penalty-regression option had the lower average error in ${wins} of ${gs.length} gameweeks. ${ch.length<100?'<b>The sample is far too small to conclude anything</b> (penalties are rare), so the base model stays the default; the option can be selected in the Optimal XI tab.':'the base model stays the default until the option shows a consistent gain over more gameweeks.'} Penalty shots of round r are used only when predicting later rounds.</div>`}
+ else v2=`<div class="mu" style="font-size:12px">Penalty regression not tested: ${esc((OX.pen&&OX.pen.why)||'no PitchAPI penalty data')}.</div>`;
  return head+tbl([['Check'],['Model says',1],['Actual',1]],[['Actual below the 10th percentile',pc(eb),pc(below)],['Actual above the 90th percentile',pc(ea),pc(above)],['Mean points per player-gameweek',mean.toFixed(3),avg(cal.map(x=>x.act)).toFixed(3)]])+
   `<div class="mu" style="font-size:12px;margin:6px 0">${cal.length} player-gameweeks from GW${st}. "Model says" is the share of the model's own simulated outcomes beyond each percentile (points are whole numbers, so it is not exactly 10%); a calibrated model matches it. Simulated mean ${mean.toFixed(3)} vs analytic expectation ${pred.toFixed(3)} (difference = Monte Carlo error). Single-player check only: lineup ranges also depend on correlations between team-mates.</div>`+
   tbl([['Pos'],['N',1],['Below P10: actual',1],['model',1],['Above P90: actual',1],['model',1]],byPos)+oxBtLineHtml(B)+v2;
@@ -5283,6 +5284,69 @@ def _x_lgl_index(html):
 
 INDEX = _x_lgl_index(INDEX)
 # ======================== نهاية إضافة Liquid Glass ========================
+
+
+# ============================================================================
+# إضافة: نموذج التوقع v2 — نموذج وقت اللعب المدرَّب على أرشيف المواسم (2022/23 → 2025/26)
+# التدريب على 2022/23 + 2023/24، التحقق على 2024/25، والاختبار مرة وحدة على 2025/26 (خطأ 1.845 → 1.716، أفضل في 35 من 35 جولة).
+# التفاصيل والأرقام: ml/RESULTS.md. التعديل في احتمال المشاركة ونسبة 60+ دقيقة والدقائق فقط؛ باقي النموذج كما هو.
+# ============================================================================
+_X_PM2_CONST = ("const PM={N:7,PRIOR_MIN:450,K_FIN:3,N0:4,RECENT:6,EPS:.001,MAXNODES:4000,\n"
+                " /* v2 playing time (trained on the 2022-23 and 2023-24 archive, validated on 2024-25, tested on 2025-26):\n"
+                "    P(play) = (sum w*played + PL_A*PL_MU)/(sum w + PL_A), w = PL_LAM^age over all earlier matches of the season (age 0 = latest),\n"
+                "    i.e. recency weighting with a Beta prior, so a player who played every recent match gets about 0.90, not 1.00.\n"
+                "    The 60+ share and the minutes when playing are weighted Q_LAM^age over his appearances. PT:0 restores v1. */\n"
+                " PT:1,PL_LAM:.5,PL_A:.5,PL_MU:.5,Q_LAM:.8};\nconst PM_VERSION='v2';")
+_X_PM2_PT = (" let pPlay0=fit?1:pl.length/rec.length,p60n=rec.filter(r=>r[3]>=60).length,q60=p60n/pl.length,ePlay=pl.reduce((s,r)=>s+r[3],0)/pl.length;\n"
+             " /* v2: a flagged (not 'a') player uses only his appearances while fit, so pPlay0 is his residual rotation risk and the\n"
+             "    published availability multiplies it as before (the injury is not counted twice) */\n"
+             " if(PM.PT){const all=fit?rows.filter(r=>r[3]>0):rows;let sw=0,sy=0,qa=0,q6=0,qm=0;\n"
+             "  for(let i=all.length-1,k=0;i>=0;i--,k++){const r=all[i],w=Math.pow(PM.PL_LAM,k),v=Math.pow(PM.Q_LAM,k);sw+=w;if(r[3]>0){sy+=w;qa+=v;qm+=v*r[3];if(r[3]>=60)q6+=v}}\n"
+             "  pPlay0=(sy+PM.PL_A*PM.PL_MU)/(sw+PM.PL_A);q60=q6/qa;ePlay=qm/qa}")
+
+
+def _x_pm2_index(html):
+    def sub(h, old, new):
+        if h.count(old) != 1:
+            log(f"  تنبيه (نموذج v2): ما لقيت نقطة التعديل بدقة، تخطيتها: {old[:60]}")
+            return h
+        return h.replace(old, new)
+    h = html
+    h = sub(h, "const PM={N:7,PRIOR_MIN:450,K_FIN:3,N0:4,RECENT:6,EPS:.001,MAXNODES:4000};", _X_PM2_CONST)
+    h = sub(h, " const pPlay0=fit?1:pl.length/rec.length,p60n=rec.filter(r=>r[3]>=60).length,q60=p60n/pl.length,ePlay=pl.reduce((s,r)=>s+r[3],0)/pl.length;", _X_PM2_PT)
+    h = sub(h, " out.rates={lamG,lamA,xg90,xa90,finG:fg,finA:fa_,R,pPlay0,q60,ePlay,e60,recN:rec.length,fit};",
+            " out.rates={lamG,lamA,xg90,xa90,finG:fg,finA:fa_,R,pPlay0,q60,ePlay,e60,recN:PM.PT?(fit?rows.filter(r=>r[3]>0).length:rows.length):rec.length,fit};")
+    h = sub(h, "Playing time: ${r.fit?'recent appearances while fit':'last '+r.recN+' matches'};",
+            "Playing time: ${r.fit?'recent appearances while fit':PM.PT?'all '+r.recN+' matches this season, recent ones weighted most':'last '+r.recN+' matches'};")
+    h = sub(h, "Model tested: <b>v1 = the model used in Predicted Points</b>, unchanged.",
+            "Model tested: <b>v2 = the model used in Predicted Points</b> (playing-time model trained on archived seasons).")
+    h = sub(h, "No model version other than v1 exists yet, and the model has not been tuned on these results, so nothing here is an in-sample fit.",
+            "Model v2's five playing-time parameters were tuned on the 2022-23 and 2023-24 seasons, so replays of those two archived seasons are partly in-sample; 2024-25 was the validation season and 2025-26 the untouched test season (error 1.845 → 1.716 against v1).")
+    h = sub(h, "sr('Model v1',S.pred,false)", "sr('Model '+PM_VERSION,S.pred,false)")
+    h = sub(h, "[['Model v1',mm.n,", "[['Model '+PM_VERSION,mm.n,")
+    h = sub(h, "[['Model (v1)','pred']", "[['Model ('+PM_VERSION+')','pred']")
+    return h
+
+
+_AR_SEASON.update({
+    "Model # (default)": "النموذج # (الافتراضي)", "Model # + penalty regression": "النموذج # + ضبط ركلات الجزاء",
+    "Model #": "النموذج #", "model #": "النموذج #", "model # + penalty regression": "النموذج # + ضبط ركلات الجزاء",
+    "Model (#)": "النموذج (#)", "Model tested:": "النموذج المختبر:",
+    "v# = the model used in Predicted Points": "v# = النموذج المستخدم في النقاط المتوقعة",
+    "(playing-time model trained on archived seasons)": "(نموذج وقت اللعب المدرَّب على المواسم المؤرشفة)",
+    "Model v#'s five playing-time parameters were tuned on the ## and ## seasons, so replays of those two archived seasons are partly in-sample": "معاملات وقت اللعب الخمسة في النموذج v# ضُبطت على موسمي ## و##، فإعادة هذين الموسمين داخل العينة جزئياً",
+    "## was the validation season and ## the untouched test season (error # → # against v#)": "## موسم التحقق و## موسم الاختبار اللي ما لُمس (الخطأ # ← # مقارنة بـ v#)",
+    "Points range calibration and the penalty-regression option": "معايرة نطاق النقاط وخيار ضبط ركلات الجزاء",
+    "Penalty regression vs base model": "ضبط ركلات الجزاء مقابل النموذج الأساسي", "MAE base": "MAE الأساسي",
+    "MAE with penalty regression": "MAE مع ضبط ركلات الجزاء",
+    "Only where the option changes the prediction (penalty takers)": "فقط حيث يغيّر الخيار التوقع (منفذو ركلات الجزاء)",
+    "all # matches this season, recent ones weighted most": "كل الـ# مباريات هذا الموسم، والأحدث لها وزن أكبر",
+    "recent appearances while fit": "المشاركات الأخيرة وهو جاهز", "last # matches": "آخر # مباريات",
+})
+
+
+INDEX = _x_pm2_index(INDEX)
+# ======================== نهاية إضافة نموذج v2 ========================
 
 
 # ============================================================================
@@ -5659,7 +5723,7 @@ _AR_DICT = {
     "Model team, mean points per GW": "فريق النموذج، متوسط النقاط لكل جولة", "Last# average team": "فريق معدل آخر #",
     "Hindsight ceiling": "السقف بأثر رجعي", "GWs where the model team beat last#": "جولات تفوق فيها فريق النموذج على آخر #",
     "Hindsight": "بأثر رجعي", "Model formation": "خطة النموذج", "Run team selection test": "شغّل اختبار اختيار الفريق",
-    "Run calibration and v# comparison": "شغّل المعايرة ومقارنة v#", "Not tested here": "لم يُختبر هنا",
+    "Run calibration and penalty-regression comparison": "شغّل المعايرة ومقارنة ضبط ركلات الجزاء", "Not tested here": "لم يُختبر هنا",
     "Injuries, suspensions and news": "الإصابات والإيقافات والأخبار", "Replaying gameweeks…": "جارٍ إعادة الجولات…",
     "only # gameweeks. Treat every number below as provisional": "# جولات فقط. اعتبر كل رقم أدناه مبدئياً",
     "it becomes meaningful as the season grows": "ويصير له معنى مع تقدم الموسم",
