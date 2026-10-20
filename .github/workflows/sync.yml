@@ -1,0 +1,37 @@
+name: Sync data
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Retry incomplete recent matches immediately"
+        required: false
+        default: "false"
+  schedule:
+    - cron: "3-59/5 * * * *"
+concurrency:
+  group: sync-data
+  cancel-in-progress: false
+permissions:
+  contents: write
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - name: Get sync.py
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.raw+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/contents/sync.py" -o sync.py
+      - name: Run sync
+        env:
+          PITCHAPI_KEY: ${{ secrets.PITCHAPI_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORCE_SYNC: ${{ github.event.inputs.force }}
+        run: |
+          python3 -m venv .venv
+          . .venv/bin/activate
+          pip install -q pitchapi requests
+          python sync.py
