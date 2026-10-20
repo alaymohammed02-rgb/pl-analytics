@@ -5225,6 +5225,67 @@ INDEX = _x_season_index(INDEX)
 
 
 # ============================================================================
+# إضافة: مؤشر "الزجاج السائل" (Liquid Glass) للقائمة العلوية فقط (#nav) — الصقها قبل إضافة الواجهة العربية
+# عنصر واحد شفاف خلف الرابط المختار، ينزلق للرابط الجديد ويتمدد قليلاً أثناء الحركة ثم يرجع لشكله.
+# الحركة بـ transform فقط (خفيفة على الجوال)، وتتوقف إذا الجهاز مفعّل فيه "تقليل الحركة".
+# ============================================================================
+_X_LGLCSS = ("#nav{position:relative}#nav.lg a{position:relative;z-index:1}#nav.lg a.on{background:transparent;box-shadow:none}"
+             # كبسولة زجاجية مثل Apple Liquid Glass: تعبئة مصقولة شبه شفافة، حافة لامعة، لمعة علوية ناعمة، وظل خفيف
+             "#nav .lgl{position:absolute;left:0;top:0;width:0;height:0;border-radius:999px;pointer-events:none;z-index:0;opacity:0;"
+             "transform-origin:0 50%;will-change:transform;"
+             "background:linear-gradient(180deg,rgba(255,255,255,.17),rgba(255,255,255,.08) 60%,rgba(255,255,255,.11));"
+             "-webkit-backdrop-filter:blur(14px) saturate(180%);backdrop-filter:blur(14px) saturate(180%);"
+             "box-shadow:inset 0 0 0 1px rgba(255,255,255,.16),inset 0 1.5px 1px rgba(255,255,255,.42),inset 0 -1.5px 1px rgba(255,255,255,.14),"
+             "inset 0 -8px 14px rgba(255,255,255,.05),0 4px 14px rgba(0,0,0,.32)}"
+             "#nav .lgl::after{content:\"\";position:absolute;inset:0;border-radius:inherit;"
+             "background:radial-gradient(120% 70% at 30% 0%,rgba(255,255,255,.28),rgba(255,255,255,0) 60%)}")
+
+_X_LGLJS = r"""/* ===== Liquid Glass indicator: top navigation (#nav) only ===== */
+const LGL={el:null,x:null,w:null,anim:null,q:false};
+function lglPlace(animate){
+ const nav=document.getElementById('nav');if(!nav)return;
+ let g=LGL.el;if(!g){g=LGL.el=document.createElement('div');g.className='lgl';g.setAttribute('aria-hidden','true')}
+ if(g.parentNode!==nav)nav.insertBefore(g,nav.firstChild);
+ nav.classList.add('lg');
+ const a=nav.querySelector('a.on');if(!a){g.style.opacity='0';return}
+ const x=a.offsetLeft,w=a.offsetWidth;g.style.opacity='1';g.style.top=a.offsetTop+'px';g.style.height=a.offsetHeight+'px';
+ if(x===LGL.x&&w===LGL.w)return;
+ const end='translateX('+x+'px) scaleX(1)',x0=LGL.x,w0=LGL.w;
+ g.style.width=w+'px';if(LGL.anim)LGL.anim.cancel();
+ if(animate&&x0!=null&&g.animate&&!matchMedia('(prefers-reduced-motion: reduce)').matches){
+  /* liquid stretch: halfway, the glass is wider (more for a longer trip) and a little flatter, centred between the two tabs */
+  const d=Math.abs(x-x0),mw=(w0+w)/2*(1+Math.min(.18,d/1500)),mc=(x0+w0/2+x+w/2)/2;
+  LGL.anim=g.animate([{transform:'translateX('+x0+'px) scaleX('+(w0/w)+')'},
+   {transform:'translateX('+(mc-mw/2)+'px) scaleX('+(mw/w)+') scaleY(.93)',offset:.55},{transform:end}],
+   {duration:Math.min(640,360+d*.35),easing:'cubic-bezier(.3,.7,.2,1)'});
+ }
+ g.style.transform=end;LGL.x=x;LGL.w=w;
+}
+/* the menu is redrawn on every page change: measure once per frame, after any text change (e.g. Arabic) has been applied */
+const lglKick=()=>{if(LGL.q)return;LGL.q=true;requestAnimationFrame(()=>{LGL.q=false;lglPlace(true)})};
+(function(){const nav=document.getElementById('nav');if(!nav)return;
+ new MutationObserver(lglKick).observe(nav,{childList:true,subtree:true,characterData:true});
+ if(window.ResizeObserver)new ResizeObserver(()=>lglPlace(false)).observe(nav);})();
+"""
+
+
+def _x_lgl_index(html):
+    def sub(h, old, new):
+        if h.count(old) != 1:
+            log(f"  تنبيه (Liquid Glass): ما لقيت نقطة التعديل بدقة، تخطيتها: {old[:60]}")
+            return h
+        return h.replace(old, new)
+    h = html
+    h = sub(h, "</style></head>", _X_LGLCSS + "</style></head>")
+    h = sub(h, "async function route(){", _X_LGLJS + "\nasync function route(){")
+    return h
+
+
+INDEX = _x_lgl_index(INDEX)
+# ======================== نهاية إضافة Liquid Glass ========================
+
+
+# ============================================================================
 # إضافة: الواجهة العربية (عربي / EN) — الصقها قبل السطر:  if __name__ == "__main__":
 # ما تغيّر أي سطر سابق ولا أي صفحة: بعد ما ترسم الصفحة نصوصها بالإنجليزي، يترجم المتصفح النصوص الظاهرة
 # من القاموس التالي ويقلب اتجاه الصفحة لليمين. الأسماء والأرقام والبيانات تبقى كما هي.
