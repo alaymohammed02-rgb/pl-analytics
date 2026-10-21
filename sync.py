@@ -5085,7 +5085,15 @@ INDEX = _x_ox_index(INDEX)
 # ============================================================================
 import csv as _csv, io as _io, collections as _collections
 
-FPL_ARCHIVE = ["2022-23", "2023-24", "2024-25", "2025-26"]
+def _fpa_seasons(t=None):
+    """المواسم المكتملة من 2022-23 لين الموسم اللي قبل الحالي (الموسم يبدأ في يوليو)، فالموسم المنتهي ينضاف تلقائياً."""
+    t = t or datetime.datetime.now(datetime.timezone.utc)
+    y = t.year if t.month >= 7 else t.year - 1
+    return [f"{x}-{str(x + 1)[2:]}" for x in range(2022, y)]
+
+
+FPL_ARCHIVE = _fpa_seasons()
+FPL_ARCHIVE_RETRY_H = 20             # موسم ما نُشر بعد في الأرشيف: نحاول مرة كل 20 ساعة تقريباً بدل كل مزامنة
 FPL_ARCHIVE_URL = "https://raw.githubusercontent.com/vaastav/Fantasy-Premier-League/master/data/{season}/{name}"
 FPL_ARCHIVE_VER = 2                 # يتغير فقط إذا تغيرت طريقة التحويل (يعيد بناء الملفات)
 FPL_SEASONS = []                    # يدخل في data/index.json → fpl.seasons
@@ -5207,9 +5215,13 @@ def sync_fpl_archive(hub):
     global FPL_SEASONS
     man = gh_get_json(hub, "data/fpl_archive.json") or {}
     have = {x["season"]: x for x in man.get("seasons", []) if x.get("av") == FPL_ARCHIVE_VER}
-    added = False
+    tried, t_now = dict(man.get("tried") or {}), datetime.datetime.now(datetime.timezone.utc)
+    added = dirty = False
     for s in FPL_ARCHIVE:
         if s in have:
+            continue
+        last = _parse_ts(tried.get(s))
+        if last is not None and (t_now - last).total_seconds() < FPL_ARCHIVE_RETRY_H * 3600:
             continue
         try:
             d = _fpa_build(s, _fpa_get(s))
@@ -5224,10 +5236,12 @@ def sync_fpl_archive(hub):
             added = True
             log(f"  [Fantasy archive] {s}: {chk['rows']} صف، القوانين تطابق {have[s]['reproduced']}% من نقاط FPL")
         except Exception as e:
-            log(f"  [Fantasy archive] تعذر جلب {s} ({type(e).__name__}: {e}) — نحاول في المزامنة القادمة")
+            tried[s], dirty = now(), True
+            log(f"  [Fantasy archive] تعذر جلب {s} ({type(e).__name__}: {e}) — نحاول بعد {FPL_ARCHIVE_RETRY_H} ساعة")
     FPL_SEASONS = [have[s] for s in FPL_ARCHIVE if s in have]
-    if added:
-        gh_put(hub, "data/fpl_archive.json", json.dumps(dict(seasons=FPL_SEASONS), ensure_ascii=False).encode("utf-8"),
+    tried = {k: v for k, v in tried.items() if k not in have}
+    if added or dirty:
+        gh_put(hub, "data/fpl_archive.json", json.dumps(dict(seasons=FPL_SEASONS, tried=tried), ensure_ascii=False).encode("utf-8"),
                "Update Fantasy archive list")
 
 
@@ -6099,6 +6113,242 @@ _AR_SEASON.update({
 
 INDEX = _x_eng_index(INDEX)
 # ======================== نهاية إضافة هذا الأسبوع وجدول الدوري ========================
+
+
+# ============================================================================
+# إضافة: هوية الألوان — لون لكل دوري، ألوان النادي كلون ثانوي، والذهبي لحامل اللقب (فقط إذا ثبت من نتائج الموسم الماضي)
+# الإعداد كله في مكان واحد (THEME في الصفحة). ألوان الإحصائيات والرسوم ما تتغير. "الزجاج السائل" صار على الأسطح كلها بخفة.
+# ============================================================================
+FPL_CHAMP_PATH = "data/champions.json"
+FPL_CHAMP_LEAGUE = "l_4WFCIZ"         # الدوري الإنجليزي في PitchAPI: نتائج الموسم الماضي الموثقة متوفرة له من أرشيف FPL
+
+
+def _champion_of(d):
+    """بطل الموسم من نتائجه الموثقة (كل المباريات منتهية). None إذا الموسم ناقص أو الأول والثاني متساويين في النقاط والفارق والأهداف."""
+    teams = {t["id"]: t["n"] for t in (d or {}).get("teams", [])}
+    fx = [x for x in (d or {}).get("fix", []) if x[0]]
+    n = len(teams)
+    if n < 2 or len(fx) != n * (n - 1) or not all(x[5] and x[6] is not None and x[7] is not None for x in fx):
+        return None
+    T = {}
+    for x in fx:
+        for t, f, a in ((x[1], x[6], x[7]), (x[2], x[7], x[6])):
+            r = T.setdefault(t, [0, 0, 0])
+            r[0] += 3 if f > a else 1 if f == a else 0
+            r[1] += f - a
+            r[2] += f
+    o = sorted(T.items(), key=lambda kv: (-kv[1][0], -kv[1][1], -kv[1][2]))
+    (w, a), (u, b) = o[0], o[1]
+    if a == b:
+        return None
+    return dict(team=teams[w], pts=a[0], gd=a[1], gf=a[2], runner_up=teams[u], margin=a[0] - b[0], fixtures=len(fx))
+
+
+def sync_champions(hub):
+    """يكتب data/champions.json لموسم ما قبل الحالي إذا أرشيفه موجود؛ مرة وحدة لكل موسم."""
+    t = datetime.datetime.now(datetime.timezone.utc)
+    y = t.year if t.month >= 7 else t.year - 1
+    prev, cur = f"{y - 1}-{str(y)[2:]}", f"{y}-{str(y + 1)[2:]}"
+    ch = gh_get_json(hub, FPL_CHAMP_PATH) or {}
+    lg = ch.setdefault("leagues", {})
+    if (lg.get(FPL_CHAMP_LEAGUE) or {}).get("season") == prev:
+        return
+    man = gh_get_json(hub, "data/fpl_archive.json") or {}
+    if not any(x.get("season") == prev for x in man.get("seasons", [])):
+        return                                          # أرشيف الموسم الماضي ما نُشر بعد: ما نخمّن
+    res = _champion_of(gh_get_json(hub, f"data/fpl_{prev}.json"))
+    if not res:
+        log(f"  [Champions] ما قدرت أحدد بطل {prev} من نتائجه — بدون شارة")
+        return
+    lg[FPL_CHAMP_LEAGUE] = dict(season=prev, next=cur, src=f"FPL archive (vaastav/Fantasy-Premier-League): final table from all {res['fixtures']} fixtures", **res)
+    ch["note"] = "Defending champions per league, from the previous season's verified results. 'next' is the season the title is defended in."
+    gh_put(hub, FPL_CHAMP_PATH, json.dumps(ch, ensure_ascii=False, indent=1).encode("utf-8"), f"Defending champions: {res['team']} ({prev})")
+    log(f"  [Champions] بطل {prev}: {res['team']} ({res['pts']} نقطة، بفارق {res['margin']})")
+
+
+_orig_run_pipeline_ch = run_pipeline
+
+
+def run_pipeline(hub, pit_key):
+    out = _orig_run_pipeline_ch(hub, pit_key)
+    try:
+        sync_champions(hub)
+    except Exception as e:      # الشارة اختيارية: ما توقف المزامنة
+        log(f"  [Champions] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
+    return out
+
+
+_X_THCSS = ":root{--th:#4cc38a;--th-ink:#06210f;--th-hi:#4cc38a;--th-link:#5aa9e6;--th-deep:#0f3b2c;--th-glow:rgba(76,195,138,.28);--th-soft:rgba(76,195,138,.10);--th-bd:rgba(76,195,138,.38);--th-amb:rgba(15,59,44,.55);--th-amb2:rgba(76,195,138,.07);--gold:#e2bd5a;--gold-bd:rgba(226,189,90,.55);--gold-soft:rgba(226,189,90,.12);--glass:var(--sf);--hdr:var(--bg);--glass-hl:rgba(255,255,255,.06);--glass-bd:rgba(255,255,255,.075)}@supports (color:color-mix(in srgb,red 50%,blue)){:root{--glass:color-mix(in srgb,var(--sf) 88%,transparent);--hdr:color-mix(in srgb,var(--bg) 80%,transparent)}}body{background-color:var(--bg);background-image:radial-gradient(1200px 620px at 100% -12%,var(--th-amb),transparent 60%),radial-gradient(1000px 600px at 0% -10%,var(--th-amb2),transparent 62%);background-attachment:fixed;transition:background-color .35s}header{background:var(--hdr);-webkit-backdrop-filter:blur(16px) saturate(150%);backdrop-filter:blur(16px) saturate(150%);border-bottom:1px solid transparent;border-image:linear-gradient(90deg,transparent,var(--th-bd),transparent) 1}@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){header{background:var(--bg)}#nav .lgl{background:rgba(255,255,255,.12)}}.bm{display:inline-block;width:10px;height:10px;border-radius:3px;margin-inline-end:8px;vertical-align:1px;background:linear-gradient(135deg,#4cc38a,#5aa9e6);box-shadow:0 0 0 1px rgba(255,255,255,.18)}a{color:var(--th-link)}.card,.kpi{background:linear-gradient(180deg,var(--glass-hl),rgba(255,255,255,.012) 40%),var(--glass);border-color:var(--glass-bd);box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 8px 22px rgba(0,0,0,.18)}.kpi{background:linear-gradient(150deg,var(--th-kpi,var(--th-soft)),transparent 58%),linear-gradient(180deg,var(--glass-hl),rgba(255,255,255,.012) 40%),var(--glass);transition:border-color .3s,box-shadow .3s}.kpi:hover{border-color:var(--th-bd)}button{background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,0) 55%),var(--th);color:var(--th-ink);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 4px 14px var(--th-soft);transition:background-color .35s,color .35s,box-shadow .35s,border-color .35s}button.s{background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.015)),var(--sf);box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}button.s:hover{border-color:var(--th-bd)}.seg button.on{background:var(--th);color:var(--th-ink)}.chp.on{border-color:var(--th-hi);box-shadow:inset 0 0 0 1px var(--th-hi)}nav a.on{box-shadow:inset 0 -2px var(--th-hi)}#nav .lgl{box-shadow:inset 0 0 0 1px rgba(255,255,255,.16),inset 0 1.5px 1px rgba(255,255,255,.42),inset 0 -1.5px 1px rgba(255,255,255,.14),inset 0 -8px 14px var(--th-soft),0 4px 16px var(--th-glow);transition:box-shadow .35s}input:focus-visible,select:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(--th-hi);outline-offset:2px}h2::after{content:'';display:block;width:44px;height:3px;border-radius:2px;margin-top:6px;background:linear-gradient(90deg,var(--th-hi),transparent)}.wkfact{border-color:var(--th-bd)}.cdot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-inline-end:6px;vertical-align:-1px;background:linear-gradient(135deg,var(--cl1) 50%,var(--cl2) 50%);box-shadow:0 0 0 1px rgba(255,255,255,.28)}.clk{color:inherit;text-decoration:none}.clk:hover{color:var(--th-link);text-decoration:underline}.ltt a{color:inherit;text-decoration:none}.trophy{width:14px;height:14px;flex:none}.chm{display:inline-flex;vertical-align:-2px;margin-inline-start:6px;color:var(--gold)}.champ{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:999px;border:1px solid var(--gold-bd);background:linear-gradient(180deg,rgba(226,189,90,.18),rgba(226,189,90,.05));color:var(--gold);font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;box-shadow:0 0 14px rgba(226,189,90,.12)}.champ .mu2{opacity:.8;font-weight:600;letter-spacing:0}.clubhd{position:relative;display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:14px 16px 14px 22px;margin-bottom:12px;border-radius:14px;border:1px solid var(--glass-bd);background:linear-gradient(135deg,var(--th-soft),rgba(255,255,255,.02) 60%),var(--glass);box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 10px 26px rgba(0,0,0,.22);overflow:hidden}.clubhd h2{margin:0 0 2px}.clubtx{flex:1;min-width:160px}.clubst{position:absolute;inset-block:0;inset-inline-start:0;width:7px;background:linear-gradient(180deg,var(--cl1,var(--th-hi)) 0 50%,var(--cl2,var(--th-hi)) 50% 100%)}.clubhd.is-champ{border-color:var(--gold-bd);background:linear-gradient(135deg,var(--th-soft),var(--gold-soft) 70%),var(--glass);box-shadow:inset 0 1px 0 rgba(226,189,90,.35),0 0 26px rgba(226,189,90,.10),0 10px 26px rgba(0,0,0,.22)}.clubk .kpi{border-top:2px solid var(--th-hi)}html[dir=rtl] .clubhd{padding:14px 22px 14px 16px}@media(max-width:560px){.clubhd{padding-inline-start:18px}.champ{font-size:11px;padding:3px 9px}}@media(prefers-reduced-motion:reduce){button,.kpi,#nav .lgl{transition:none}}.nw{white-space:nowrap}input,progress{accent-color:var(--th)}.ltf.D{background:#8a9bb0}"
+_X_THJS = r"""/* ===== Theme: league colours, club colours and defending champions =====
+   One configuration for every colour that carries identity. Layers:
+   1. PL Analytics (wordmark, layout) — always the same; THEME.base is the original dark navy look;
+   2. the selected league colours the whole page in its shades (THEME.leagues, by PitchAPI league ID); a league without a
+      checked identity keeps THEME.base;
+   3. a club's own page is drawn in the club's shades instead (THEME.clubs); elsewhere a club shows a colour dot by its name;
+   4. gold, only for a defending champion that data/champions.json verifies for the current season.
+   Statistical colours (chart panels and marks, form, heatmaps, status green/red/amber) are not part of the theme. */
+const THEME={
+ base:{key:'base',bg:'#0d1520',sf:'#152130',ln:'#25374d',tx:'#e8eef5',mu:'#8a9bb0',th:'#4cc38a',ink:'#06210f',hi:'#4cc38a',link:'#5aa9e6',deep:'#0f3b2c'},
+ /* base = identity colour; the page shades are derived from it (thPalette). The Premier League shades follow its purple and
+    magenta identity directly. */
+ leagues:[
+  {key:'pl',ids:['l_4WFCIZ'],label:'Premier League purple',base:'#c414dc',pal:{bg:'#2a0030',sf:'#3d0045',ln:'#5e1a6a',th:'#c414dc',hi:'#e05cf0',link:'#f0a6ff',mu:'#d9bfe0',deep:'#38003c'}},
+  {key:'bund',ids:['l_1Isor4'],label:'Bundesliga red',base:'#d10214'},
+  {key:'laliga',ids:['l_0ErfuF'],label:'LaLiga coral red',base:'#ff4b44'},
+  {key:'seriea',ids:['l_0ALvwF'],label:'Serie A blue',base:'#0059d6'},
+  {key:'ucl',ids:['l_0bfbkO'],label:'Champions League navy',base:'#3550c8'}
+ ],
+ /* primary kit colours of the Premier League clubs in the data (commonly used values, not official brand files).
+    Clubs not listed keep the league colours. */
+ clubs:{
+  'afc bournemouth':['#da291c','#000000'],'arsenal':['#ef0107','#ffffff'],'aston villa':['#670e36','#95bfe5'],'brentford':['#e30613','#ffffff'],
+  'brighton & hove albion':['#0057b8','#ffffff'],'chelsea':['#034694','#ffffff'],'coventry city':['#59cbe8','#ffffff'],'crystal palace':['#1b458f','#c4122e'],
+  'everton':['#003399','#ffffff'],'fulham':['#ffffff','#000000'],'hull city':['#f5a12d','#000000'],'ipswich town':['#0044a9','#ffffff'],
+  'leeds united':['#ffffff','#1d428a'],'liverpool':['#c8102e','#ffffff'],'manchester city':['#6cabdd','#ffffff'],'manchester united':['#da291c','#ffffff'],
+  'newcastle united':['#ffffff','#241f20'],'nottingham forest':['#dd0000','#ffffff'],'sunderland':['#eb172b','#ffffff'],'tottenham hotspur':['#ffffff','#132257']
+ },
+ gold:'#e2bd5a'
+};
+const thRgb=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
+const thA=(h,a)=>'rgba('+thRgb(h).join(',')+','+a+')';
+const thLum=h=>{const c=thRgb(h).map(v=>v/255).map(v=>v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4));return .2126*c[0]+.7152*c[1]+.0722*c[2]};
+const thCr=(a,b)=>{const x=thLum(a),y=thLum(b);return (Math.max(x,y)+.05)/(Math.min(x,y)+.05)};
+/* shades for a whole page from one identity colour (HSL), each step checked for contrast; used for leagues and clubs */
+const thHex=(h,s,l)=>{s=Math.max(0,Math.min(1,s));l=Math.max(0,Math.min(1,l));const k=n=>(n+h/30)%12,a=s*Math.min(l,1-l),f=n=>l-a*Math.max(-1,Math.min(k(n)-3,Math.min(9-k(n),1)));return '#'+[f(0),f(8),f(4)].map(x=>Math.round(x*255).toString(16).padStart(2,'0')).join('')};
+const thHsl=hex=>{const [r,g,b]=thRgb(hex).map(v=>v/255),mx=Math.max(r,g,b),mn=Math.min(r,g,b),l=(mx+mn)/2,d=mx-mn;let h=0,s=0;
+ if(d){s=d/(1-Math.abs(2*l-1));h=mx===r?((g-b)/d)%6:mx===g?(b-r)/d+2:(r-g)/d+4;h*=60;if(h<0)h+=360}return [h,s,l]};
+/* lightest/darkest version of (h,s) that reaches the contrast ratio c against every background in bgs */
+function thReach(h,s,l,bgs,c,up=true){for(let i=0;i<=100;i++){const x=thHex(h,s,up?l+i/100:l-i/100);if(bgs.every(b=>thCr(x,b)>=c))return x}return up?'#ffffff':'#000000'}
+function thPalette(base,o={},alt=null){
+ /* neutral clubs (black and white): the lighter colour leads */
+ if(alt&&thHsl(base)[1]<.12&&thHsl(alt)[1]<.12&&thLum(alt)>thLum(base))[base,alt]=[alt,base];
+ const [h,s0,l0]=thHsl(base),s=Math.min(s0,.92),neutral=s0<.12;
+ const bg=o.bg||thHex(h,neutral?0:s*.85,.085),sf=o.sf||thHex(h,neutral?0:s*.7,.135),ln=o.ln||thHex(h,neutral?0:s*.45,.26),B=[bg,sf];
+ /* buttons: visible on the page (3:1) with readable text (4.5:1): the club's own colour, then a little darker or lighter, then its second colour */
+ const okTh=x=>Math.min(thCr(x,bg),thCr(x,sf))>=3,inkOf=(x,other)=>[other,'#ffffff','#0b0b0b'].filter(Boolean).find(i=>thCr(i,x)>=4.5);
+ let th=o.th,ink=th?inkOf(th):null;
+ if(!th){const dk=Array.from({length:12},(_,i)=>[thHex(h,s0,l0-(i+1)/100),alt]),lt=n=>Array.from({length:n},(_,i)=>[thHex(h,s0,l0+(i+1)/100),alt]);
+  const cands=[[base,alt],...dk,...lt(20),...(alt?[[alt,base]]:[]),...lt(60).slice(20)];
+  for(const [c,other] of cands){const k=inkOf(c,other);if(okTh(c)&&k){th=c;ink=k;break}}
+  if(!th){th=thReach(h,s,l0,B,3);ink=inkOf(th)||'#ffffff'}}
+ return {bg,sf,ln,th,ink,tx:'#f3eef6',
+  mu:o.mu||thReach(h,neutral?0:.25,.68,B,4.5),hi:o.hi||thReach(h,neutral?0:s,.55,B,3),link:o.link||thReach(h,neutral?0:Math.min(s,.85),.74,B,4.5),
+  deep:o.deep||thHex(h,neutral?0:s,.2)};
+}
+
+const TH_CACHE=new Map();
+function thLeague(id){return THEME.leagues.find(t=>t.ids.includes(id))||null}
+function thLeaguePal(id){const t=thLeague(id);if(!t)return THEME.base;if(!TH_CACHE.has(t.key))TH_CACHE.set(t.key,Object.assign({key:t.key},thPalette(t.base,t.pal||{})));return TH_CACHE.get(t.key)}
+/* the club's leading colour: the more saturated one (for black-and-white clubs the palette uses the lighter one) */
+function thClubPal(name){
+ const n=String(name||'').toLowerCase().trim(),c=THEME.clubs[n];if(!c)return null;
+ if(!TH_CACHE.has('club:'+n)){const [a,b]=thHsl(c[0])[1]>=thHsl(c[1])[1]?[c[0],c[1]]:[c[1],c[0]];TH_CACHE.set('club:'+n,Object.assign({key:'club'},thPalette(a,{},b)))}
+ return TH_CACHE.get('club:'+n);
+}
+/* applies the league's colours, or the club's when its own page is open (club = the club's name) */
+function applyTheme(club){
+ const r=document.documentElement,s=r.style,lp=thLeaguePal(D&&D.id),cp=club?thClubPal(club):null,t=cp||lp;
+ r.dataset.league=lp.key;if(cp)r.dataset.club=String(club);else delete r.dataset.club;
+ const v={'--bg':t.bg,'--sf':t.sf,'--ln':t.ln,'--tx':t.tx,'--mu':t.mu,'--th':t.th,'--th-ink':t.ink,'--th-hi':t.hi,'--th-link':t.link,'--th-deep':t.deep,
+  '--th-glow':thA(t.hi,.30),'--th-kpi':thA(t.hi,t===THEME.base?.08:.22),'--th-soft':thA(t.hi,.12),'--th-bd':thA(t.hi,.40),'--th-amb':thA(t.hi,t===THEME.base?.06:.16),'--th-amb2':thA(t.deep,t===THEME.base?.5:.9)};
+ for(const k in v)s.setProperty(k,v[k]);
+ champLoad();
+}
+/* a club's two colours for its dot and stripe; the accent is its main colour when that reaches 3:1 on the page, else the second */
+function clubColors(name){
+ const n=String(name||'').toLowerCase().trim(),c=THEME.clubs[n];if(!c)return null;
+ const hi=[c[0],c[1]].find(x=>thCr(x,'#0d1520')>=3)||null;
+ return {c1:c[0],c2:c[1],hi};
+}
+const clubVars=name=>{const c=clubColors(name);return c?`--cl1:${c.c1};--cl2:${c.c2};--clhi:${c.hi||'var(--th-hi)'}`:''};
+const clubDot=name=>{const c=clubColors(name);return c?`<i class="cdot" aria-hidden="true" style="${clubVars(name)}"></i>`:''};
+function clubLink(name){return `<a class="clk" href="#/club/${encodeURIComponent(name)}">${clubDot(name)}${esc(name)}</a>${champMark(name)}`}
+
+/* ---------- defending champions ---------- */
+/* data/champions.json (written by the sync from verified results): {leagues:{<league id>:{season,next,team,...}}}.
+   A club gets the gold treatment only when the entry is for the season before the one in the data (next = current season)
+   and its name matches exactly one club of the league. Nothing is shown when the file or the entry is missing. */
+const CHAMP={p:null,d:null};
+function champLoad(){if(!CHAMP.p)CHAMP.p=fetch('data/champions.json?v='+encodeURIComponent((ALL&&ALL.generated)||'')).then(r=>r.ok?r.json():null).catch(()=>null).then(d=>{CHAMP.d=d;return d});return CHAMP.p}
+const champReady=()=>champLoad();
+/* season of the league's data from its first match: a season starting in July or later is "YYYY-YY", else the calendar year */
+function curSeason(){const ds=D.matches.map(m=>String(m.date||'').slice(0,10)).filter(Boolean).sort();if(!ds.length)return null;const y=+ds[0].slice(0,4),mo=+ds[0].slice(5,7);return mo>=7?y+'-'+String(y+1).slice(2):String(y)}
+function champInfo(){
+ const e=CHAMP.d&&CHAMP.d.leagues&&CHAMP.d.leagues[D.id];if(!e||!e.team||e.next!==curSeason())return null;
+ const teams=[...new Set(D.matches.flatMap(m=>[m.home,m.away]))],hit=teams.filter(t=>fpTeamEq(t,e.team));
+ return hit.length===1?{team:hit[0],season:e.season,e}:null;
+}
+const isChamp=name=>{const c=champInfo();return !!c&&c.team===name};
+const thTrophy='<svg class="trophy" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 3h10v2h3v3a4 4 0 0 1-4 4h-.3A5 5 0 0 1 13 14.9V17h3v2H8v-2h3v-2.1A5 5 0 0 1 8.3 12H8a4 4 0 0 1-4-4V5h3V3zm0 4H6v1a2 2 0 0 0 1.2 1.8A5 5 0 0 1 7 8.5V7zm10 0v1.5c0 .5-.1.9-.2 1.3A2 2 0 0 0 18 8V7h-1zM7 20h10v1H7z"/></svg>';
+function champMark(name){if(!isChamp(name))return '';const s=champInfo().season;return `<span class="chm" title="Defending champions ${esc(s)}" aria-label="Defending champions ${esc(s)}">${thTrophy}</span>`}
+function champBadge(name){if(!isChamp(name))return '';return `<span class="champ">${thTrophy}<span>Defending champions</span><span class="mu2">${esc(champInfo().season)}</span></span>`}
+
+/* ---------- club page ---------- */
+R.club=async function(el,arg){
+ const name=decodeURIComponent(arg||''),M=D.matches.filter(m=>m.home===name||m.away===name);
+ if(!M.length&&!D.stats.some(s=>s.club===name)){el.innerHTML='<div class="empty">Club not found.</div>';return}
+ await champReady();
+ const sh=await loadSh().catch(()=>null),tx=wkTeamXg(sh?sh.rows:[]),fin=D.matches.filter(m=>wkSc(m.score)&&m.date),mine=fin.filter(m=>m.home===name||m.away===name);
+ const lg=ltOk(fin)?ltTable(fin,tx):null,pos=lg?lg.findIndex(r=>r.t===name):-1,me=lg&&pos>=0?lg[pos]:ltTable(mine,tx).find(r=>r.t===name);
+ const champ=isChamp(name),cv=clubVars(name),f1=x=>x.toFixed(2);
+ const sq=agg().filter(p=>p.club===name).sort((a,b)=>(b.xt??-1)-(a.xt??-1)).slice(0,20);
+ const rec=[...mine].sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,5).map(m=>{const g=wkSc(m.score),h=m.home===name,f=h?g[0]:g[1],a=h?g[1]:g[0],r=f>a?'W':f<a?'L':'D';
+  return [`<i class="ltf ${r}" title="${r==='W'?'Win':r==='D'?'Draw':'Loss'}"></i>`,esc(m.date.slice(0,10)),mlink(m)]});
+ el.innerHTML=`<div class="clubhd${champ?' is-champ':''}" style="${cv}"><div class="clubst" aria-hidden="true"></div><div class="clubtx"><h2>${esc(name)}</h2><div class="mu">${esc(D.name)}${curSeason()?'<span class="nw"> · '+esc(curSeason())+'</span>':''}</div></div>${champ?champBadge(name):''}</div>
+ <div class="grid clubk" style="${cv}">${[
+   [lg&&pos>=0?String(pos+1):'N/A',lg&&pos>=0?'Position of '+lg.length:'Position'],
+   [me?String(me.pts):'N/A','Points'],[me?me.w+'-'+me.d+'-'+me.l:'N/A','Won-drawn-lost'],[me?me.f+'-'+me.a:'N/A','Goals for-against'],
+   [me&&me.nx?f1(me.xf/me.nx):'N/A','xG for a match'],[me&&me.nx?f1(me.xa/me.nx):'N/A','xG against a match']
+  ].map(([v,k])=>`<div class="kpi"><b>${v}</b><span>${esc(k)}</span></div>`).join('')}</div>
+ ${champ?`<div class="mu" style="font-size:12px;margin:2px 0 12px" title="${esc(champInfo().e.src||'')}">${esc(name)} <span>won the ${esc(champInfo().season)} league, worked out from that season's verified results. The current table is separate: being top now does not make a club champions.</span></div>`:''}
+ <h3>Recent results</h3>${rec.length?tbl([[''],['Date'],['Match']],rec):'<div class="empty">No results in the data yet.</div>'}
+ <h3>Players by xT</h3>${sq.length?tbl([['Player'],['Pos'],['Games',1],['Min',1],['xT',1],['xG',1]],sq.map(p=>[`<a href="#/player/${encodeURIComponent(p.key+'||'+p.club)}">${esc(p.player)}</a>`,p.pos||'N/A',p.games,p.minutes==null?'N/A':Math.round(p.minutes),f(p.xt),f(p.xg)])):'<div class="empty">No player data for this club yet.</div>'}`;
+};
+"""
+
+
+def _x_theme_index(html):
+    def sub(h, old, new):
+        if h.count(old) != 1:
+            log(f"  تنبيه (هوية الألوان): ما لقيت نقطة التعديل بدقة، تخطيتها: {old[:60]}")
+            return h
+        return h.replace(old, new)
+    h = html
+    h = sub(h, "</style></head>", _X_THCSS + "</style></head>")
+    h = sub(h, '<div class="top"><b>PL Analytics</b>', '<div class="top"><b><i class="bm" aria-hidden="true"></i>PL Analytics</b>')
+    h = sub(h, "try{localStorage.setItem('league',D.id)}catch(e){}\n", "try{localStorage.setItem('league',D.id)}catch(e){}\n applyTheme();\n")
+    h = sub(h, "(pg==='player'&&k==='players')?'on':''", "(pg==='player'&&k==='players')||(pg==='club'&&k==='teams')?'on':''")
+    h = sub(h, "async teams(el){\n  const r=await api('/api/teams');", "async teams(el){\n  await champReady();const r=await api('/api/teams');")
+    h = sub(h, "r.rows.map(x=>[esc(x.club),x.matches,x.players,f(x.xt),f(x.xg)])", "r.rows.map(x=>[clubLink(x.club),x.matches,x.players,f(x.xt),f(x.xg)])")
+    h = sub(h, "<span class=\"ltt\">${esc(r.t)}</span>", "<span class=\"ltt\"><a href=\"#/club/${encodeURIComponent(r.t)}\">${clubDot(r.t)}${esc(r.t)}</a>${champMark(r.t)}</span>")
+    h = sub(h, "R.table=async function(el){\n", "R.table=async function(el){\n await champReady();\n")
+    h = sub(h, "async player(el,arg){\n  const [key,club]=decodeURIComponent(arg).split('||');", "async player(el,arg){\n  await champReady();const [key,club]=decodeURIComponent(arg).split('||');")
+    h = sub(h, "<h2>${esc(r.rows[0].player)}</h2><div class=\"mu\">${esc(club)} · ${r.rows[0].pos||'position N/A'}</div>",
+            "<h2>${esc(r.rows[0].player)}</h2><div class=\"mu\" style=\"${clubVars(club)}\">${clubLink(club)} · ${r.rows[0].pos||'position N/A'}</div>${champBadge(club)?`<div style=\"margin:8px 0\">${champBadge(club)}</div>`:''}")
+    h = sub(h, "async function route(){", _X_THJS + "\nasync function route(){")
+    h = sub(h, " const [,pg='overview',arg='']=(location.hash||'#/overview').split('/');\n", " const [,pg='overview',arg='']=(location.hash||'#/overview').split('/');\n applyTheme(pg==='club'?decodeURIComponent(arg):null);\n")
+    return h
+
+
+_AR_SEASON.update({
+    "Defending champions": "حامل اللقب",
+    "Defending champions ##": "حامل لقب ##",
+    "Club not found.": "النادي غير موجود.",
+    "Position": "المركز",
+    "Position of #": "المركز من #",
+    "Won-drawn-lost": "فوز-تعادل-خسارة",
+    "Goals for-against": "الأهداف له-عليه",
+    "xG for a match": "xG له في المباراة",
+    "xG against a match": "xG عليه في المباراة",
+    "Recent results": "آخر النتائج",
+    "Players by xT": "اللاعبون حسب xT",
+    "No player data for this club yet.": "لا توجد بيانات لاعبين لهذا النادي للحين.",
+    "won the ## league, worked out from that season's verified results. The current table is separate: being top now does not make a club champions.": "فاز بدوري ## حسب نتائج ذاك الموسم الموثقة. جدول الموسم الحالي شيء آخر: تصدّر الجدول الحالي لا يجعل النادي حامل اللقب."
+})
+
+
+INDEX = _x_theme_index(INDEX)
+# ======================== نهاية إضافة هوية الألوان ========================
 
 
 # ============================================================================

@@ -1,0 +1,17 @@
+{
+ "leagues": {
+  "l_4WFCIZ": {
+   "season": "2025-26",
+   "next": "2026-27",
+   "src": "FPL archive (vaastav/Fantasy-Premier-League): final table from all 380 fixtures",
+   "team": "Arsenal",
+   "pts": 85,
+   "gd": 44,
+   "gf": 71,
+   "runner_up": "Man City",
+   "margin": 7,
+   "fixtures": 380
+  }
+ },
+ "note": "Defending champions per league, from the previous season's verified results. 'next' is the season the title is defended in."
+}
