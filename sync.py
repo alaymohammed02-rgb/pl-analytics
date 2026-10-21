@@ -8064,7 +8064,7 @@ INDEX = _x_ui_index(INDEX)
 # المزامنة تضيف شي واحد فقط: رابط صورة كل لاعب من PitchAPI (players.get، مربوط برقم اللاعب نفسه)، في ملف صغير لكل دوري.
 # الصفحة تعرض الصورة فقط إذا تأكدت المزامنة إن الصور تنفتح بدون مفتاح؛ وإلا تعرض الحروف الأولى وشعار النادي.
 # ============================================================================
-PHOTO_PER_RUN = 100               # أقصى عدد لاعبين نطلب ملفهم (صورة + مركز) في المزامنة الوحدة (لكل الدوريات)
+PHOTO_PER_RUN = 300               # أقصى عدد لاعبين نطلب ملفهم (صورة + مركز) في المزامنة الوحدة (لكل الدوريات)، حوالي دقيقتين
 PHOTO_RETRY_H = 24                # إعادة المحاولة بعد خطأ
 PHOTO_NOIMG_H = 24 * 7            # لاعب ملفه ما فيه صورة: نرجع له بعد أسبوع
 PHOTO_MIN_MIN = 270               # الصور: لاعبون لعبوا 270 دقيقة على الأقل (اللي ممكن يظهرون في البطاقات)
@@ -8631,13 +8631,15 @@ INDEX = _x_home_index(INDEX)
 # ======================== نهاية إضافة الصفحة الرئيسية ========================
 
 
+
 # ============================================================================
 # إضافة: جودة البيانات — مراكز اللاعبين، وإعادة جلب المباريات اللي ناقصها xAG.
 # المراكز: PitchAPI يعطي رقم مركز (position_id) لكل لاعب بدون شرح للأرقام. المزامنة تتعلّم معنى كل رقم من البيانات نفسها:
 #   مراكز لاعبي الدوري الإنجليزي الرسمية في الفانتازي (حارس/مدافع/وسط/مهاجم) + الحراس المعروفين من "xG المواجَهة".
 #   أي رقم ما له أدلة كافية يبقى بدون مركز (ما نخمّن). الجدول المتعلَّم ينحفظ في data/positions_map.json ويظهر في السجل.
 # xAG: بعض المباريات انحفظت "مكتملة" وفيها xAG / xG chain / xG buildup فاضية لكل اللاعبين (PitchAPI يضيفها متأخر غالباً).
-#   كل مزامنة نرجع لعدد محدود منها (مرة في اليوم لكل مباراة، خلال أول DQ_XAG_DAYS يوم بعد المباراة).
+#   كل مزامنة نرجع لعدد محدود منها (مرة في اليوم لكل مباراة، خلال أول DQ_XAG_DAYS يوم بعد المباراة). أول تجربة بيّنت إن PitchAPI
+#   ما عنده هذي الأرقام لهذي المباريات أصلاً (0 من 28)، فالصفحات تحسب لكل 90 من الدقائق اللي لها قيمة فقط.
 # ============================================================================
 import unicodedata
 
@@ -8645,7 +8647,7 @@ DQ_POS_MIN_N = 4                  # أقل عدد أدلة لرقم مركز
 DQ_POS_MIN_SHARE = 0.6            # وأقل نسبة للمركز الغالب
 DQ_XAG_PER_RUN = 4                # كم مباراة ناقصة نعيد جلبها لكل دوري في المزامنة الوحدة
 DQ_XAG_RETRY_H = 24
-DQ_XAG_DAYS = 60
+DQ_XAG_DAYS = 14                  # أول تجربة (21 أكتوبر 2026): 0 من 28 مباراة رجع فيها xAG، فالمصدر ما يضيفه متأخر؛ نجرب فقط المباريات الحديثة
 DQ_FPL_POS = {1: "GK", 2: "DF", 3: "MF", 4: "FW"}
 DQ = dict(hub=None, map=None, q={}, done=set())
 
@@ -8811,6 +8813,176 @@ def run_pipeline(hub, pit_key):
         log(f"  [المراكز] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
     return out
 # ======================== نهاية إضافة جودة البيانات ========================
+
+# ============================================================================
+# إضافة: الفانتازي — نموذج v3، فريق النموذج موسم بموسم، وصفحة الأنماط
+# نموذج v3 = v2 + معايرة التمريرات الحاسمة حسب المركز: FPL يحسب تمريرات حاسمة أكثر مما يتوقعه xA (ارتداد، ركلة جزاء مكتسبة…)،
+#   فمعدل الصناعة من xA يُضرب في 1.45 للمدافع و1.58 للوسط و2.33 للمهاجم. المعاملات من مواسم 2022/23–2024/25 فقط؛ التحقق على
+#   2025/26 والاختبار على جولات هذا الموسم المنتهية: الخطأ (RMSE) أقل في المواسم الخمسة، والانحياز أقل في الخمسة، واحتمال المشاركة كما هو.
+# فريق النموذج موسم بموسم: نتائج "مراجعة الموسم" لكل موسم جنب بعض (data/fpl_review.json + هذا الموسم بعد تشغيل مراجعته).
+# الأنماط: data/fpl_patterns.json محسوب مسبقاً بإعادة تشغيل المواسم بنفس النموذج بدون بيانات مستقبلية.
+# ============================================================================
+_X_FPXCSS = ".fpx-acr h3{margin:0 0 4px}.fpx-sub{font-size:12px;margin:6px 0}.fpx-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:10px;margin:8px 0}.fpx-s{padding:10px 12px;border-radius:12px;border:1px solid var(--glass-bd);background:rgba(255,255,255,.02)}.fpx-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:4px}.fpx-n{font-size:11.5px;margin-top:4px}.fpx-tbl{margin-top:6px}.fpx-tbl summary{cursor:pointer;color:var(--th-link);font-size:13px}.hpt i.mgr{background:#e6e3dc;opacity:.8}.hpt i.mdl{background:var(--th-hi);opacity:.45}.fpx-intro{font-size:13px}.fpx-pat{display:flex;flex-direction:column;gap:8px}.fpx-pt{font-weight:700}.fpx-tags{display:flex;flex-wrap:wrap;gap:6px}.fpx-tag{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;border:1px solid var(--glass-bd)}.fpx-tag.warn{background:rgba(233,180,76,.14);color:var(--a);border-color:rgba(233,180,76,.35)}.fpx-tag.ok{background:rgba(76,195,138,.12);color:var(--g);border-color:rgba(76,195,138,.3)}.fpx-tag.neu{color:var(--mu)}.fpx-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:14px}.fpx-per{font-size:11.5px;margin-bottom:2px}"
+_X_FPXJS = r"""/* ===== Fantasy extras: the model's team season by season, and the Patterns tab =====
+   Season by season: the Season review of every archived season (data/fpl_review.json, same code and model version), next to this
+   season once its review has been run on this device. Patterns: data/fpl_patterns.json, computed offline by replaying every archived
+   season and this season's finished gameweeks with the same model, each gameweek seeing only earlier gameweeks. */
+function srSum(R){
+ const ok=L=>(L||[]).filter(x=>!x.err),f=ok(R.fixed),t=ok(R.ft),om=new Map((R.opt||[]).map(x=>[x.r,x.pts])),n=t.length;if(!n)return null;
+ const sum=(L,g)=>L.reduce((s,x)=>s+(g(x)||0),0),O=sum(t,x=>om.get(x.r)),A=sum(t,x=>x.act);
+ return {n,kept:sum(f,x=>x.act)/Math.max(1,f.length),ft:A/n,best:O/n,share:O?A/O:null,rs:t.map(x=>x.r)};
+}
+async function srAcross(){
+ const box=document.getElementById('srall');if(!box)return;
+ if(SR.file===undefined){try{const r=await fetch('data/fpl_review.json?v='+encodeURIComponent(SR_VER));SR.file=r.ok?await r.json():null}catch(e){SR.file=null}}
+ if(!document.body.contains(box))return;
+ const F=SR.file&&SR.file.sr===SR_VER?SR.file.seasons||{}:{},rows=[];
+ Object.keys(F).sort().forEach(s=>{const R=F[s];if(R&&R.ver===PM_VERSION){const o=srSum(R);if(o)rows.push(Object.assign({lab:fpsLabel(s)},o))}});
+ const d=FPD,cur=d&&!d.archive?SR.res[srKey(d)]:null;let cr=null;
+ if(cur){const o=srSum(cur);if(o){const av=o.rs.map(r=>{const e=(d.events||[]).find(x=>x.id===r);return e&&fpOk(e.avg)?e.avg:null}).filter(v=>v!=null);
+  cr=Object.assign({lab:'This season',mgr:av.length===o.n?av.reduce((a,b)=>a+b,0)/av.length:null},o);rows.push(cr)}}
+ if(!rows.length){box.innerHTML='';return}
+ const mx=Math.max(...rows.map(r=>Math.max(r.ft,r.kept,r.mgr||0)),1),hasM=!!(cr&&cr.mgr!=null);
+ const bar=(v,c,l)=>`<div><span>${l}</span><span class="hpt"><i class="${c}" style="width:${Math.max(2,v/mx*100).toFixed(1)}%"></i></span><b>${v.toFixed(1)}</b></div>`;
+ box.innerHTML=`<div class="card fpx-acr"><h3>The model's team, season by season</h3><div class="mu fpx-sub"><span>Points a gameweek from gameweek ${SR_FROM}, with the same rules every season: squad picked before gameweek ${SR_FROM} from earlier data only, no chips, no points hits</span>. <span>Model ${esc(PM_VERSION)}.</span></div>
+  <div class="fpx-grid">${rows.map(r=>`<div class="fpx-s"><div class="fpx-h"><b>${esc(r.lab)}</b><span class="mu">${r.n} <span>gameweeks</span></span></div><div class="hpair">${bar(r.ft,'on','1 free transfer a week')}${bar(r.kept,'','Squad kept all season')}${r.mgr!=null?bar(r.mgr,'mgr','Average FPL manager'):''}</div><div class="mu fpx-n"><span>Best XI in hindsight</span> ${r.best.toFixed(1)} · <span>reached</span> ${Math.round(r.share*100)}%</div></div>`).join('')}</div>
+  ${!cr&&d&&!d.archive?'<div class="mu fpx-sub">This season is added here once its review below has been run.</div>':''}
+  <details class="fpx-tbl"><summary>Show as a table</summary>${tbl([['Season'],['Gameweeks',1],['1 free transfer',1],['Squad kept',1],['Best XI in hindsight',1],['Reached',1]].concat(hasM?[['Average manager',1]]:[]),rows.map(r=>[esc(r.lab),r.n,r.ft.toFixed(1),r.kept.toFixed(1),r.best.toFixed(1),Math.round(r.share*100)+'%'].concat(hasM?[r.mgr!=null?r.mgr.toFixed(1):'N/A']:[])))}</details>
+  <div class="mu fpx-sub">The archived seasons carry no average-manager figure in the data; this season's comes from FPL's own gameweek averages. Only a few gameweeks of this season can be replayed so far, so its row moves a lot.</div></div>`;
+}
+/* ---------- Patterns tab ---------- */
+let FPX_PAT;
+const fpxSig=e=>!!(e&&e.lo!=null&&(e.lo>0||e.hi<0)),fpxHolds=(a,b)=>fpxSig(a)&&fpxSig(b)&&Math.sign(a.m)===Math.sign(b.m);
+const fpxG=e=>e?`${e.m>=0?'+':''}${e.m.toFixed(2)} (${e.lo==null?'N/A':e.lo.toFixed(2)} – ${e.hi==null?'N/A':e.hi.toFixed(2)})`:'N/A';
+async function fpTPatterns(el){
+ el.innerHTML='<div class="empty skel">Loading…</div>';
+ if(FPX_PAT===undefined){try{const r=await fetch('data/fpl_patterns.json?v='+encodeURIComponent((ALL&&ALL.generated)||''));FPX_PAT=r.ok?await r.json():null}catch(e){FPX_PAT=null}}
+ if(FP.tab!=='patterns'||!document.body.contains(el))return;
+ const P=FPX_PAT;if(!P||!P.items){el.innerHTML='<div class="empty">The patterns file is not available.</div>';return}
+ const items=P.items.map(it=>Object.assign({fh:fpxHolds(it.train.vsForm,it.confirm.vsForm),mh:fpxHolds(it.train.vsModel,it.confirm.vsModel)},it)).sort((a,b)=>(b.fh-a.fh)||(Math.abs(b.confirm.vsForm.m)-Math.abs(a.confirm.vsForm.m)));
+ const nF=items.filter(x=>x.fh).length,nM=items.filter(x=>x.mh).length;
+ const card=it=>{const T=it.train,C=it.confirm,mx=Math.max(T.form,T.pred,T.act,C.form,C.pred,C.act,.1);
+  const bars=o=>`<div class="hpair">${[['His form said',o.form,''],['The model predicted',o.pred,'mdl'],['He actually scored',o.act,'on']].map(([l,v,c])=>`<div><span>${l}</span><span class="hpt"><i class="${c}" style="width:${Math.max(2,v/mx*100).toFixed(1)}%"></i></span><b>${v.toFixed(2)}</b></div>`).join('')}</div>`;
+  return `<div class="card fpx-pat"><div class="fpx-pt">${esc(it.l)}</div>
+   <div class="fpx-tags"><span class="fpx-tag ${it.fh?'warn':'neu'}">${it.fh?(C.vsForm.m<0?'Form overrates them':'Form underrates them'):'Form: no consistent gap'}</span><span class="fpx-tag ${it.mh?'warn':'ok'}">${it.mh?'The model misses it':'The model already accounts for it'}</span></div>
+   <div class="fpx-cols"><div><div class="mu fpx-per"><span>Confirmation</span> · ${C.n} <span>cases</span></div>${bars(C)}</div><div><div class="mu fpx-per"><span>Discovery</span> · ${T.n} <span>cases</span></div>${bars(T)}</div></div>
+   <div class="mu fpx-n"><span>Next gameweek against his form:</span> ${fpxG(T.vsForm)} → ${fpxG(C.vsForm)} · <span>against the model:</span> ${fpxG(T.vsModel)} → ${fpxG(C.vsModel)}</div></div>`};
+ el.innerHTML=`<div class="card mu fpx-intro"><b>If X happens, what happens next gameweek?</b> <span>Each pattern was fixed in advance, measured on a discovery period and then checked again on a confirmation period that played no part in choosing it.</span> <span>A pattern only counts when it shows up in both periods, with a 95% interval clear of zero (intervals are by gameweek, so many players in one week do not count as many pieces of evidence).</span> <span>Points are next-gameweek FPL points; "form" is his average over his last 5 gameweeks; "the model" is the Predicted Points model, which saw only earlier gameweeks.</span>
+   <div class="fpx-per"><span>Discovery period:</span> ${esc(P.trainLabel)} · <span>confirmation period:</span> <span>${esc(P.confirmLabel)}</span> · <span>model</span> ${esc(P.model)}</div></div>
+  <div class="grid"><div class="kpi"><b>${nF}</b><span>of ${items.length} patterns: form misleads, in both periods</span></div><div class="kpi"><b>${nM}</b><span>of ${items.length} patterns: the model misses them, in both periods</span></div></div>
+  ${items.map(card).join('')}
+  <div class="mu fpx-sub"><span>Gaps are average points per player per gameweek, with the 95% interval in brackets: discovery period → confirmation period.</span> <span>Computed</span> <span class="nw" dir="ltr">${esc(String(P.generated||'').slice(0,10))}</span> <span>from the archived seasons and this season's finished gameweeks.</span></div>`;
+}
+"""
+
+
+def _x_fpx_index(html):
+    def sub(h, old, new):
+        if h.count(old) != 1:
+            log(f"  تنبيه (الفانتازي v3): ما لقيت نقطة التعديل بدقة، تخطيتها: {old[:60]}")
+            return h
+        return h.replace(old, new)
+    h = html
+    # --- model v3: assist calibration (a rate change, so the breakdown, the ranges and the shown rate all agree) ---
+    h = sub(h, "const PM_VERSION='v2';",
+            "const PM_VERSION='v3';\n/* v3: FPL awards more assists than xA expects (rebounds, penalties won, deflections), the same in every season and position:\n"
+            "   the assist rate from xA is scaled by position (fitted on 2022-23 to 2024-25, validated on 2025-26, tested on this season's\n"
+            "   finished gameweeks). A rate from FPL assists themselves (no xA in the data) is not scaled. AF:1 everywhere restores v2. */\n"
+            "PM.AF={1:1,2:1.45,3:1.58,4:2.33};")
+    h = sub(h, " if(xa90!=null&&fa_!=null)lamA=xa90*fa_;else{", " if(xa90!=null&&fa_!=null)lamA=xa90*fa_*((PM.AF&&PM.AF[t])||1);else{")
+    h = sub(h, "bonus ${pc(r.R.bon)}.", "bonus ${pc(r.R.bon)}.${PM.AF&&PM.AF[p.ty]!==1&&r.xa90!=null?` The assist rate includes ×${PM.AF[p.ty]} for this position: FPL counts more assists than xA expects.`:''}")
+    h = sub(h, "Model tested: <b>v2 = the model used in Predicted Points</b> (playing-time model trained on archived seasons).",
+            "Model tested: <b>v3 = the model used in Predicted Points</b> (playing time and assist calibration trained on archived seasons).")
+    h = sub(h, "Model v2's five playing-time parameters were tuned on the 2022-23 and 2023-24 seasons, so replays of those two archived seasons are partly in-sample; 2024-25 was the validation season and 2025-26 the untouched test season (error 1.845 → 1.716 against v1).",
+            "Model v3: the five playing-time parameters were tuned on 2022-23 and 2023-24 (validated on 2024-25, tested on 2025-26) and the assist calibration on 2022-23 to 2024-25 (validated on 2025-26, tested on this season), so replays of the archived seasons are partly in-sample.")
+    # --- season by season ---
+    h = sub(h, "<div id=\"srout\"><div class=\"empty\">Loading…</div></div>`;", "<div id=\"srall\"></div><div id=\"srout\"><div class=\"empty\">Loading…</div></div>`;")
+    h = sub(h, " srStored(d).then(R=>{if(R){SR.res[k]=R;srDraw()}else srAsk()});", " srStored(d).then(R=>{if(R){SR.res[k]=R;srDraw()}else srAsk()});srAcross();")
+    h = sub(h, "srChartWire('srch',gws,S,dl);", "srChartWire('srch',gws,S,dl);srAcross();")
+    # --- Patterns tab (for this season and archived seasons alike: its content does not depend on the season shown) ---
+    h = sub(h, "['track','Track record']];", "['track','Track record'],['patterns','Patterns']];")
+    h = sub(h, "review:fpTReview,track:fpTTrack})[FP.tab]", "review:fpTReview,track:fpTTrack,patterns:fpTPatterns})[FP.tab]")
+    h = sub(h, "'backtest','review']);", "'backtest','review','patterns']);")
+    h = sub(h, "</style></head>", _X_FPXCSS + "</style></head>")
+    h = sub(h, "async function route(){", _X_FPXJS + "\nasync function route(){")
+    return h
+
+
+_AR_SEASON.update({
+    "The model's team, season by season": "فريق النموذج، موسم بموسم",
+    "Model v#.": "النموذج v#.",
+    "gameweeks": "جولات",
+    "This season": "هذا الموسم",
+    "Squad kept all season": "القائمة ثابتة طوال الموسم",
+    "Average FPL manager": "متوسط مدربي FPL",
+    "Best XI in hindsight": "أفضل تشكيلة بأثر رجعي",
+    "reached": "وصل إلى",
+    "This season is added here once its review below has been run.": "هذا الموسم ينضاف هنا بعد تشغيل مراجعته تحت.",
+    "Show as a table": "اعرضها كجدول",
+    "Season": "الموسم",
+    "Gameweeks": "الجولات",
+    "# free transfer": "انتقال مجاني #",
+    "Squad kept": "القائمة ثابتة",
+    "Reached": "النسبة",
+    "Average manager": "متوسط المدربين",
+    "The archived seasons carry no average-manager figure in the data; this season's comes from FPL's own gameweek averages. Only a few gameweeks of this season can be replayed so far, so its row moves a lot.": "المواسم المؤرشفة ما فيها رقم متوسط المدربين في البيانات؛ رقم هذا الموسم من متوسطات FPL الرسمية لكل جولة. جولات قليلة من هذا الموسم ممكن تُعاد حتى الآن، فصفّه يتغير كثير.",
+    "Patterns": "الأنماط",
+    "If X happens, what happens next gameweek?": "إذا صار كذا، ايش يصير الجولة الجاية؟",
+    "The patterns file is not available.": "ملف الأنماط غير متوفر.",
+    "of # patterns: form misleads, in both periods": "من # أنماط: المستوى الأخير يضلّل، في الفترتين",
+    "of # patterns: the model misses them, in both periods": "من # أنماط: النموذج يفوّتها، في الفترتين",
+    "Form overrates them": "المستوى الأخير يبالغ فيهم",
+    "Form underrates them": "المستوى الأخير يظلمهم",
+    "Form: no consistent gap": "المستوى الأخير: لا فرق ثابت",
+    "The model misses it": "النموذج يفوّته",
+    "The model already accounts for it": "النموذج يحسب حسابه أصلاً",
+    "cases": "حالة",
+    "His form said": "مستواه الأخير يقول",
+    "The model predicted": "توقّع النموذج",
+    "He actually scored": "سجّل فعلياً",
+    "Next gameweek against his form:": "الجولة الجاية مقارنة بمستواه الأخير:",
+    "against the model:": "مقارنة بالنموذج:",
+    "#/# and this season (GW#–#)": "#/# وهذا الموسم (الجولات #–#)",
+    "Unlucky: xG+xA at least # over his last # appearances but no goal or assist": "سيئ الحظ: xG+xA لا يقل عن # في آخر # مشاركات بدون هدف ولا صناعة",
+    "Lucky: #+ goals and assists over his last # appearances from under # xG+xA": "محظوظ: # أهداف وصناعات أو أكثر في آخر # مشاركات من xG+xA أقل من #",
+    "After a haul: #+ points last gameweek": "بعد غلّة كبيرة: # نقاط أو أكثر الجولة الماضية",
+    "Dropped: started the # gameweeks before, then did not play last gameweek": "أُبعد: بدأ أساسياً # جولات، ثم ما لعب الجولة الماضية",
+    "Clean-sheet run: a goalkeeper or defender with a clean sheet in each of his last # appearances (#+ min)": "سلسلة شباك نظيفة: حارس أو مدافع بشباك نظيفة في كل واحدة من آخر # مشاركات (#+ دقيقة)",
+    "His team scored #+ last gameweek (midfielders and forwards)": "فريقه سجّل # أو أكثر الجولة الماضية (لاعبو الوسط والمهاجمون)",
+    "The opponent conceded #+ last gameweek (midfielders and forwards facing them)": "الخصم استقبل # أو أكثر الجولة الماضية (لاعبو الوسط والمهاجمون اللي يواجهونه)",
+    "His price rose last gameweek": "سعره ارتفع الجولة الماضية",
+    "His price fell last gameweek": "سعره نزل الجولة الماضية",
+    "Playing at home (midfielders and forwards)": "يلعب على أرضه (لاعبو الوسط والمهاجمون)",
+    "Two matches in the gameweek (double gameweek)": "مباراتين في الجولة (جولة مزدوجة)",
+    "One of the model's # highest predictions of the gameweek (the captaincy candidates)": "من أعلى # توقعات للنموذج في الجولة (مرشحو الكابتن)",
+    "(playing time and assist calibration trained on archived seasons)": "(وقت اللعب ومعايرة الصناعة مدرَّبة على المواسم المؤرشفة)",
+    "v# = the model used in Predicted Points": "v# = النموذج المستخدم في النقاط المتوقعة",
+    "The assist rate includes ×# for this position: FPL counts more assists than xA expects.": "معدل الصناعة فيه ×# لهذا المركز: FPL يحسب تمريرات حاسمة أكثر مما يتوقعه xA.",
+    "Points a gameweek from gameweek #, with the same rules every season: squad picked before gameweek # from earlier data only, no chips, no points hits": "النقاط في كل جولة من الجولة #، بنفس القواعد كل موسم: القائمة تُختار قبل الجولة # من بيانات الجولات السابقة فقط، بدون رقائق ولا خصم نقاط",
+    "Each pattern was fixed in advance, measured on a discovery period and then checked again on a confirmation period that played no part in choosing it.": "كل نمط حُدد مسبقاً، وقِيس على فترة اكتشاف، ثم تم التحقق منه مرة ثانية على فترة تأكيد ما كان لها أي دور في اختياره.",
+    "A pattern only counts when it shows up in both periods, with a #% interval clear of zero (intervals are by gameweek, so many players in one week do not count as many pieces of evidence).": "النمط يُحسب فقط إذا ظهر في الفترتين، بمجال ثقة #% بعيد عن الصفر (المجالات محسوبة بالجولة، فكثرة اللاعبين في جولة وحدة ما تُحسب أدلة كثيرة).",
+    "Points are next-gameweek FPL points; \"form\" is his average over his last # gameweeks; \"the model\" is the Predicted Points model, which saw only earlier gameweeks.": "النقاط هي نقاط FPL في الجولة الجاية؛ \"المستوى الأخير\" متوسطه في آخر # جولات؛ \"النموذج\" هو نموذج النقاط المتوقعة، وما شاف إلا الجولات السابقة.",
+    "Discovery period:": "فترة الاكتشاف:",
+    "confirmation period:": "فترة التأكيد:",
+    "model": "النموذج",
+    "Confirmation": "التأكيد",
+    "Computed": "حُسبت في",
+    "from the archived seasons and this season's finished gameweeks.": "من المواسم المؤرشفة وجولات هذا الموسم المنتهية.",
+    "Gaps are average points per player per gameweek, with the #% interval in brackets: discovery period → confirmation period.": "الفروق متوسط نقاط لكل لاعب في الجولة، وبين القوسين مجال الثقة #%: فترة الاكتشاف ← فترة التأكيد.",
+    "Blank streak: an attacker predicted #+ who scored # or fewer in each of his last # appearances": "سلسلة إخفاق: لاعب هجومي متوقع له #+ وسجّل # نقاط أو أقل في كل واحدة من آخر # مشاركات",
+    "Taken off early twice: under # minutes in each of his last # appearances": "خرج مبكراً مرتين: أقل من # دقيقة في كل واحدة من آخر # مشاركات"
+})
+
+
+INDEX = _x_fpx_index(INDEX)
+# ======================== نهاية إضافة الفانتازي v3 ========================
+
+
+
+
+
+
+
 
 
 
