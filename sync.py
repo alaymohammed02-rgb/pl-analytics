@@ -6582,6 +6582,7 @@ INDEX = _x_theme_index(INDEX)
 # كل الطلبات هنا قليلة ومحفوظة: الأبطال مرة لكل موسم، المشاركات كل 12 ساعة، المواعيد كل ساعة.
 # ============================================================================
 TITLES_RETRY_H = 24               # بطل ما قدرنا نثبته: نعيد المحاولة بعد يوم
+TITLES_METHOD = 2                 # يزيد كل ما تحسّنت طريقة الإثبات، فالمحاولات الفاشلة القديمة تُعاد فوراً
 EURO_REFRESH_H = 12
 FIX_REFRESH_MIN = 60
 FIX_MAX = 80                      # أقصى عدد مباريات قادمة نحفظها لكل دوري
@@ -6656,7 +6657,18 @@ def _shootout(client, m):
     na = sum(1 for e in pens if str(getattr(e, "team_id", "")) == aid)
     if pens and nh != na and nh + na == len(pens):
         return (m.home_team.name if nh > na else m.away_team.name, f"{nh}-{na}"), None
-    return None, f"no shootout in events ({', '.join(kinds)})"
+    # الأحداث فيها فترة الترجيح بدون الأهداف: نعدّ تسديدات فترة الترجيح من بيانات التسديد
+    sh, err = call(client.matches.shots, m.id)
+    shots = [x for p in (getattr(sh, "periods", None) or []) if _PEN_PERIOD.search(str(getattr(p, "period", "") or ""))
+             for x in (getattr(p, "shots", None) or [])] if sh is not None else []
+    th = [x for x in shots if str(getattr(x, "team_id", "")) == hid]
+    ta = [x for x in shots if str(getattr(x, "team_id", "")) == aid]
+    goal = lambda x: "goal" in str(getattr(x, "event_type", "")).lower() and not getattr(x, "is_own_goal", False)
+    gh, ga = sum(map(goal, th)), sum(map(goal, ta))
+    if len(th) >= 3 and len(ta) >= 3 and len(th) + len(ta) == len(shots) and gh != ga:
+        return (m.home_team.name if gh > ga else m.away_team.name, f"{gh}-{ga}"), None
+    kinds_s = sorted({str(getattr(x, "event_type", "")) for x in shots})
+    return None, f"no shootout in events ({', '.join(kinds)}) or shots ({len(th)}+{len(ta)} {', '.join(kinds_s)})"
 
 
 def _cup_title(client, lid, season, ms):
@@ -6709,7 +6721,7 @@ def sync_titles(client, hub, lids):
         if e.get("next") == nxt and e.get("team"):
             continue                                            # محسوب لهذا الموسم
         last = _parse_ts((tried.get(lid) or {}).get("t"))
-        if (tried.get(lid) or {}).get("next") == nxt and last and (t_now - last).total_seconds() < TITLES_RETRY_H * 3600:
+        if (tried.get(lid) or {}).get("next") == nxt and (tried.get(lid) or {}).get("m") == TITLES_METHOD and last and (t_now - last).total_seconds() < TITLES_RETRY_H * 3600:
             continue
         res, err = call(lambda: client.leagues.matches(lid, season=prev, status="played"))
         ms = list(getattr(res, "matches", None) or []) if res is not None else []
@@ -6724,7 +6736,7 @@ def sync_titles(client, hub, lids):
             else:
                 why = f"league: {why}; cup: {why2}"
         if out is None:
-            tried[lid] = dict(next=nxt, t=now(), why=why)
+            tried[lid] = dict(next=nxt, t=now(), why=why, m=TITLES_METHOD)
             log(f"  [Titles] {L.name} {pl}: ما قدرت أثبت البطل ({why}) — بدون شارة")
         else:
             src = (f"PitchAPI results of {pl}: final table from all {out['fixtures']} fixtures" if kind == "league"
@@ -6824,7 +6836,8 @@ def sync_fixtures(client, hub, lids):
     last = _parse_ts(old.get("t"))
     t_now = datetime.datetime.now(datetime.timezone.utc)
     today = t_now.strftime("%Y-%m-%d")
-    stale = any(x.get("d", "9") < today for v in (old.get("leagues") or {}).values() for x in v) and (not last or (t_now - last).total_seconds() > 600)
+    fetched = str(old.get("t") or "")[:10]       # مباراة كان موعدها فات وقت الجلب (مؤجلة) ما تستدعي جلب جديد
+    stale = any(fetched <= x.get("d", "9") < today for v in (old.get("leagues") or {}).values() for x in v)
     if last and (t_now - last).total_seconds() < FIX_REFRESH_MIN * 60 and not stale and set(lids) <= set(old.get("leagues") or {}):
         return
     out = dict(old.get("leagues") or {})
@@ -7013,6 +7026,7 @@ _AR_SEASON.update({
 
 INDEX = _x_cmp_index(INDEX)
 # ======================== نهاية إضافة البطولات ========================
+
 
 
 
