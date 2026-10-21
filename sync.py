@@ -8135,7 +8135,7 @@ def sync_photos(client, hub, lids):
         if Q:
             PHOTO_POS_IDS[lid] = Q
         if P:
-            PHOTO_INDEX[lid] = dict(photo_file=fn[5:], photo_v=hashlib.sha1(json.dumps([pub, sorted(P.items())]).encode()).hexdigest()[:10])
+            PHOTO_INDEX[lid] = dict(photo_file=fn[5:], photo_v=hashlib.sha1(json.dumps([pub, sorted(P.items()), sorted(C.items())]).encode()).hexdigest()[:10])
         if budget <= 0:
             break
     man = {k: v for k, v in PHOTO_INDEX.items()}
@@ -8979,11 +8979,13 @@ INDEX = _x_fpx_index(INDEX)
 # ======================== نهاية إضافة الفانتازي v3 ========================
 
 # ============================================================================
-# إضافة: ملفات الميزات المستقلة — Threat Map داخل صفحة Heatmaps، وصفحة Match What-If
-# الكود في ملفات مستقلة في المستودع: assets/threat-map.js و assets/match-whatif.js و assets/features.css.
+# إضافة: ملفات الميزات المستقلة — Threat Map داخل صفحة Heatmaps، وصفحة Match What-If، وصفحة اللاعب، ومركز المباراة،
+# وشريط مباريات اليوم ولاعب الجولة في الرئيسية، والمشاركة كصورة، وتثبيت الموقع كتطبيق (PWA).
+# الكود في ملفات مستقلة في المستودع: assets/*.js و assets/features.css و manifest.webmanifest و sw.js و assets/icons/.
 # هذا القسم يضيف روابطها للصفحة فقط (بعد السكربت الرئيسي، فتلقى R و PAGES جاهزة). غيّر FEATURES_V لما تتغير الملفات.
 # ============================================================================
-FEATURES_V = "3"
+FEATURES_V = "4"
+FEATURES_JS = ("pla-data", "share-card", "threat-map", "match-whatif", "player-page", "match-centre", "home-extra")
 
 
 def _x_feat_index(html):
@@ -8998,9 +9000,20 @@ def _x_feat_index(html):
         html = html.replace(leg, "const heatLegend=max=>typeof heatLegend2==='function'?heatLegend2(max):")
     else:
         log("  تنبيه (ملفات الميزات): ما لقيت مفتاح خريطة الحرارة، تخطيته")
-    return html.replace(old, f'</script><link rel="stylesheet" href="assets/features.css?v={v}">'
-                             f'<script src="assets/threat-map.js?v={v}"></script>'
-                             f'<script src="assets/match-whatif.js?v={v}"></script></body></html>')
+    # installable app: manifest, icons, theme colour, and the service worker (registered after the page has loaded)
+    head = "<title>PL Analytics</title>"
+    if html.count(head) == 1:
+        html = html.replace(head, '<title>PL Analytics</title><link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#0d1520">'
+                                  '<link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png">'
+                                  '<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">'
+                                  '<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">'
+                                  '<meta name="apple-mobile-web-app-title" content="PL Analytics">', 1)
+    else:
+        log("  تنبيه (ملفات الميزات): ما لقيت عنوان الصفحة، تخطيت ملف التطبيق")
+    js = "".join(f'<script src="assets/{n}.js?v={v}"></script>' for n in FEATURES_JS)
+    sw = ("<script>if('serviceWorker' in navigator&&location.protocol==='https:')addEventListener('load',()=>"
+          "navigator.serviceWorker.register('sw.js').catch(()=>null))</script>")
+    return html.replace(old, f'</script><link rel="stylesheet" href="assets/features.css?v={v}">{js}{sw}</body></html>')
 
 
 INDEX = _x_feat_index(INDEX)
@@ -9058,14 +9071,21 @@ def _mx_side(s):
                 c=txt(getattr(s, "coach", None)), xi=xi, sb=[pl(x, False) for x in getattr(s, "subs", None) or []])
 
 
-def mx_fetch(client, mid, parts, blocked, keys):
-    """يطلب الأجزاء الناقصة لمباراة. ترجع {الجزء: القيمة} للي وصل. blocked: نقاط اتصال رفضها الاشتراك في هذي المزامنة."""
+def mx_fetch(client, mid, parts, blocked, keys, asked=None):
+    """يطلب الأجزاء الناقصة لمباراة. ترجع {الجزء: القيمة} للي وصل. blocked: نقاط اتصال رفضها الاشتراك في هذي المزامنة
+    ("*" = PitchAPI يحدّ الطلبات: نوقف الخطوة كلها). asked: الأجزاء اللي انطلبت فعلاً."""
     got = {}
     for part, fn in MX_FN.items():
-        if part not in parts or fn in blocked:
+        if part not in parts or fn in blocked or "*" in blocked:
             continue
         res, err = call(getattr(client.matches, fn), mid)
         time.sleep(REQUEST_DELAY)
+        if err == "rate_limit":
+            blocked.add("*")
+            log("  [مركز المباراة] PitchAPI يحدّ الطلبات الحين: نوقف هذي الخطوة ونحفظ اللي وصل")
+            break
+        if asked is not None:
+            asked.add(part)
         if err in ("plan", "auth"):
             blocked.add(fn)
             log(f"  [مركز المباراة] {fn}: غير متاح بهذا الاشتراك ({err})، تخطيته في هذي المزامنة")
@@ -9126,6 +9146,16 @@ def mx_todo(lids, t_now, files):
     return [(d, L, i, miss) for _, d, L, i, miss in out]
 
 
+def _mx_status(hub, path):
+    """هل الملف موجود في GitHub؟ 'missing' (404) / 'ok' / 'error' (أي خطأ ثاني أو انقطاع)."""
+    try:
+        r = requests.get(f"{GH}/repos/{hub['repo']}/contents/{path}", params={"ref": hub["branch"]}, timeout=60,
+                         headers=gh_headers(hub["token"], "application/vnd.github.object+json"))
+        return "missing" if r.status_code == 404 else "ok" if r.status_code == 200 else "error"
+    except Exception:
+        return "error"
+
+
 def _mx_v(b):
     return hashlib.sha1(b).hexdigest()[:10]
 
@@ -9134,18 +9164,26 @@ def sync_match_centre(client, hub, lids):
     _mx_index_all(hub)
     t_now = datetime.datetime.now(datetime.timezone.utc)
     files = {}
-    for L in lids:
-        mx = gh_get_json(hub, f"data/{safe_name(L)}_mx.json") or {}
-        rt = gh_get_json(hub, f"data/{safe_name(L)}_rt.json") or {}
+    for L in list(lids):
+        mx, rt = gh_get_json(hub, f"data/{safe_name(L)}_mx.json"), gh_get_json(hub, f"data/{safe_name(L)}_rt.json")
+        # ملف ما انقرى: إذا موجود في GitHub (الخطأ مؤقت) نتخطى الدوري هذي المرة بدل ما نكتب فوقه ملف ناقص
+        bad = [f for f, d in ((f"{safe_name(L)}_mx.json", mx), (f"{safe_name(L)}_rt.json", rt)) if d is None and _mx_status(hub, "data/" + f) != "missing"]
+        if bad:
+            log(f"  [مركز المباراة] {L}: تعذرت قراءة {', '.join(bad)}، تخطيت الدوري هذي المرة (المحفوظ ما تغيّر)")
+            lids = [x for x in lids if x != L]
+            continue
+        mx, rt = mx or {}, rt or {}
         files[L] = (dict(m=dict(mx.get("m") or {}), st=dict(mx.get("st") or {})), dict(k=dict(rt.get("k") or {}), m=dict(rt.get("m") or {})))
     todo = mx_todo(lids, t_now, files)
     if not todo:
         log("  [مركز المباراة] كل المباريات المنتهية محدّثة")
     blocked, keys, touched = set(), {}, {}
     for d, L, mid, miss in todo[:MX_PER_RUN]:
+        if "*" in blocked:
+            break
         mx, rt = files[L]
-        kl = {}
-        got = mx_fetch(client, mid, miss, blocked, kl)
+        kl, asked = {}, set()
+        got = mx_fetch(client, mid, miss, blocked, kl, asked)
         for k, n in kl.items():
             keys[k] = keys.get(k, 0) + n
             rt["k"][k] = rt["k"].get(k, 0) + n
@@ -9156,8 +9194,8 @@ def sync_match_centre(client, hub, lids):
         if "rt" in got:
             rt["m"][mid] = got["rt"]
         left = _mx_missing(mx["m"], rt["m"], mid)
-        if left:
-            mx["st"][mid] = [(mx["st"].get(mid) or [0])[0] + 1, now(), ",".join(left)]
+        if left:      # المحاولة تنحسب فقط إذا انطلب جزء ناقص فعلاً؛ وفي الحالتين ننتظر يوم قبل نرجع لها
+            mx["st"][mid] = [(mx["st"].get(mid) or [0])[0] + (1 if set(left) & asked else 0), now(), ",".join(left)]
         else:
             mx["st"].pop(mid, None)
         c = touched.setdefault(L, dict(n=0, lu=0, mo=0, rt=0))
@@ -9256,6 +9294,9 @@ def run_pipeline(hub, pit_key):
         log(f"  [مركز المباراة] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
     return out
 # ======================== نهاية إضافة مركز المباراة ========================
+
+
+
 
 
 
@@ -9881,7 +9922,7 @@ function arNode(n){
  let o=v;const x=arT(v);if(x!=null){const lead=v.match(/^\s*/)[0],trail=v.match(/\s*$/)[0];o=lead+x+trail}
  o=arBidi(o);if(!o.includes('\u2066')&&o.includes('£')&&!/[\u0600-\u06FF]/.test(o))o='\u2066'+o+'\u2069';if(o!==v)n.nodeValue=o;
 }
-function arEl(e){for(const a of ['placeholder','title','aria-label']){const v=e.getAttribute&&e.getAttribute(a);if(v){const x=arT(v);if(x!=null)e.setAttribute(a,x)}}}
+function arEl(e){for(const a of ['placeholder','title','aria-label']){const v=e.getAttribute&&e.getAttribute(a);if(v){const x=arT(v);if(x!=null&&x!==v)e.setAttribute(a,x)}}}
 function arWalk(root){
  if(!ARL.on||!root)return;
  if(root.nodeType===3){arNode(root);return}
