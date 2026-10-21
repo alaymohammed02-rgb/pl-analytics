@@ -36,7 +36,7 @@ LEAGUE_TARGETS = [
          clubs=["bayern", "dortmund", "leverkusen", "leipzig", "frankfurt", "stuttgart", "wolfsburg", "freiburg"]),
     dict(label="الدوري الفرنسي", words=["ligue 1"], country="france", known="l_3FJFUl",
          clubs=["paris saint-germain", "marseille", "lyon", "monaco", "lille", "lens", "rennes", "nice"]),
-    dict(label="الدوري الإيطالي", words=["serie a"], country="italy",
+    dict(label="الدوري الإيطالي", words=["serie a"], country="italy", known="l_0ALvwF",
          clubs=["juventus", "inter", "milan", "napoli", "roma", "lazio", "atalanta", "fiorentina", "bologna", "torino"]),
     dict(label="الدوري البرتغالي", words=["primeira liga", "liga portugal"], country="portugal", known="l_4QexZg",
          clubs=["benfica", "porto", "sporting", "braga", "vitoria", "guimaraes"]),
