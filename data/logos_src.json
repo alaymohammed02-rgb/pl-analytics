@@ -74,5 +74,29 @@
    "__league__": "https://cdn.pitchapi.dev/images/leagues/f798d3b662336f2336cbd121d4e83958ae3205fb9922b6716e2e9bd5eb7c6050.webp"
   },
   "fail": {}
+ },
+ "l_3FJFUl": {
+  "src": {
+   "Marseille": "https://cdn.pitchapi.dev/images/teams/10ec6fe14a73f5994c3b2570231e34cd8884232163027b8a423fe45957045ffd.webp",
+   "Strasbourg": "https://cdn.pitchapi.dev/images/teams/e49b6b67d4f44ab2182c8f2384be346d13f717d85c447736c43e52ae587de406.webp",
+   "Lens": "https://cdn.pitchapi.dev/images/teams/d7424c5e0e5cb6adc67ed5a1119d16f497a63f31ca406127d9563afc29e59d11.webp",
+   "Auxerre": "https://cdn.pitchapi.dev/images/teams/540808ef1a04c1e62d1c24cb7bd4f8f5d0cffffaa3b61538873a59bb0168a7a2.webp",
+   "Toulouse": "https://cdn.pitchapi.dev/images/teams/1f5139af48bf869cbecf3c4444a0761f443e5feaf6ff3b8a559c6d0bc1631d8f.webp",
+   "Lyon": "https://cdn.pitchapi.dev/images/teams/c310928ed40f0513c11bd6ad30e631df2bd6256cd828fa906288cde82806ad33.webp",
+   "Le Mans": "https://cdn.pitchapi.dev/images/teams/1cb6a08139354588a88094bbdfa0f38eb68cbb145b19af79fe548402d4534de4.webp",
+   "Brest": "https://cdn.pitchapi.dev/images/teams/dd9ed059b3f4a132cfd8357431d608d7280fbd23b4014ea8552a7a411164d901.webp",
+   "Troyes": "https://cdn.pitchapi.dev/images/teams/a805183b27f376ca106faf014559528f32f291be0a93b621357697efc173aeeb.webp",
+   "Paris FC": "https://cdn.pitchapi.dev/images/teams/b9cad4d256831ccc0a700cc4a5c7f246a0937745dc14fe981517d735f3be7472.webp",
+   "Nice": "https://cdn.pitchapi.dev/images/teams/18fbda11f9f4ba7f44d95b49f876fe429a374840433354d9fb1d7b1aee03f666.webp",
+   "Lorient": "https://cdn.pitchapi.dev/images/teams/1f56f4e83b5165a9233d27bda3d67602e4517667cdc7c7584558bf9fedbfbfa3.webp",
+   "Angers": "https://cdn.pitchapi.dev/images/teams/97e37649cadc979d8f16bc30ef4064d4144b44dad5392d4eb8585ff6947d367a.webp",
+   "Lille": "https://cdn.pitchapi.dev/images/teams/1e97c1ce973c99ad73ddfbeee79d47efeb8946124983ddb3282074045bd3ea7a.webp",
+   "Le Havre": "https://cdn.pitchapi.dev/images/teams/c9c565fda39bde124db002c75a5b6a34a1a464a961dccf8ae7d256c8eac59ed6.webp",
+   "Monaco": "https://cdn.pitchapi.dev/images/teams/fc7189194b0929cc3fd7f474f626fb8ce6abafecff23857e50b3feb6fcfb5470.webp",
+   "Rennes": "https://cdn.pitchapi.dev/images/teams/87e4093af8a42182c2394abd11392cfe7a9b5988266f8161a20e126a66a8238b.webp",
+   "Paris Saint-Germain": "https://cdn.pitchapi.dev/images/teams/79197b8594269f02679ffd055d230e2095d99bde56994d5bc4d6b6a01a1ada13.webp",
+   "__league__": "https://cdn.pitchapi.dev/images/leagues/60132b94cec9376428f59561ef11650b8a69b097d492642f9b737dc76f45cf94.webp"
+  },
+  "fail": {}
  }
 }
