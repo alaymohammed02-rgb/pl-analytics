@@ -6304,14 +6304,36 @@ const THEME={
   {key:'seriea',ids:['l_0ALvwF'],label:'Serie A blue',base:'#0059d6'},
   {key:'ucl',ids:['l_0bfbkO'],label:'Champions League navy',base:'#3550c8'}
  ],
- /* primary kit colours of the Premier League clubs in the data (commonly used values, not official brand files).
-    Clubs not listed keep the league colours. */
+ /* primary kit colours (commonly used values, not official brand files) of the clubs in the Premier League, LaLiga, Bundesliga,
+    Serie A and Liga Portugal data; a club not listed takes its crest colours (thCrest), else the league colours. */
  clubs:{
   'afc bournemouth':['#da291c','#000000'],'arsenal':['#ef0107','#ffffff'],'aston villa':['#670e36','#95bfe5'],'brentford':['#e30613','#ffffff'],
   'brighton & hove albion':['#0057b8','#ffffff'],'chelsea':['#034694','#ffffff'],'coventry city':['#59cbe8','#ffffff'],'crystal palace':['#1b458f','#c4122e'],
   'everton':['#003399','#ffffff'],'fulham':['#ffffff','#000000'],'hull city':['#f5a12d','#000000'],'ipswich town':['#0044a9','#ffffff'],
   'leeds united':['#ffffff','#1d428a'],'liverpool':['#c8102e','#ffffff'],'manchester city':['#6cabdd','#ffffff'],'manchester united':['#da291c','#ffffff'],
-  'newcastle united':['#ffffff','#241f20'],'nottingham forest':['#dd0000','#ffffff'],'sunderland':['#eb172b','#ffffff'],'tottenham hotspur':['#ffffff','#132257']
+  'newcastle united':['#ffffff','#241f20'],'nottingham forest':['#dd0000','#ffffff'],'sunderland':['#eb172b','#ffffff'],'tottenham hotspur':['#ffffff','#132257'],
+  /* LaLiga */
+  'athletic club':['#ee2523','#ffffff'],'atlético madrid':['#cb3524','#ffffff'],'barcelona':['#a50044','#004d98'],'celta vigo':['#8ac3ee','#ffffff'],
+  'deportivo a coruña':['#0045a8','#ffffff'],'deportivo alavés':['#0761af','#ffffff'],'elche':['#05642c','#ffffff'],'espanyol':['#0072ce','#ffffff'],
+  'getafe':['#005999','#ffffff'],'levante':['#b4053f','#0c4da2'],'málaga':['#0099d8','#ffffff'],'osasuna':['#d91a21','#0a346f'],
+  'racing santander':['#ffffff','#009b48'],'rayo vallecano':['#ffffff','#e53027'],'real betis':['#00954c','#ffffff'],'real sociedad':['#0067b1','#ffffff'],
+  'sevilla':['#ffffff','#d71920'],'valencia':['#ffffff','#000000'],'villarreal':['#ffe667','#005187'],
+  /* Bundesliga */
+  '1. fc köln':['#ed1c24','#ffffff'],'augsburg':['#ba3733','#46714d'],'bayer leverkusen':['#e32221','#000000'],'bayern münchen':['#dc052d','#0066b2'],
+  'borussia dortmund':['#fde100','#000000'],'borussia mönchengladbach':['#ffffff','#00a14b'],'eintracht frankfurt':['#e1000f','#000000'],'elversberg':['#000000','#ffffff'],
+  'freiburg':['#e2001a','#000000'],'hamburger sv':['#0a3f86','#ffffff'],'hoffenheim':['#1961b5','#ffffff'],'mainz 05':['#c3141e','#ffffff'],
+  'paderborn':['#005ca9','#000000'],'rb leipzig':['#dd0741','#ffffff'],'schalke 04':['#004d9d','#ffffff'],'union berlin':['#eb1923','#ffffff'],
+  'vfb stuttgart':['#e32219','#ffffff'],'werder bremen':['#1d9053','#ffffff'],
+  /* Serie A */
+  'atalanta':['#1e71b8','#000000'],'bologna':['#a21c26','#1a2f48'],'cagliari':['#ad002a','#002350'],'como':['#0c4ea6','#ffffff'],
+  'fiorentina':['#482e92','#ffffff'],'frosinone':['#ffd200','#0047ab'],'genoa':['#a51e36','#002147'],'inter':['#010e80','#000000'],
+  'juventus':['#000000','#ffffff'],'lazio':['#87d8f7','#ffffff'],'lecce':['#ffd200','#e30613'],'milan':['#fb090b','#000000'],
+  'monza':['#e4002b','#ffffff'],'napoli':['#12a0d7','#ffffff'],'parma':['#ffd200','#1b4093'],'roma':['#8e1f2f','#f0bc42'],
+  'sassuolo':['#00a752','#000000'],'torino':['#881f19','#ffffff'],'udinese':['#000000','#ffffff'],
+  /* Liga Portugal */
+  'benfica':['#e83030','#ffffff'],'fc porto':['#003893','#ffffff'],'sporting cp':['#008057','#ffffff'],'braga':['#d50f19','#ffffff'],
+  'vitória de guimarães':['#ffffff','#000000'],'famalicão':['#1d3c6e','#ffffff'],'rio ave':['#00843d','#ffffff'],'nacional':['#000000','#ffffff'],
+  'estoril':['#ffde00','#0047ab'],'arouca':['#ffde00','#0047ab'],'moreirense':['#00843d','#ffffff'],'santa clara':['#d7262f','#ffffff']
  },
  gold:'#e2bd5a'
 };
@@ -6334,7 +6356,7 @@ function thPalette(base,o={},alt=null){
  const okTh=x=>Math.min(thCr(x,bg),thCr(x,sf))>=3,inkOf=(x,other)=>[other,'#ffffff','#0b0b0b'].filter(Boolean).find(i=>thCr(i,x)>=4.5);
  let th=o.th,ink=th?inkOf(th):null;
  if(!th){const dk=Array.from({length:12},(_,i)=>[thHex(h,s0,l0-(i+1)/100),alt]),lt=n=>Array.from({length:n},(_,i)=>[thHex(h,s0,l0+(i+1)/100),alt]);
-  const cands=[[base,alt],...dk,...lt(20),...(alt?[[alt,base]]:[]),...lt(60).slice(20)];
+  const cands=[[base,alt],...dk,...lt(35),...(alt?[[alt,base]]:[]),...lt(70).slice(35)];
   for(const [c,other] of cands){const k=inkOf(c,other);if(okTh(c)&&k){th=c;ink=k;break}}
   if(!th){th=thReach(h,s,l0,B,3);ink=inkOf(th)||'#ffffff'}}
  return {bg,sf,ln,th,ink,tx:'#f3eef6',
@@ -6385,18 +6407,21 @@ function logoLoad(){
 const logoOf=name=>{const d=LOGO.d[D&&D.id];return (d&&d.teams&&d.teams[name])||null};
 const leagueLogo=()=>{const d=LOGO.d[D&&D.id];return (d&&d.league)||null};
 function logoHeader(){const im=document.getElementById('lglogo');if(!im)return;const s=leagueLogo();if(s){im.src=s;im.alt=D.name;im.hidden=false}else{im.removeAttribute('src');im.hidden=true}}
-/* the crest's two dominant colours: pixels are grouped by hue (20° steps) and lightness, near-white/near-black/grey ones are set
-   aside; a crest that is almost all black and white gives white and black */
+/* the crest's two dominant colours: pixels are grouped by hue (20° steps) and lightness; near-white, near-black and grey ones
+   are set aside. Purer pixels count more (weight saturation³), so anti-aliased edges do not wash a colour out, and gold counts
+   a third, because in many crests it is trim (Barcelona's stripes, Benfica's eagle); a mostly yellow crest still leads in
+   yellow. A crest that is almost all black and white gives white and black. */
 function thCrest(src){return new Promise(res=>{const im=new Image();im.onload=()=>{try{
- const N=48,c=document.createElement('canvas');c.width=c.height=N;const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(im,0,0,N,N);const p=x.getImageData(0,0,N,N).data;
+ const N=64,c=document.createElement('canvas');c.width=c.height=N;const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(im,0,0,N,N);const p=x.getImageData(0,0,N,N).data;
  const B=new Map();let op=0,col=0,light=0,dark=0;
  for(let i=0;i<p.length;i+=4){if(p[i+3]<200)continue;op++;const hx='#'+[p[i],p[i+1],p[i+2]].map(v=>v.toString(16).padStart(2,'0')).join(''),[h,s,l]=thHsl(hx);
   if(l>.88)light++;else if(l<.14)dark++;if(s<.25||l<.14||l>.88)continue;col++;
-  const k=(Math.round(h/20)%18)+'|'+(l<.42?0:1),b=B.get(k)||{n:0,r:0,g:0,b:0};b.n++;b.r+=p[i];b.g+=p[i+1];b.b+=p[i+2];B.set(k,b)}
+  const w=s*s*s*(h>=38&&h<=62?1/3:1),k=(Math.round(h/20)%18)+'|'+(l<.42?0:1),b=B.get(k)||{n:0,w:0,r:0,g:0,b:0};
+  b.n++;b.w+=w;b.r+=p[i]*w;b.g+=p[i+1]*w;b.b+=p[i+2]*w;B.set(k,b)}
  if(!op){res(null);return}
- const avg=b=>'#'+[b.r,b.g,b.b].map(v=>Math.round(v/b.n).toString(16).padStart(2,'0')).join(''),L=[...B.values()].sort((a,b)=>b.n-a.n);
- if(col/op<.08){res(light>=dark?['#ffffff','#000000']:['#000000','#ffffff']);return}
- const c1=avg(L[0]),h1=thHsl(c1)[0],sec=L.slice(1).find(b=>{const h=thHsl(avg(b))[0],d=Math.min(Math.abs(h-h1),360-Math.abs(h-h1));return d>30&&b.n>=L[0].n*.12});
+ const avg=b=>'#'+[b.r,b.g,b.b].map(v=>Math.round(v/b.w).toString(16).padStart(2,'0')).join(''),L=[...B.values()].filter(b=>b.w>0).sort((a,b)=>b.w-a.w);
+ if(col/op<.08||!L.length){res(light>=dark?['#ffffff','#000000']:['#000000','#ffffff']);return}
+ const c1=avg(L[0]),h1=thHsl(c1)[0],sec=L.slice(1).find(b=>{const h=thHsl(avg(b))[0],d=Math.min(Math.abs(h-h1),360-Math.abs(h-h1));return d>30&&b.w>=L[0].w*.12});
  res([c1,sec?avg(sec):(light>=dark?'#ffffff':'#000000')])}catch(e){res(null)}};im.onerror=()=>res(null);im.src=src})}
 /* colours of a club: configured kit colours first, else its crest (computed once) */
 async function crestFor(name){
