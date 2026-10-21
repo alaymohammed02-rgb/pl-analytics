@@ -6254,13 +6254,35 @@ def sync_logos(hub, league_id):
         gh_put(hub, "data/logos_src.json", json.dumps(man, ensure_ascii=False, indent=1).encode("utf-8"), "Update logo list")
         log(f"  [Logos] {league_id}: {len(todo) - len(bad)} شعار جديد، {len(bad)} تعذّر" + (f" (مثل {bad[0]})" if bad else ""))
     if src:
-        LOGO_INDEX[league_id] = dict(logo_file=fn, logo_v=hashlib.sha1(json.dumps(src, sort_keys=True).encode("utf-8")).hexdigest()[:10])
+        LOGO_INDEX[league_id] = _logo_entry(league_id, src)
+
+
+def _logo_entry(league_id, src):
+    return dict(logo_file=f"logos_{safe_name(league_id)}.json",
+                logo_v=hashlib.sha1(json.dumps(src, sort_keys=True).encode("utf-8")).hexdigest()[:10])
+
+
+_LOGO_MAN_READ = []
+
+
+def _logo_index_all(hub):
+    """مرة في كل مزامنة: كل الدوريات اللي لها شعارات محفوظة تبقى في الفهرس من أول نشر (ما تختفي لين يجي دورها)."""
+    if _LOGO_MAN_READ:
+        return
+    _LOGO_MAN_READ.append(1)
+    for lid, v in (gh_get_json(hub, "data/logos_src.json") or {}).items():
+        if (v or {}).get("src") and lid not in LOGO_INDEX:
+            LOGO_INDEX[lid] = _logo_entry(lid, v["src"])
 
 
 _orig_publish_logo = publish
 
 
 def publish(hub, metas, final=False):
+    try:
+        _logo_index_all(hub)
+    except Exception as e:
+        log(f"  [Logos] تعذر قراءة قائمة الشعارات ({type(e).__name__}: {e})")
     for m in metas:
         try:
             sync_logos(hub, m["id"])
