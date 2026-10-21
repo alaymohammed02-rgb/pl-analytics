@@ -3263,6 +3263,18 @@ INDEX = _x_fix_index(INDEX)
 FPL_ENABLED = True
 FPL_API = "https://fantasy.premierleague.com/api/"
 FPL_MIN_INTERVAL_MIN = 55          # أقل فاصل بين جلبتين (الأسعار تتغير ليلاً فقط)
+FPL_NEAR_DL_MIN, FPL_NEAR_DL_HOURS = 15, 3     # قبل الموعد النهائي بـ3 ساعات: كل 15 دقيقة (آخر أخبار الإصابات لسجل التوقعات)
+
+
+def _fpl_interval(old):
+    """الفاصل بين جلبتين: أقصر قرب الموعد النهائي للجولة القادمة."""
+    ev = next((e for e in (old or {}).get("events", []) if e.get("nxt")), None)
+    dl = _parse_ts(ev.get("dl")) if ev else None
+    if dl is not None:
+        h = (dl - datetime.datetime.now(datetime.timezone.utc)).total_seconds() / 3600
+        if 0 < h <= FPL_NEAR_DL_HOURS:
+            return FPL_NEAR_DL_MIN
+    return FPL_MIN_INTERVAL_MIN
 FPL_DELAY = 0.12
 FPL_INDEX = {}                     # يدخل في data/index.json
 _FPL_UA = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"}
@@ -3433,7 +3445,7 @@ def sync_fpl(hub):
         FPL_INDEX = dict(file="fpl.json", v=old["generated"])
         t = _parse_ts(old["generated"])
         if (not FORCE_SYNC and t is not None and not _fpl_hist_stale(old)
-                and (datetime.datetime.now(datetime.timezone.utc) - t).total_seconds() / 60 < FPL_MIN_INTERVAL_MIN):
+                and (datetime.datetime.now(datetime.timezone.utc) - t).total_seconds() / 60 < _fpl_interval(old)):
             log("  [Fantasy] البيانات حديثة — تخطيت الجلب")
             return
     boot, st = _fpl_get("bootstrap-static/")
@@ -4334,9 +4346,9 @@ _X_OXJS = r"""/* ===== Optimal Starting XI · My XI builder · My XI vs Optimal 
 const OX={mode:'budget',gi:0,hz:3,src:'cur',ver:'v1',btVer:'v1',N:2000,cache:{},my:null,sel:null,pq:'',ppos:'',pteam:'',msg:'',pen:undefined,penBusy:null,bt:null,btBusy:false,fcSeq:0};
 const OXCOL=['#3987e5','#d95926','#199e70'],OXDASH=['','7 4','2 3'];
 const OX_LS={cur:'fpl_myxi_cur_v1',saved:'fpl_myxi_saved_v1',log:'fpl_ox_log_v1',cal:'fpl_ox_cal_v1'};
-/* Lineup ranges are widened by kappa around their mean. Default 1.25: in the leak-free replay of 2026/27 (checked 2026-10-20),
-   simulated XI totals were too narrow (80% ranges held 71% of real totals); kappa fitted on GW2-4 restored 79% coverage on
-   GW5-6. Running the calibration in the Backtest tab refits kappa on all finished gameweeks and stores it on this device. */
+/* Lineup ranges are widened by kappa around their mean. Default 1.19: fitted on the leak-free replays of 2022-23 and 2023-24,
+   validated on 2024-25 and tested once on 2025-26 (82.5% of real totals inside the 80% range; ml/RESULTS.md). Running the
+   calibration in the Backtest tab refits kappa on this season's finished gameweeks and stores it on this device. */
 const OX_KAPPA=1.19;
 const oxKs=fm=>({1:fm.g,2:fm.d,3:fm.m,4:fm.f});
 const oxYield=()=>new Promise(r=>setTimeout(r,0));
@@ -5643,6 +5655,231 @@ _AR_SEASON.update({
 
 INDEX = _x_sr_index(INDEX)
 # ======================== نهاية إضافة مراجعة الموسم ========================
+
+
+# ============================================================================
+# إضافة: سجل التوقعات العلني — يحفظ توقع النموذج لكل جولة قبل الموعد النهائي في data/fpl_track.json
+# يتحدّث مع كل تحديث للبيانات لين الموعد النهائي، وبعده ما يتغير أبداً (كل حفظ commit، فتاريخ الملف هو الإثبات).
+# الحساب بنفس كود الصفحة (Node)، فالرقم المحفوظ هو نفس اللي يشوفه الزائر في التشكيلة المثالية. إذا Node مو موجود يتخطى بهدوء.
+# ============================================================================
+FPL_TRACK_PATH = "data/fpl_track.json"
+_TRK_FPL = None                     # محتوى data/fpl.json اللي انرفع في هذه المزامنة
+_TRK_NODE = r"""// Track record snapshot: runs the page's own Fantasy code (argv[2]) on data/fpl.json (argv[3]) and prints the model's
+// Optimal XI (budget) for the next gameweek with its simulated range, and every player's expected points.
+const fs=require('fs'),vm=require('vm');
+const [codeF,dataF]=process.argv.slice(2);
+const ctx={console:{log(){},warn(){},error(){}},Math,Date,JSON,Map,Set,Promise,setTimeout,Float64Array,Uint8Array,Int16Array,Uint32Array,Array,Object,String,Number,isFinite,parseInt,parseFloat,Error,RegExp,Infinity,NaN,
+ document:{querySelector:()=>null,getElementById:()=>null,querySelectorAll:()=>[]},localStorage:{getItem:()=>null,setItem(){},removeItem(){}},fetch:async()=>({ok:false,status:404})};
+vm.createContext(ctx);
+vm.runInContext("const $=s=>null;const esc=s=>String(s??'');const f=(v,d=3)=>v==null?'N/A':Number(v).toFixed(d);const tbl=()=>'';const R={};let ALL={leagues:[]},D=null;\n"+fs.readFileSync(codeF,'utf8')+"\n;globalThis.__ev=s=>eval(s);",ctx);
+const ev=ctx.__ev;
+(async()=>{
+ const d=JSON.parse(fs.readFileSync(dataF,'utf8'));
+ /* the same preparation as fpLoad on the page */
+ d.T=new Map(d.teams.map(t=>[t.id,t]));
+ d.P=d.rows.map(r=>{const o={};d.cols.forEach((c,i)=>o[c]=r[i]);const t=d.T.get(o.tm)||{};o.tn=t.s||'?';o.tf=t.n||'?';o.pos=o.ty;o.name=o.wn;
+  o.price=typeof o.now_cost==='number'?o.now_cost/10:null;o.chg=typeof o.cost_change_start==='number'?o.cost_change_start/10:null;return o});
+ d.PB=new Map(d.P.map(p=>[p.id,p]));ev('v=>{FPD=v}')(d);
+ const X=ev('oxReady()');if(X.err)throw new Error(X.err);
+ const res=await ev('oxOptimal')(X,0,'budget');if(res.err)throw new Error(res.err);
+ const t=res.team,ids=t.xi.map(i=>i.id),C=X.C,g=C.gws[0];
+ /* the same simulation (seed 7001, N 2000) and widening as the Optimal XI tab */
+ const sim=ev('oxSim')(d,C,[{per:[{ids,cap:t.cap.id}]}],[0],ev('OX.N'),7001)[0],st=ev('oxQs')(sim.tot);
+ const pv=p=>{const x=ev('oxG')(p,0);return x?x.pts:null};
+ const bench=(t.bench||[]).map(i=>d.PB.get(i.id)).filter(Boolean).sort((a,b)=>(a.ty===1)-(b.ty===1)||(pv(b)||0)-(pv(a)||0)||a.id-b.id).map(p=>p.id);
+ const preds={};d.P.forEach(p=>{const v=pv(p);if(v!=null&&ev('oxHasPred')(p))preds[p.id]=Math.round(v*100)/100});
+ const r2=x=>Math.round(x*100)/100;
+ process.stdout.write(JSON.stringify({gw:g,data:d.generated,ver:ev('PM_VERSION'),kappa:ev('oxK()'),mode:'budget',form:t.form.name,xi:ids,cap:t.cap.id,vice:t.vice?t.vice.id:null,bench,
+  exp:r2(t.total),p10:r2(st.p10),p50:r2(st.p50),p90:r2(st.p90),cost:t.squadCost??null,preds}));
+})().catch(e=>{process.stderr.write(String(e&&e.message||e));process.exit(1)});
+"""
+
+
+def _trk_snapshot(payload_bytes):
+    """يشغّل كود الفانتازي من الصفحة على البيانات ويرجع التوقع، أو None."""
+    import shutil, subprocess, tempfile
+    node = shutil.which("node")
+    if not node:
+        log("  [Track record] Node غير موجود — تخطيت حفظ التوقع")
+        return None
+    a, b = INDEX.find("/* ===== Fantasy (FPL) ===== */"), INDEX.find("/* ===== Fantasy seasons:")
+    if a < 0 or b < 0:
+        log("  [Track record] ما لقيت كود الفانتازي في الصفحة — تخطيت")
+        return None
+    with tempfile.TemporaryDirectory() as td:
+        paths = {k: os.path.join(td, k) for k in ("run.js", "code.js", "fpl.json")}
+        open(paths["run.js"], "w", encoding="utf-8").write(_TRK_NODE)
+        open(paths["code.js"], "w", encoding="utf-8").write(INDEX[a:b])
+        open(paths["fpl.json"], "wb").write(payload_bytes)
+        r = subprocess.run([node, paths["run.js"], paths["code.js"], paths["fpl.json"]], capture_output=True, text=True, timeout=900)
+    if r.returncode != 0:
+        log(f"  [Track record] تعذر حساب التوقع: {r.stderr.strip()[:300]}")
+        return None
+    return json.loads(r.stdout)
+
+
+def sync_fpl_track(hub):
+    if not _TRK_FPL:
+        return
+    d = json.loads(_TRK_FPL.decode("utf-8"))
+    ev = next((e for e in d.get("events", []) if e.get("nxt")), None)
+    if not ev or not ev.get("dl"):
+        return
+    dl, gen, t = _parse_ts(ev["dl"]), _parse_ts(d.get("generated")), datetime.datetime.now(datetime.timezone.utc)
+    if dl is None or gen is None or not (t < dl and gen < dl):
+        return                                       # بعد الموعد النهائي ما نحفظ شيء لهذي الجولة
+    season = str((d.get("events") or [{}])[0].get("dl") or "")[:4]
+    track = gh_get_json(hub, FPL_TRACK_PATH) or {}
+    if track.get("season") and track["season"] != season:      # موسم جديد: السجل القديم يبقى في ملف باسمه
+        gh_put(hub, f"data/fpl_track_{track['season']}.json", json.dumps(track, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
+               f"Track record: keep season {track['season']}")
+        track = {}
+    track["season"] = season
+    gws = track.setdefault("gws", {})
+    old = gws.get(str(ev["id"]))
+    if old and (_parse_ts(old.get("dl")) or t) <= t:
+        return                                       # مقفول
+    snap = _trk_snapshot(_TRK_FPL)
+    if not snap or snap.get("gw") != ev["id"]:
+        log(f"  [Track record] التوقع المحسوب ما يخص الجولة {ev['id']} — ما حفظته")
+        return
+    snap["dl"], snap["saved"] = ev["dl"], now()
+    same = lambda x: {k: v for k, v in x.items() if k not in ("saved", "data")}
+    if old and same(old) == same(snap):
+        return                                       # نفس التوقع (حتى لو البيانات أحدث)، ما في داعي لـ commit
+    gws[str(ev["id"])] = snap
+    gh_put(hub, FPL_TRACK_PATH, json.dumps(track, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
+           f"Track record: model prediction for GW{ev['id']} (saved before the deadline)")
+    log(f"  [Track record] حُفظ توقع الجولة {ev['id']}: {snap['exp']} نقطة متوقعة ({snap['p10']}–{snap['p90']})، الموعد النهائي {ev['dl']}")
+
+
+_orig_gh_put_trk = gh_put
+
+
+def gh_put(hub, path, content, message):
+    global _TRK_FPL
+    if path == "data/fpl.json":
+        _TRK_FPL = content
+    return _orig_gh_put_trk(hub, path, content, message)
+
+
+_orig_sync_fpl_trk = sync_fpl
+
+
+def sync_fpl(hub):
+    _orig_sync_fpl_trk(hub)
+    try:
+        sync_fpl_track(hub)
+    except Exception as e:      # السجل ما يوقف بقية المزامنة
+        log(f"  [Track record] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
+
+
+_X_TRKJS = r"""/* ===== Track record: the model's prediction saved before every deadline (data/fpl_track.json), against what happened =====
+   The sync saves, for the next gameweek, the model's Optimal XI within the budget (the Optimal XI tab's default), its captain
+   and vice, bench, the simulated 80% range and every player's expected points. It refreshes the record with each data update
+   until the deadline and never changes it afterwards; each save is a commit, so the file's history shows when it was made.
+   Actual points use FPL's automatic substitutions and captain/vice rule (srAuto, as in Season review). */
+const TRK={data:null,key:''};
+async function trkLoad(d){
+ if(TRK.key===d.generated&&TRK.data)return TRK.data;
+ let T={gws:{}};try{const r=await fetch('data/fpl_track.json?v='+encodeURIComponent(d.generated||''));if(r.ok)T=await r.json()}catch(e){}
+ TRK.data=T;TRK.key=d.generated;return T;
+}
+function trkRows(d,T){
+ const ix=btIx(d),RU=pmRules(d),now=Date.now(),ty=id=>{const p=d.PB.get(id);return p?p.ty:4};
+ const at=(id,g,c)=>{let s=0;((d.hist||{})[String(id)]||[]).forEach(h=>{if(h[ix.r]===g&&fpOk(h[ix[c]]))s+=h[ix[c]]});return s};
+ return Object.values(T.gws||{}).sort((a,b)=>a.gw-b.gw).map(s=>{
+  const e=d.events.find(x=>x.id===s.gw)||{},locked=Date.parse(s.dl)<=now,fin=!!e.fin,minOf=id=>at(id,s.gw,'min'),ptsOf=id=>at(id,s.gw,'pts');
+  const au=RU?srAuto(s.xi.map(id=>({id,t:ty(id)})),(s.bench||[]).map(id=>({id,t:ty(id)})),minOf,RU):{ids:s.xi,subs:[]};
+  const capU=minOf(s.cap)>0?s.cap:(s.vice!=null&&minOf(s.vice)>0?s.vice:null),act=au.ids.reduce((a,id)=>a+ptsOf(id),0)+(capU!=null?ptsOf(capU):0);
+  let n=0,ae=0,b=0;for(const [id,p] of Object.entries(s.preds||{})){const a=ptsOf(+id);n++;ae+=Math.abs(p-a);b+=p-a}
+  return {s,e,locked,fin,act,capU,subs:au.subs,ids:au.ids,inR:act>=s.p10&&act<=s.p90,avg:fpOk(e.avg)&&e.avg>0?e.avg:null,mae:n?ae/n:null,bias:n?b/n:null,n,ptsOf,minOf};
+ });
+}
+function fpTTrack(el){
+ const d=FPD;el.innerHTML='<div class="empty">Loading…</div>';
+ trkLoad(d).then(T=>{if(FPD===d&&FP.tab==='track')trkDraw(el,d,T)});
+}
+function trkDraw(el,d,T){
+ const nm=id=>{const p=d.PB.get(id);return p?p.name:'#'+id},f1=x=>x.toFixed(1),hh=s=>String(s).slice(0,16).replace('T',' ')+' UTC';
+ const repo=typeof GH_REPO==='function'?GH_REPO():'',link=repo?`https://github.com/${repo}/commits/main/data/fpl_track.json`:'';
+ const nx=d.events.find(e=>e.nxt),rows=trkRows(d,T),done=rows.filter(r=>r.fin);
+ const intro=`<div class="card mu" style="font-size:12px"><b>How this works.</b> Before every deadline the sync saves the model's prediction for that gameweek: the Optimal XI within the budget (as shown in the Optimal XI tab), captain, vice-captain and bench, the 80% range and every player's expected points. Until the deadline the record is refreshed with each data update (every 15 minutes in the last 3 hours); after the deadline it is never changed. Each save is a commit, so ${link?`<a href="${esc(link)}" target="_blank" rel="noopener">the history of the file on GitHub</a>`:'the history of the file on GitHub'} shows when every prediction was made. <b>Actual</b> = the points that XI scored with FPL's automatic substitutions and the captain/vice-captain rule. <b>FPL average</b> = the average score of all FPL managers that gameweek.</div>`;
+ if(!rows.length){el.innerHTML=intro+`<div class="empty">No prediction saved yet. The first one is saved before the ${nx?'GW'+nx.id+' deadline ('+esc(hh(nx.dl))+')':'next deadline'} and scored once that gameweek is finished. The Backtest and Season review tabs replay earlier gameweeks.</div>`;return}
+ const sum=(L,k)=>L.reduce((a,x)=>a+(x[k]||0),0),A=sum(done,'act'),E=done.reduce((a,x)=>a+x.s.exp,0),wA=done.filter(x=>x.avg!=null),AV=sum(wA,'avg'),AA=sum(wA,'act'),inR=done.filter(x=>x.inR).length;
+ const mae=done.filter(x=>x.mae!=null);
+ let h=intro;
+ if(done.length){
+  h+=`<div class="grid"><div class="kpi"><b>${done.length}</b><span>Gameweeks scored (${inR} of ${done.length} inside the 80% range)</span></div><div class="kpi"><b>${A}</b><span>Actual points of the saved XIs (expected ${f1(E)})</span></div><div class="kpi"><b>${wA.length?(AA-AV>=0?'+':'')+(AA-AV):'N/A'}</b><span>Against the FPL average manager${wA.length?' ('+((AA-AV)/wA.length>=0?'+':'')+f1((AA-AV)/wA.length)+' a gameweek)':''}</span></div><div class="kpi"><b>${mae.length?(mae.reduce((a,x)=>a+x.mae,0)/mae.length).toFixed(2):'N/A'}</b><span>Player prediction error (mean absolute, points per player)</span></div></div>`;
+  if(done.length>=2){const gws=done.map(x=>x.s.gw),S=[{n:'Actual points',short:'Actual',v:done.map(x=>x.act),c:SR_COL.act,dash:''},{n:'Expected points',short:'Expected',v:done.map(x=>x.s.exp),c:SR_COL.exp,dash:'7 4'},{n:'FPL average',short:'FPL avg',v:done.map(x=>x.avg),c:SR_COL.opt,dash:'2 3'}];
+   h+=`<div class="ctl" style="margin:10px 0 2px;font-size:13px;gap:14px">${S.map(s=>`<span style="display:inline-flex;align-items:center;gap:6px"><svg width="26" height="10" aria-hidden="true"><line x1="1" y1="5" x2="25" y2="5" stroke="${s.c}" stroke-width="2.5" stroke-dasharray="${s.dash}"/></svg>${esc(s.n)}</span>`).join('')}<span style="display:inline-flex;align-items:center;gap:6px"><svg width="12" height="12" aria-hidden="true"><rect x="1" y="1" width="10" height="10" rx="2" fill="${SR_COL.dlt}" fill-opacity=".55"/></svg>Δ actual − expected</span></div><div id="trkch"></div>`;
+   TRK.chart={gws,S,dl:done.map(x=>x.act-x.s.exp)}}else TRK.chart=null;
+ }else TRK.chart=null;
+ const st=r=>!r.locked?`<span class="mu">open until the deadline, ${esc(hh(r.s.dl))}</span>`:!r.fin?`<span class="mu">in progress (${r.act} so far)</span>`:String(r.act);
+ h+=`<h3>Gameweek by gameweek</h3>`+tbl([['GW'],['Saved'],['Captain'],['Expected (80% range)',1],['Actual',1],['Δ',1],['In range'],['FPL average',1],['Player error',1]],rows.map(r=>{const bh=(Date.parse(r.s.dl)-Date.parse(String(r.s.saved).replace(' ','T')+'Z'))/36e5;
+  return ['GW'+r.s.gw,`${esc(hh(r.s.saved))}<br><span class="mu">${bh>=0?f1(bh)+' h before the deadline':''}</span>`,esc(nm(r.s.cap))+(r.fin&&r.capU!==r.s.cap?(r.capU==null?' <span class="mu">(did not play, nor the vice-captain)</span>':' <span class="mu">(did not play, the vice-captain was doubled)</span>'):''),
+   `${f1(r.s.exp)} <span class="mu">(${Math.round(r.s.p10)}–${Math.round(r.s.p90)})</span>`,st(r),r.fin?(r.act-r.s.exp>=0?'+':'')+f1(r.act-r.s.exp):'',r.fin?(r.inR?'✓ yes':'✗ no'):'',r.fin&&r.avg!=null?String(r.avg):'',r.fin&&r.mae!=null?r.mae.toFixed(2):'']}));
+ h+=rows.slice().reverse().map(r=>`<details style="margin:6px 0"><summary>GW${r.s.gw}: the saved XI (${esc(r.s.form)}, model ${esc(r.s.ver)})</summary>`+
+  tbl([['Player'],['Pos'],['Expected',1],['Minutes',1],['Points',1]],r.s.xi.concat(r.s.bench||[]).map(id=>{const p=d.PB.get(id),sub=r.subs.find(x=>x[1]===id),out=r.subs.find(x=>x[0]===id),bench=!r.s.xi.includes(id);
+   return [esc(nm(id))+(id===r.s.cap?' <b>(C)</b>':id===r.s.vice?' <span class="mu">(V)</span>':'')+(bench?' <span class="mu">(bench'+(sub?', came on':'')+')</span>':'')+(out?' <span class="mu">(replaced)</span>':''),p?FPPOS[p.ty]:'',f1((r.s.preds||{})[id]??0),r.locked?String(r.minOf(id)):'',r.locked?String(r.ptsOf(id)):'']}))+'</details>').join('');
+ h+=`<div class="mu" style="font-size:12px;margin:6px 0">Player error: mean absolute difference between expected and actual points over all ${rows.length&&rows[rows.length-1].n?rows[rows.length-1].n:''} players with a saved prediction (those who did not play count with 0). Earlier gameweeks of this season have no saved prediction; the Backtest and Season review tabs replay them without future data.</div>`;
+ el.innerHTML=h;
+ if(TRK.chart){const o=$('#trkch');o.innerHTML=srChart('trkc',TRK.chart.gws,TRK.chart.S,TRK.chart.dl,Math.round(Math.max(340,Math.min(680,el.clientWidth||680))));srChartWire('trkc',TRK.chart.gws,TRK.chart.S,TRK.chart.dl)}
+}
+"""
+
+
+def _x_trk_index(html):
+    def sub(h, old, new):
+        if h.count(old) != 1:
+            log(f"  تنبيه (سجل التوقعات): ما لقيت نقطة التعديل بدقة، تخطيتها: {old[:60]}")
+            return h
+        return h.replace(old, new)
+    h = html
+    h = sub(h, "['review','Season review']];", "['review','Season review'],['track','Track record']];")
+    h = sub(h, "review:fpTReview})[FP.tab]", "review:fpTReview,track:fpTTrack})[FP.tab]")
+    h = sub(h, "async function route(){", _X_TRKJS + "\nasync function route(){")
+    return h
+
+
+_AR_SEASON.update({
+    "Track record": "سجل التوقعات",
+    "Before every deadline the sync saves the model's prediction for that gameweek: the Optimal XI within the budget (as shown in the Optimal XI tab), captain, vice-captain and bench, the #% range and every player's expected points. Until the deadline the record is refreshed with each data update (every # minutes in the last # hours)": "قبل كل موعد نهائي تحفظ المزامنة توقع النموذج لتلك الجولة: التشكيلة المثالية ضمن الميزانية (مثل ما تظهر في تبويب التشكيلة المثالية)، والكابتن ونائبه والاحتياط، ونطاق #%، والنقاط المتوقعة لكل لاعب. ولين الموعد النهائي يتحدّث السجل مع كل تحديث للبيانات (كل # دقيقة في آخر # ساعات)",
+    "after the deadline it is never changed. Each save is a commit, so": "وبعد الموعد النهائي ما يتغير أبداً. كل حفظ هو commit، لذلك",
+    "the history of the file on GitHub": "تاريخ الملف على GitHub",
+    "shows when every prediction was made": "يبيّن متى انحفظ كل توقع",
+    "= the points that XI scored with FPL's automatic substitutions and the captain/vice-captain rule": "= النقاط اللي سجلتها هذه التشكيلة مع التبديلات التلقائية في FPL وقاعدة الكابتن ونائبه",
+    "FPL average": "متوسط FPL",
+    "FPL avg": "متوسط FPL",
+    "= the average score of all FPL managers that gameweek": "= متوسط نقاط كل مدربي FPL في تلك الجولة",
+    "No prediction saved yet. The first one is saved before the GW# deadline (### #:# UTC) and scored once that gameweek is finished. The Backtest and Season review tabs replay earlier gameweeks": "ما انحفظ أي توقع للحين. أول توقع ينحفظ قبل الموعد النهائي للجولة # (### #:# UTC) ويُقيَّم بعد ما تخلص تلك الجولة. تبويبا الاختبار التاريخي ومراجعة الموسم يعيدان الجولات السابقة",
+    "Gameweeks scored (# of # inside the #% range)": "جولات مُقيَّمة (# من # داخل نطاق #%)",
+    "Actual points of the saved XIs (expected #)": "النقاط الفعلية للتشكيلات المحفوظة (المتوقع #)",
+    "Against the FPL average manager (+# a gameweek)": "مقارنة بمتوسط مدربي FPL (+# لكل جولة)",
+    "Against the FPL average manager (# a gameweek)": "مقارنة بمتوسط مدربي FPL (# لكل جولة)",
+    "Against the FPL average manager": "مقارنة بمتوسط مدربي FPL",
+    "Player prediction error (mean absolute, points per player)": "خطأ توقع اللاعبين (متوسط الفرق المطلق، نقاط لكل لاعب)",
+    "Saved": "وقت الحفظ",
+    "Expected (#% range)": "المتوقع (نطاق #%)",
+    "In range": "داخل النطاق",
+    "Player error": "خطأ اللاعبين",
+    "# h before the deadline": "قبل الموعد النهائي بـ# ساعة",
+    "### #:# UTC": "### #:# UTC",
+    "open until the deadline, ### #:# UTC": "مفتوح لين الموعد النهائي، ### #:# UTC",
+    "in progress (# so far)": "جارية (# للحين)",
+    "yes": "نعم",
+    "no": "لا",
+    "(did not play, nor the vice-captain)": "(ما لعب، ولا نائبه)",
+    "(did not play, the vice-captain was doubled)": "(ما لعب، فتضاعفت نقاط نائبه)",
+    "GW#: the saved XI (###, model v#)": "ج#: التشكيلة المحفوظة (###، النموذج v#)",
+    "(bench, came on)": "(احتياط، دخل بدل لاعب)",
+    "(replaced)": "(خرج بالتبديل التلقائي)",
+    "Player error: mean absolute difference between expected and actual points over all # players with a saved prediction (those who did not play count with #). Earlier gameweeks of this season have no saved prediction": "خطأ اللاعبين: متوسط الفرق المطلق بين النقاط المتوقعة والفعلية لكل الـ# لاعب اللي لهم توقع محفوظ (اللي ما لعبوا ينحسبون بـ#). الجولات السابقة من هذا الموسم ما لها توقع محفوظ",
+    "the Backtest and Season review tabs replay them without future data": "وتبويبا الاختبار التاريخي ومراجعة الموسم يعيدانها بدون بيانات مستقبلية"
+})
+
+INDEX = _x_trk_index(INDEX)
+# ======================== نهاية إضافة سجل التوقعات ========================
 
 
 # ============================================================================
