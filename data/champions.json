@@ -11,7 +11,111 @@
    "runner_up": "Man City",
    "margin": 7,
    "fixtures": 380
+  },
+  "l_0ErfuF": {
+   "season": "2025-26",
+   "next": "2026-27",
+   "kind": "league",
+   "name": "LaLiga",
+   "src": "PitchAPI results of 2025-26: final table from all 380 fixtures",
+   "team": "Barcelona",
+   "pts": 94,
+   "gd": 59,
+   "gf": 95,
+   "runner_up": "Real Madrid",
+   "margin": 8,
+   "fixtures": 380
+  },
+  "l_1Isor4": {
+   "season": "2025-26",
+   "next": "2026-27",
+   "kind": "league",
+   "name": "Bundesliga",
+   "src": "PitchAPI results of 2025-26: final table from all 306 fixtures",
+   "team": "Bayern München",
+   "pts": 89,
+   "gd": 86,
+   "gf": 122,
+   "runner_up": "Borussia Dortmund",
+   "margin": 16,
+   "fixtures": 306
+  },
+  "l_3FJFUl": {
+   "season": "2025-26",
+   "next": "2026-27",
+   "kind": "league",
+   "name": "Ligue 1",
+   "src": "PitchAPI results of 2025-26: final table from all 306 fixtures",
+   "team": "Paris Saint-Germain",
+   "pts": 76,
+   "gd": 45,
+   "gf": 74,
+   "runner_up": "Lens",
+   "margin": 6,
+   "fixtures": 306
+  },
+  "l_0ALvwF": {
+   "season": "2025-26",
+   "next": "2026-27",
+   "kind": "league",
+   "name": "Serie A",
+   "src": "PitchAPI results of 2025-26: final table from all 380 fixtures",
+   "team": "Inter",
+   "pts": 87,
+   "gd": 54,
+   "gf": 89,
+   "runner_up": "Napoli",
+   "margin": 11,
+   "fixtures": 380
+  },
+  "l_4QexZg": {
+   "season": "2025-26",
+   "next": "2026-27",
+   "kind": "league",
+   "name": "Liga Portugal",
+   "src": "PitchAPI results of 2025-26: final table from all 306 fixtures",
+   "team": "FC Porto",
+   "pts": 88,
+   "gd": 48,
+   "gf": 66,
+   "runner_up": "Sporting CP",
+   "margin": 6,
+   "fixtures": 306
+  },
+  "l_38d9HA": {
+   "season": "2025-26",
+   "next": "2026-27",
+   "kind": "cup",
+   "name": "Europa League",
+   "src": "PitchAPI results of 2025-26: the final, Freiburg 0-3 Aston Villa",
+   "team": "Aston Villa",
+   "final": "Freiburg 0-3 Aston Villa",
+   "date": "2026-05-20",
+   "runner_up": "Freiburg"
+  },
+  "l_2WZ2tt": {
+   "season": "2025-26",
+   "next": "2026-27",
+   "kind": "cup",
+   "name": "Conference League",
+   "src": "PitchAPI results of 2025-26: the final, Crystal Palace 1-0 Rayo Vallecano",
+   "team": "Crystal Palace",
+   "final": "Crystal Palace 1-0 Rayo Vallecano",
+   "date": "2026-05-27",
+   "runner_up": "Rayo Vallecano"
   }
  },
- "note": "Defending champions per league, from the previous season's verified results. 'next' is the season the title is defended in."
+ "note": "Last season's winner per competition, from verified results (a full league table, or the final of a cup). 'next' is the season the title is defended in.",
+ "tried": {
+  "l_0bfbkO": {
+   "next": "2026-27",
+   "t": "2026-10-21 10:13:51",
+   "why": "league: 106 of 552 fixtures; cup: final drawn 1-1, no shootout in events (ExtraTime/substitution, ExtraTime/yellowcard, FirstHalf/goal, SecondHalf/goal, SecondHalf/substitution, SecondHalf/yellowcard)"
+  },
+  "l_1XLtP0": {
+   "next": "2026",
+   "t": "2026-10-21 10:13:52",
+   "why": "league: 24 of 240 fixtures; cup: final drawn 3-3, no shootout in events (ExtraTime/goal, ExtraTime/substitution, ExtraTime/yellowcard, FirstHalf/goal, FirstHalf/substitution, FirstHalf/yellowcard, Penalties/yellowcard, SecondHalf/goal, SecondHalf/substitution, SecondHalf/yellowcard)"
+  }
+ }
 }
