@@ -98,5 +98,31 @@
    "__league__": "https://cdn.pitchapi.dev/images/leagues/60132b94cec9376428f59561ef11650b8a69b097d492642f9b737dc76f45cf94.webp"
   },
   "fail": {}
+ },
+ "l_0ALvwF": {
+  "src": {
+   "Inter": "https://cdn.pitchapi.dev/images/teams/66c6a85491df0b8111e1c35695ef712af120a2bf0aa9b03a877377889516611e.webp",
+   "Monza": "https://cdn.pitchapi.dev/images/teams/a5a467d0b57c46c33fa2b4b156dcadebe20de96e848a4a09fad642ad6d6bb7de.webp",
+   "Udinese": "https://cdn.pitchapi.dev/images/teams/bf074b2992c5c0d8bb4fefdf71b549070c402656ac2e6405a52e8ee9ef6c8801.webp",
+   "Como": "https://cdn.pitchapi.dev/images/teams/35f069058222c070820cbf97102be4379a619b2c9892b41f0ee6c4d1920bdec9.webp",
+   "Parma": "https://cdn.pitchapi.dev/images/teams/2bc9e6c9d46925f545749ecd287f49bb9ab6671e48084d1ad6093334b4df069d.webp",
+   "Cagliari": "https://cdn.pitchapi.dev/images/teams/fc041ee03885d9b8da088ad78d69f3a6b3c58cbad38c8aa8725af7edfb75fa62.webp",
+   "Genoa": "https://cdn.pitchapi.dev/images/teams/c303d188af518260d4e49f3708493f3324c501752d19c0fb26d49214af885f4d.webp",
+   "Napoli": "https://cdn.pitchapi.dev/images/teams/0755206cdb935eb37cd5bd42b54afc629d486c010c12029c096def4f5227db6f.webp",
+   "Venezia": "https://cdn.pitchapi.dev/images/teams/ef4cf59b13e1d9d130d304bad00d700783a9783ba1c0469952db26a8a76a5b38.webp",
+   "Lecce": "https://cdn.pitchapi.dev/images/teams/fd12bd6e2b68f30eee08cea1fb48d9fb43ce61b3e152f980732e2835fb8be9fd.webp",
+   "Frosinone": "https://cdn.pitchapi.dev/images/teams/097fc95a83112a7fa163b200006b2fdffd2823180101ff48cf116ec881a3d0f0.webp",
+   "Juventus": "https://cdn.pitchapi.dev/images/teams/7eaf5f4fe543152082fc53d035dc7f0663b4a090cab3ab701fc5f4df3a711784.webp",
+   "Atalanta": "https://cdn.pitchapi.dev/images/teams/108eb0aab69689251ffd6d722eff62fd754c93e39c20909a373b26464bbb38be.webp",
+   "Sassuolo": "https://cdn.pitchapi.dev/images/teams/6d1458229c36991186c0335b8d5656e50422806805f2bf064712147162e428c8.webp",
+   "Torino": "https://cdn.pitchapi.dev/images/teams/9228f7a3cf4ea300f3381a9a39828e08ec959a59ccfa86d1918809dcb520a4f2.webp",
+   "Milan": "https://cdn.pitchapi.dev/images/teams/084d6673fc303d26d77ffa8d8763966663b002403d5bbdf17916de163f389018.webp",
+   "Bologna": "https://cdn.pitchapi.dev/images/teams/666c2362e7fc4aa2380cdb768cfe1a9539333a548feb4268b900ebba19278439.webp",
+   "Lazio": "https://cdn.pitchapi.dev/images/teams/a6553d42eb04063e4cdafc1a197c2cc6d7ab7c35a66ca26caeeba1a6391a4175.webp",
+   "Roma": "https://cdn.pitchapi.dev/images/teams/ad80e0ea1049979b20dd51e024dc82d40e9b665e8081ab02534310f38427b4ef.webp",
+   "Fiorentina": "https://cdn.pitchapi.dev/images/teams/52f92c4c2ae57c14bc3d2ead58a2f899ab2fa12bebb91e6f627af2b99608dfce.webp",
+   "__league__": "https://cdn.pitchapi.dev/images/leagues/1e6b2d0d7b14ef10ae27b51a6a7f536b32fdceea229d84c475be346978232f22.webp"
+  },
+  "fail": {}
  }
 }
