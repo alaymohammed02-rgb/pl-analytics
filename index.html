@@ -1,6 +1,6 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PL Analytics</title>
+<title>PL Analytics</title><link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#0d1520"><link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png"><link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="PL Analytics">
 <style>
 :root{--bg:#0d1520;--sf:#152130;--ln:#25374d;--tx:#e8eef5;--mu:#8a9bb0;--g:#4cc38a;--b:#5aa9e6;--a:#e9b44c;--r:#e5646b}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
@@ -4451,7 +4451,7 @@ function arNode(n){
  let o=v;const x=arT(v);if(x!=null){const lead=v.match(/^\s*/)[0],trail=v.match(/\s*$/)[0];o=lead+x+trail}
  o=arBidi(o);if(!o.includes('\u2066')&&o.includes('£')&&!/[\u0600-\u06FF]/.test(o))o='\u2066'+o+'\u2069';if(o!==v)n.nodeValue=o;
 }
-function arEl(e){for(const a of ['placeholder','title','aria-label']){const v=e.getAttribute&&e.getAttribute(a);if(v){const x=arT(v);if(x!=null)e.setAttribute(a,x)}}}
+function arEl(e){for(const a of ['placeholder','title','aria-label']){const v=e.getAttribute&&e.getAttribute(a);if(v){const x=arT(v);if(x!=null&&x!==v)e.setAttribute(a,x)}}}
 function arWalk(root){
  if(!ARL.on||!root)return;
  if(root.nodeType===3){arNode(root);return}
@@ -4498,4 +4498,4 @@ async function route(){
   $('#lg').textContent='';
   $('#app').innerHTML=`<div class="empty">No data yet. The first sync is running in the background, reload this page in a few minutes.<br><span class="mu">${esc(e.message)}</span></div>`}
 })();
-</script><link rel="stylesheet" href="assets/features.css?v=3"><script src="assets/threat-map.js?v=3"></script><script src="assets/match-whatif.js?v=3"></script></body></html>
+</script><link rel="stylesheet" href="assets/features.css?v=4"><script src="assets/pla-data.js?v=4"></script><script src="assets/share-card.js?v=4"></script><script src="assets/threat-map.js?v=4"></script><script src="assets/match-whatif.js?v=4"></script><script src="assets/player-page.js?v=4"></script><script src="assets/match-centre.js?v=4"></script><script src="assets/home-extra.js?v=4"></script><script>if('serviceWorker' in navigator&&location.protocol==='https:')addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>null))</script></body></html>
