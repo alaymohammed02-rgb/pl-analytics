@@ -124,5 +124,29 @@
    "__league__": "https://cdn.pitchapi.dev/images/leagues/1e6b2d0d7b14ef10ae27b51a6a7f536b32fdceea229d84c475be346978232f22.webp"
   },
   "fail": {}
+ },
+ "l_4QexZg": {
+  "src": {
+   "Santa Clara": "https://cdn.pitchapi.dev/images/teams/fa8fe8daca85df8a4ece1f701195026dc3195701ad44cd2c0b235d5346ed911a.webp",
+   "Nacional": "https://cdn.pitchapi.dev/images/teams/85195781f87e9ac2c0f4a49056c906e9342b60351d71a2551161fc521c14b984.webp",
+   "Sporting CP": "https://cdn.pitchapi.dev/images/teams/5817bbd34cd3f72b924b6fe60740c7176bc383aa030a4d10832bffab27318dd9.webp",
+   "Vitória de Guimarães": "https://cdn.pitchapi.dev/images/teams/5567d7ba89b0635ee1b04f84c451bc6ac347e6146a67867286ee00e858f51f7f.webp",
+   "Alverca": "https://cdn.pitchapi.dev/images/teams/b5905ee4617deb237b1390528be7e162506da95254f3ade21fce39e68878d94b.webp",
+   "Estrela da Amadora": "https://cdn.pitchapi.dev/images/teams/c2be76e4cb7c9d2cd69bf961e608a4abf90ccc363122fecbbb2a622de7096854.webp",
+   "Académico Viseu": "https://cdn.pitchapi.dev/images/teams/3c8a60c65883c4c23f4ffcc7363bac89bde31ba3468dedc7a447e2f781639f9b.webp",
+   "Rio Ave": "https://cdn.pitchapi.dev/images/teams/450f3e8aee59d66af4a25e1fa236c21aa7dab9fd9c979ec6faf215407e1c8aaa.webp",
+   "FC Porto": "https://cdn.pitchapi.dev/images/teams/32b58b1949ae598ee4f05086017e0bf309cbc15846c63a60955beccf41726790.webp",
+   "Estoril": "https://cdn.pitchapi.dev/images/teams/3f07a465a910b410c97b60cc1cc7ffc4356b6d019450612788f4de9d1fd0104e.webp",
+   "Arouca": "https://cdn.pitchapi.dev/images/teams/058b56600b5c2b95b4432f14d73e49eab6ca694e75b558d97fc15ba08da65456.webp",
+   "Moreirense": "https://cdn.pitchapi.dev/images/teams/6d598a9dac1d99892e130b508b13c0468684f286a28c95862e3ba80644d7b9f4.webp",
+   "Famalicão": "https://cdn.pitchapi.dev/images/teams/111f33274a5107cb9fe3f9954a7a04dca3ba54a6ebf5ac23b1eb34016ef7962f.webp",
+   "Marítimo": "https://cdn.pitchapi.dev/images/teams/f62b11db46f2a119eddda0140f455a65fe8360ae4ba5e1db5e90c77f1b534a91.webp",
+   "Casa Pia AC": "https://cdn.pitchapi.dev/images/teams/9b1064b6b2e3eda938ecbd033b2af859f383d13206b3d2f6567ddc2829df2a24.webp",
+   "Benfica": "https://cdn.pitchapi.dev/images/teams/f400d9a5aa24f6f0c3094f0d1598c0f56ce2b003b8282a45481dd551d75a7a20.webp",
+   "Gil Vicente": "https://cdn.pitchapi.dev/images/teams/902c15949fa6b536bacab1f62dbc94b55109ae66207566209198613104f7dd43.webp",
+   "Braga": "https://cdn.pitchapi.dev/images/teams/a1892ba6866568f9d93771bb12c20c59031589516013282509a934aff7d76672.webp",
+   "__league__": "https://cdn.pitchapi.dev/images/leagues/77c078948ff67bf4bf3b7f156f4dbbd4c46d6eb043a3563098a11b432aa39117.webp"
+  },
+  "fail": {}
  }
 }
