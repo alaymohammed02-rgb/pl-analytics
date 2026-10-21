@@ -8391,8 +8391,8 @@ function homeScat(L){
 const HCMP=[{k:'npxg',l:'Non-penalty xG',s:'npxG'},{k:'xag',l:'Expected assists (xAG)',s:'xAG'},{k:'sca',l:'Shot-creating actions',s:'Shot-creating'},{k:'tkw',l:'Successful take-ons',s:'Take-ons'},{k:'pc',l:'Progressive carries',s:'Carries'},{k:'tkic',l:'Tackles + interceptions',s:'Tackles + int.'}];
 function homeVsHtml(c,a,b){
  const met=HCMP.map(x=>{const M=HOME_RULES.metrics.find(m=>m.k===x.k);return [x.l,M.f(a),M.f(b)]});
- return `<div class="hvs"><div class="hvh">${hAvatar(a.id,a.n,a.club,true)}<div><a href="${hPl(a.id,a.club)}"><b>${esc(a.n)}</b></a><div class="mu hcl">${hCrest(a.club)}<span>${esc(a.club)}</span></div><div class="mu">${a.p?`<span>${esc(a.p)}</span> · `:''}${Math.round(a.s.mi)} min</div></div></div>
-  <div class="hvvs">vs</div><div class="hvh r">${hAvatar(b.id,b.n,b.club,true)}<div><a href="${hPl(b.id,b.club)}"><b>${esc(b.n)}</b></a><div class="mu hcl">${hCrest(b.club)}<span>${esc(b.club)}</span></div><div class="mu">${b.p?`<span>${esc(b.p)}</span> · `:''}${Math.round(b.s.mi)} min</div></div></div></div>
+ return `<div class="hvs"><div class="hvh">${hAvatar(a.id,a.n,a.club,true)}<div><a href="${hPl(a.id,a.club)}"><b>${esc(a.n)}</b></a><div class="mu hcl">${hCrest(a.club)}<span>${esc(a.club)}</span></div><div class="mu">${a.p?`<span>${esc(a.p)}</span> · `:''}<span>${Math.round(a.s.mi)} min</span></div></div></div>
+  <div class="hvvs">vs</div><div class="hvh r">${hAvatar(b.id,b.n,b.club,true)}<div><a href="${hPl(b.id,b.club)}"><b>${esc(b.n)}</b></a><div class="mu hcl">${hCrest(b.club)}<span>${esc(b.club)}</span></div><div class="mu">${b.p?`<span>${esc(b.p)}</span> · `:''}<span>${Math.round(b.s.mi)} min</span></div></div></div></div>
   <div class="hvgrid">${hRadar(c,a,b)}<div class="hrows">${met.map(([l,x,y])=>{const mx=Math.max(x||0,y||0)||1,w=x!=null&&y!=null&&x!==y?(x>y?'a':'b'):'';
    return `<div class="hrow"><b class="${w==='a'?'win':''}">${hF(x)}</b><span class="hbx l"><i style="width:${((x||0)/mx*100).toFixed(0)}%"></i></span><span class="hlab">${esc(l)}</span><span class="hbx"><i style="width:${((y||0)/mx*100).toFixed(0)}%"></i></span><b class="${w==='b'?'win':''}">${hF(y)}</b></div>`}).join('')}</div></div>
   <p class="mu hnote"><span>Per 90 minutes, season so far.</span> ${hPosOk(c)?(a.p&&a.p===b.p?'<span>Both play in the same position, so the radar compares each with that position only.</span>':'<span>These two play in different positions, so the radar compares each with every outfield player; read it with care.</span>'):'<span>The data has no positions, so the defaults come from the same leaderboard; a striker and a defender are not like for like.</span>'}</p>
@@ -8629,7 +8629,6 @@ _AR_SEASON.update({
 
 INDEX = _x_home_index(INDEX)
 # ======================== نهاية إضافة الصفحة الرئيسية ========================
-
 
 
 # ============================================================================
@@ -8976,6 +8975,30 @@ _AR_SEASON.update({
 
 INDEX = _x_fpx_index(INDEX)
 # ======================== نهاية إضافة الفانتازي v3 ========================
+
+# ============================================================================
+# إضافة: ملفات الميزات المستقلة — Threat Map داخل صفحة Heatmaps، وصفحة Match What-If
+# الكود في ملفات مستقلة في المستودع: assets/threat-map.js و assets/match-whatif.js و assets/features.css.
+# هذا القسم يضيف روابطها للصفحة فقط (بعد السكربت الرئيسي، فتلقى R و PAGES جاهزة). غيّر FEATURES_V لما تتغير الملفات.
+# ============================================================================
+FEATURES_V = "1"
+
+
+def _x_feat_index(html):
+    old = "</script></body></html>"
+    if html.count(old) != 1:
+        log("  تنبيه (ملفات الميزات): ما لقيت نهاية الصفحة بدقة، تخطيتها")
+        return html
+    v = FEATURES_V
+    return html.replace(old, f'</script><link rel="stylesheet" href="assets/features.css?v={v}">'
+                             f'<script src="assets/threat-map.js?v={v}"></script>'
+                             f'<script src="assets/match-whatif.js?v={v}"></script></body></html>')
+
+
+INDEX = _x_feat_index(INDEX)
+# ======================== نهاية إضافة ملفات الميزات ========================
+
+
 
 
 
