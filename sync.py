@@ -7032,7 +7032,7 @@ INDEX = _x_cmp_index(INDEX)
 # مقارنتها بتوقع النموذج المحفوظ قبل الموعد، أنماطك (Analytical DNA) لما تكفي البيانات، واكتشاف من بيانات حقيقية.
 # كل شي في الصفحة فقط: التوقعات تنحفظ في متصفح المستخدم (localStorage: plx_lab_v1)، ولا تغيير في المزامنة أو البيانات.
 # ============================================================================
-_X_LABCSS = ".labtabs{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 12px}.labtabs button{min-height:36px}.labn{display:inline-block;min-width:18px;padding:0 5px;margin-inline-start:4px;border-radius:9px;background:var(--th-soft);font-size:11px}.labintro{border-color:var(--th-bd);background:linear-gradient(135deg,var(--th-soft),rgba(255,255,255,.02) 70%),var(--glass)}.labmsg{border-color:var(--th-bd)}.labforms{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:12px}.labforms h3{margin-top:0}.labf{display:flex;flex-direction:column;gap:4px;margin-bottom:10px;font-size:13px}.labf>span{color:var(--mu)}.labf input,.labf select{width:100%;box-sizing:border-box}.labconf{display:flex;align-items:center;gap:10px}.labconf input{flex:1}.labst{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;border:1px solid var(--ln);white-space:nowrap}.labst.g{color:var(--g);border-color:currentColor}.labst.w{color:var(--a);border-color:currentColor}.labst.o{color:var(--th-link);border-color:currentColor}.labst.x{color:var(--mu)}.labdel{min-height:26px;padding:0 8px;margin-inline-start:6px}.labwhy{font-size:12px;margin-top:3px;max-width:340px;overflow-wrap:anywhere}.labins .labinh{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.labins p{margin:8px 0}.labins.established{border-color:var(--g)}.labins.emerging{border-color:var(--a)}.labdisc h3{margin:6px 0}.labimp{display:inline-flex;align-items:center;cursor:pointer;border:1px solid var(--ln);border-radius:8px;padding:6px 12px;background:var(--sf)}.labins td,.labins th{white-space:normal}.labins .wrap{overflow-x:visible}"
+_X_LABCSS = ".labtabs{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 12px}.labtabs button{min-height:36px}.labn{display:inline-block;min-width:18px;padding:0 5px;margin-inline-start:4px;border-radius:9px;background:var(--th-soft);font-size:11px}.labintro{border-color:var(--th-bd);background:linear-gradient(135deg,var(--th-soft),rgba(255,255,255,.02) 70%),var(--glass)}.labmsg{border-color:var(--th-bd)}.labforms{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:12px}.labforms h3{margin-top:0}.labf{display:flex;flex-direction:column;gap:4px;margin-bottom:10px;font-size:13px}.labf>span{color:var(--mu)}.labf input,.labf select{width:100%;box-sizing:border-box}.labconf{display:flex;align-items:center;gap:10px}.labconf input{flex:1}.labst{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;border:1px solid var(--ln);white-space:nowrap}.labst.g{color:var(--g);border-color:currentColor}.labst.w{color:var(--a);border-color:currentColor}.labst.o{color:var(--th-link);border-color:currentColor}.labst.x{color:var(--mu)}.labdel{min-height:26px;padding:0 8px;margin-inline-start:6px}.labwhy{font-size:12px;margin-top:3px;max-width:340px;overflow-wrap:anywhere}.labins .labinh{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.labins p{margin:8px 0}.labins.established{border-color:var(--g)}.labins.emerging{border-color:var(--a)}.labdisc h3{margin:6px 0}.labimp{display:inline-flex;align-items:center;cursor:pointer;border:1px solid var(--ln);border-radius:8px;padding:6px 12px;background:var(--sf)}.labins td,.labins th{white-space:normal}.labins .wrap{overflow-x:visible}.labul{margin:6px 0;padding-inline-start:18px}.labul li{margin:4px 0}.labopts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:8px;margin-top:8px}.labopts button{text-align:start;white-space:normal;min-height:44px}.labev{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:12px;margin:10px 0}.labev>div{border:1px solid var(--glass-bd);border-radius:10px;padding:10px 12px;background:rgba(255,255,255,.02)}.labev h4{margin:0 0 6px}.labev ul{margin:4px 0;padding-inline-start:18px;font-size:13px}.labms{list-style:none;margin:6px 0 12px;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:6px}.labms li{display:flex;gap:8px;align-items:baseline;padding:8px 10px;border:1px solid var(--glass-bd);border-radius:10px;color:var(--mu)}.labms li.on{color:var(--tx);border-color:var(--th-bd)}.labmk{font-weight:700;color:var(--th-hi)}.labfeed{margin-bottom:8px}.labfeed.new{border-color:var(--th-bd);background:linear-gradient(135deg,var(--th-soft),rgba(255,255,255,.02) 70%),var(--glass)}.labfeed.case{border-color:var(--gold-bd)}.labhp h3{margin-top:0}.labcase h3{margin:6px 0}"
 _X_LABJS = r"""/* ===== Intelligence Lab: your Premier League judgement against the model and the official results =====
    Your predictions stay in this browser only (localStorage key 'plx_lab_v1'); nothing is sent anywhere.
    Read-only data: data/fpl.json (players, fixtures, deadlines, official FPL points per gameweek), data/fpl_track.json (the
@@ -7041,21 +7041,24 @@ _X_LABJS = r"""/* ===== Intelligence Lab: your Premier League judgement against 
    Rules: a prediction can be recorded or removed only before its gameweek's deadline; it is evaluated once the gameweek is
    finished (official points final) and the result is stored with it, so it never changes later. The model's figure stays
    hidden until the deadline, so your call is your own. Personal patterns are shown only with enough evaluated predictions. */
-const LAB_KEY='plx_lab_v1',LAB={d:null,v:'',tab:'arena',msg:''};
+const LAB_KEY='plx_lab_v1',LAB={d:null,v:'',tab:'feed',msg:'',case:null};
 const LAB_POS={1:'GKP',2:'DEF',3:'MID',4:'FWD'};
-function labValid(r){return !!r&&typeof r==='object'&&(r.type==='pts'||r.type==='h2h')&&Number.isInteger(r.gw)&&typeof r.dl==='string'&&typeof r.at==='string'&&
- Array.isArray(r.p)&&r.p.length===(r.type==='pts'?1:2)&&r.p.every(Number.isInteger)&&Array.isArray(r.s)&&r.s.length===r.p.length}
+function labValid(r){if(!r||typeof r!=='object'||typeof r.dl!=='string'||typeof r.at!=='string'||typeof r.id!=='string')return false;
+ if(r.type==='match')return typeof r.lid==='string'&&typeof r.mid==='string'&&typeof r.h==='string'&&typeof r.a==='string'&&['H','D','A'].includes(r.pick)&&Array.isArray(r.pr)&&r.pr.length===3&&r.pr.every(fpOk);
+ return (r.type==='pts'||r.type==='h2h')&&Number.isInteger(r.gw)&&Array.isArray(r.p)&&r.p.length===(r.type==='pts'?1:2)&&r.p.every(Number.isInteger)&&Array.isArray(r.s)&&r.s.length===r.p.length}
+const labObj=x=>x&&typeof x==='object'&&!Array.isArray(x)?x:{};
 /* stored records; unreadable data is kept aside (once) instead of being overwritten */
 function labRead(){
  let raw=null,o=null;try{raw=localStorage.getItem(LAB_KEY)}catch(e){}
  if(raw){try{o=JSON.parse(raw)}catch(e){o=null}}
  if(!o||typeof o!=='object'||!Array.isArray(o.recs)){
   if(raw){try{if(!localStorage.getItem(LAB_KEY+'_unreadable'))localStorage.setItem(LAB_KEY+'_unreadable',raw)}catch(e){}}
-  return {v:1,recs:[],bad:!!raw};
+  return {v:1,recs:[],cases:{},ms:{},seen:{},bad:!!raw};
  }
- const recs=o.recs.filter(labValid);return {v:1,recs,dropped:o.recs.length-recs.length};
+ const recs=o.recs.filter(labValid);return {v:1,recs,cases:labObj(o.cases),ms:labObj(o.ms),seen:labObj(o.seen),dropped:o.recs.length-recs.length};
 }
-function labWrite(o){try{localStorage.setItem(LAB_KEY,JSON.stringify({v:1,recs:o.recs}));return true}catch(e){return false}}
+/* recs: predictions; cases: your answers to case files; ms: when each milestone was first reached; seen: what the Lab showed on your last visit */
+function labWrite(o){try{localStorage.setItem(LAB_KEY,JSON.stringify({v:1,recs:o.recs,cases:o.cases||{},ms:o.ms||{},seen:o.seen||{}}));return true}catch(e){return false}}
 async function labData(){
  const m=ALL&&ALL.fpl;if(!m||!m.file)return null;
  if(LAB.d&&LAB.v===(m.v||''))return LAB.d;
@@ -7152,12 +7155,15 @@ function labInsights(recs){
 /* expected points of a match from the two teams' xG, with each side's goals as a Poisson count (a common simplification) */
 function labXPts(xf,xa){const P=l=>{const o=[];let p=Math.exp(-l);for(let k=0;k<=10;k++){o.push(p);p*=l/(k+1)}return o},a=P(xf),b=P(xa);let w=0,dr=0;
  for(let i=0;i<=10;i++)for(let j=0;j<=10;j++){const q=a[i]*b[j];if(i>j)w+=q;else if(i===j)dr+=q}return 3*w+dr}
-async function labDiscovery(){
+async function labDiscCalc(){
  const sh=await loadSh().catch(()=>null),tx=wkTeamXg(sh?sh.rows:[]),fin=D.matches.filter(m=>wkSc(m.score)&&m.date),T=new Map();
  fin.forEach(m=>{const g=wkSc(m.score);[[m.home,g[0],g[1],m.away],[m.away,g[1],g[0],m.home]].forEach(([t,f,a,o])=>{const xf=tx.get(m.match_id+'|'+t),xa=tx.get(m.match_id+'|'+o);if(xf==null||xa==null)return;
   const r=T.get(t)||{t,n:0,pts:0,xp:0,xf:0,xa:0,f:0,a:0,d0:m.date,d1:m.date};r.n++;r.pts+=f>a?3:f===a?1:0;r.xp+=labXPts(xf,xa);r.xf+=xf;r.xa+=xa;r.f+=f;r.a+=a;
   if(m.date<r.d0)r.d0=m.date;if(m.date>r.d1)r.d1=m.date;T.set(t,r)})});
- const R=[...T.values()].filter(r=>r.n>=6).map(r=>Object.assign(r,{gap:r.pts-r.xp})).sort((a,b)=>Math.abs(b.gap)-Math.abs(a.gap));
+ return [...T.values()].filter(r=>r.n>=6).map(r=>Object.assign(r,{gap:r.pts-r.xp})).sort((a,b)=>Math.abs(b.gap)-Math.abs(a.gap));
+}
+async function labDiscovery(){
+ const R=await labDiscCalc();
  if(R.length<6)return `<div class="empty">Not enough matches with shot data in ${esc(D.name)} yet for a reliable discovery (each team needs at least 6).</div>`;
  const top=R[0],mean=labMean(R.map(r=>Math.abs(r.gap))),d0=R.reduce((a,r)=>r.d0<a?r.d0:a,R[0].d0).slice(0,10),d1=R.reduce((a,r)=>r.d1>a?r.d1:a,R[0].d1).slice(0,10);
  const tab=tbl([['Team'],['Matches',1],['Points',1],['Expected points',1],['Difference',1],['xG for',1],['xG against',1],['Goals',1]],
@@ -7203,26 +7209,30 @@ function labSave(type){
 function labDel(id){const o=labRead(),r=o.recs.find(x=>x.id===id);if(!r)return;
  if(Date.now()>=Date.parse(r.dl)){LAB.msg='This prediction is locked: its deadline has passed.';route();return}
  o.recs=o.recs.filter(x=>x.id!==id);labWrite(o);route()}
-function labExport(){const o=labRead(),b=new Blob([JSON.stringify({app:'PL Analytics Intelligence Lab',key:LAB_KEY,exported:new Date().toISOString(),v:1,recs:o.recs},null,1)],{type:'application/json'}),a=document.createElement('a');
+function labExport(){const o=labRead(),b=new Blob([JSON.stringify({app:'PL Analytics Intelligence Lab',key:LAB_KEY,exported:new Date().toISOString(),v:1,recs:o.recs,cases:o.cases,ms:o.ms},null,1)],{type:'application/json'}),a=document.createElement('a');
  a.href=URL.createObjectURL(b);a.download='pl-analytics-lab-'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
 function labImport(inp){const f=inp.files&&inp.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{let o=null;try{o=JSON.parse(rd.result)}catch(e){}
  const recs=o&&Array.isArray(o.recs)?o.recs.filter(labValid):null;if(!recs){LAB.msg='That file is not a Lab export.';route();return}
- const cur=labRead(),ids=new Set(cur.recs.map(r=>r.id));let n=0;recs.forEach(r=>{if(!ids.has(r.id)){cur.recs.push(r);n++}});labWrite(cur);LAB.msg=n+' predictions imported.';route()};rd.readAsText(f)}
+ const cur=labRead(),ids=new Set(cur.recs.map(r=>r.id));let n=0;recs.forEach(r=>{if(!ids.has(r.id)){cur.recs.push(r);n++}});Object.entries(labObj(o.cases)).forEach(([k,v])=>{if(!cur.cases[k]&&v&&v.ans)cur.cases[k]=v});labWrite(cur);LAB.msg=n+' predictions imported.';route()};rd.readAsText(f)}
 function labWipe(){if(!confirm('Delete all your Intelligence Lab predictions from this browser? This cannot be undone.'))return;try{localStorage.removeItem(LAB_KEY);localStorage.removeItem(LAB_KEY+'_unreadable')}catch(e){}LAB.msg='All Lab predictions deleted from this browser.';route()}
 
 function labCall(d,r){
+ if(r.type==='match')return `<span class="nw"><span>${esc(r.h)}</span> – <span>${esc(r.a)}</span></span>: <b>${r.pick==='H'?'<span>home win</span>':r.pick==='A'?'<span>away win</span>':'<span>draw</span>'}</b> <span class="mu">(${Math.round(r.conf*100)}%)</span> <div class="mu" style="font-size:11px">${esc(r.lname||'')}</div>`;
  const nm=i=>esc(labName(d,r.p[i]));
  if(r.type==='pts')return `<span class="nw">${nm(0)}</span>: <b>${r.pred}</b> <span>pts</span>`;
  return `<span class="nw">${esc(labName(d,r.pick))}</span> <span>over</span> <span class="nw">${esc(labName(d,r.p.find(x=>x!==r.pick)))}</span> <span class="mu">(${Math.round(r.conf*100)}%)</span>`;
 }
 function labStatus(d,r){
  const st=r.res?r.res.st:Date.now()<Date.parse(r.dl)?'open':'wait';
- return {open:'<span class="labst o">Open</span>',wait:'<span class="labst w">Locked, waiting for official points</span>',late:'<span class="labst x">Saved after the deadline, not counted</span>',
+ return {open:'<span class="labst o">Open</span>',wait:r.type==='match'?'<span class="labst w">Locked, waiting for the result</span>':'<span class="labst w">Locked, waiting for official points</span>',late:'<span class="labst x">Saved after the deadline, not counted</span>',
   blank:'<span class="labst x">No fixture, not counted</span>',tie:'<span class="labst x">Level on points, not counted</span>',ok:'<span class="labst g">Evaluated</span>'}[st];
 }
 function labRows(d,recs){
- return tbl([['GW',1],['Your prediction'],['Model',1],['Official result'],['Status']],[...recs].sort((a,b)=>b.gw-a.gw||String(b.at).localeCompare(String(a.at))).map(r=>{
+ return tbl([['GW',1],['Your prediction'],['Model',1],['Official result'],['Status']],[...recs].sort((a,b)=>Date.parse(b.dl)-Date.parse(a.dl)||String(b.at).localeCompare(String(a.at))).map(r=>{
   const R=r.res,lk=Date.now()>=Date.parse(r.dl);let model='<span class="mu" title="Shown after the deadline">hidden</span>',act='';
+  if(r.type==='match'){if(lk)model=r.model?r.model.p.map(x=>Math.round(x*100)+'%').join(' / '):'<span class="mu">N/A</span>';
+   if(R&&R.st==='ok')act=`<b>${esc(R.score)}</b> · ${R.won?'<span style="color:var(--g)">right</span>':'<span style="color:var(--r)">wrong</span>'} · <span>Brier</span> ${R.b.toFixed(2)}${R.mb!=null?` <span class="mu">(<span>model</span> ${R.mb.toFixed(2)})</span>`:''}`;
+   return [r.gw||'',labCall(d,r)+(r.why?`<div class="mu labwhy">“${esc(r.why)}”</div>`:''),model,act||'<span class="mu">–</span>',labStatus(d,r)+(!lk?` <button class="s labdel" onclick="labDel('${esc(r.id)}')" aria-label="Remove">✕</button>`:'')]}
   if(lk){const M=R&&R.m?R.m:r.p.map(id=>labModel(d,r.gw,id)).every(Boolean)?r.p.map(id=>labModel(d,r.gw,id).v):null;
    model=M?(r.type==='pts'?M[0].toFixed(1):M.map(x=>x.toFixed(1)).join(' – ')):'<span class="mu">N/A</span>'}
   if(R&&R.a)act=r.type==='pts'?`<b>${R.a[0]}</b> <span>pts</span> <span class="mu">(${R.min[0]} <span>min</span>)</span>${R.st==='ok'?` · <span>error</span> ${R.e.toFixed(1)}${R.me!=null?` <span class="mu">(<span>model</span> ${R.me.toFixed(1)})</span>`:''}`:''}`:
@@ -7240,6 +7250,10 @@ function labProgress(d,recs){
  if(H.length){const b=labMean(H.map(r=>r.res.b)),hit=labMean(H.map(r=>r.res.won?1:0));
   cmp+=`<p><span>Head-to-head picks:</span> <b>${H.length}</b> · <span>right</span> <b>${Math.round(hit*100)}%</b> · <span>Brier score</span> <b>${b.toFixed(3)}</b> <span class="mu">(<span>0 is perfect; always saying 50% scores 0.25</span>)</span></p>`+
    (HM.length?`<p><span>On the same pairs, the model's pick (the player it predicted more points for) was right</span> <b>${Math.round(labMean(HM.map(r=>r.res.mHit?1:0))*100)}%</b> <span>of the time</span> <span class="mu">(${HM.length} <span>pairs; the model gives points, not probabilities, so only hit rates are compared</span>)</span></p>`:'');}
+ const X=recs.filter(r=>r.type==='match'&&r.res&&r.res.st==='ok'),XM=X.filter(r=>r.res.mb!=null);
+ if(X.length){const v=XM.map(r=>r.res.b-r.res.mb),se=v.length>1?Math.sqrt(labVar(v)/v.length):null;
+  cmp+=`<p><span>Match results:</span> <b>${X.length}</b> · <span>right</span> <b>${Math.round(labMean(X.map(r=>r.res.won?1:0))*100)}%</b> · <span>Brier score</span> <b>${labMean(X.map(r=>r.res.b)).toFixed(3)}</b> <span class="mu">(<span>three outcomes: 0 is perfect, 2 is the worst; one-third each scores 0.667</span>)</span></p>`+
+   (XM.length?`<p><span>On the same matches, the xG model's Brier score:</span> <b>${labMean(XM.map(r=>r.res.mb)).toFixed(3)}</b> <span class="mu">(${XM.length})</span></p>`+(XM.length<10?'<p class="mu">Fewer than 10: too few to compare you with the model.</p>':se!=null&&Math.abs(labMean(v))<=2*se?'<p class="mu">The difference is within the noise of this sample (less than two standard errors).</p>':`<p class="mu">${labMean(v)<0?'Over these matches your probabilities scored better than the model\'s.':'Over these matches the model\'s probabilities scored better than yours.'}</p>`):'')}
  return `<div class="grid">${k(recs.length,'Predictions recorded')}${k(ev,'Evaluated')}${k(P.length?labMean(P.map(r=>r.res.e)).toFixed(2):'N/A','Your mean error (points)')}${k(H.length?labMean(H.map(r=>r.res.b)).toFixed(3):'N/A','Your Brier score')}</div>${cmp?`<div class="card">${cmp}</div>`:''}`;
 }
 function labDNA(recs){
@@ -7252,10 +7266,10 @@ function labDNA(recs){
    return `<div class="card labins ${c.state}"><div class="labinh"><b>${esc(x.t)}</b><span class="labst ${c.state==='established'?'g':c.state==='emerging'?'w':'x'}">${LAB_STATE[c.state]}</span></div><p>${esc(x.v)}</p>${ev2}
     ${x.how?`<div class="mu" style="font-size:11px">${esc(x.how)}</div>`:''}${rs.length&&c.state!=='none'&&c.se!=null?`<div class="mu" style="font-size:11px"><span>Difference</span> ${labF(c.dif,2)} ± ${c.se.toFixed(2)} <span>(one standard error)</span> · ${esc(labGw(rs))}</div>`:''}</div>`}).join('');
 }
-function labArena(d,recs){
+function labArena(d,recs,extra){
  const e=labOpen(d);
- if(!e)return '<div class="empty">There is no open gameweek: the season\'s deadlines have all passed.</div>';
- const mine=recs.filter(r=>r.gw===e.id),dlt=new Date(e.dl),opts=labPlOptions(d,e.id);
+ if(!e)return '<div class="empty">There is no open gameweek: the season\'s deadlines have all passed.</div>'+(extra?`<div class="labforms">${extra}</div>`:'');
+ const mine=recs.filter(r=>r.gw===e.id||(r.type==='match'&&!r.res&&Date.now()<Date.parse(r.dl))),dlt=new Date(e.dl),opts=labPlOptions(d,e.id);
  return `<div class="card"><div><b>${esc(e.name)}</b> · <span>Deadline</span> <span class="nw">${esc(dlt.toLocaleString(document.documentElement.lang==='ar'?'ar-u-ca-gregory-nu-latn':'en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))}</span></div>
   <div class="mu" style="font-size:12px">Record your call before the deadline. The model's figure for this gameweek is shown only after the deadline, so your judgement stays your own.</div></div>
   <datalist id="labpl">${opts}</datalist>
@@ -7270,17 +7284,22 @@ function labArena(d,recs){
    <label class="labf"><span>Your pick</span><select id="labwin"><option value="1">Player 1</option><option value="2">Player 2</option></select></label>
    <label class="labf"><span>Confidence</span><span class="labconf"><input id="labconf" type="range" min="50" max="100" step="5" value="60" oninput="$('#labconfv').textContent=this.value+'%'"><b id="labconfv">60%</b></span></label>
    <label class="labf"><span>Why? (optional)</span><input id="labwhyh2h" maxlength="280"></label>
-   <button onclick="labSave('h2h')">Save prediction</button><div class="mu" style="font-size:11px;margin-top:6px">Evaluated with the Brier score: your confidence against what happened. Level points are not counted.</div></div></div>
+   <button onclick="labSave('h2h')">Save prediction</button><div class="mu" style="font-size:11px;margin-top:6px">Evaluated with the Brier score: your confidence against what happened. Level points are not counted.</div></div>${extra||''}</div>
   <h3><span>${esc(e.name)}</span> · <span>Your predictions</span></h3>${mine.length?labRows(d,mine):'<div class="empty">No predictions for this gameweek yet.</div>'}`;
 }
 R.lab=async function(el){
  await champReady();const d=await labData();
  if(!d||!d.events||!d.fix){el.innerHTML='<h2>Intelligence Lab</h2><div class="empty">The Fantasy Premier League data is not available yet.</div>';return}
- const o=labRead(),msg=LAB.msg;LAB.msg='';if(!o.bad)labEval(d,o);const recs=o.recs,ev=recs.filter(r=>r.res&&r.res.st==='ok').length;
- const tabs=[['arena','Decision Arena'],['review','Review and progress'],['dna','Analytical DNA'],['disc','Discovery'],['data','Your data']];
+ const o=labRead(),msg=LAB.msg;LAB.msg='';if(!o.bad){labEval(d,o);await labEvalMatches(o).catch(()=>false)}const recs=o.recs,ev=recs.filter(r=>r.res&&r.res.st==='ok').length;
+ const tabs=[['feed','For you'],['arena','Decision Arena'],['review','Review and progress'],['dna','Analytical DNA'],['week','Weekly review'],['hidden','Hidden patterns'],['case','Case file'],['disc','Discovery'],['data','Your data']];
+ if(!tabs.some(t=>t[0]===LAB.tab))LAB.tab='feed';
  let body='';
- if(LAB.tab==='arena')body=labArena(d,recs);
- else if(LAB.tab==='review')body=labProgress(d,recs)+'<h3>All predictions</h3>'+(recs.length?labRows(d,recs):'<div class="empty">No predictions yet. Record one in the Decision Arena.</div>');
+ if(LAB.tab==='feed')body=o.bad?'':await labFeed(d,o);
+ else if(LAB.tab==='arena')body=labArena(d,recs,await labMatchCard());
+ else if(LAB.tab==='review')body=labProgress(d,recs)+(o.bad?'':labMsHtml(o))+'<h3>All predictions</h3>'+(recs.length?labRows(d,recs):'<div class="empty">No predictions yet. Record one in the Decision Arena.</div>');
+ else if(LAB.tab==='week')body=await labWeek(d,o);
+ else if(LAB.tab==='hidden')body=labHiddenHtml(d);
+ else if(LAB.tab==='case')body=await labCase(o);
  else if(LAB.tab==='dna')body=labDNA(recs);
  else if(LAB.tab==='disc')body=await labDiscovery();
  else body=`<div class="card"><p>Your predictions are stored only in this browser, on this device. They are not uploaded, do not follow you to another device or browser, and are lost if this browser's site data is cleared. Export them to keep a copy.</p>
@@ -7292,6 +7311,205 @@ R.lab=async function(el){
   <div class="seg labtabs">${tabs.map(([k,n])=>`<button class="${LAB.tab===k?'on':''}" onclick="labTab('${k}')">${n}${k==='review'&&ev?` <span class="labn">${ev}</span>`:''}</button>`).join('')}</div>
   ${msg?`<div class="card labmsg" role="status">${esc(msg)}</div>`:''}${body}`;
 };
+
+/* ===== Intelligence Lab, part 2: match results, weekly review, hidden patterns, case file, milestones, the feed ===== */
+
+/* ---------- match results in any league: your probabilities against a simple xG model ---------- */
+/* Match model "xG Poisson 1": each team's attack and defence are its xG for and against a match this season, pulled toward the
+   league average by 3 matches' worth; the home side scores the league's home xG average scaled by its attack and the
+   opponent's defence, the away side likewise; goals are independent Poisson counts. It needs 3 matches with shot data for
+   both teams. The probabilities are saved with your prediction, from the data of that moment, and stay hidden until kick-off. */
+const LAB_MM='xg-poisson-1';
+async function labMatchModel(){
+ const sh=await loadSh().catch(()=>null),tx=wkTeamXg(sh?sh.rows:[]),fin=D.matches.filter(m=>wkSc(m.score)&&m.date),T=new Map();let hs=0,as=0,n=0;
+ fin.forEach(m=>{const xh=tx.get(m.match_id+'|'+m.home),xa=tx.get(m.match_id+'|'+m.away);if(xh==null||xa==null)return;n++;hs+=xh;as+=xa;
+  [[m.home,xh,xa],[m.away,xa,xh]].forEach(([t,f,a])=>{const r=T.get(t)||{n:0,f:0,a:0};r.n++;r.f+=f;r.a+=a;T.set(t,r)})});
+ if(n<10)return null;
+ const H=hs/n,A=as/n,mu=(H+A)/2,N0=3,str=t=>{const r=T.get(t);return r&&r.n>=3?{att:(r.f+N0*mu)/(r.n+N0)/mu,def:(r.a+N0*mu)/(r.n+N0)/mu,n:r.n}:null};
+ const pois=l=>{const o=[];let p=Math.exp(-l);for(let k=0;k<=10;k++){o.push(p);p*=l/(k+1)}return o};
+ return (h,a)=>{const x=str(h),y=str(a);if(!x||!y)return null;const lh=H*x.att*y.def,la=A*y.att*x.def,ph=pois(lh),pa=pois(la);let w=0,dr=0,l=0;
+  for(let i=0;i<=10;i++)for(let j=0;j<=10;j++){const q=ph[i]*pa[j];if(i>j)w+=q;else if(i===j)dr+=q;else l+=q}const s=w+dr+l;
+  return {p:[w/s,dr/s,l/s],lh,la,n:[x.n,y.n],ver:LAB_MM}};
+}
+const labBrier3=(p,o)=>p.reduce((s,x,i)=>s+Math.pow(x-(i===o?1:0),2),0);
+async function labMatchCard(){
+ await fixLoad();const L=((FIX.d&&FIX.d.leagues)||{})[D.id]||[],now=Date.now(),soon=now+10*864e5;
+ const fx=L.filter(x=>{const t=Date.parse(x.k||x.d);return t>now&&t<soon}).slice(0,40),mine=new Set(labRead().recs.filter(r=>r.type==='match').map(r=>r.mid));
+ if(!fx.length)return `<div class="card"><h3>Who will win?</h3><div class="empty">No ${esc(D.name)} fixtures in the next 10 days in the data.</div></div>`;
+ const lc=document.documentElement.lang==='ar'?'ar-u-ca-gregory-nu-latn':'en-GB';
+ return `<div class="card"><h3>Who will win? <span class="mu" style="font-weight:400">· <span>${esc(D.name)}</span></span></h3>
+  <label class="labf"><span>Match</span><select id="labmx">${fx.map(x=>`<option value="${esc(x.i)}"${mine.has(x.i)?' disabled':''}>${esc(new Date(x.k||x.d).toLocaleString(lc,{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))} · ${esc(x.h)} – ${esc(x.a)}</option>`).join('')}</select></label>
+  <label class="labf"><span>Your pick</span><select id="labmp"><option value="H">Home win</option><option value="D">Draw</option><option value="A">Away win</option></select></label>
+  <label class="labf"><span>Confidence</span><span class="labconf"><input id="labmc" type="range" min="35" max="100" step="5" value="50" oninput="$('#labmcv').textContent=this.value+'%'"><b id="labmcv">50%</b></span></label>
+  <label class="labf"><span>Why? (optional)</span><input id="labwhymatch" maxlength="280"></label>
+  <button onclick="labSaveMatch()">Save prediction</button><div class="mu" style="font-size:11px;margin-top:6px">Locked at kick-off. Your confidence goes to your pick and the rest is split evenly between the other two results; evaluated with the Brier score for three outcomes (0 is perfect, 2 is the worst), next to the site's xG model.</div></div>`;
+}
+async function labSaveMatch(){
+ const say=m=>{LAB.msg=m;route()},o=labRead();if(o.bad)return say('Your saved predictions could not be read. Delete them in the Data tab before recording new ones.');
+ const mid=($('#labmx')||{}).value,x=(((FIX.d&&FIX.d.leagues)||{})[D.id]||[]).find(f=>f.i===mid),pick=($('#labmp')||{}).value,c=labN(($('#labmc')||{}).value);
+ if(!x)return say('Choose a match from the list.');if(Date.now()>=Date.parse(x.k||x.d))return say('This match has kicked off: predictions are closed.');
+ if(!['H','D','A'].includes(pick)||c==null||c<35||c>100)return say('Confidence must be between #% and #%.'.replace('#',35).replace('#',100));
+ if(o.recs.some(r=>r.type==='match'&&r.mid===mid))return say('You already have a prediction for this match.');
+ const mm=await labMatchModel(),m=mm?mm(x.h,x.a):null,ix={H:0,D:1,A:2}[pick],pr=[0,1,2].map(i=>i===ix?c/100:(1-c/100)/2);
+ o.recs.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),type:'match',lid:D.id,lname:D.name,mid,h:x.h,a:x.a,dl:new Date(Date.parse(x.k||x.d)).toISOString(),
+  at:new Date().toISOString(),pick,conf:c/100,pr,model:m?{p:m.p,lh:m.lh,la:m.la,n:m.n,ver:m.ver}:null,why:String(($('#labwhymatch')||{}).value||'').trim().slice(0,280)});
+ if(!labWrite(o))return say('This browser did not allow saving (storage full or blocked).');
+ say('Saved. It can be removed until the deadline; after that it is locked.');
+}
+/* results come from each league's own data file; a league other than the one open is loaded only when one of its matches is due */
+async function labEvalMatches(o){
+ const due=o.recs.filter(r=>r.type==='match'&&!r.res&&Date.now()>=Date.parse(r.dl));if(!due.length)return false;let ch=false;
+ for(const lid of [...new Set(due.map(r=>r.lid))]){
+  let M=null;if(D&&D.id===lid)M=D.matches;else{const m=(ALL.leagues||[]).find(l=>l.id===lid);if(!m||!m.file)continue;
+   try{const x=await fetch('data/'+m.file+'?v='+encodeURIComponent(ALL.generated||''));if(x.ok){const j=await x.json();M=(j.matches||[]).map(z=>({match_id:z.i,score:z.s,date:z.d}))}}catch(e){}}
+  if(!M)continue;const by=new Map(M.map(m=>[m.match_id,m]));
+  for(const r of due.filter(r=>r.lid===lid)){const m=by.get(r.mid),g=m&&wkSc(m.score);if(!g)continue;
+   if(!(Date.parse(r.at)<Date.parse(r.dl))){r.res={st:'late',t:new Date().toISOString()};ch=true;continue}
+   const oc=g[0]>g[1]?0:g[0]===g[1]?1:2,ix={H:0,D:1,A:2}[r.pick],mm=r.model?r.model.p:null,mx=mm?mm.indexOf(Math.max(...mm)):null;
+   r.res={st:'ok',score:g[0]+'-'+g[1],o:oc,won:ix===oc,b:labBrier3(r.pr,oc),mb:mm?labBrier3(mm,oc):null,mHit:mm?mx===oc:null,t:new Date().toISOString()};ch=true}
+ }
+ if(ch)labWrite(o);return ch;
+}
+
+/* ---------- weekly review: the last finished gameweek ---------- */
+function labWeekOf(d){const fin=d.events.filter(e=>e.fin).sort((a,b)=>b.id-a.id)[0];if(!fin)return null;const nx=d.events.find(e=>e.id===fin.id+1);
+ return {e:fin,from:Date.parse(fin.dl),to:nx?Date.parse(nx.dl):Infinity}}
+async function labWeek(d,o){
+ const W=labWeekOf(d);if(!W)return '<div class="empty">No gameweek has finished yet this season.</div>';
+ const inW=r=>r.res&&r.res.st==='ok'&&(r.type==='match'?Date.parse(r.dl)>=W.from&&Date.parse(r.dl)<W.to:r.gw===W.e.id&&r.season===labSeason(d));
+ const now=o.recs.filter(inW),before=o.recs.filter(r=>r.res&&r.res.st==='ok'&&!inW(r)&&Date.parse(r.dl)<W.from);
+ const R=await labDiscCalc().catch(()=>[]),disc=R.length>=6&&Math.abs(R[0].gap)>=4?`<p><b>${esc(R[0].t)}</b> ${R[0].gap<0?'<span>have fewer points than their chances were worth</span>':'<span>have more points than their chances were worth</span>'}: <b>${labF(R[0].gap)}</b> <span class="mu">(${R[0].n} <span>matches</span> · <span>${esc(D.name)}</span>)</span> · <a href="javascript:labTab('disc')">Discovery</a></p>`:'';
+ const head=`<div class="card"><div class="mu" style="font-size:12px"><span>${esc(W.e.name)}</span> · <span class="nw">${esc(new Date(W.from).toISOString().slice(0,10))}</span></div>`;
+ if(!now.length)return head+`<p>None of your predictions were evaluated in this gameweek, so there is no personal review this week.</p><p class="mu"><a href="javascript:labTab('arena')">Record a prediction</a> <span>for the next gameweek to get one.</span></p>${disc?'<h3>This week in the data</h3>'+disc:''}</div>`;
+ const P=now.filter(r=>r.type==='pts'),PM=P.filter(r=>r.res.me!=null),H=now.filter(r=>r.type==='h2h'),X=now.filter(r=>r.type==='match');
+ const lines=[];
+ if(P.length)lines.push(`<li><span>Points predictions:</span> <b>${P.length}</b> · <span>your mean error</span> <b>${labMean(P.map(r=>r.res.e)).toFixed(2)}</b>${PM.length?` · <span>model's mean error</span> <b>${labMean(PM.map(r=>r.res.me)).toFixed(2)}</b> <span class="mu">(${PM.length})</span>`:''}</li>`);
+ if(H.length)lines.push(`<li><span>Head-to-head picks:</span> <b>${H.length}</b> · <span>right</span> <b>${H.filter(r=>r.res.won).length}</b> · <span>Brier score</span> <b>${labMean(H.map(r=>r.res.b)).toFixed(3)}</b></li>`);
+ if(X.length){const XM=X.filter(r=>r.res.mb!=null);lines.push(`<li><span>Match results:</span> <b>${X.length}</b> · <span>right</span> <b>${X.filter(r=>r.res.won).length}</b> · <span>Brier score</span> <b>${labMean(X.map(r=>r.res.b)).toFixed(3)}</b>${XM.length?` · <span>model</span> <b>${labMean(XM.map(r=>r.res.mb)).toFixed(3)}</b>`:''}</li>`)}
+ /* most informative: where you and the model differed most, in your favour and against you */
+ const gap=r=>r.type==='pts'&&r.res.me!=null?r.res.me-r.res.e:r.type==='match'&&r.res.mb!=null?(r.res.mb-r.res.b)*5:null,G=now.filter(r=>gap(r)!=null).sort((a,b)=>gap(b)-gap(a));
+ const desc=r=>`${labCall(d,r)} → ${r.type==='pts'?`<b>${r.res.a[0]}</b> <span>pts</span> (<span>your error</span> ${r.res.e.toFixed(1)} · <span>model's error</span> ${r.res.me.toFixed(1)})`:`<b>${esc(r.res.score)}</b> (<span>Brier</span> ${r.res.b.toFixed(2)} · <span>model</span> ${r.res.mb.toFixed(2)})`}`;
+ const best=G.length&&gap(G[0])>0?`<p><b>Most informative success.</b> ${desc(G[0])}</p>`:'',worst=G.length&&gap(G[G.length-1])<0?`<p><b>Most informative mistake.</b> ${desc(G[G.length-1])}</p>`:'';
+ /* against your own earlier weeks, on points predictions with a model figure */
+ const rel=rs=>rs.filter(r=>r.type==='pts'&&r.res.me!=null).map(r=>r.res.e-r.res.me),a=rel(now),b=rel(before);
+ const prev=a.length&&b.length>=10?`<p class="mu"><span>Your error minus the model's this week:</span> <b>${labF(labMean(a),2)}</b> · <span>in earlier weeks:</span> <b>${labF(labMean(b),2)}</b> <span>(lower is better; one week is a small sample)</span></p>`:'';
+ const ins=labInsights(o.recs).find(x=>x.c.state==='established'||x.c.state==='emerging');
+ return head+`<ul class="labul">${lines.join('')}</ul>${best}${worst}${prev}${ins?`<p><b>Analytical DNA.</b> ${esc(ins.v)} <span class="labst ${ins.c.state==='established'?'g':'w'}">${LAB_STATE[ins.c.state]}</span></p>`:''}${disc?'<h3>This week in the data</h3>'+disc:''}</div>`;
+}
+
+/* ---------- hidden patterns in the FPL data ---------- */
+function labHidden(d){
+ const fin=d.events.filter(e=>e.fin).length,P=d.P.map(p=>Object.assign({},p,{mi:labN(p.minutes)||0,xg:labN(p.expected_goals)||0,xa:labN(p.expected_assists)||0,gl:labN(p.goals_scored)||0,st0:labN(p.starts)||0})),out=[];
+ const med=a=>{const s=[...a].sort((x,y)=>x-y);return s.length?s[Math.floor(s.length/2)]:null},pos=p=>LAB_POS[p.ty]||'',f2=x=>x.toFixed(2);
+ const row=p=>`<b>${esc(p.wn)}</b> <span class="mu">${esc(p.tn)} · ${pos(p)}</span>`;
+ /* 1. per 90 against totals */
+ {const cap=fin*90,att=P.filter(p=>p.ty>=3&&p.mi>=270),xgi=p=>(p.xg+p.xa)/p.mi*90,reg=att.filter(p=>p.mi>=.7*cap),base=med(reg.map(xgi));
+  const L=att.filter(p=>p.mi<=.55*cap&&xgi(p)>=.5).sort((a,b)=>xgi(b)-xgi(a)).slice(0,8);
+  out.push({t:'Strong per 90 minutes, limited minutes',why:'Season totals reward minutes. These midfielders and forwards produce chances at a high rate when they play, but have played little, so their totals hide it.',
+   base:base!=null?`<span>Midfielders and forwards with at least 70% of the minutes:</span> <span>median xG + xA per 90</span> <b>${f2(base)}</b>`:'',
+   rows:L.map(p=>[row(p),Math.round(p.mi),f2(xgi(p)),(p.xg+p.xa).toFixed(1),labN(p.total_points)]),head:[['Player'],['Minutes',1],['xG + xA per 90',1],['xG + xA',1],['FPL points',1]],
+   lim:'Few minutes make a figure per 90 minutes noisy, and minutes off the bench can come against tired defences; the rate may not hold with more playing time.'})}
+ /* 2. goals against xG */
+ {const L=P.filter(p=>p.xg>=2),up=[...L].sort((a,b)=>(b.gl-b.xg)-(a.gl-a.xg)).slice(0,5),dn=[...L].sort((a,b)=>(a.gl-a.xg)-(b.gl-b.xg)).slice(0,5);
+  out.push({t:'Goals against the quality of chances',why:'xG measures how good the chances were; goals measure how many went in. A large gap over a few matches says more about this season\'s finishing (and goalkeeping) than about chance quality.',
+   base:`<span>Players with at least 2.0 xG:</span> <b>${L.length}</b>`,
+   rows:up.concat(dn).map(p=>[row(p),p.gl,p.xg.toFixed(1),labF(p.gl-p.xg)]),head:[['Player'],['Goals',1],['xG',1],['Goals − xG',1]],
+   lim:'Some players do finish better than average over many seasons, but over a few matches large gaps are mostly noise. This shows a difference, not its cause.'})}
+ /* 3. the model's next-gameweek prediction per million, for players with secure minutes and low ownership */
+ {const T=Object.values(d.track.gws||{}).filter(t=>Date.parse(t.dl)>Date.now()).sort((a,b)=>a.gw-b.gw)[0];
+  if(T&&T.preds){const sec=p=>(p.chance_of_playing_next_round==null||labN(p.chance_of_playing_next_round)>=100)&&fin>0&&p.st0/fin>=.8,pr=p=>T.preds[String(p.id)],own=p=>labN(p.selected_by_percent);
+   const L=P.filter(p=>sec(p)&&fpOk(pr(p))&&p.now_cost>0),pm=p=>pr(p)/(p.now_cost/10),base=L.length?labMean(L.map(pm)):null,V=L.filter(p=>own(p)!=null&&own(p)<10).sort((a,b)=>pm(b)-pm(a)).slice(0,8);
+   out.push({t:'Possibly undervalued for Gameweek '+T.gw,why:'Predicted points per £1m from the site\'s model for the next gameweek, among players who start regularly and have no availability flag, owned by fewer than 10% of managers.',
+    base:base!=null?`<span>All such regular starters:</span> <b>${base.toFixed(2)}</b> <span>predicted points per £1m</span> <span class="mu">(${L.length})</span>`:'',
+    rows:V.map(p=>[row(p),(p.now_cost/10).toFixed(1),pr(p).toFixed(2),pm(p).toFixed(2),own(p).toFixed(1)+'%']),head:[['Player'],['Price',1],['Predicted points',1],['Per £1m',1],['Owned by',1]],
+    lim:'A one-gameweek model prediction, not official points; prices and ownership change daily. Cheap players score more per million partly because they are cheap.'})}}
+ return out;
+}
+function labHiddenHtml(d){
+ return `<div class="mu" style="font-size:12px;margin-bottom:8px">Patterns in this season's Fantasy Premier League data that totals and tables can hide. Each says what it shows, the baseline, and its limits; none of them shows a cause.</div>`+
+  labHidden(d).map(x=>`<div class="card labhp"><h3>${esc(x.t)}</h3><p class="mu">${esc(x.why)}</p>${x.base?`<p style="font-size:13px">${x.base}</p>`:''}${x.rows.length?tbl(x.head,x.rows):'<div class="empty">No player meets the conditions yet.</div>'}<p class="mu" style="font-size:11px"><b>Limits.</b> <span>${esc(x.lim)}</span></p></div>`).join('');
+}
+
+/* ---------- case file: a recent match the result did not follow the chances ---------- */
+async function labCases(){
+ const sh=await loadSh().catch(()=>null),S=sh?sh.rows:[],tx=wkTeamXg(S),fin=D.matches.filter(m=>wkSc(m.score)&&m.date),last=fin.map(m=>m.date.slice(0,10)).sort().pop();if(!last)return [];
+ const from=new Date(Date.parse(last+'T00:00:00Z')-20*864e5).toISOString().slice(0,10),out=[];
+ fin.filter(m=>m.date.slice(0,10)>=from).forEach(m=>{const g=wkSc(m.score);if(g[0]===g[1])return;const xh=tx.get(m.match_id+'|'+m.home),xa=tx.get(m.match_id+'|'+m.away);if(xh==null||xa==null)return;
+  const w=g[0]>g[1]?'h':'a',xw=w==='h'?xh:xa,xl=w==='h'?xa:xh;if(xl-xw>=.7)out.push({m,g,w,xw,xl,dx:xl-xw,sh:S.filter(s=>s.m===m.match_id)})});
+ return out.sort((a,b)=>b.dx-a.dx||String(b.m.date).localeCompare(String(a.m.date))).slice(0,6);
+}
+const LAB_CASE_OPTS=[['fin','The winners finished their chances better than expected'],['miss','The losers missed big chances'],['set','The winners scored from set pieces or penalties'],['ot','The losers rarely hit the target']];
+function labCaseEvidence(c){
+ const W=c.w==='h'?c.m.home:c.m.away,L=c.w==='h'?c.m.away:c.m.home,gw=c.w==='h'?c.g[0]:c.g[1],gl=c.w==='h'?c.g[1]:c.g[0];
+ const sW=c.sh.filter(s=>s.c===W&&!s.og),sL=c.sh.filter(s=>s.c===L&&!s.og),goal=s=>s.ev==='Goal',ot=s=>!!s.ot;
+ const big=sL.filter(s=>!goal(s)&&s.xg>=.3).sort((a,b)=>b.xg-a.xg),wGoals=sW.filter(goal),setG=wGoals.filter(s=>!['RegularPlay','FastBreak','IndividualPlay'].includes(s.st)),ogs=c.sh.filter(s=>s.og).length;
+ const over=gw-c.xw,under=c.xl-gl,f={fin:over>=1,miss:big.length>=2||(big.length>=1&&big[0].xg>=.5),set:setG.length>0&&setG.length*2>=wGoals.length,ot:sL.length>=6&&sL.filter(ot).length/sL.length<.35};
+ const main=over>=under?'fin':'miss';
+ return {W,L,gw,gl,sW,sL,big,wGoals,setG,ogs,over,under,f,main};
+}
+async function labCase(o){
+ const C=await labCases();if(!C.length)return `<div class="empty">No recent ${esc(D.name)} match in the data where the team with clearly more xG (at least 0.7 more) lost. That is a finding too: recent results have followed the chances.</div>`;
+ const pick=(LAB.case&&C.find(c=>c.m.match_id===LAB.case))||C.find(c=>!o.cases[c.m.match_id])||C[0],c=pick,E=labCaseEvidence(c),A=o.cases[c.m.match_id];
+ const q=`<div class="mu" style="font-size:12px"><span>${esc(D.name)}</span> · <span class="nw">${esc(c.m.date.slice(0,10))}</span> · ${mlink(c.m)}</div><h3><span>Why did</span> <span>${esc(E.L)}</span> <span>lose to</span> <span>${esc(E.W)}</span> <span>despite creating more chances?</span></h3>
+  <p class="mu"><span>xG:</span> <span>${esc(E.L)}</span> <b>${c.xl.toFixed(2)}</b> · <span>${esc(E.W)}</span> <b>${c.xw.toFixed(2)}</b> · <span>Score</span> <b>${esc(c.m.score)}</b></p>`;
+ let body;
+ if(!A)body=`<p>What do you think explains it? Pick one, then see the evidence.</p><div class="labopts">${LAB_CASE_OPTS.map(([k,t])=>`<button class="s" onclick="labCaseAnswer('${esc(c.m.match_id)}','${k}')">${esc(t)}</button>`).join('')}</div>`;
+ else{const sup=Object.keys(E.f).filter(k=>E.f[k]),sh=s=>`${esc(s.pn||'?')} <span class="mu">${s.mn!=null?Math.round(s.mn)+'′':''} · xG ${s.xg.toFixed(2)}${s.st&&s.st!=='RegularPlay'?' · '+esc(SIT[s.st]||s.st):''}</span>`;
+  body=`<p><span>Your answer:</span> <b>${esc((LAB_CASE_OPTS.find(x=>x[0]===A.ans)||['',''])[1])}</b> · ${E.f[A.ans]?'<span class="labst g">supported by the evidence</span>':'<span class="labst x">not supported by the evidence</span>'}</p>
+   <div class="labev"><div><h4>${esc(E.W)}</h4><p><span>Goals</span> <b>${E.gw}</b> <span>from xG</span> <b>${c.xw.toFixed(2)}</b> (${labF(E.over)}) · <span>shots</span> ${E.sW.length}</p>${E.wGoals.length?'<ul>'+E.wGoals.map(s=>'<li>'+sh(s)+'</li>').join('')+'</ul>':''}</div>
+    <div><h4>${esc(E.L)}</h4><p><span>Goals</span> <b>${E.gl}</b> <span>from xG</span> <b>${c.xl.toFixed(2)}</b> (${labF(-E.under)}) · <span>shots</span> ${E.sL.length}</p>${E.big.length?'<div class="mu" style="font-size:12px">Big chances missed (xG ≥ 0.3)</div><ul>'+E.big.slice(0,4).map(s=>'<li>'+sh(s)+'</li>').join('')+'</ul>':''}</div></div>
+   <p><b>Conclusion.</b> ${E.main==='fin'?`<span>The bigger part of the gap is on the winners' side: they scored</span> <b>${E.over.toFixed(1)}</b> <span>goals more than their chances were worth.</span>`:`<span>The bigger part of the gap is on the losers' side: they scored</span> <b>${E.under.toFixed(1)}</b> <span>goals fewer than their chances were worth.</span>`}
+    <span>Supported explanations:</span> ${sup.length?sup.map(k=>'<b>'+esc(LAB_CASE_OPTS.find(x=>x[0]===k)[1])+'</b>').join(' · '):'<span>none clearly; a small xG difference can go either way</span>'}.</p>
+   ${E.ogs?`<p class="mu" style="font-size:12px"><span>Own goals in this match:</span> ${E.ogs} <span>(they count in the score, not in xG).</span></p>`:''}
+   <p class="mu" style="font-size:11px"><b>How the evidence is read.</b> <span>Finishing: the winners scored at least 1 goal more than their xG. Big chances missed: two misses of xG 0.3 or more, or one of 0.5 or more. Set pieces: at least half of the winners' goals came from set pieces or penalties. Shooting: under 35% of the losers' shots (at least 6) were on target. xG is a measure of chance quality, not a verdict on the players.</span></p>`}
+ const others=C.filter(x=>x!==c).map(x=>`<li><a href="javascript:labOpenCase('${esc(x.m.match_id)}')">${esc(x.m.home)} ${esc(x.m.score)} ${esc(x.m.away)}</a> <span class="mu">${esc(x.m.date.slice(0,10))} · xG ${x.xl.toFixed(2)} – ${x.xw.toFixed(2)}</span>${o.cases[x.m.match_id]?' <span class="labst g">done</span>':''}</li>`).join('');
+ return `<div class="card labcase">${q}${body}</div>${others?`<h3>Other recent cases</h3><ul class="labul">${others}</ul>`:''}`;
+}
+function labOpenCase(id){LAB.case=id;route()}
+function labCaseAnswer(id,ans){const o=labRead();if(o.bad)return;if(!o.cases[id]){o.cases[id]={ans,at:new Date().toISOString(),lid:D.id};labWrite(o)}LAB.case=id;route()}
+
+/* ---------- milestones: things you did or measurably achieved; nothing for simply visiting ---------- */
+function labMilestones(o){
+ const ev=o.recs.filter(r=>r.res&&r.res.st==='ok').sort((a,b)=>String(a.res.t).localeCompare(String(b.res.t))),PM=o.recs.filter(r=>r.type==='pts'&&r.res&&r.res.st==='ok'&&r.res.me!=null);
+ const H=o.recs.filter(r=>r.type==='h2h'&&r.res&&r.res.st==='ok').sort((a,b)=>String(a.dl).localeCompare(String(b.dl))),cs=Object.values(o.cases).sort((a,b)=>String(a.at).localeCompare(String(b.at)));
+ const first=[...o.recs].sort((a,b)=>String(a.at).localeCompare(String(b.at)))[0],ins=labInsights(o.recs).find(x=>x.c.state==='established'||x.c.state==='emerging');
+ const beat=PM.length>=20?(()=>{const v=PM.map(r=>r.res.e-r.res.me),m=labMean(v),se=Math.sqrt(labVar(v)/v.length);return m<0&&-m>2*se})():false;
+ const cal=H.length>=20?labMean(H.slice(-10).map(r=>r.res.b))<labMean(H.slice(0,10).map(r=>r.res.b)):false;
+ const L=[['first','First prediction recorded',first&&first.at],['review','First prediction evaluated',ev[0]&&ev[0].res.t],['case','First case file investigated',cs[0]&&cs[0].at],
+  ['e10','10 predictions evaluated',ev[9]&&ev[9].res.t],['e25','25 predictions evaluated',ev[24]&&ev[24].res.t],['e50','50 predictions evaluated',ev[49]&&ev[49].res.t],
+  ['dna','First pattern in your Analytical DNA',ins?'now':null],['cal','Head-to-head Brier score better in your last 10 picks than your first 10',cal?'now':null],
+  ['beat','Closer than the model over at least 20 points predictions (more than two standard errors)',beat?'now':null]];
+ let ch=false;L.forEach(([k,,t])=>{if(t&&!o.ms[k]){o.ms[k]=t==='now'?new Date().toISOString():t;ch=true}});if(ch)labWrite(o);
+ return L.map(([k,t])=>({k,t,at:o.ms[k]||null}));
+}
+function labMsHtml(o){const M=labMilestones(o);
+ return `<h3>Milestones</h3><div class="mu" style="font-size:12px;margin-bottom:6px">Reached by what you did or measurably achieved; there are no streaks and nothing to lose by taking a break.</div><ul class="labms">${M.map(m=>`<li class="${m.at?'on':''}"><span class="labmk">${m.at?'✓':'·'}</span><span>${esc(m.t)}</span>${m.at?` <span class="mu nw">${esc(String(m.at).slice(0,10))}</span>`:''}</li>`).join('')}</ul>`}
+
+/* ---------- the feed: what is new for you, then what is worth a look ---------- */
+async function labFeed(d,o){
+ const S=o.seen||{},since=S.t?Date.parse(S.t):null,items=[],e=labOpen(d),ins=labInsights(o.recs);
+ const card=(k,html)=>items.push(`<div class="card labfeed ${k}">${html}</div>`);
+ if(since){const nev=o.recs.filter(r=>r.res&&r.res.st==='ok'&&Date.parse(r.res.t)>since);
+  if(nev.length)card('new',`<b>${nev.length} <span>predictions evaluated since your last visit</span></b> · <a href="javascript:labTab('review')">Review</a>`);
+  const chg=ins.filter(x=>(x.c.state==='established'||x.c.state==='emerging')&&(S.dna||{})[x.k]!==x.c.state);
+  chg.forEach(x=>card('new',`<b>${esc(LAB_STATE[x.c.state])}:</b> ${esc(x.v)} · <a href="javascript:labTab('dna')">Analytical DNA</a>`));
+  const ms=labMilestones(o).filter(m=>m.at&&Date.parse(m.at)>since);if(ms.length)card('new',`<b>${ms.length>1?'Milestones reached':'Milestone reached'}:</b> `+ms.map(m=>`<span>${esc(m.t)}</span>`).join(' · ')+` · <a href="javascript:labTab('review')">Review and progress</a>`)}
+ if(e){const n=o.recs.filter(r=>r.gw===e.id&&r.season===labSeason(d)).length;
+  card('open',`<b>${esc(e.name)}</b> · <span>Deadline</span> <span class="nw">${esc(new Date(e.dl).toISOString().slice(0,16).replace('T',' '))} UTC</span><br>${n?`<span>Your predictions for this gameweek:</span> <b>${n}</b>`:'<span>You have no predictions for this gameweek yet.</span>'} · <a href="javascript:labTab('arena')">Decision Arena</a>`)}
+ /* leagues you have predicted matches in come first */
+ const lg=[...new Set(o.recs.filter(r=>r.type==='match').map(r=>r.lid))];await fixLoad();
+ [...new Set([...lg,D.id])].slice(0,3).forEach(id=>{const L=(((FIX.d&&FIX.d.leagues)||{})[id]||[]).filter(x=>Date.parse(x.k||x.d)>Date.now()),nm=((ALL.leagues||[]).find(l=>l.id===id)||{}).name;
+  if(L.length)card('open',`<b>${esc(nm||'')}</b> · <span>Next match</span> <span>${esc(L[0].h)}</span> – <span>${esc(L[0].a)}</span> <span class="mu nw">${esc(String(L[0].k||L[0].d).slice(0,16).replace('T',' '))} UTC</span>${id===D.id?` · <a href="javascript:labTab('arena')">Predict it</a>`:''}`)});
+ const C=await labCases().catch(()=>[]),open=C.find(c=>!o.cases[c.m.match_id]);
+ if(open)card('case',`<b>Case file.</b> <span>Why did</span> <span>${esc(open.w==='h'?open.m.away:open.m.home)}</span> <span>lose to</span> <span>${esc(open.w==='h'?open.m.home:open.m.away)}</span> <span>despite creating more chances?</span> · <a href="javascript:labOpenCase('${esc(open.m.match_id)}');labTab('case')">Investigate</a>`);
+ const R=await labDiscCalc().catch(()=>[]);if(R.length>=6&&Math.abs(R[0].gap)>=4)card('disc',`<b>Discovery.</b> ${esc(R[0].t)} ${R[0].gap<0?'<span>have fewer points than their chances were worth</span>':'<span>have more points than their chances were worth</span>'} (${labF(R[0].gap)}) · <a href="javascript:labTab('disc')">Discovery</a>`);
+ const hp=labHidden(d).find(x=>x.rows.length);if(hp)card('disc',`<b>Hidden pattern.</b> <span>${esc(hp.t)}</span> · <a href="javascript:labTab('hidden')">Hidden patterns</a>`);
+ const dev=o.recs.filter(r=>r.res&&r.res.st==='ok').length<20;
+ if(dev)card('tip',`<span>Your Analytical DNA appears after 20 evaluated predictions. Evaluated so far:</span> <b>${o.recs.filter(r=>r.res&&r.res.st==='ok').length}</b>`);
+ /* remember what was shown, so the next visit can say what changed */
+ o.seen={t:new Date().toISOString(),dna:Object.fromEntries(ins.map(x=>[x.k,x.c.state]))};labWrite(o);
+ return (since?'':`<div class="mu" style="font-size:12px;margin-bottom:8px">From your next visit, this page starts with what changed since this one.</div>`)+items.join('');
+}
 """
 
 
@@ -7363,7 +7581,6 @@ _AR_SEASON.update({
     "your mean error": "متوسط خطئك",
     "model's mean error": "متوسط خطأ النموذج",
     "(MAE)": "(متوسط الخطأ المطلق)",
-    "Fewer than 10: too few to compare you with the model.": "أقل من 10: قليلة جداً للمقارنة بينك وبين النموذج.",
     "The difference is within the noise of this sample (less than two standard errors).": "الفرق ضمن تذبذب هذه العينة (أقل من خطأين معياريين).",
     "Over this sample your predictions have been closer to the official points than the model's.": "في هذه العينة كانت توقعاتك أقرب للنقاط الرسمية من توقعات النموذج.",
     "Over this sample the model has been closer to the official points than your predictions.": "في هذه العينة كان النموذج أقرب للنقاط الرسمية من توقعاتك.",
@@ -7474,12 +7691,133 @@ _AR_SEASON.update({
     "That file is not a Lab export.": "هذا الملف مو ملف تصدير من المختبر.",
     "# predictions imported.": "تم استيراد # توقع.",
     "All Lab predictions deleted from this browser.": "انحذفت كل توقعات المختبر من هذا المتصفح.",
-    "The Fantasy Premier League data is not available yet.": "بيانات فانتازي الدوري الإنجليزي غير متوفرة للحين."
+    "The Fantasy Premier League data is not available yet.": "بيانات فانتازي الدوري الإنجليزي غير متوفرة للحين.",
+    "For you": "لك",
+    "Weekly review": "المراجعة الأسبوعية",
+    "Hidden patterns": "أنماط خفية",
+    "Case file": "ملف القضية",
+    "Milestone reached:": "إنجاز جديد:",
+    "Milestones reached:": "إنجازات جديدة:",
+    "You have no predictions for this gameweek yet.": "ما عندك توقعات لهذه الجولة للحين.",
+    "Your predictions for this gameweek:": "توقعاتك لهذه الجولة:",
+    "Next match": "المباراة القادمة",
+    "Predict it": "توقّعها",
+    "Hidden pattern.": "نمط خفي.",
+    "Discovery.": "اكتشاف.",
+    "Case file.": "ملف القضية.",
+    "predictions evaluated since your last visit": "توقع تقيّم من آخر زيارة",
+    "From your next visit, this page starts with what changed since this one.": "من زيارتك الجاية، هذه الصفحة تبدأ باللي تغيّر من هذي الزيارة.",
+    "Your Analytical DNA appears after # evaluated predictions. Evaluated so far:": "بصمتك التحليلية تظهر بعد # توقعاً مقيّماً. المقيّم حتى الآن:",
+    "Who will win?": "مين بيفوز؟",
+    "Match": "المباراة",
+    "Home win": "فوز صاحب الأرض",
+    "Draw": "تعادل",
+    "Away win": "فوز الضيف",
+    "home win": "فوز صاحب الأرض",
+    "away win": "فوز الضيف",
+    "draw": "تعادل",
+    "Locked at kick-off. Your confidence goes to your pick and the rest is split evenly between the other two results; evaluated with the Brier score for three outcomes (# is perfect, # is the worst), next to the site's xG model.": "يُقفل مع بداية المباراة. ثقتك تروح لاختيارك، والباقي يتقسّم بالتساوي على النتيجتين الثانيتين؛ يُقيَّم بمقياس Brier لثلاث نتائج (# مثالي، # الأسوأ)، جنب نموذج xG الخاص بالموقع.",
+    "No # fixtures in the next # days in the data.": "ما فيه مباريات في البيانات خلال الأيام الـ# القادمة.",
+    "Choose a match from the list.": "اختر مباراة من القائمة.",
+    "This match has kicked off: predictions are closed.": "المباراة بدأت: التوقعات مقفلة.",
+    "You already have a prediction for this match.": "عندك توقع لهذه المباراة.",
+    "Locked, waiting for the result": "مقفل، بانتظار النتيجة",
+    "Match results:": "نتائج المباريات:",
+    "three outcomes: # is perfect, # is the worst; one-third each scores #": "ثلاث نتائج: # مثالي، # الأسوأ؛ الثلث لكل نتيجة يعطي #",
+    "On the same matches, the xG model's Brier score:": "في نفس المباريات، درجة Brier لنموذج xG:",
+    "Over these matches your probabilities scored better than the model's.": "في هذه المباريات كانت احتمالاتك أفضل من احتمالات النموذج.",
+    "Over these matches the model's probabilities scored better than yours.": "في هذه المباريات كانت احتمالات النموذج أفضل من احتمالاتك.",
+    "Milestones": "الإنجازات",
+    "Reached by what you did or measurably achieved; there are no streaks and nothing to lose by taking a break.": "تتحقق باللي سويته أو حققته فعلاً بالأرقام؛ ما فيه سلاسل متتالية، وما تخسر شي لو أخذت استراحة.",
+    "First prediction recorded": "أول توقع مسجّل",
+    "First prediction evaluated": "أول توقع مقيّم",
+    "First case file investigated": "أول ملف قضية حللته",
+    "# predictions evaluated": "# توقع مقيّم",
+    "First pattern in your Analytical DNA": "أول نمط في بصمتك التحليلية",
+    "Head-to-head Brier score better in your last # picks than your first #": "درجة Brier في المواجهات أفضل في آخر # اختيارات من أول #",
+    "Closer than the model over at least # points predictions (more than two standard errors)": "أقرب من النموذج في # توقع نقاط على الأقل (بأكثر من خطأين معياريين)",
+    "Points predictions:": "توقعات النقاط:",
+    "Most informative success.": "أكثر نجاح مفيد.",
+    "Most informative mistake.": "أكثر خطأ مفيد.",
+    "your error": "خطؤك",
+    "model's error": "خطأ النموذج",
+    "This week in the data": "هذا الأسبوع في البيانات",
+    "No gameweek has finished yet this season.": "ما انتهت أي جولة للحين هذا الموسم.",
+    "None of your predictions were evaluated in this gameweek, so there is no personal review this week.": "ما تقيّم أي توقع لك في هذه الجولة، فما فيه مراجعة شخصية هذا الأسبوع.",
+    "Record a prediction": "سجّل توقعاً",
+    "for the next gameweek to get one.": "للجولة القادمة عشان تحصل على مراجعة.",
+    "Your error minus the model's this week:": "خطؤك ناقص خطأ النموذج هذا الأسبوع:",
+    "in earlier weeks:": "في الأسابيع السابقة:",
+    "(lower is better; one week is a small sample)": "(الأقل أفضل؛ أسبوع واحد عينة صغيرة)",
+    "Analytical DNA.": "بصمتك التحليلية.",
+    "Patterns in this season's Fantasy Premier League data that totals and tables can hide. Each says what it shows, the baseline, and its limits; none of them shows a cause.": "أنماط في بيانات فانتازي الدوري الإنجليزي هذا الموسم ممكن تخفيها المجاميع والجداول. كل نمط يوضح وش يبيّن، والمرجع، وحدوده؛ وما فيها شي يثبت السبب.",
+    "Strong per # minutes, limited minutes": "قوي لكل # دقيقة، بدقائق قليلة",
+    "Season totals reward minutes. These midfielders and forwards produce chances at a high rate when they play, but have played little, so their totals hide it.": "مجاميع الموسم تكافئ الدقائق. لاعبو الوسط والهجوم هؤلاء يصنعون فرصاً بمعدل عالٍ لما يلعبون، لكنهم لعبوا قليلاً، فمجاميعهم تخفي هذا.",
+    "Midfielders and forwards with at least #% of the minutes:": "لاعبو الوسط والهجوم اللي لعبوا #% من الدقائق على الأقل:",
+    "median xG + xA per #": "وسيط xG + xA لكل # دقيقة",
+    "xG + xA per #": "xG + xA لكل # دقيقة",
+    "xG + xA": "xG + xA",
+    "Minutes": "الدقائق",
+    "FPL points": "نقاط الفانتازي",
+    "Limits.": "الحدود.",
+    "Goals against the quality of chances": "الأهداف مقابل جودة الفرص",
+    "xG measures how good the chances were; goals measure how many went in. A large gap over a few matches says more about this season's finishing (and goalkeeping) than about chance quality.": "xG يقيس جودة الفرص؛ والأهداف تقيس كم منها دخل. الفرق الكبير خلال مباريات قليلة يقول عن إنهاء الهجمات (وأداء الحراس) هذا الموسم أكثر مما يقول عن جودة الفرص.",
+    "Players with at least # xG:": "اللاعبون اللي عندهم # xG على الأقل:",
+    "Goals − xG": "الأهداف − xG",
+    "Some players do finish better than average over many seasons, but over a few matches large gaps are mostly noise. This shows a difference, not its cause.": "بعض اللاعبين فعلاً ينهون الهجمات أفضل من المتوسط على مدى مواسم، لكن خلال مباريات قليلة الفروق الكبيرة غالباً تذبذب. هذا يبيّن فرقاً، مو سببه.",
+    "Possibly undervalued for Gameweek #": "ممكن تكون قيمتهم أعلى من سعرهم في الجولة #",
+    "Predicted points per £#m from the site's model for the next gameweek, among players who start regularly and have no availability flag, owned by fewer than #% of managers.": "النقاط المتوقعة لكل #م£ من نموذج الموقع للجولة القادمة، بين اللاعبين اللي يبدؤون بانتظام وما عليهم تنبيه جاهزية، ويملكهم أقل من #% من المدربين.",
+    "All such regular starters:": "كل هؤلاء الأساسيين:",
+    "predicted points per £#m": "نقطة متوقعة لكل #م£",
+    "Predicted points": "النقاط المتوقعة",
+    "Per £#m": "لكل #م£",
+    "Owned by": "نسبة الامتلاك",
+    "Price": "السعر",
+    "A one-gameweek model prediction, not official points; prices and ownership change daily. Cheap players score more per million partly because they are cheap.": "توقع النموذج لجولة وحدة، مو نقاط رسمية؛ الأسعار ونسب الامتلاك تتغير يومياً. اللاعبون الرخيصون يجيبون نقاطاً أكثر لكل مليون جزئياً لأنهم رخيصون.",
+    "No player meets the conditions yet.": "ما فيه لاعب يحقق الشروط للحين.",
+    "Why did": "ليش",
+    "lose to": "خسر قدام",
+    "despite creating more chances?": "مع إنه صنع فرصاً أكثر؟",
+    "xG:": "xG:",
+    "Score": "النتيجة",
+    "What do you think explains it? Pick one, then see the evidence.": "وش تتوقع السبب؟ اختر واحداً، وبعدها شوف الأدلة.",
+    "The winners finished their chances better than expected": "الفائز أنهى فرصه أفضل من المتوقع",
+    "The losers missed big chances": "الخاسر أضاع فرصاً كبيرة",
+    "The winners scored from set pieces or penalties": "الفائز سجّل من كرات ثابتة أو ركلات جزاء",
+    "The losers rarely hit the target": "الخاسر نادراً ما سدد على المرمى",
+    "Your answer:": "إجابتك:",
+    "supported by the evidence": "تدعمها الأدلة",
+    "not supported by the evidence": "ما تدعمها الأدلة",
+    "from xG": "من xG",
+    "shots": "تسديدة",
+    "Big chances missed (xG ≥ #)": "فرص كبيرة ضائعة (xG ≥ #)",
+    "Conclusion.": "الخلاصة.",
+    "The bigger part of the gap is on the winners' side: they scored": "الجزء الأكبر من الفرق عند الفائز: سجّل",
+    "goals more than their chances were worth.": "أهداف أكثر مما تستحقه فرصه.",
+    "The bigger part of the gap is on the losers' side: they scored": "الجزء الأكبر من الفرق عند الخاسر: سجّل",
+    "goals fewer than their chances were worth.": "أهداف أقل مما تستحقه فرصه.",
+    "Supported explanations:": "التفسيرات المدعومة:",
+    "none clearly; a small xG difference can go either way": "ولا وحد بوضوح؛ فرق xG الصغير ممكن يروح لأي جهة",
+    "Own goals in this match:": "الأهداف العكسية في هذه المباراة:",
+    "(they count in the score, not in xG).": "(تُحسب في النتيجة، وما تدخل في xG).",
+    "How the evidence is read.": "كيف نقرأ الأدلة.",
+    "Finishing: the winners scored at least # goal more than their xG. Big chances missed: two misses of xG # or more, or one of # or more. Set pieces: at least half of the winners' goals came from set pieces or penalties. Shooting: under #% of the losers' shots (at least #) were on target. xG is a measure of chance quality, not a verdict on the players.": "الإنهاء: الفائز سجّل # هدف على الأقل أكثر من xG حقه. الفرص الكبيرة الضائعة: فرصتان بـxG # أو أكثر، أو فرصة وحدة بـ# أو أكثر. الكرات الثابتة: نصف أهداف الفائز على الأقل من كرات ثابتة أو ركلات جزاء. التسديد: أقل من #% من تسديدات الخاسر (# على الأقل) كانت على المرمى. xG مقياس لجودة الفرص، مو حكم على اللاعبين.",
+    "Other recent cases": "قضايا حديثة أخرى",
+    "done": "تم",
+    "No recent # match in the data where the team with clearly more xG (at least # more) lost. That is a finding too: recent results have followed the chances.": "ما فيه مباراة حديثة في البيانات خسر فيها الفريق اللي عنده xG أكثر بوضوح (# على الأقل). وهذا بحد ذاته نتيجة: النتائج الأخيرة مشت مع الفرص.",
+    "Few minutes make a figure per # minutes noisy, and minutes off the bench can come against tired defences; the rate may not hold with more playing time.": "الدقائق القليلة تخلي الرقم لكل # دقيقة متذبذباً، ودقائق البديل ممكن تجي ضد دفاعات تعبانة؛ المعدل ممكن ما يستمر مع دقائق أكثر.",
+    "Fewer than #: too few to compare you with the model.": "أقل من #: قليلة جداً للمقارنة بينك وبين النموذج.",
+    "Investigate": "حلّلها"
 })
 
 
 INDEX = _x_lab_index(INDEX)
 # ======================== نهاية إضافة Intelligence Lab ========================
+
+
+
+
+
 
 
 
