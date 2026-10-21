@@ -8981,7 +8981,7 @@ INDEX = _x_fpx_index(INDEX)
 # الكود في ملفات مستقلة في المستودع: assets/threat-map.js و assets/match-whatif.js و assets/features.css.
 # هذا القسم يضيف روابطها للصفحة فقط (بعد السكربت الرئيسي، فتلقى R و PAGES جاهزة). غيّر FEATURES_V لما تتغير الملفات.
 # ============================================================================
-FEATURES_V = "2"
+FEATURES_V = "3"
 
 
 def _x_feat_index(html):
@@ -9003,6 +9003,8 @@ def _x_feat_index(html):
 
 INDEX = _x_feat_index(INDEX)
 # ======================== نهاية إضافة ملفات الميزات ========================
+
+
 
 
 
