@@ -7962,7 +7962,7 @@ function favSkip(){const o=favRead();o.skip[D.id]=1;favWrite(o);const c=document
 function favColors(on){const o=favRead();o.colors=!!on;favWrite(o);applyTheme(null)}
 async function favCard(){
  const app=document.getElementById('app');if(!app||uiPage()!=='overview'||document.getElementById('favcard'))return;const h2=app.querySelector('h2');if(!h2)return;
- const o=favRead(),fv=favOf(),box=document.createElement('div');box.id='favcard';box.className='card favcard';h2.after(box);
+ const o=favRead(),fv=favOf(),box=document.createElement('div');box.id='favcard';box.className='card favcard';(app.querySelector('#home .hhero-s')||h2).after(box);
  if(!fv){if(o.skip[D.id]){box.remove();return}
   box.innerHTML=`<b>Which team do you support?</b> <span class="mu">Its page comes first here, its row stands out in tables, and the site can take its colours.</span>
    <div class="ctl" style="margin-top:8px"><select id="favpick" aria-label="Your team"><option value="">Choose a team</option>${favTeams().map(t=>`<option>${esc(t)}</option>`).join('')}</select>
@@ -8058,6 +8058,457 @@ _AR_SEASON.update({
 
 INDEX = _x_ui_index(INDEX)
 # ======================== نهاية إضافة الواجهة ========================
+
+# ============================================================================
+# إضافة: الصفحة الرئيسية الذكية — اكتشاف الجولة، نجوم الجولة، قوة الأندية، من الأفضل؟، رادار الفانتازي، ترتيبات سريعة، ومركز الإحصائيات.
+# المزامنة تضيف شي واحد فقط: رابط صورة كل لاعب من PitchAPI (players.get، مربوط برقم اللاعب نفسه)، في ملف صغير لكل دوري.
+# الصفحة تعرض الصورة فقط إذا تأكدت المزامنة إن الصور تنفتح بدون مفتاح؛ وإلا تعرض الحروف الأولى وشعار النادي.
+# ============================================================================
+PHOTO_PER_RUN = 60                # أقصى عدد لاعبين نطلب صورهم في المزامنة الوحدة (لكل الدوريات)
+PHOTO_RETRY_H = 24
+PHOTO_MIN_MIN = 270               # لاعبون لعبوا 270 دقيقة على الأقل (اللي ممكن يظهرون في البطاقات)
+PHOTO_INDEX = {}
+_PHOTO_READ = []
+
+
+def _photo_public(url):
+    """هل تنفتح الصورة بدون أي مفتاح؟ (المتصفح ما يرسل المفتاح، فهذا هو اللي يهم)"""
+    try:
+        r = requests.get(url, timeout=20)
+        ct = (r.headers.get("content-type") or "").split(";")[0].strip().lower()
+        return r.status_code == 200 and ct.startswith("image/") and len(r.content) > 0
+    except Exception:
+        return False
+
+
+def sync_photos(client, hub, lids):
+    _photo_index_all(hub)          # الدوريات اللي ما يجي دورها في هذي المزامنة تبقى في القائمة
+    budget = PHOTO_PER_RUN
+    t_now = datetime.datetime.now(datetime.timezone.utc)
+    public = None
+    for lid in lids:
+        fn = f"data/photos_{safe_name(lid)}.json"
+        old = gh_get_json(hub, fn) or {}
+        P, fail = dict(old.get("p") or {}), dict(old.get("fail") or {})
+        rows = q("SELECT player_id AS i, SUM(minutes) AS mi FROM pl_adv WHERE league_id=? AND player_id IS NOT NULL GROUP BY player_id", (lid,))
+        want = [r["i"] for r in sorted(rows, key=lambda r: -(r["mi"] or 0)) if (r["mi"] or 0) >= PHOTO_MIN_MIN]
+        def due(pid):
+            if pid in P:
+                return False
+            last = _parse_ts((fail.get(pid) or {}).get("t"))
+            return last is None or (t_now - last).total_seconds() > PHOTO_RETRY_H * 3600
+        todo = [p for p in want if due(p)][:max(0, budget)]
+        got = 0
+        for pid in todo:
+            res, err = call(client.players.get, pid)
+            url = getattr(res, "image_url", None) if res is not None else None
+            if url:
+                P[pid] = url
+                fail.pop(pid, None)
+                got += 1
+            else:
+                fail[pid] = dict(t=now(), why=err or "no image")
+            time.sleep(REQUEST_DELAY)
+        budget -= len(todo)
+        pub = old.get("public")
+        if P and (pub is None or todo):
+            if public is None:
+                public = _photo_public(next(iter(P.values())))
+            pub = public
+        if todo or pub != old.get("public"):
+            gh_put(hub, fn, json.dumps(dict(public=pub, p=P, fail=fail), ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
+                   f"Update player photos ({lid})")
+            log(f"  [Photos] {lid}: {got} صورة جديدة من {len(todo)} طلب، المجموع {len(P)}، تنفتح بدون مفتاح: {pub}")
+        if P:
+            PHOTO_INDEX[lid] = dict(photo_file=fn[5:], photo_v=hashlib.sha1(json.dumps([pub, sorted(P.items())]).encode()).hexdigest()[:10])
+        if budget <= 0:
+            break
+    man = {k: v for k, v in PHOTO_INDEX.items()}
+    if man and man != (gh_get_json(hub, "data/photos_index.json") or {}):
+        gh_put(hub, "data/photos_index.json", json.dumps(man, ensure_ascii=False, indent=1).encode("utf-8"), "Update player photo index")
+
+
+def _photo_index_all(hub):
+    """مرة في كل مزامنة: الدوريات اللي لها صور محفوظة تبقى في الفهرس من أول نشر."""
+    if _PHOTO_READ:
+        return
+    _PHOTO_READ.append(1)
+    for lid, v in (gh_get_json(hub, "data/photos_index.json") or {}).items():
+        if lid not in PHOTO_INDEX and (v or {}).get("photo_file"):
+            PHOTO_INDEX[lid] = v
+
+
+_orig_gh_put_photo = gh_put
+
+
+def gh_put(hub, path, content, message):
+    if path == "data/index.json":
+        try:
+            _photo_index_all(hub)   # الصور تُجلب بعد آخر نشر في المزامنة، فتدخل الفهرس من أول نشر في المزامنة التالية
+        except Exception as e:
+            log(f"  [Photos] تعذر قراءة الفهرس ({type(e).__name__}: {e})")
+        if PHOTO_INDEX:
+            try:
+                d = json.loads(content.decode("utf-8"))
+                for lg in d.get("leagues", []):
+                    lg.update(PHOTO_INDEX.get(lg["id"], {}))
+                content = json.dumps(d, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+            except Exception as e:
+                log(f"  تنبيه: ما قدرت أضيف الصور للفهرس: {e}")
+    return _orig_gh_put_photo(hub, path, content, message)
+
+
+_orig_run_pipeline_photo = run_pipeline
+
+
+def run_pipeline(hub, pit_key):
+    out = _orig_run_pipeline_photo(hub, pit_key)
+    lids = list((globals().get("_LOGO_REFS") or {}).keys())
+    try:
+        with PitchAPI(api_key=pit_key) as client:
+            sync_photos(client, hub, lids)
+    except Exception as e:      # الصور اختيارية: ما توقف المزامنة
+        log(f"  [Photos] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
+    return out
+
+
+_X_HOMECSS = "#home{display:flex;flex-direction:column;gap:22px;margin:6px 0 26px}.hsec{display:flex;flex-direction:column;gap:10px}.hhd{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap}.hhd h2{margin:0}.hhd>.mu{font-size:12px}.hhold{margin-top:6px;padding-top:16px;border-top:1px solid var(--glass-bd)}.hcard{display:block;position:relative;padding:14px 16px;border-radius:16px;border:1px solid var(--glass-bd);background:linear-gradient(180deg,var(--glass-hl),rgba(255,255,255,.01) 45%),var(--glass);box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 8px 22px rgba(0,0,0,.16);color:var(--tx);text-decoration:none;transition:border-color .2s,transform .2s}a.hcard:hover{border-color:var(--th-bd);transform:translateY(-1px)}a.hcard:focus-visible{outline:2px solid var(--th-hi);outline-offset:2px}.hgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:12px}.hk{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--th-link)}.hbig{font-size:30px;line-height:1.1;font-variant-numeric:tabular-nums}.hnote{font-size:11px;margin:4px 0 0}.hsub{font-size:12px;margin:2px 0 8px}.hhero{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:12px}.hmain{display:flex;gap:16px;align-items:flex-start;padding:18px 20px;background:linear-gradient(135deg,var(--th-soft),rgba(255,255,255,.02) 60%),var(--glass);border-color:var(--th-bd)}.hmain h3{margin:6px 0 8px;font-size:19px;line-height:1.35}.hmain p{margin:6px 0}.hmain>div{min-width:0}.hmain>img.clogo{width:48px;height:48px;flex:none}.hmore{display:flex;flex-direction:column;gap:12px}.hside h3{margin:6px 0;font-size:15px;line-height:1.35}.hside p{margin:4px 0;font-size:13px}.hside .hbig{font-size:22px}.hmcol{display:flex;flex-direction:column;gap:8px;min-width:0}.hwhy{font-size:12px}.hwhy summary{cursor:pointer;color:var(--mu)}.hwhy p{margin:6px 0 0}.hav{position:relative;flex:none;display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--cl1,var(--sf)) 0 50%,var(--cl2,var(--ln)) 50% 100%);box-shadow:0 0 0 2px rgba(255,255,255,.12);overflow:visible}.hav.big{width:64px;height:64px}.hav b{font-size:14px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.7);letter-spacing:.02em}.hav.big b{font-size:19px}.hav .hph{position:absolute;inset:0;width:100%;height:100%;border-radius:50%;object-fit:cover;object-position:50% 15%;background:var(--sf)}.hav .hcr{position:absolute;right:-4px;bottom:-4px;width:40%;height:40%;object-fit:contain;padding:2px;border-radius:50%;background:rgba(255,255,255,.95);box-shadow:0 1px 4px rgba(0,0,0,.35)}html[dir=rtl] .hav .hcr{right:auto;left:-4px}.hstar{display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-areas:'av tx' 'nm nm' 'cp cp';gap:10px 12px;align-items:center}.hstar .hav{grid-area:av}.hst{grid-area:tx;min-width:0}.hnum{grid-area:nm;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}.hnum b{font-size:32px;line-height:1;font-variant-numeric:tabular-nums}.hnum span{font-size:12px}.hcmp{grid-area:cp;font-size:11.5px}.hnm{font-weight:700;font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.hcl{display:flex;align-items:center;gap:4px;font-size:12px}.hcl .clogo{margin:0}.hcl2{font-weight:700;margin:4px 0 8px}.hbars,.hlist,.hrank{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}.hbars li{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) auto;gap:8px;align-items:center;font-size:13px}.hbars a{display:flex;align-items:center;min-width:0;color:var(--tx);text-decoration:none}.hbn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.hbar{height:8px;border-radius:4px;background:rgba(255,255,255,.07);overflow:hidden}.hbar i{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,var(--cl1,var(--th-hi)),var(--cl2,var(--th-hi)))}.hbars b,.hlist b{font-variant-numeric:tabular-nums;font-size:13px}.hlist li{display:flex;justify-content:space-between;gap:8px;align-items:baseline;font-size:13px;padding-bottom:6px;border-bottom:1px solid var(--glass-bd)}.hlist li:last-child{border:0}.htag{display:inline-block;padding:1px 7px;border-radius:999px;font-size:10px;letter-spacing:.05em}.htag.act{background:rgba(76,195,138,.16);color:var(--g)}.htag.pred{background:rgba(233,180,76,.16);color:var(--a)}.hvc{padding:16px}.hvsel{gap:8px}.hvsel select{flex:1;min-width:0;max-width:none}.hvs{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:10px;align-items:center;margin:10px 0}.hvh{display:flex;gap:10px;align-items:center;min-width:0}.hvh>div{min-width:0}.hvh a{color:var(--tx);text-decoration:none}.hvh.r{flex-direction:row-reverse;text-align:end}.hvvs{font-weight:800;color:var(--mu)}.hrows{display:flex;flex-direction:column;gap:6px;margin:8px 0}.hrow{display:grid;grid-template-columns:44px minmax(0,1fr) minmax(90px,auto) minmax(0,1fr) 44px;gap:8px;align-items:center;font-size:12.5px}.hrow>b{font-variant-numeric:tabular-nums;color:var(--mu)}.hrow>b.win{color:var(--tx)}.hrow>b:last-child{text-align:end}.hlab{text-align:center;color:var(--mu)}.hbx{height:8px;border-radius:4px;background:rgba(255,255,255,.06);overflow:hidden;display:flex}.hbx.l{justify-content:flex-end}.hbx i{display:block;height:100%;background:var(--th-hi);border-radius:4px}.hchips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}.hchips button{min-height:32px;padding:5px 11px;font-size:12px}.hrank li{display:grid;grid-template-columns:22px auto minmax(0,1fr) auto 56px;gap:10px;align-items:center}.hrn{font-weight:800;color:var(--mu);text-align:center}.hrp{display:flex;flex-direction:column;min-width:0;color:var(--tx);text-decoration:none}.hrp b,.hrp span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.hrp span{font-size:12px}.hrv{font-size:17px;font-variant-numeric:tabular-nums}.hrg{font-size:11px;text-align:end}.hfull{margin-top:10px}.hfull summary{cursor:pointer;color:var(--th-link);font-size:13px}.hhub{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));gap:10px}.hhb{display:flex;flex-direction:column;gap:4px;padding:12px 14px}.hhb span{font-size:12px}@media(max-width:760px){.hhero{grid-template-columns:1fr}.hmain{padding:16px}.hmain h3{font-size:17px}.hbig{font-size:26px}.hav.big{width:56px;height:56px} .hrow{grid-template-columns:38px minmax(0,1fr) minmax(70px,auto) minmax(0,1fr) 38px;font-size:11.5px}.hrank li{grid-template-columns:20px auto minmax(0,1fr) auto 46px;gap:8px}.hvh,.hvh.r{flex-direction:column;text-align:center;gap:6px}.hvh .hcl{justify-content:center;flex-wrap:wrap}.hlab{font-size:11px;line-height:1.25}}@media(prefers-reduced-motion:reduce){.hcard{transition:none}a.hcard:hover{transform:none}}@media(max-width:420px){#lgpick{max-width:136px!important;text-overflow:ellipsis}}"
+_X_HOMEJS = r"""/* ===== Home: the overview tells the season's stories =====
+   Sections, in order: discovery of the round, stars of the round, club power, who is better?, Fantasy radar (Premier League),
+   quick rankings, and the way into every detailed page. The overview's existing content stays below, unchanged.
+   Data: the league file and shots already loaded, and the per-match player file (loadPl, the same one the Comparison Lab
+   and Defensive pages use); every per-90 value comes from aggPl, so the numbers match those pages. Fantasy data is loaded
+   only when its section scrolls into view. Player photos come from PitchAPI (by the player's own id) and are shown only
+   when the sync found them reachable without a key; otherwise the player's initials on his club colours.
+   How cards are chosen (HOME_RULES below, editable): interest = how far the value stands from the field, in standard
+   deviations (at most 4) × reliability (enough minutes) × a weight per kind of story. It ranks stories; it is not a fact
+   about football. Positions are not in the data, so nothing here compares by position; goalkeepers (players with xG faced)
+   are left out. */
+const HOME_RULES={
+ minMin:450,        /* season minutes for per-90 values */
+ roundMin:60,       /* minutes in the round to appear in its rankings */
+ roundDays:7,       /* the round = the last match day and the 6 days before it */
+ weight:{hidden:1,rise:.9,luck:1,mover:.8},
+ /* the statistics the home page uses: id in the player file, label, how to read it, group (one card per group at most) */
+ metrics:[
+  {k:'npxg',l:'Non-penalty xG',g:'shoot',f:a=>a.p90('npxg'),sum:r=>r.npxg},
+  {k:'xt',l:'Expected threat (xT)',g:'threat',f:a=>a.p90('xt'),sum:r=>r.xt},
+  {k:'sca',l:'Shot-creating actions',g:'create',f:a=>a.p90('sca'),sum:r=>r.sca},
+  {k:'xag',l:'Expected assists (xAG)',g:'create',f:a=>a.p90('xag'),sum:r=>r.xag},
+  {k:'tkw',l:'Successful take-ons',g:'dribble',f:a=>a.p90('tkw'),sum:r=>r.tkw},
+  {k:'pc',l:'Progressive carries',g:'carry',f:a=>a.p90('pc'),sum:r=>r.pc},
+  {k:'tkic',l:'Tackles + interceptions',g:'defend',f:a=>a.has('tk')&&a.has('ic')?a.p90('tk')+a.p90('ic'):null,sum:r=>r.tk==null||r.ic==null?null:r.tk+r.ic}]};
+const HOME={id:null,ver:null,c:null,ph:null};
+const hMean=a=>a.reduce((s,x)=>s+x,0)/(a.length||1),hSd=a=>{const m=hMean(a);return Math.sqrt(hMean(a.map(x=>(x-m)*(x-m))))||1};
+const hF=(v,d=2)=>v==null||!isFinite(v)?'N/A':(+v).toFixed(d);
+const hPl=(id,club)=>'#/player/'+encodeURIComponent(id+'||'+club);
+const hIni=n=>String(n||'?').split(/\s+/).filter(Boolean).map(w=>w[0]).slice(0,2).join('').toUpperCase();
+function hAvatar(id,name,club,big){
+ const d=HOME.ph,u=d&&d.public&&d.p&&d.p[id],lg=logoOf(club);
+ return `<span class="hav${big?' big':''}" style="${clubVars(club)}" aria-hidden="true"><b>${esc(hIni(name))}</b>${u?`<img class="hph" src="${esc(u)}" alt="" loading="lazy" decoding="async" onerror="this.remove()">`:''}${lg?`<img class="hcr" src="${lg}" alt="">`:''}</span>`;
+}
+const hCrest=c=>{const s=logoOf(c);return s?`<img class="clogo" src="${s}" alt="" aria-hidden="true" loading="lazy">`:clubDot(c)};
+/* the overview and the home ask for the shots file at the same moment; loadSh caches only once the file has arrived,
+   so both downloaded it: calls made while it is on its way now share the one download (per league) */
+{const _ls=loadSh;let pend=null;loadSh=function(){if(SHD)return Promise.resolve(SHD);if(!pend||pend.id!==D.id){const p=_ls();p.id=D.id;pend=p;p.then(()=>{if(pend===p)pend=null},()=>{if(pend===p)pend=null})}return pend}}
+async function homePhotos(){const m=lgMeta();if(!m.photo_file)return null;try{const r=await fetch('data/'+m.photo_file+'?v='+encodeURIComponent(m.photo_v||''));return r.ok?await r.json():null}catch(e){return null}}
+
+/* ---------- everything the cards need, computed once per league and data version ---------- */
+async function homeData(){
+ const ver=(lgMeta().pl_v||'')+'|'+(ALL.generated||'');
+ if(HOME.id===D.id&&HOME.ver===ver&&HOME.c)return HOME.c;
+ const [P,sh,ph]=await Promise.all([loadPl().catch(()=>null),loadSh().catch(()=>null),homePhotos(),champReady().catch(()=>null)]);
+ HOME.ph=ph;
+ const fin=D.matches.filter(m=>wkSc(m.score)&&m.date),last=fin.map(m=>m.date.slice(0,10)).sort().pop();
+ const c={fin,last,P,tx:wkTeamXg(sh?sh.rows:[])};
+ if(last){c.from=new Date(Date.parse(last+'T00:00:00Z')-(HOME_RULES.roundDays-1)*864e5).toISOString().slice(0,10);c.round=fin.filter(m=>m.date.slice(0,10)>=c.from)}
+ const gk=new Set(agg().filter(p=>p.xgf!=null).map(p=>p.player_id||p.key));c.gk=gk;
+ if(P&&P.rows.length){
+  c.ag=aggPl(P).filter(a=>!gk.has(a.id));c.q=c.ag.filter(a=>a.s.mi>=HOME_RULES.minMin);
+  /* the round, from the same per-match rows */
+  const inR=new Set((c.round||[]).map(m=>m.match_id)),ix=P.ix,R=new Map();
+  P.rows.forEach(r=>{if(!inR.has(r[ix.m])||r[ix.mi]==null||gk.has(r[ix.i]))return;let o=R.get(r[ix.i]);if(!o){o={id:r[ix.i],n:r[ix.n],club:r[ix.c],mi:0,games:0,v:{}};R.set(r[ix.i],o)}
+   o.mi+=r[ix.mi];o.games++;HOME_RULES.metrics.forEach(M=>{const row={};['npxg','xt','sca','xag','tkw','pc','tk','ic'].forEach(k=>row[k]=r[ix[k]]);const v=M.sum(row);if(v!=null)o.v[M.k]=(o.v[M.k]||0)+v})});
+  c.rp=[...R.values()].filter(o=>o.mi>=HOME_RULES.roundMin);
+  /* per-match rows by date, for "on the rise" */
+  const date=new Map(fin.map(m=>[m.match_id,m.date])),byP=new Map();
+  P.rows.forEach(r=>{if(r[ix.mi]==null||gk.has(r[ix.i])||!date.has(r[ix.m]))return;if(!byP.has(r[ix.i]))byP.set(r[ix.i],[]);byP.get(r[ix.i]).push({d:date.get(r[ix.m]),mi:r[ix.mi],v:(r[ix.npxg]||0)+(r[ix.xag]||0),ok:r[ix.npxg]!=null&&r[ix.xag]!=null})});
+  c.byP=byP;
+  c.tc=teamCtx(P,null);
+ }
+ HOME.id=D.id;HOME.ver=ver;HOME.c=c;return c;
+}
+
+/* ---------- 1. discovery of the round: the strongest story, and two more ---------- */
+function homeStories(c){
+ const W=HOME_RULES.weight,out=[],rel=mi=>Math.min(1,mi/(2*HOME_RULES.minMin));
+ /* a creator the scoresheet does not show: top 5 in a creative or threat measure, at most one goal or assist */
+ if(c.q&&c.q.length>20)['sca','xag','xt','pc','tkw'].forEach(k=>{const M=HOME_RULES.metrics.find(m=>m.k===k),vs=c.q.map(a=>[a,M.f(a)]).filter(x=>x[1]!=null),arr=vs.map(x=>x[1]),mu=hMean(arr),sd=hSd(arr);
+  vs.sort((x,y)=>y[1]-x[1]).slice(0,5).forEach(([a,v],i)=>{const ga=(a.s.gl||0)+(a.s.ast||0);if(ga>1)return;const z=(v-mu)/sd;
+   out.push({t:'hidden',z,rel:rel(a.s.mi),a,club:a.club,html:`<div class="hk">Hidden in the numbers</div><h3><b>${esc(a.n)}</b> <span>is number ${i+1} in the league for</span> <span>${esc(M.l)}</span> <span>per 90, with ${ga} ${ga===1?'goal or assist':'goals or assists'}</span></h3>
+    <p><b class="hbig">${hF(v)}</b> <span>${esc(M.l)}</span> <span class="mu">per 90 · league average ${hF(mu)} · ${Math.round(a.s.mi)} minutes</span></p><p class="mu"><span>Goals and assists miss what this player does before the shot.</span> <span>Season so far, players with ${HOME_RULES.minMin}+ minutes.</span></p>`,link:hPl(a.id,a.club)})})});
+ /* on the rise: xG + xAG per 90 in the last 3 matches against the matches before */
+ if(c.byP){const D2=[];c.byP.forEach((L,id)=>{L.sort((x,y)=>String(x.d).localeCompare(String(y.d)));const r3=L.slice(-3),pre=L.slice(0,-3),m3=r3.reduce((s,x)=>s+x.mi,0),mp=pre.reduce((s,x)=>s+x.mi,0);
+   if(r3.length<3||m3<180||mp<HOME_RULES.minMin||!r3.every(x=>x.ok))return;const a=r3.reduce((s,x)=>s+x.v,0)/m3*90,b=pre.reduce((s,x)=>s+x.v,0)/mp*90;D2.push({id,a,b,d:a-b,m3,mp,r3})});
+  if(D2.length>15){const sd=hSd(D2.map(x=>x.d)),top=D2.sort((x,y)=>y.d-x.d)[0],ag=(c.ag||[]).find(x=>x.id===top.id);
+   if(ag&&top.d>0)out.push({t:'rise',z:top.d/sd,rel:Math.min(1,top.m3/270),a:ag,club:ag.club,html:`<div class="hk">On the rise</div><h3><b>${esc(ag.n)}</b> <span>expected goal involvement up from ${hF(top.b)} to ${hF(top.a)} per 90</span></h3>
+    <p class="mu"><span>xG without penalties + expected assists (xAG), last 3 matches (${Math.round(top.m3)} minutes) against the ${Math.round(top.mp)} minutes before.</span> <span>Three matches is a short window: a trend to watch, not a verdict.</span></p>`,link:hPl(ag.id,ag.club)})}}
+ /* points against the chances: from the Lab's expected-points calculation */
+ if(c.luck&&c.luck.length>=6){const sd=hSd(c.luck.map(r=>r.gap)),r=c.luck[0];if(Math.abs(r.gap)>=3)out.push({t:'luck',z:Math.abs(r.gap)/sd,rel:Math.min(1,r.n/8),club:r.t,html:`<div class="hk">${r.gap<0?'Results behind the chances':'Results ahead of the chances'}</div>
+  <h3>${hCrest(r.t)} <b>${esc(r.t)}</b> <span>${r.gap<0?'have fewer points than their chances were worth':'have more points than their chances were worth'}</span></h3><p><b class="hbig">${r.gap>0?'+':''}${hF(r.gap,1)}</b> <span class="mu">points: ${r.pts} won, ${hF(r.xp,1)} expected from xG in ${r.n} matches</span></p><p class="mu"><span>Expected points treat each side's goals as Poisson counts from its xG; this ignores game state.</span> <span>A gap says where results and chances disagree, not why.</span></p>`,link:'#/club/'+encodeURIComponent(r.t)})}
+ /* biggest move in the table this round */
+ if(c.round&&c.round.length&&typeof ltOk==='function'&&ltOk(c.fin)){const before=c.fin.filter(m=>m.date.slice(0,10)<c.from);if(before.length&&ltOk(before)){const A=ltTable(before,c.tx),B=ltTable(c.fin,c.tx),pa=new Map(A.map((r,i)=>[r.t,i]));
+  const mv=B.map((r,i)=>({t:r.t,from:pa.has(r.t)?pa.get(r.t)+1:null,to:i+1})).filter(x=>x.from!=null).sort((x,y)=>Math.abs(y.from-y.to)-Math.abs(x.from-x.to))[0];
+  if(mv&&Math.abs(mv.from-mv.to)>=3)out.push({t:'mover',z:Math.abs(mv.from-mv.to)/2,rel:1,club:mv.t,html:`<div class="hk">${mv.to<mv.from?'Climbing':'Falling'}</div><h3>${hCrest(mv.t)} <b>${esc(mv.t)}</b> <span>${mv.to<mv.from?'moved up':'dropped'} from place ${mv.from} to place ${mv.to}</span></h3><p class="mu"><span>The table before and after the latest round</span> <span class="nw" dir="ltr">${esc(c.from)} – ${esc(c.last)}</span> · <span>Points, then goal difference.</span></p>`,link:'#/table'})}}
+ out.forEach(s=>s.score=Math.min(4,Math.max(0,s.z))*s.rel*(W[s.t]??1));
+ /* one story per kind, strongest first */
+ const seen=new Set();return out.sort((a,b)=>b.score-a.score).filter(s=>!seen.has(s.t)&&seen.add(s.t));
+}
+function homeWhy(s){return `<details class="hwhy"><summary>Why this card?</summary><p class="mu"><span>It stands ${hF(s.z,1)} standard deviations from the rest of the field (interest, at most 4), × reliability ${hF(s.rel,2)} (enough minutes or matches), × weight ${hF(HOME_RULES.weight[s.t]??1,1)} for this kind of story = ${hF(s.score,2)}.</span> <span>The rule ranks stories; it is not a judgement of the player.</span></p></details>`}
+
+/* ---------- 2. stars of the round ---------- */
+function homeStars(c){
+ if(!c.rp||c.rp.length<10)return '';
+ const cards=[],used=new Set();
+ HOME_RULES.metrics.map(M=>{const vs=c.rp.map(o=>[o,o.v[M.k]]).filter(x=>x[1]!=null);if(vs.length<10)return null;const arr=vs.map(x=>x[1]),mu=hMean(arr),sd=hSd(arr);vs.sort((x,y)=>y[1]-x[1]);
+  return {M,top:vs[0],second:vs[1],mu,n:vs.length,z:(vs[0][1]-mu)/sd}}).filter(Boolean).sort((a,b)=>b.z-a.z).forEach(x=>{if(cards.length>=4||used.has(x.M.g)||used.has(x.top[0].id))return;used.add(x.M.g);used.add(x.top[0].id);cards.push(x)});
+ const n=(c.round||[]).length;
+ return `<section class="hsec"><div class="hhd"><h2>Stars of the round</h2><span class="mu nw">${esc(c.from)} – ${esc(c.last)} · ${n} <span>matches</span></span></div><div class="hgrid">${cards.map(x=>{const o=x.top[0];
+  return `<a class="hcard hstar" href="${hPl(o.id,o.club)}">${hAvatar(o.id,o.n,o.club,true)}<div class="hst"><div class="hk">${esc(x.M.l)}</div><div class="hnm">${esc(o.n)}</div><div class="mu hcl">${hCrest(o.club)}<span>${esc(o.club)}</span></div></div>
+   <div class="hnum"><b>${hF(x.top[1],x.M.k==='xt'?2:x.M.k==='npxg'||x.M.k==='xag'?2:0)}</b><span class="mu">in ${o.games} ${o.games===1?'match':'matches'} · ${Math.round(o.mi)} min</span></div>
+   <div class="hcmp mu"><span>best of ${x.n}</span> · <span>average</span> ${hF(x.mu,2)} · <span>next best</span> ${hF(x.second[1],2)}</div></a>`}).join('')}</div>
+  <p class="mu hnote">Totals in the round for players with ${HOME_RULES.roundMin}+ minutes in it; each card is a different kind of contribution, picked where the leader stands furthest from the rest.</p></section>`;
+}
+
+/* ---------- 3. club power ---------- */
+function homeClubs(c){
+ const T=new Map();c.fin.forEach(m=>{const g=wkSc(m.score);[[m.home,m.away,g[0],g[1]],[m.away,m.home,g[1],g[0]]].forEach(([t,o,f,a])=>{const xf=c.tx.get(m.match_id+'|'+t),xa=c.tx.get(m.match_id+'|'+o);if(xf==null||xa==null)return;const r=T.get(t)||{t,n:0,xf:0,xa:0};r.n++;r.xf+=xf;r.xa+=xa;T.set(t,r)})});
+ const L=[...T.values()].filter(r=>r.n>=3);if(L.length<6)return '';
+ const tc=new Map((c.tc||[]).map(t=>[t.n,t]));
+ const cards=[
+  {t:'Attack',l:'xG created a match',v:r=>r.xf/r.n,d:2,best:'high'},
+  {t:'Defence',l:'xG allowed a match',v:r=>r.xa/r.n,d:2,best:'low',note:'lower is better'},
+  {t:'Territory',l:'Field tilt (share of final-third play)',v:r=>(tc.get(r.t)||{}).tilt,d:1,best:'high',u:'%'},
+  {t:'Pressing',l:'High turnovers a match',v:r=>(tc.get(r.t)||{}).hto,d:1,best:'high'}];
+ return `<section class="hsec"><div class="hhd"><h2>Club power</h2><span class="mu nw">${esc(D.name)} · <span>season so far</span></span></div><div class="hgrid">${cards.map(K=>{
+  const rows=L.map(r=>[r,K.v(r)]).filter(x=>x[1]!=null&&isFinite(x[1]));if(rows.length<6)return '';rows.sort((a,b)=>K.best==='low'?a[1]-b[1]:b[1]-a[1]);
+  const top=rows.slice(0,5),mx=Math.max(...rows.map(x=>x[1])),avg=hMean(rows.map(x=>x[1]));
+  return `<div class="hcard hclub"><div class="hk">${esc(K.t)}</div><div class="hcl2">${esc(K.l)}${K.note?` <span class="mu">(${esc(K.note)})</span>`:''}</div>
+   <ol class="hbars">${top.map(([r,v])=>`<li><a href="#/club/${encodeURIComponent(r.t)}">${hCrest(r.t)}<span class="hbn">${esc(r.t)}</span></a><span class="hbar"><i style="width:${Math.max(4,v/mx*100).toFixed(1)}%;${clubVars(r.t)}"></i></span><b>${hF(v,K.d)}${K.u||''}</b></li>`).join('')}</ol>
+   <div class="mu hnote"><span>League average</span> ${hF(avg,K.d)}${K.u||''} · ${rows.length} <span>clubs</span> · <span>bars run from 0 to the league's highest</span></div></div>`}).join('')}</div></section>`;
+}
+
+/* ---------- 4. who is better? two players from the same leaderboard ---------- */
+const HCMP=[{k:'npxg',l:'Non-penalty xG'},{k:'xag',l:'Expected assists (xAG)'},{k:'sca',l:'Shot-creating actions'},{k:'tkw',l:'Successful take-ons'},{k:'pc',l:'Progressive carries'},{k:'tkic',l:'Tackles + interceptions'}];
+function homeVsHtml(c,a,b){
+ const met=HCMP.map(x=>{const M=HOME_RULES.metrics.find(m=>m.k===x.k);return [x.l,M.f(a),M.f(b)]});
+ return `<div class="hvs"><div class="hvh">${hAvatar(a.id,a.n,a.club,true)}<div><a href="${hPl(a.id,a.club)}"><b>${esc(a.n)}</b></a><div class="mu hcl">${hCrest(a.club)}<span>${esc(a.club)}</span></div><div class="mu">${Math.round(a.s.mi)} min</div></div></div>
+  <div class="hvvs">vs</div><div class="hvh r">${hAvatar(b.id,b.n,b.club,true)}<div><a href="${hPl(b.id,b.club)}"><b>${esc(b.n)}</b></a><div class="mu hcl">${hCrest(b.club)}<span>${esc(b.club)}</span></div><div class="mu">${Math.round(b.s.mi)} min</div></div></div></div>
+  <div class="hrows">${met.map(([l,x,y])=>{const mx=Math.max(x||0,y||0)||1,w=x!=null&&y!=null&&x!==y?(x>y?'a':'b'):'';
+   return `<div class="hrow"><b class="${w==='a'?'win':''}">${hF(x)}</b><span class="hbx l"><i style="width:${((x||0)/mx*100).toFixed(0)}%"></i></span><span class="hlab">${esc(l)}</span><span class="hbx"><i style="width:${((y||0)/mx*100).toFixed(0)}%"></i></span><b class="${w==='b'?'win':''}">${hF(y)}</b></div>`}).join('')}</div>
+  <p class="mu hnote"><span>Per 90 minutes, season so far.</span> <span>The data has no positions, so the defaults come from the same leaderboard; a striker and a defender are not like for like.</span></p>
+  <button class="s" onclick="homeToLab()">Compare in detail</button>`;
+}
+function homeVsPick(){const c=HOME.c;if(!c||!c.q)return;const a=c.q.find(x=>x.id===$('#hva').value),b=c.q.find(x=>x.id===$('#hvb').value);if(a&&b){HOME.vs=[a.id,b.id];$('#hvbody').innerHTML=homeVsHtml(c,a,b)}}
+function homeToLab(){const c=HOME.c,v=HOME.vs;if(!c||!v)return;CMP=v.map(id=>{const a=c.q.find(x=>x.id===id);return encodeURIComponent(a.id+'||'+a.club)});CLC={};location.hash='#/compare'}
+function homeVs(c){
+ if(!c.q||c.q.length<10)return '';const M=HOME_RULES.metrics.find(m=>m.k==='npxg'),N=HOME_RULES.metrics.find(m=>m.k==='xag');
+ const idx=a=>{const x=M.f(a),y=N.f(a);return x==null||y==null?null:x+y},L=c.q.filter(a=>idx(a)!=null).sort((a,b)=>idx(b)-idx(a));if(L.length<2)return '';
+ HOME.vs=HOME.vs&&HOME.vs.every(id=>c.q.some(x=>x.id===id))?HOME.vs:[L[0].id,L[1].id];const A=c.q.find(x=>x.id===HOME.vs[0]),B=c.q.find(x=>x.id===HOME.vs[1]);
+ const opts=sel=>[...c.q].sort((a,b)=>a.n.localeCompare(b.n)).map(a=>`<option value="${esc(a.id)}"${a.id===sel?' selected':''}>${esc(a.n)} · ${esc(a.club)}</option>`).join('');
+ return `<section class="hsec"><div class="hhd"><h2>Who is better?</h2><span class="mu">The two highest in xG + xAG per 90, or any two you choose</span></div>
+  <div class="hcard hvc"><div class="ctl hvsel"><select id="hva" aria-label="Player 1" onchange="homeVsPick()">${opts(A.id)}</select><select id="hvb" aria-label="Player 2" onchange="homeVsPick()">${opts(B.id)}</select></div><div id="hvbody">${homeVsHtml(c,A,B)}</div></div></section>`;
+}
+
+/* ---------- 5. Fantasy radar (Premier League only), loaded when it scrolls into view ---------- */
+async function homeFpl(el){
+ let d=null;try{d=await labData()}catch(e){}if(!d||!d.P){el.innerHTML='';return}
+ const fin=d.events.filter(e=>e.fin).length,P=d.P.filter(p=>(labN(p.minutes)||0)>=HOME_RULES.minMin&&p.now_cost>0),row=p=>`<b>${esc(p.wn)}</b> <span class="mu">${esc(p.tn)} · ${LAB_POS[p.ty]} <span>· £${(p.now_cost/10).toFixed(1)}m</span></span>`;
+ const ppm=p=>labN(p.total_points)/(p.now_cost/10),val=[...P].sort((a,b)=>ppm(b)-ppm(a)).slice(0,5);
+ const xgi=p=>((labN(p.expected_goals)||0)+(labN(p.expected_assists)||0))/labN(p.minutes)*90,ppg=p=>labN(p.points_per_game);
+ const ppgs=P.map(ppg).filter(x=>x!=null).sort((a,b)=>a-b),med=ppgs[Math.floor(ppgs.length/2)];
+ const und=[...P].filter(p=>ppg(p)!=null&&ppg(p)<=med).sort((a,b)=>xgi(b)-xgi(a)).slice(0,5);
+ const T=Object.values(d.track.gws||{}).filter(t=>Date.parse(t.dl)>Date.now()).sort((a,b)=>a.gw-b.gw)[0];
+ const pr=T&&T.preds?d.P.filter(p=>fpOk(T.preds[String(p.id)])).sort((a,b)=>T.preds[String(b.id)]-T.preds[String(a.id)]).slice(0,5):[];
+ const card=(k,t,sub,rows,cell,note)=>`<div class="hcard hfpl"><div class="hk">${k}</div><div class="hcl2">${t}</div><div class="mu hsub">${sub}</div><ol class="hlist">${rows.map(p=>`<li>${row(p)}<b>${cell(p)}</b></li>`).join('')}</ol>${note?`<div class="mu hnote">${note}</div>`:''}</div>`;
+ el.innerHTML=`<div class="hhd"><h2>Fantasy radar</h2><span class="mu">Official FPL data · ${fin} <span>gameweeks finished</span></span></div><div class="hgrid">`+
+  card('<span class="htag act">Actual</span>','Points per £1m','Official FPL points this season ÷ price, players with 450+ minutes',val,p=>hF(ppm(p),1))+
+  card('<span class="htag act">Actual</span>','Underlying numbers ahead of points','Highest xG + xA per 90 among players at or below the median points per game ('+hF(med,1)+')',und,p=>hF(xgi(p),2)+' <span class="mu">· <span>'+hF(ppg(p),1)+' ppg</span></span>','Strong chances without the points yet; it can go either way.')+
+  (pr.length?card('<span class="htag pred">Prediction</span>','Highest predicted points, Gameweek '+T.gw,'The site\'s model before the deadline; not official points and not guaranteed',pr,p=>hF(T.preds[String(p.id)],1)):'')+
+  `</div><p class="hnote"><a href="#/fantasy">Fantasy</a> · <a href="#/lab">Intelligence Lab</a></p>`;
+}
+
+/* ---------- 6. quick rankings ---------- */
+function homeRank(c,k){
+ const box=document.getElementById('hrk');if(!box||!c.q)return;HOME.rk=k;const M=HOME_RULES.metrics.find(m=>m.k===k),L=c.q.map(a=>[a,M.f(a)]).filter(x=>x[1]!=null).sort((a,b)=>b[1]-a[1]);
+ document.querySelectorAll('#hrkc button').forEach(b=>b.classList.toggle('on',b.dataset.k===k));
+ box.innerHTML=`<ol class="hrank">${L.slice(0,5).map(([a,v],i)=>`<li><span class="hrn">${i+1}</span>${hAvatar(a.id,a.n,a.club)}<a href="${hPl(a.id,a.club)}" class="hrp"><b>${esc(a.n)}</b><span class="mu">${esc(a.club)}</span></a><b class="hrv">${hF(v)}</b>${i<4&&L[i+1]?`<span class="mu hrg">+${hF(v-L[i+1][1])}</span>`:'<span class="hrg"></span>'}</li>`).join('')}</ol>
+  <details class="hfull"><summary>Show all ${L.length} players</summary>${tbl([['#',1],['Player'],['Club'],['Minutes',1],['Per 90',1]],L.map(([a,v],i)=>[i+1,`<a href="${hPl(a.id,a.club)}">${esc(a.n)}</a>`,esc(a.club),Math.round(a.s.mi),hF(v)]))}</details>
+  <p class="mu hnote">Per 90 minutes, ${HOME_RULES.minMin}+ minutes this season; the gap is to the next player.</p>`;
+}
+function homeRanks(c){
+ if(!c.q||c.q.length<10)return '';
+ return `<section class="hsec"><div class="hhd"><h2>Quick rankings</h2><span class="mu">Per 90 · ${c.q.length} <span>players with</span> ${HOME_RULES.minMin}+ <span>minutes</span></span></div>
+  <div class="hcard"><div class="seg hchips" id="hrkc">${HOME_RULES.metrics.map(M=>`<button data-k="${M.k}" onclick="homeRank(HOME.c,'${M.k}')">${esc(M.l)}</button>`).join('')}</div><div id="hrk"></div></div></section>`;
+}
+
+/* ---------- 7. the way into the detailed pages ---------- */
+function homeHub(){
+ const L=[['players','Players','Every player, sortable by xT and xG'],['compare','Comparison Lab',typeof CL_LIM==='object'?'Up to '+CL_LIM.p+' players or '+CL_LIM.t+' teams, side by side':'Players or teams, side by side'],['rankings','Rankings','Leaderboards by measure'],['shots','Shots','Every shot on the pitch, with xG'],['passing','Passing','Pass networks and progression'],['defense','Defensive','Duels, tackles, pressing'],['heatmaps','Heatmaps','Where players and teams act, match by match'],['table','League table','Points, goal difference and xG difference'],['fantasy','Fantasy','Predictions, Optimal XI, backtests'],['lab','Intelligence Lab','Your predictions against the model']].filter(([k])=>PAGES.some(p=>p[0]===k));
+ return `<section class="hsec"><div class="hhd"><h2>Stats centre</h2><span class="mu">All the data, page by page</span></div><div class="hhub">${L.map(([k,t,d])=>`<a class="hcard hhb" href="#/${k}"><b>${esc(t)}</b><span class="mu">${esc(d)}</span></a>`).join('')}</div></section>`;
+}
+
+/* ---------- putting it on the overview ---------- */
+async function homeMount(){
+ const app=document.getElementById('app');if(!app||uiPage()!=='overview'||document.getElementById('home'))return;const h2=app.querySelector('h2');if(!h2)return;
+ const home=document.createElement('div');home.id='home';home.innerHTML='<div class="empty skel">Loading…</div>';h2.after(home);
+ let c=null;try{c=await homeData()}catch(e){}
+ if(!document.body.contains(home))return;
+ if(!c||!c.last){home.remove();return}
+ if(typeof labDiscCalc==='function'&&!c.luck){try{c.luck=await labDiscCalc()}catch(e){c.luck=[]}}
+ if(!document.body.contains(home))return;
+ const S=homeStories(c),hero=S[0],more=S.slice(1,3);
+ home.innerHTML=(hero?`<section class="hsec hhero-s"><div class="hhd"><h2>Discovery of the round</h2><span class="mu nw">${esc(D.name)} · <span>up to</span> ${esc(c.last)}</span></div>
+   <div class="hhero"><div class="hmcol"><a class="hcard hmain" href="${hero.link}">${hero.a?hAvatar(hero.a.id,hero.a.n,hero.a.club,true):hCrest(hero.club)}<div>${hero.html}</div></a>${homeWhy(hero)}</div>
+   ${more.length?`<div class="hmore">${more.map(s=>`<a class="hcard hside" href="${s.link}">${s.html}</a>`).join('')}</div>`:''}</div></section>`:'')+
+  homeStars(c)+homeClubs(c)+homeVs(c)+(/premier league/i.test(D.name)&&ALL.fpl&&ALL.fpl.file?'<section class="hsec" id="hfpl"></section>':'')+homeRanks(c)+homeHub()+
+  `<div class="hhd hold"><h2>Data and this week</h2><span class="mu">What the data covers, and the week's highlights</span></div>`;
+ if(c.q)homeRank(c,HOME.rk||'sca');
+ const fc=document.getElementById('favcard'),hs=home.querySelector('.hhero-s');if(fc&&hs)hs.after(fc);
+ const fp=document.getElementById('hfpl');if(fp){const go=()=>homeFpl(fp);if('IntersectionObserver' in window){const io=new IntersectionObserver(es=>{if(es.some(e=>e.isIntersecting)){io.disconnect();go()}},{rootMargin:'300px'});io.observe(fp)}else go()}
+}
+(function(){const app=document.getElementById('app');if(app)new MutationObserver(()=>{if(uiPage()==='overview'&&!document.getElementById('home'))setTimeout(homeMount,0)}).observe(app,{childList:true})})();
+"""
+
+
+def _x_home_index(html):
+    def sub(h, old, new):
+        if h.count(old) != 1:
+            log(f"  تنبيه (الصفحة الرئيسية): ما لقيت نقطة التعديل بدقة، تخطيتها: {old[:60]}")
+            return h
+        return h.replace(old, new)
+    h = html
+    h = sub(h, "</style></head>", _X_HOMECSS + "</style></head>")
+    h = sub(h, "async function route(){", _X_HOMEJS + "\nasync function route(){")
+    return h
+
+
+_AR_SEASON.update({
+    "Discovery of the round": "اكتشاف الجولة",
+    "Stars of the round": "نجوم الجولة",
+    "Club power": "قوة الأندية",
+    "Who is better?": "من الأفضل؟",
+    "Fantasy radar": "رادار الفانتازي",
+    "Quick rankings": "ترتيبات سريعة",
+    "Stats centre": "مركز الإحصائيات",
+    "Data and this week": "البيانات وهذا الأسبوع",
+    "Non-penalty xG": "xG بدون ركلات الجزاء",
+    "Expected threat (xT)": "التهديد المتوقع (xT)",
+    "Expected assists (xAG)": "الصناعة المتوقعة (xAG)",
+    "Successful take-ons": "المراوغات الناجحة",
+    "Tackles + interceptions": "الافتكاكات + الاعتراضات",
+    "Hidden in the numbers": "مخفي في الأرقام",
+    "is number # in the league for": "صاحب المركز # في الدوري في",
+    "per #, with # goal or assist": "لكل # دقيقة، مع # هدف أو صناعة",
+    "per #, with # goals or assists": "لكل # دقيقة، مع # أهداف أو صناعات",
+    "Per #": "لكل # دقيقة",
+    "league average #": "متوسط الدوري #",
+    "# minutes": "# دقيقة",
+    "Goals and assists miss what this player does before the shot.": "الأهداف والتمريرات الحاسمة لا تُظهر ما يقدمه هذا اللاعب قبل التسديدة.",
+    "Season so far, players with #+ minutes": "الموسم حتى الآن، اللاعبون الذين لعبوا #+ دقيقة",
+    "On the rise": "في صعود",
+    "expected goal involvement up from # to # per #": "ارتفعت مساهمته المتوقعة في الأهداف من # إلى # لكل # دقيقة",
+    "xG without penalties + expected assists (xAG), last # matches (# minutes) against the # minutes before": "الأهداف المتوقعة بدون ركلات الجزاء + الصناعة المتوقعة (xAG)، آخر # مباريات (# دقيقة) مقارنة بالـ # دقيقة التي قبلها",
+    "Three matches is a short window: a trend to watch, not a verdict": "ثلاث مباريات فترة قصيرة: اتجاه يستحق المتابعة، وليس حكمًا نهائيًا",
+    "Results behind the chances": "النتائج أقل من الفرص",
+    "Results ahead of the chances": "النتائج أعلى من الفرص",
+    "points: # won, # expected from xG in # matches": "نقطة: # محققة، و# متوقعة من الأهداف المتوقعة في # مباراة",
+    "Expected points treat each side's goals as Poisson counts from its xG; this ignores game state.": "النقاط المتوقعة تعامل أهداف كل فريق كتوزيع بواسون من أهدافه المتوقعة؛ وهذا يتجاهل مجريات المباراة.",
+    "A gap says where results and chances disagree, not why.": "الفارق يوضح أين تختلف النتائج عن الفرص، لا سبب ذلك.",
+    "Climbing": "صعود في الجدول",
+    "Falling": "هبوط في الجدول",
+    "moved up from place # to place #": "تقدّم من المركز # إلى المركز #",
+    "dropped from place # to place #": "تراجع من المركز # إلى المركز #",
+    "The table before and after the latest round": "الجدول قبل آخر جولة وبعدها",
+    "Points, then goal difference.": "النقاط، ثم فارق الأهداف.",
+    "Why this card?": "لماذا هذه البطاقة؟",
+    "It stands # standard deviations from the rest of the field (interest, at most #), × reliability # (enough minutes or matches), × weight # for this kind of story = #": "يبتعد # انحرافًا معياريًا عن بقية اللاعبين (الإثارة، بحد أقصى #) × الموثوقية # (دقائق أو مباريات كافية) × وزن # لهذا النوع من القصص = #",
+    "The rule ranks stories; it is not a judgement of the player.": "هذه القاعدة ترتّب القصص؛ وليست حكمًا على اللاعب.",
+    "up to": "حتى",
+    "in # match": "في مباراة واحدة",
+    "in # matches": "في # مباريات",
+    "best of #": "الأفضل من بين #",
+    "average": "المتوسط",
+    "next best": "التالي",
+    "Totals in the round for players with #+ minutes in it; each card is a different kind of contribution, picked where the leader stands furthest from the rest.": "المجاميع في الجولة للاعبين الذين لعبوا #+ دقيقة فيها؛ كل بطاقة نوع مختلف من المساهمة، اختيرت حيث يبتعد المتصدر أكثر عن البقية.",
+    "season so far": "الموسم حتى الآن",
+    "Attack": "الهجوم",
+    "Defence": "الدفاع",
+    "Territory": "السيطرة على الملعب",
+    "Pressing": "الضغط",
+    "xG created a match": "الأهداف المتوقعة المصنوعة في المباراة",
+    "xG allowed a match": "الأهداف المتوقعة المستقبلة في المباراة",
+    "lower is better": "الأقل أفضل",
+    "Field tilt (share of final-third play)": "ميل الملعب (نصيب اللعب في الثلث الأخير)",
+    "High turnovers a match": "استخلاص الكرة في مناطق متقدمة لكل مباراة",
+    "League average": "متوسط الدوري",
+    "clubs": "أندية",
+    "The two highest in xG + xAG per #, or any two you choose": "الأعلى في xG + xAG لكل # دقيقة، أو أي لاعبين تختارهما",
+    "Player #": "اللاعب #",
+    "vs": "ضد",
+    "Per # minutes, season so far.": "لكل # دقيقة، الموسم حتى الآن.",
+    "The data has no positions, so the defaults come from the same leaderboard; a striker and a defender are not like for like.": "البيانات لا تحتوي على المراكز، لذا الاختيار الافتراضي من نفس قائمة الترتيب؛ والمهاجم والمدافع ليسا متماثلين في المقارنة.",
+    "Compare in detail": "قارن بالتفصيل",
+    "Official FPL data": "بيانات FPL الرسمية",
+    "gameweeks finished": "جولات منتهية",
+    "Prediction": "توقع",
+    "Official FPL points this season ÷ price, players with #+ minutes": "نقاط FPL الرسمية هذا الموسم ÷ السعر، للاعبين الذين لعبوا #+ دقيقة",
+    "Underlying numbers ahead of points": "أرقام أداء تسبق النقاط",
+    "Highest xG + xA per # among players at or below the median points per game (#)": "أعلى xG + xA لكل # دقيقة بين اللاعبين عند وسيط النقاط لكل مباراة أو أقل (#)",
+    "Strong chances without the points yet; it can go either way.": "فرص قوية لم تتحول إلى نقاط بعد؛ وقد تسير الأمور في أي اتجاه.",
+    "# ppg": "# نقطة/مباراة",
+    "Highest predicted points, Gameweek #": "أعلى النقاط المتوقعة، الجولة #",
+    "The site's model before the deadline; not official points and not guaranteed": "نموذج الموقع قبل الموعد النهائي؛ ليست نقاطًا رسمية وغير مضمونة",
+    "players with": "لاعب لعبوا",
+    "minutes": "دقيقة",
+    "Show all # players": "عرض كل اللاعبين (#)",
+    "Per # minutes, #+ minutes this season; the gap is to the next player.": "لكل # دقيقة، للاعبين الذين لعبوا #+ دقيقة هذا الموسم؛ الفارق مع اللاعب التالي.",
+    "Player": "اللاعب",
+    "Club": "النادي",
+    "Minutes": "الدقائق",
+    "All the data, page by page": "كل البيانات، صفحة بصفحة",
+    "Every player, sortable by xT and xG": "كل اللاعبين، مع الترتيب حسب xT و xG",
+    "Leaderboards by measure": "قوائم الصدارة حسب المقياس",
+    "Every shot on the pitch, with xG": "كل تسديدة على الملعب، مع xG",
+    "Pass networks and progression": "شبكات التمرير والتقدّم بالكرة",
+    "Duels, tackles, pressing": "الالتحامات والافتكاكات والضغط",
+    "Predictions, Optimal XI, backtests": "التوقعات، التشكيلة المثالية، الاختبارات التاريخية",
+    "Your predictions against the model": "توقعاتك مقابل النموذج",
+    "What the data covers, and the week's highlights": "ما تغطيه البيانات، وأبرز أحداث الأسبوع",
+    "bars run from # to the league's highest": "الأشرطة من # إلى أعلى قيمة في الدوري",
+    "Points per £#m": "النقاط لكل # مليون £",
+    "(lower is better)": "(الأقل أفضل)",
+    "Up to # players or # teams, side by side": "حتى # لاعبًا أو # فرق، جنبًا إلى جنب",
+    "Players or teams, side by side": "لاعبون أو فرق، جنبًا إلى جنب",
+    "Points, goal difference and xG difference": "النقاط وفارق الأهداف وفارق xG",
+    "Where players and teams act, match by match": "أين يتحرك اللاعبون والفرق، مباراة بمباراة"
+})
+
+
+INDEX = _x_home_index(INDEX)
+# ======================== نهاية إضافة الصفحة الرئيسية ========================
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
