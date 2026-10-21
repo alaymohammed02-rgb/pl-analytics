@@ -89,32 +89,32 @@
   "PitchAPI returned no shots for this match, so there is no threat to map.":"PitchAPI ما رجّع تسديدات لهذي المباراة، فما فيه خطورة نرسمها.",
   "# shots from this zone, xG #":"# تسديدات من هذه المنطقة، xG #","# shot from this zone, xG #":"تسديدة واحدة من هذه المنطقة، xG #"}).forEach(([k,v])=>{if(!(k in AR))AR[k]=v});
 })();
-/* ===== Smooth heat map: one continuous colour field over the whole pitch (blue = no activity → red = the busiest cell) =====
-   PitchAPI bins actions on a coarse grid (16×12). For display the cell values are softened with their neighbours and
-   interpolated between cell centres, then coloured; the numbers are unchanged and each spot still shows its cell's exact count
-   on hover. Falls back to the original cells when the browser cannot draw on a canvas. */
-const HEAT_JET=[[0,[22,40,150]],[.14,[18,92,225]],[.3,[0,185,235]],[.45,[35,205,140]],[.58,[150,225,60]],[.7,[250,225,45]],[.84,[255,135,35]],[1,[226,32,32]]];
-function heatJet(t){t=Math.max(0,Math.min(1,t));for(let i=1;i<HEAT_JET.length;i++)if(t<=HEAT_JET[i][0]){const [a,ca]=HEAT_JET[i-1],[b,cb]=HEAT_JET[i],u=(t-a)/((b-a)||1);return ca.map((v,k)=>Math.round(v+(cb[k]-v)*u))}return HEAT_JET[HEAT_JET.length-1][1]}
-const HEAT_TOP=.6;   /* the colour scale tops out at 60% of the busiest cell, so one crowded cell (often the goal area) does not wash out the rest */
-const heatGrad=()=>'linear-gradient(90deg,'+HEAT_JET.map(([p,c])=>`rgb(${c.join(',')}) ${Math.round(p*100)}%`).join(',')+')';
-function heatLegend2(max){return `<div style="max-width:420px;margin:4px 0 8px"><div style="height:8px;border-radius:4px;background:${heatGrad()}"></div><div class="mu" style="display:flex;justify-content:space-between;font-size:12px"><span>No actions</span><span>${Math.max(1,Math.round(max*HEAT_TOP))}+ actions in one cell</span></div><div class="mu" style="font-size:11.5px;margin-top:2px">Smoothed for display between PitchAPI's cells; hover a spot for its exact count.</div></div>`}
+/* ===== Smooth heat map: soft blobs on a dark pitch (transparent = no activity, green → yellow → orange → red = busiest) =====
+   PitchAPI bins actions on a 16×12 grid and has no exact touch positions, so this is a density estimate from those cells: each
+   cell's count is spread evenly over its area, then smoothed with a Gaussian kernel (σ ≈ 4 m) at 6 pixels a metre, so no square
+   or pixel of the grid shows. Red = the densest spot of the map (with two pitches, the scale follows the busiest cell of both). Each spot still shows its cell's exact count on hover. Old cells without canvas. */
+const HEAT_STOPS=[[0,[0,180,130,0]],[.12,[0,185,135,.5]],[.3,[40,200,100,.78]],[.5,[150,215,60,.88]],[.66,[245,210,45,.93]],[.83,[245,140,40,.97]],[1,[220,40,38,1]]];
+const HEAT_TOP=.85,HEAT_PX=6,HEAT_SIGMA=4,HEAT_BG='#2b2f35';
+function heatRGBA(t){t=Math.max(0,Math.min(1,t));for(let i=1;i<HEAT_STOPS.length;i++)if(t<=HEAT_STOPS[i][0]){const [a,ca]=HEAT_STOPS[i-1],[b,cb]=HEAT_STOPS[i],u=(t-a)/((b-a)||1);return ca.map((v,k)=>v+(cb[k]-v)*u)}return HEAT_STOPS[HEAT_STOPS.length-1][1]}
+const heatGrad=()=>'linear-gradient(90deg,'+HEAT_STOPS.map(([p,c])=>`rgba(${Math.round(c[0])},${Math.round(c[1])},${Math.round(c[2])},${c[3]}) ${Math.round(p*100)}%`).join(',')+')';
+function heatLegend2(max){return `<div style="max-width:420px;margin:4px 0 8px"><div style="height:8px;border-radius:4px;background:${heatGrad()},${HEAT_BG}"></div><div class="mu" style="display:flex;justify-content:space-between;font-size:12px"><span>No actions</span><span>Busiest area (top cell: ${max} actions)</span></div><div class="mu" style="font-size:11.5px;margin-top:2px">A smoothed density from PitchAPI's 16×12 cells (it gives no exact touch positions); hover a spot for its cell's exact count.</div></div>`}
+/* separable Gaussian blur of a W×H field */
+function heatBlur(F,W,H,s){const r=Math.ceil(3*s),k=new Float32Array(2*r+1);let z=0;for(let i=-r;i<=r;i++){k[i+r]=Math.exp(-i*i/(2*s*s));z+=k[i+r]}for(let i=0;i<k.length;i++)k[i]/=z;
+ const T=new Float32Array(W*H);for(let y=0;y<H;y++){const o=y*W;for(let x=0;x<W;x++){let a=0;for(let i=-r;i<=r;i++){const xx=x+i;if(xx>=0&&xx<W)a+=F[o+xx]*k[i+r]}T[o+x]=a}}
+ const O=new Float32Array(W*H);for(let x=0;x<W;x++)for(let y=0;y<H;y++){let a=0;for(let i=-r;i<=r;i++){const yy=y+i;if(yy>=0&&yy<H)a+=T[yy*W+x]*k[i+r]}O[y*W+x]=a}return O}
 if(typeof heatRects==='function'){const heatCellsOrig=heatRects;
  heatRects=function(c,GL,GW,max,flip){
   let cv=null;try{cv=document.createElement('canvas')}catch(e){}const g=cv&&cv.getContext&&cv.getContext('2d');if(!g||!(max>0))return heatCellsOrig(c,GL,GW,max,flip);
-  const W=210,H=136;cv.width=W;cv.height=H;
-  const raw=(x,y)=>{x=Math.max(0,Math.min(GL-1,x));y=Math.max(0,Math.min(GW-1,y));return c.acc[(flip?GW-1-y:y)*GL+x]||0};
-  /* soften: each cell half itself, half its neighbours (3×3 weights 1-2-1) */
-  const F=new Float32Array(GL*GW);
-  for(let y=0;y<GW;y++)for(let x=0;x<GL;x++){let s=0,w=0;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const xx=x+dx,yy=y+dy;if(xx<0||yy<0||xx>=GL||yy>=GW)continue;const k=(2-Math.abs(dx))*(2-Math.abs(dy));s+=k*raw(xx,yy);w+=k}F[y*GL+x]=.55*raw(x,y)+.45*s/w}
-  const f=(x,y)=>F[Math.max(0,Math.min(GW-1,y))*GL+Math.max(0,Math.min(GL-1,x))];
-  const img=g.createImageData(W,H);
-  for(let py=0;py<H;py++){const gy=(py+.5)/H*GW-.5,y0=Math.floor(gy),fy=gy-y0;
-   for(let px=0;px<W;px++){const gx=(px+.5)/W*GL-.5,x0=Math.floor(gx),fx=gx-x0;
-    const v=(f(x0,y0)*(1-fx)+f(x0+1,y0)*fx)*(1-fy)+(f(x0,y0+1)*(1-fx)+f(x0+1,y0+1)*fx)*fy,col=heatJet(Math.pow(Math.max(0,v)/(max*HEAT_TOP),.6)),o=(py*W+px)*4;
-    img.data[o]=col[0];img.data[o+1]=col[1];img.data[o+2]=col[2];img.data[o+3]=255}}
+  const W=105*HEAT_PX,H=68*HEAT_PX;cv.width=W;cv.height=H;
+  const deposit=cells=>{const F=new Float32Array(W*H);cells.forEach(([x,y,n])=>{const x0=Math.round(x*W/GL),x1=Math.round((x+1)*W/GL),y0=Math.round(y*H/GW),y1=Math.round((y+1)*H/GW),d=n/((x1-x0)*(y1-y0));for(let yy=y0;yy<y1;yy++)for(let xx=x0;xx<x1;xx++)F[yy*W+xx]+=d});return heatBlur(F,W,H,HEAT_SIGMA*HEAT_PX)};
+  const cells=[];c.acc.forEach((n,i)=>{if(n>0){const x=i%GL,y=Math.floor(i/GL);cells.push([x,flip?GW-1-y:y,n])}});
+  const D=deposit(cells);let dm=0;for(let i=0;i<D.length;i++)if(D[i]>dm)dm=D[i];
+  /* red at HEAT_TOP of this map's densest spot; with two pitches (shared max) a pitch whose busiest cell is lower stays cooler */
+  const scale=Math.max(1e-9,dm*HEAT_TOP*(max/Math.max(1,c.max))),img=g.createImageData(W,H);
+  for(let i=0;i<D.length;i++){const t=Math.pow(D[i]/scale,.8),col=heatRGBA(t),o=i*4;img.data[o]=col[0];img.data[o+1]=col[1];img.data[o+2]=col[2];img.data[o+3]=Math.round(col[3]*255)}
   g.putImageData(img,0,0);
   const cw=105/GL,ch=68/GW;let hover='';
   c.acc.forEach((n,i)=>{if(!n)return;const x=i%GL,y=Math.floor(i/GL),yy=flip?GW-1-y:y;hover+=`<rect x="${(x*cw).toFixed(3)}" y="${(yy*ch).toFixed(3)}" width="${cw.toFixed(3)}" height="${ch.toFixed(3)}" fill="transparent"><title>cell ${x},${y}: ${n} actions</title></rect>`});
-  return `<image class="heat-smooth" href="${cv.toDataURL('image/png')}" x="0" y="0" width="105" height="68" preserveAspectRatio="none"/>`+hover;
+  return `<rect x="-2" y="-2" width="109" height="73" fill="${HEAT_BG}"/><image class="heat-smooth" href="${cv.toDataURL('image/png')}" x="0" y="0" width="105" height="68" preserveAspectRatio="none"/>`+hover;
  }}
-if(typeof AR==='object')Object.entries({"No actions":"بدون أفعال","#+ actions in one cell":"#+ فعل في الخانة الواحدة","Smoothed for display between PitchAPI's cells; hover a spot for its exact count.":"منعّمة للعرض بين خانات PitchAPI؛ مرّر على أي نقطة لترى العدد الدقيق لخانتها."}).forEach(([k,v])=>{if(!(k in AR))AR[k]=v});
+if(typeof AR==='object')Object.entries({"No actions":"بدون أفعال","#+ actions in one cell":"#+ فعل في الخانة الواحدة","Busiest area (top cell: # actions)":"أكثر منطقة نشاطًا (أعلى خانة: # فعل)","A smoothed density from PitchAPI's #×# cells (it gives no exact touch positions); hover a spot for its cell's exact count.":"كثافة منعّمة من خانات PitchAPI ‏#×# (ما يعطي مواقع اللمسات الدقيقة)؛ مرّر على أي نقطة لترى العدد الدقيق لخانتها."}).forEach(([k,v])=>{if(!(k in AR))AR[k]=v});
