@@ -3713,7 +3713,8 @@ function pmCtx(d){
  const gws=next==null?[]:Array.from({length:PM.N},(_,i)=>next+i).filter(g=>ev.some(e=>e.id===g));
  const tm=new Map();
  for(const p of d.P){const rows=H[String(p.id)];if(!rows)continue;
-  for(const r of rows){if(!(r[3]>0)||!fpOk(r[4]))continue;const k=p.tm+'|'+r[0]+'|'+r[7];let o=tm.get(k);if(!o){o={t:p.tm,o:r[7],r:r[0],h:r[8],xg:0};tm.set(k,o)}o.xg+=r[4]}}
+  /* a match with no xG published (2022-23 before gameweek 16) counts its goals instead */
+  for(const r of rows){if(!(r[3]>0))continue;const xg=fpOk(r[4])?r[4]:fpOk(r[10])?r[10]:null;if(xg==null)continue;const k=p.tm+'|'+r[0]+'|'+r[7];let o=tm.get(k);if(!o){o={t:p.tm,o:r[7],r:r[0],h:r[8],xg:0};tm.set(k,o)}o.xg+=xg}}
  const T=new Map(d.teams.map(t=>[t.id,{n:0,f:0,a:0}]));let sA=0,nA=0,sH=0,nH=0,sW=0,nW=0;
  for(const o of tm.values()){const q=tm.get(o.o+'|'+o.r+'|'+o.t),t=T.get(o.t);if(!q||!t)continue;t.n++;t.f+=o.xg;t.a+=q.xg;sA+=o.xg;nA++;if(o.h===1){sH+=o.xg;nH++}else{sW+=o.xg;nW++}}
  const mu=nA?sA/nA:null,muH=nH?sH/nH:mu,muA=nW?sW/nW:mu,S=new Map();
@@ -4069,6 +4070,13 @@ const BT={start:4,key:'',res:null,busy:false,line:null,lineBusy:false};
 const BT_MAP=[['minutes','min'],['expected_goals','xg'],['goals_scored','gl'],['expected_assists','xa'],['assists','as'],['bonus','bon'],['yellow_cards','yc'],['red_cards','rc'],['own_goals','og'],['penalties_missed','pmi'],['penalties_saved','psv'],['saves','sv'],['defensive_contribution','dc']];
 const btIx=d=>{const m={};(d.hcols||[]).forEach((c,i)=>m[c]=i);return m};
 /* sum of the values that exist; null (missing) when no row has the value. Missing is never turned into 0. */
+/* xG and xA of matches where they were not published (2022-23 before gameweek 16) are missing, not zero: the player's xG over the
+   matches that have it is scaled to all his minutes, so his per-90 rate is kept; with none, the model uses goals and assists only */
+function btXgScale(o,prior,ix){
+ for(const [pf,hc] of [['expected_goals','xg'],['expected_assists','xa']]){const j=ix[hc];if(j===undefined)continue;let mA=0,mX=0,s=0;
+  for(const x of prior){const m=x[ix.min];if(!(m>0))continue;mA+=m;if(fpOk(x[j])){mX+=m;s+=x[j]}}
+  if(mA>mX)o[pf]=mX>0?s*mA/mX:null}
+}
 const btSum=(rows,j)=>{let s=null;if(j===undefined)return s;for(const x of rows){const v=x[j];if(fpOk(v))s=(s||0)+v}return s};
 const btAvg=a=>a.length?a.reduce((s,x)=>s+x,0)/a.length:null;
 const btYield=()=>new Promise(r=>setTimeout(r,0));
@@ -4091,7 +4099,7 @@ function btRound(d,P,H,ix,fixAll,r){
   const rows=H[String(p.id)];if(!rows)continue;
   const rr=rows.filter(x=>x[0]===r),prior=rows.filter(x=>x[0]<r),tm=rr.length?btTeamAt(p,rr,fixR,ix):p.tm;
   const o={id:p.id,ty:p.ty,tm,st:'a',nw:'',chance_of_playing_next_round:null,name:p.name};
-  for(const [pf,hc] of BT_MAP)o[pf]=btSum(prior,ix[hc]);
+  for(const [pf,hc] of BT_MAP)o[pf]=btSum(prior,ix[hc]);btXgScale(o,prior,ix);
   Hp[String(p.id)]=prior;sh.push(o);
   if(rr.length)tg.push({p,o,rr,prior});
  }
@@ -4329,13 +4337,14 @@ const OX_LS={cur:'fpl_myxi_cur_v1',saved:'fpl_myxi_saved_v1',log:'fpl_ox_log_v1'
 /* Lineup ranges are widened by kappa around their mean. Default 1.25: in the leak-free replay of 2026/27 (checked 2026-10-20),
    simulated XI totals were too narrow (80% ranges held 71% of real totals); kappa fitted on GW2-4 restored 79% coverage on
    GW5-6. Running the calibration in the Backtest tab refits kappa on all finished gameweeks and stores it on this device. */
-const OX_KAPPA=1.25;
+const OX_KAPPA=1.19;
 const oxKs=fm=>({1:fm.g,2:fm.d,3:fm.m,4:fm.f});
 const oxYield=()=>new Promise(r=>setTimeout(r,0));
 const oxLsGet=(k,def)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):def}catch(e){return def}};
 const oxLsSet=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){return false}};
 const oxSeason=d=>{const e=(d.events||[])[0];return e&&e.dl?String(e.dl).slice(0,4):'?'};
 const oxR1=v=>Math.round(v*10)/10;
+const oxVerLabel=()=>(typeof PM_VERSION!=='undefined'?PM_VERSION:'v1')+(OX.ver==='v2'?' + penalty regression':'');
 const oxP=v=>v==null?'N/A':Math.round(v*100)+'%';
 
 /* ---------- inputs ---------- */
@@ -4438,9 +4447,13 @@ function oxCheapBench(ids,X){
 /* ---------- uncertainty: Monte Carlo of the same model ----------
    Each player-fixture is simulated with exactly the inputs pmPlayer used, so the simulated mean equals the expected points shown:
    plays ~ Bernoulli(P(play) incl. availability); 60+ min ~ Bernoulli(q60); goals, assists, saves, defensive actions, cards ~ Poisson;
-   bonus = 2 × Poisson(rate/2) (same mean); goals against are drawn ONCE per team and fixture and thinned by the player's share of
-   the match, so team-mates' clean sheets and goals-conceded deductions move together. Attacking returns of team-mates are drawn
-   independently (their positive correlation is ignored, which makes team ranges slightly too narrow). */
+   bonus = 2 × Poisson(rate/2) (same mean). Goals are drawn ONCE per team and fixture: the team's goals G ~ Poisson(Λ) are shared
+   out to its players (multinomial, so one goal has one scorer; assists likewise) and thinned to the opponent's goals conceded, so
+   team-mates' attacking returns move together and against the opposing defence. Λ is fixed per team and fixture from ALL its
+   players (max of the opponent's conceded rate, the sum of the players' goal rates and the sum of their assist rates), so a player's
+   own distribution does not depend on who else is simulated; Poisson thinning keeps his goals and assists exactly Poisson with
+   his own rates, so the simulated mean still equals the expected points shown. The opponent's goals conceded are thinned again by each defender's share
+   of the match, so his clean sheet and goals-conceded deductions follow his own minutes. */
 function oxRng(seed){let a=seed>>>0;return ()=>{a=(a+0x6D2B79F5)>>>0;let t=a;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return ((t^(t>>>14))>>>0)/4294967296}}
 function oxBin(n,p,u){let k=0;for(let i=0;i<n;i++)if(u()<p)k++;return k}
 function oxParams(p,gi,d,C){
@@ -4449,21 +4462,24 @@ function oxParams(p,gi,d,C){
  const r=m.rates,t=p.ty,RL=m.rules,Rt=r.R,rr=id=>pmRule(d,id,t);
  const cards=[[Rt.yc,rr('yellow_cards').pts],[Rt.rc,rr('red_cards').pts],[Rt.og,rr('own_goals').pts],[Rt.pmi,rr('penalties_missed').pts]].concat(t===1?[[Rt.psv,rr('penalties_saved').pts]]:[]).filter(([a,b])=>a>0&&b);
  const out=g.fx.map(x=>{const So=C.S.get(x.opp),St=C.S.get(p.tm),saveF=(C.mu&&So&&St)?So.A*(x.home?C.muA:C.muH)/C.mu:1;
-  return {gk:p.tm+'|'+g.ev+'|'+x.opp+'|'+(x.home?1:0)+'|'+(x.ko||''),pPlay:x.pPlay,q60:r.q60,e:r.ePlay/90,e60:r.e60,lo:RL.mr.lo,hi:RL.mr.hi,
+  const fk=g.ev+'|'+(x.home?p.tm+'|'+x.opp:x.opp+'|'+p.tm)+'|'+(x.ko||'');
+  return {ak:fk+'|'+p.tm,ck:fk+'|'+x.opp,pPlay:x.pPlay,q60:r.q60,e:r.ePlay/90,e60:r.e60,lo:RL.mr.lo,hi:RL.mr.hi,
    lg:r.lamG*x.fa,la:r.lamA*x.fa,pG:RL.rG.pts,pA:RL.rA.pts,lc:x.lc,pCS:(x.lc!=null&&t<=3)?RL.rCS.pts:0,gcStep:(x.lc!=null&&t<=2)?RL.rGC.step:0,gcPts:RL.rGC.pts,
    sv:(t===1&&Rt.sv!=null)?Rt.sv*saveF:null,svStep:RL.rSV.step,svPts:RL.rSV.pts,dc:(t!==1&&Rt.dc!=null&&RL.rDC.pts)?Rt.dc:null,dcStep:RL.rDC.step,dcPts:RL.rDC.pts,
    bon:Rt.bon!=null?Rt.bon:0,bPts:RL.rB.pts,cards}});
  /* exp(-rate) of every Poisson count, computed once (null = rate 0, nothing to draw) */
  const ex=l=>l>0?Math.exp(-l):null;
- out.forEach(q=>{q.xG=ex(q.e*q.lg);q.xA=ex(q.e*q.la);q.xS=q.sv!=null?ex(q.sv*q.e):null;q.xD=q.dc!=null?ex(q.dc*q.e):null;q.xB=q.bon>0?ex(q.e*q.bon/2):null;q.xC=q.cards.map(([a,b])=>[ex(a*q.e),b]).filter(c=>c[0]!=null);q.xL=q.lc!=null?ex(q.lc):null});
+ out.forEach(q=>{q.gl=q.e*q.lg;q.al=q.e*q.la;q.xG=ex(q.e*q.lg);q.xA=ex(q.e*q.la);q.xS=q.sv!=null?ex(q.sv*q.e):null;q.xD=q.dc!=null?ex(q.dc*q.e):null;q.xB=q.bon>0?ex(q.e*q.bon/2):null;q.xC=q.cards.map(([a,b])=>[ex(a*q.e),b]).filter(c=>c[0]!=null);q.xL=q.lc!=null?ex(q.lc):null});
  m._ox[gi]=out;return out;
 }
 /* Poisson draw from a precomputed exp(-rate) (Knuth); cap = stop counting at cap (only "at least cap" matters) */
 function oxPx(L,u,cap){if(L==null)return 0;let k=0,p=u();while(p>L){k++;if(cap&&k>=cap)return k;p*=u()}return k}
-function oxDraw(q,G,u){
+/* ng/na: the player's goals and assists already shared out from his team's goals (oxDrawSet); null = draw them independently */
+function oxDraw(q,G,u,ng,na){
  if(!(u()<q.pPlay))return 0;
  const s60=u()<q.q60;let v=s60?q.hi:q.lo;
- if(q.xG!=null)v+=oxPx(q.xG,u)*q.pG;if(q.xA!=null)v+=oxPx(q.xA,u)*q.pA;
+ if(ng!=null)v+=ng*q.pG+na*q.pA;
+ else{if(q.xG!=null)v+=oxPx(q.xG,u)*q.pG;if(q.xA!=null)v+=oxPx(q.xA,u)*q.pA}
  if(G){if(q.pCS&&s60&&oxBin(G,q.e60/90,u)===0)v+=q.pCS;if(q.gcStep)v+=Math.floor(oxBin(G,q.e,u)/q.gcStep)*q.gcPts}
  else if(q.pCS&&s60&&G===0)v+=q.pCS;
  if(q.xS!=null)v+=Math.floor(oxPx(q.xS,u)/q.svStep)*q.svPts;
@@ -4472,15 +4488,39 @@ function oxDraw(q,G,u){
  for(let i=0;i<q.xC.length;i++)v+=oxPx(q.xC[i][0],u)*q.xC[i][1];
  return v;
 }
+/* joint draw of a set of players in one gameweek. pls: [{id,fx:oxParams(...)}]. oxPlan groups their fixtures by team and match
+   (computed once); oxDrawSet(plan,u) then returns one simulated score per player, in the order of pls. */
+/* team scale Λ per team and fixture, from the fixtures (oxParams) of every player with a prediction */
+function oxLam(fxs){
+ const M=new Map(),get=k=>{let o=M.get(k);if(!o){o={sg:0,sa:0,lc:0};M.set(k,o)}return o};
+ for(const fx of fxs)for(const q of fx){const a=get(q.ak);a.sg+=q.gl;a.sa+=q.al;if(q.lc!=null){const c=get(q.ck);c.lc=Math.max(c.lc,q.lc)}}
+ M.forEach(o=>o.L=Math.max(o.lc,o.sg,o.sa));return M;
+}
+function oxPlan(pls,lam){
+ const F=[],grp=new Map(),get=k=>{let g=grp.get(k);if(!g){g={k,sc:[],as:[],lc:null,L:0,xL:null,G:0,c:0};grp.set(k,g)}return g};
+ pls.forEach((pl,j)=>pl.fx.forEach(q=>{const i=F.length;F.push({j,q,ng:0,na:0,g:null});const a=get(q.ak);
+  if(q.gl>0)a.sc.push([i,q.gl]);if(q.al>0)a.as.push([i,q.al]);
+  if(q.lc!=null){const c=get(q.ck);c.lc=c.lc==null?q.lc:Math.max(c.lc,q.lc);F[i].g=c}}));
+ const G=[...grp.values()];G.forEach(g=>{const sg=g.sc.reduce((x,y)=>x+y[1],0),sa=g.as.reduce((x,y)=>x+y[1],0);const T=lam&&lam.get(g.k);g.L=Math.max(T?T.L:0,g.lc||0,sg,sa);
+  g.xL=g.L>0?Math.exp(-g.L):null;const sh=L=>L.map(([i,r])=>[i,r/g.L]);g.sc=sh(g.sc);g.as=sh(g.as);g.pc=g.lc!=null&&g.L>0?Math.min(1,g.lc/g.L):0});
+ return {n:pls.length,F,G};
+}
+/* multinomial share-out of n goals over members [[index,share]] (shares sum to at most 1; the rest is "nobody in the set") */
+function oxShare(n,M,F,f,u){let rem=n,mass=1;for(const [i,p] of M){if(!rem){F[i][f]=0;continue}const pr=mass>p?p/mass:1,k=pr>=1?rem:oxBin(rem,pr,u);F[i][f]=k;rem-=k;mass-=p}}
+function oxDrawSet(P,u){
+ for(const g of P.G){const n=g.xL==null?0:oxPx(g.xL,u);g.G=n;g.c=g.pc>0&&n?(g.pc>=1?n:oxBin(n,g.pc,u)):0;oxShare(n,g.sc,P.F,'ng',u);oxShare(n,g.as,P.F,'na',u)}
+ const pts=new Float64Array(P.n);for(const f of P.F)pts[f.j]+=oxDraw(f.q,f.g?f.g.c:null,u,f.ng,f.na);return pts;
+}
 /* lineups: [{per:[{ids,cap}|null per gameweek of gis]}]. Common random numbers: each player's and each team's draws are shared by all lineups. */
 function oxSim(d,C,lineups,gis,N,seed){
  const u=oxRng(seed),out=lineups.map(()=>({gw:gis.map(()=>new Float64Array(N)),tot:new Float64Array(N),ok:true}));
  lineups.forEach((L,j)=>{if(L.per.some(e=>!e))out[j].ok=false});
- const union=gis.map((gi,k)=>{const s=new Set();lineups.forEach(L=>{const e=L.per[k];if(e)e.ids.forEach(id=>s.add(id))});return [...s].map(id=>({id,fx:oxParams(d.PB.get(id),gi,d,C)}))});
+ const plan=gis.map((gi,k)=>{const s=new Set();lineups.forEach(L=>{const e=L.per[k];if(e)e.ids.forEach(id=>s.add(id))});const ids=[...s],ix=new Map(ids.map((id,i)=>[id,i]));
+  const lam=oxLam(d.P.filter(oxHasPred).map(p=>oxParams(p,gi,d,C)));
+  return {ix,P:oxPlan(ids.map(id=>({id,fx:oxParams(d.PB.get(id),gi,d,C)})),lam)}});
  for(let s=0;s<N;s++)for(let k=0;k<gis.length;k++){
-  const G=new Map(),pts=new Map();
-  for(const pl of union[k]){let v=0;for(const q of pl.fx){let g=null;if(q.lc!=null){g=G.get(q.gk);if(g===undefined){g=oxPx(q.xL,u);G.set(q.gk,g)}}v+=oxDraw(q,g,u)}pts.set(pl.id,v)}
-  lineups.forEach((L,j)=>{const e=L.per[k];if(!e)return;let v=0;for(const id of e.ids)v+=pts.get(id);if(e.cap!=null&&e.ids.includes(e.cap))v+=pts.get(e.cap);out[j].gw[k][s]=v;out[j].tot[s]+=v});
+  const {ix,P}=plan[k],pts=oxDrawSet(P,u);
+  lineups.forEach((L,j)=>{const e=L.per[k];if(!e)return;let v=0;for(const id of e.ids)v+=pts[ix.get(id)];if(e.cap!=null&&e.ids.includes(e.cap))v+=pts[ix.get(e.cap)];out[j].gw[k][s]=v;out[j].tot[s]+=v});
  }
  return out;
 }
@@ -4554,7 +4594,7 @@ function oxSPText(p){
    minutes: league penalties per team-match × his observed share of his club's penalties × mean penalty xG.
    Only shots from rounds before the round being predicted are used, so the backtest stays leak-free. */
 function oxPenAdj(p,r){
- const P=OX.pen;if(!P||!P.ok||!fpOk(p.expected_goals)||!fpOk(p.goals_scored)||!(p.minutes>0))return p;
+ const P=OX.pen;if(!P||!P.ok||(FPD&&FPD.archive)||!fpOk(p.expected_goals)||!fpOk(p.goals_scored)||!(p.minutes>0))return p;
  const e=P.by.get(p.id);if(!e)return p;const mine=e.pen.filter(s=>s.r!=null&&s.r<r);if(!mine.length)return p;
  const all=P.pens.filter(s=>s.r!=null&&s.r<r),nm=[...P.round.values()].filter(x=>x.r<r).length;if(!nm||!all.length)return p;
  const lam=all.length/(2*nm),xgs=all.map(s=>s.xg).filter(fpOk),xpen=xgs.length?xgs.reduce((a,b)=>a+b,0)/xgs.length:null;if(xpen==null)return p;
@@ -4565,7 +4605,7 @@ function oxPenAdj(p,r){
 const oxPmPlayer0=pmPlayer;
 pmPlayer=function(p,C,dd){const v=dd===FPD?OX.ver:OX.btVer;return oxPmPlayer0(v==='v2'?oxPenAdj(p,C.next):p,C,dd)};
 async function oxSetVer(v){
- if(v==='v2'){const P=await oxPenLoad();if(!P||!P.ok){OX.msg='Model v2 needs PitchAPI Premier League shot data: '+((P&&P.why)||'not available');v='v1'}}
+ if(v==='v2'){const P=await oxPenLoad();if(!P||!P.ok){OX.msg='Penalty regression needs PitchAPI Premier League shot data: '+((P&&P.why)||'not available');v='v1'}}
  OX.ver=v;FPD._pmPred=null;FPD.P.forEach(p=>{p.pm=null});FPBEST={};OX.cache={};fpRender();
 }
 
@@ -4593,7 +4633,7 @@ function oxPartsRow(g){return OX_COMP.map(k=>(g.parts[k]||0))}
 function oxLogRecord(X,res){
  const {d,C}=X,t=res.team,lg=oxLsGet(OX_LS.log,[]),gw=C.gws[0];
  if(lg.some(e=>e.gw===gw&&e.gen===d.generated&&e.ver===OX.ver&&e.mode===res.mode))return;
- lg.push({gw,gen:d.generated,ver:OX.ver,mode:res.mode,at:new Date().toISOString().slice(0,16).replace('T',' ')+' UTC',ids:t.xi.map(i=>i.id),cap:t.cap?t.cap.id:null,total:+t.total.toFixed(2),form:t.form.name,season:oxSeason(d)});
+ lg.push({gw,gen:d.generated,ver:oxVerLabel(),mode:res.mode,at:new Date().toISOString().slice(0,16).replace('T',' ')+' UTC',ids:t.xi.map(i=>i.id),cap:t.cap?t.cap.id:null,total:+t.total.toFixed(2),form:t.form.name,season:oxSeason(d)});
  while(lg.length>60)lg.shift();oxLsSet(OX_LS.log,lg);
 }
 function oxActual(d,id,r){const ix=btIx(d);let s=null;((d.hist||{})[String(id)]||[]).forEach(h=>{if(h[0]===r&&fpOk(h[ix.pts]))s=(s||0)+h[ix.pts]});return s}
@@ -4610,12 +4650,12 @@ function oxCtl(X,o){
  const {C,RU}=X,gw=o.gw!==false?`<select onchange="OX.gi=+this.value;fpRender()">${fpOpts(C.gws.map((g,i)=>[String(i),'GW'+g+(i===0?' (next)':'')]),String(OX.gi))}</select>`:'';
  const md=o.mode!==false?`<select onchange="OX.mode=this.value;fpRender()">${fpOpts([['budget','Fits a '+(RU.budget!=null?pmMoney(RU.budget):'')+' squad of '+RU.squad],['any','Any price (best possible XI)']].filter(x=>x[0]!=='budget'||RU.budget!=null),OX.mode)}</select>`:'';
  const v2=OX.pen&&OX.pen.ok;
- const vr=`<select onchange="oxSetVer(this.value)" title="Prediction model">${fpOpts([['v1','Model v1 (default)'],...(v2||OX.ver==='v2'?[['v2','Model v2: penalty-regressed']]:[])],OX.ver)}</select>`;
+ const vr=`<select onchange="oxSetVer(this.value)" title="Prediction model">${fpOpts([['v1','Model '+PM_VERSION+' (default)'],...(v2||OX.ver==='v2'?[['v2','Model '+PM_VERSION+' + penalty regression']]:[])],OX.ver)}</select>`;
  return `<div class="ctl">${gw}${md}${o.extra||''}${vr}</div>`+(OX.msg?`<div class="card" style="color:var(--a);font-size:13px">${esc(OX.msg)}</div>`:'');
 }
 function oxHead(X,gi,txt){
  const {d,C}=X,e=d.events.find(x=>x.id===C.gws[gi]),dl=e&&e.dl?new Date(e.dl):null;
- return `<div class="mu" style="font-size:12px;margin:-4px 0 8px">GW${C.gws[gi]}${dl?' · deadline '+esc(dl.toUTCString().slice(0,22))+' UTC':''} · data ${esc(d.generated)} UTC · model ${esc(OX.ver)} · ${txt||'all points are projections (expected values), not guarantees'}</div>`;
+ return `<div class="mu" style="font-size:12px;margin:-4px 0 8px">GW${C.gws[gi]}${dl?' · deadline '+esc(dl.toUTCString().slice(0,22))+' UTC':''} · data ${esc(d.generated)} UTC · model ${esc(oxVerLabel())} · ${txt||'all points are projections (expected values), not guarantees'}</div>`;
 }
 const oxNm=(d,id)=>{const p=d.PB.get(id);return p?`<a href="javascript:void(0)" onclick="fpPredPick(${id})">${esc(p.name)}</a>`:'?'};
 const oxRange=s=>s?`${s.p10.toFixed(0)}–${s.p90.toFixed(0)}`:'N/A';
@@ -4669,8 +4709,8 @@ function oxDrawXI(X,res,gi){
  ${oxLogHtml(d)}
  <details class="card" style="font-size:12px"><summary class="mu"><b>How the optimal XI and its range are calculated</b></summary>
  <p>Player values are the availability-adjusted expected points of the Predicted Points model for GW${g} (a double gameweek adds both fixtures; a blank gameweek is 0). ${res.mode==='budget'?`The XI comes from the exact squad optimizer of the Best Team tab (dynamic programming over the budget with branch and bound for the club limit, ${res.pool} of ${res.full} players after a lossless dominance prune): it maximises the XI's expected points plus the captain's, subject to a legal ${RU.squad}-player squad within the budget.`:`Every legal formation (${forms.map(x=>x.name).join(', ')}, from FPL's game settings) is solved exactly by branch and bound: maximise the XI's expected points plus the captain's, at most ${RU.club} players per club; ${res.pool} players with a projection are considered.`} Players marked unavailable or not in a squad are excluded.</p>
- <p>The 80% range comes from ${OX.N.toLocaleString()} simulations of the same model (fixed seed, so it does not change between visits): minutes, goals, assists, saves, defensive actions, bonus and cards are drawn per player; goals against are drawn once per team and fixture, so team-mates' clean sheets move together. Team-mates' attacking returns are drawn independently. In the leak-free replay these lineup ranges came out too narrow, so they are widened by a factor of ${oxK().toFixed(2)} around the expected total (${oxK()===OX_KAPPA?'default fitted on GW2–4 and validated on GW5–6':'refitted on this device in the Backtest tab'}); the Backtest tab shows the current check. Projections of the very top players have been optimistic (a selection effect: the highest projections include the largest over-estimates), so read the XI total as an upper-leaning estimate${(()=>{const c=oxLsGet(OX_LS.cal,null);return c&&c.season===oxSeason(FPD)&&c.top11?`: in the replay the 11 highest-projected players per gameweek averaged ${c.top11.pred.toFixed(2)} projected vs ${c.top11.act.toFixed(2)} actual points`:''})()}.</p>
- <p>Set pieces: FPL taker order (when the data has it) and PitchAPI shot evidence (penalties taken and scored, direct free-kick shots) are shown for information. PitchAPI shots do not record who took a corner or a free-kick cross, so corner duty is only known from FPL's own taker order. Model v1 already counts penalty xG inside FPL xG; model v2 regresses each taker's realised penalty xG toward the league penalty rate (see Backtest).${OX.pen&&OX.pen.ok?` PitchAPI evidence: ${OX.pen.pens.length} penalties in ${OX.pen.matches} ${esc(OX.pen.league)} matches, ${OX.pen.penLinked} linked to an FPL player by club and name${OX.pen.penUnlinked.length?'; not linked: '+OX.pen.penUnlinked.map(esc).join(', '):''}.`:OX.pen&&!OX.pen.ok?' PitchAPI set-piece evidence unavailable: '+esc(OX.pen.why):''}${FPD.cols.includes('penalties_order')?'':' FPL taker order is not in the downloaded data yet; it is added at the next synchronization.'}</p></details>`;
+ <p>The 80% range comes from ${OX.N.toLocaleString()} simulations of the same model (fixed seed, so it does not change between visits): minutes, goals, assists, saves, defensive actions, bonus and cards are drawn per player; goals against are drawn once per team and fixture, so team-mates' clean sheets move together. Each team's goals are drawn once per match and shared out to its scorers and assisters, so team-mates' attacking returns move together and against the opposing defence. In the leak-free replay these lineup ranges came out too narrow, so they are widened by a factor of ${oxK().toFixed(2)} around the expected total (${oxK()===OX_KAPPA?'default fitted on the 2022-23 and 2023-24 seasons, validated on 2024-25 and tested on 2025-26':'refitted on this device in the Backtest tab'}); the Backtest tab shows the current check. Projections of the very top players have been optimistic (a selection effect: the highest projections include the largest over-estimates), so read the XI total as an upper-leaning estimate${(()=>{const c=oxLsGet(OX_LS.cal,null);return c&&c.season===oxSeason(FPD)&&c.top11?`: in the replay the 11 highest-projected players per gameweek averaged ${c.top11.pred.toFixed(2)} projected vs ${c.top11.act.toFixed(2)} actual points`:''})()}.</p>
+ <p>Set pieces: FPL taker order (when the data has it) and PitchAPI shot evidence (penalties taken and scored, direct free-kick shots) are shown for information. PitchAPI shots do not record who took a corner or a free-kick cross, so corner duty is only known from FPL's own taker order. The base model counts penalty xG inside FPL xG; the penalty-regression option regresses each taker's realised penalty xG toward the league penalty rate (see Backtest).${OX.pen&&OX.pen.ok?` PitchAPI evidence: ${OX.pen.pens.length} penalties in ${OX.pen.matches} ${esc(OX.pen.league)} matches, ${OX.pen.penLinked} linked to an FPL player by club and name${OX.pen.penUnlinked.length?'; not linked: '+OX.pen.penUnlinked.map(esc).join(', '):''}.`:OX.pen&&!OX.pen.ok?' PitchAPI set-piece evidence unavailable: '+esc(OX.pen.why):''}${FPD.cols.includes('penalties_order')?'':' FPL taker order is not in the downloaded data yet; it is added at the next synchronization.'}</p></details>`;
 }
 
 /* ---------- My XI (builder) ---------- */
@@ -4890,14 +4930,14 @@ function oxRangePlot(rows){
  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:760px;display:block;margin:0 auto" role="img" aria-label="Expected points and 80% range per lineup">${g}</svg>`;
 }
 
-/* ---------- Backtest additions: range calibration + model v2 vs v1 (same leak-free replay) ---------- */
+/* ---------- Backtest additions: range calibration + penalty regression vs base model (same leak-free replay) ---------- */
 async function oxBtRun(d,onP){
  await oxPenLoad();
  const cap=new Map(),orig=pmPlayer;
  const runV=async v=>{OX.btVer=v;cap.clear();try{
    pmPlayer=function(p,C,dd){const m=orig(p,C,dd);if(dd!==FPD)cap.set(C.next+'|'+p.id,{p,m,C,dd});return m};
    const r=await btRun(d,x=>onP&&onP(v,x));return {r,cap:new Map(cap)}}finally{pmPlayer=orig;OX.btVer='v1'}};
- const a=await runV('v1'),b=OX.pen&&OX.pen.ok?await runV('v2'):null;
+ const a=await runV('v1'),b=OX.pen&&OX.pen.ok&&!d.archive?await runV('v2'):null;
  /* calibration of v1 ranges: per player-gameweek, simulate his points and compare the actual with the 10th/90th percentiles */
  const u=oxRng(99),N=300,cal=[];let k=0;
  for(const x of a.r.rows){const c=a.cap.get(x.r+'|'+x.id);if(!c)continue;const q=oxParams(Object.assign({},c.p,{pm:c.m}),0,c.dd,c.C);
@@ -4913,8 +4953,9 @@ async function oxBtRun(d,onP){
   for(let j=0;j<60;j++){const fm=forms[Math.floor(u()*forms.length)],ks=oxKs(fm),ids=[];let okk=true;
    for(const t of [1,2,3,4]){const A=pool.filter(x=>x.pos===t);for(let i=0;i<ks[t];i++){if(!A.length){okk=false;break}ids.push(A.splice(Math.floor(u()*A.length),1)[0].id)}}
    if(okk)ls.push({kind:'rand',ids,cap:ids[Math.floor(u()*ids.length)]})}
-  for(const Lx of ls){const q=Lx.ids.map(id=>{const c=a.cap.get(rd+'|'+id);return {id,fx:c?oxParams(Object.assign({},c.p,{pm:c.m}),0,c.dd,c.C):[]}}),M=500,s=new Float64Array(M);
-   for(let i=0;i<M;i++){const G=new Map();let tot=0;for(const pl of q){let v=0;for(const z of pl.fx){let g=null;if(z.lc!=null){g=G.get(z.gk);if(g===undefined){g=oxPx(z.xL,u);G.set(z.gk,g)}}v+=oxDraw(z,g,u)}tot+=v;if(pl.id===Lx.cap)tot+=v}s[i]=tot}
+  const fxOf=id=>{const c=a.cap.get(rd+'|'+id);return c?oxParams(Object.assign({},c.p,{pm:c.m}),0,c.dd,c.C):[]},lam=oxLam(L.map(x=>fxOf(x.id)));
+  for(const Lx of ls){const q=Lx.ids.map(id=>({id,fx:fxOf(id)})),P=oxPlan(q,lam),ci=Lx.ids.indexOf(Lx.cap),M=500,s=new Float64Array(M);
+   for(let i=0;i<M;i++){const v=oxDrawSet(P,u);let tot=0;for(let j=0;j<v.length;j++)tot+=v[j];if(ci>=0)tot+=v[ci];s[i]=tot}
    const st=oxQ(s);let v2=0;for(const v of s)v2+=(v-st.mean)**2;
    lin.push({r:rd,kind:Lx.kind,act:Lx.ids.reduce((x,id)=>x+(act.get(id)||0),0)+(act.get(Lx.cap)||0),mean:st.mean,p10:st.p10,p90:st.p90,sd:Math.sqrt(v2/M)})}
   onP&&onP('xi',rd);await oxYield()}
@@ -4925,12 +4966,12 @@ async function oxBtRun(d,onP){
  const rs=[...by.keys()].sort((x,y)=>x-y),half=rs[Math.floor(rs.length/2)],fit=rr.filter(x=>x.r<half),val=rr.filter(x=>x.r>=half),kf=zsd(fit);
  const cov=(L,k)=>L.length?L.filter(o=>o.act>=o.mean-k*(o.mean-o.p10)&&o.act<=o.mean+k*(o.p90-o.mean)).length/L.length:null;
  const lc={n:rr.length,rounds:rs,kappa,cov1:cov(rr,1),covK:cov(rr,Math.min(2,Math.max(1,kappa||1))),split:fit.length&&val.length?{half,kf,cov1:cov(val,1),covK:cov(val,Math.min(2,Math.max(1,kf))),n:val.length}:null,opt:lin.filter(x=>x.kind==='opt')};
- if(fpOk(kappa))oxLsSet(OX_LS.cal,{season:oxSeason(d),gen:d.generated,kappa:Math.min(2,Math.max(1,kappa)),top11,slope:sxx>0?sxy/sxx:null,rounds:rs,n:rr.length});
+ if(fpOk(kappa)&&!d.archive)oxLsSet(OX_LS.cal,{season:oxSeason(d),gen:d.generated,kappa:Math.min(2,Math.max(1,kappa)),top11,slope:sxx>0?sxy/sxx:null,rounds:rs,n:rr.length});
  return {at:d.generated,v1:a.r,v2:b?b.r:null,cal,lc,slope:sxx>0?sxy/sxx:null,top11};
 }
 function oxBtHtml(){
- const head='<h3>Points range calibration and model v2 (penalty regression)</h3>';
- if(!OX.bt)return head+`<div class="mu" style="font-size:12px;margin-bottom:6px">Checks the 80% ranges shown in Optimal XI, My XI and Forecast: in the same leak-free replay, how often did a player's actual points fall below the 10th or above the 90th percentile of his simulated distribution? Also replays model v2, which regresses penalty xG (PitchAPI shots), and compares it with v1 on the same player-gameweeks.</div><div class="ctl"><button class="s" onclick="oxBtGo()" ${OX.btBusy?'disabled':''}>Run calibration and v2 comparison</button></div><div id="oxbtmsg" class="mu"></div>`;
+ const head='<h3>Points range calibration and the penalty-regression option</h3>';
+ if(!OX.bt)return head+`<div class="mu" style="font-size:12px;margin-bottom:6px">Checks the 80% ranges shown in Optimal XI, My XI and Forecast: in the same leak-free replay, how often did a player's actual points fall below the 10th or above the 90th percentile of his simulated distribution? Also replays the penalty-regression option (PitchAPI penalty shots) and compares it with the base model on the same player-gameweeks.</div><div class="ctl"><button class="s" onclick="oxBtGo()" ${OX.btBusy?'disabled':''}>Run calibration and penalty-regression comparison</button></div><div id="oxbtmsg" class="mu"></div>`;
  if(OX.bt.err)return head+`<div class="empty">Could not run: ${esc(OX.bt.err)}</div>`;
  const B=OX.bt,st=BT.start,cal=B.cal.filter(x=>x.r>=st);if(!cal.length)return head+'<div class="empty">No player-gameweeks in this range.</div>';
  const avg=a=>a.reduce((s,x)=>s+x,0)/a.length,below=avg(cal.map(x=>x.act<x.p10?1:0)),above=avg(cal.map(x=>x.act>x.p90?1:0)),eb=avg(cal.map(x=>x.eb)),ea=avg(cal.map(x=>x.ea));
@@ -4941,9 +4982,9 @@ function oxBtHtml(){
   const mae=(L,f)=>L.length?avg(L.map(x=>Math.abs(x[f]-x.act))):null,ch=pr.filter(x=>Math.abs(x.a-x.b)>1e-6),by=new Map();
   ch.forEach(x=>{let o=by.get(x.r);if(!o){o={n:0,g:0};by.set(x.r,o)}o.n++;o.g+=Math.abs(x.a-x.act)-Math.abs(x.b-x.act)});
   const gs=[...by.values()].map(o=>o.g/o.n),wins=gs.filter(x=>x>0).length;
-  v2=`<h3>Model v2 vs v1</h3>`+tbl([['Sample'],['N',1],['MAE v1',1],['MAE v2',1]],[['All player-gameweeks',pr.length,f(mae(pr,'a'),3),f(mae(pr,'b'),3)],['Only where v2 changes the prediction (penalty takers)',ch.length,f(mae(ch,'a'),3),f(mae(ch,'b'),3)]])+
-   `<div class="mu" style="font-size:12px;margin:6px 0">On the changed player-gameweeks v2 had the lower average error in ${wins} of ${gs.length} gameweeks. ${ch.length<100?'<b>The sample is far too small to conclude anything</b> (penalties are rare), so v1 stays the default; v2 can be selected in the Optimal XI tab.':'v1 stays the default until v2 shows a consistent gain over more gameweeks.'} Penalty shots of round r are used only when predicting later rounds.</div>`}
- else v2=`<div class="mu" style="font-size:12px">Model v2 not tested: ${esc((OX.pen&&OX.pen.why)||'no PitchAPI penalty data')}.</div>`;
+  v2=`<h3>Penalty regression vs base model</h3>`+tbl([['Sample'],['N',1],['MAE base',1],['MAE with penalty regression',1]],[['All player-gameweeks',pr.length,f(mae(pr,'a'),3),f(mae(pr,'b'),3)],['Only where the option changes the prediction (penalty takers)',ch.length,f(mae(ch,'a'),3),f(mae(ch,'b'),3)]])+
+   `<div class="mu" style="font-size:12px;margin:6px 0">On the changed player-gameweeks the penalty-regression option had the lower average error in ${wins} of ${gs.length} gameweeks. ${ch.length<100?'<b>The sample is far too small to conclude anything</b> (penalties are rare), so the base model stays the default; the option can be selected in the Optimal XI tab.':'the base model stays the default until the option shows a consistent gain over more gameweeks.'} Penalty shots of round r are used only when predicting later rounds.</div>`}
+ else v2=`<div class="mu" style="font-size:12px">Penalty regression not tested: ${esc((OX.pen&&OX.pen.why)||'no PitchAPI penalty data')}.</div>`;
  return head+tbl([['Check'],['Model says',1],['Actual',1]],[['Actual below the 10th percentile',pc(eb),pc(below)],['Actual above the 90th percentile',pc(ea),pc(above)],['Mean points per player-gameweek',mean.toFixed(3),avg(cal.map(x=>x.act)).toFixed(3)]])+
   `<div class="mu" style="font-size:12px;margin:6px 0">${cal.length} player-gameweeks from GW${st}. "Model says" is the share of the model's own simulated outcomes beyond each percentile (points are whole numbers, so it is not exactly 10%); a calibrated model matches it. Simulated mean ${mean.toFixed(3)} vs analytic expectation ${pred.toFixed(3)} (difference = Monte Carlo error). Single-player check only: lineup ranges also depend on correlations between team-mates.</div>`+
   tbl([['Pos'],['N',1],['Below P10: actual',1],['model',1],['Above P90: actual',1],['model',1]],byPos)+oxBtLineHtml(B)+v2;
@@ -4993,6 +5034,615 @@ def _x_ox_index(html):
 
 INDEX = _x_ox_index(INDEX)
 # ======================== نهاية إضافة Optimal XI ========================
+
+
+# ============================================================================
+# إضافة: مواسم الفانتازي السابقة (2022/23 → 2025/26) — الصقها قبل إضافة الواجهة العربية
+# المصدر: الأرشيف العام vaastav/Fantasy-Premier-League (بيانات FPL الرسمية لكل لاعب في كل جولة).
+# المواسم المنتهية ما تتغير، فتُجلب مرة وحدة فقط وتُحفظ في data/fpl_<season>.json، وقائمتها في data/fpl_archive.json.
+# قبل الحفظ نتحقق أن قوانين نقاط الموسم تعيد حساب نقاط FPL الرسمية لكل لاعب في كل جولة.
+# ============================================================================
+import csv as _csv, io as _io, collections as _collections
+
+FPL_ARCHIVE = ["2022-23", "2023-24", "2024-25", "2025-26"]
+FPL_ARCHIVE_URL = "https://raw.githubusercontent.com/vaastav/Fantasy-Premier-League/master/data/{season}/{name}"
+FPL_ARCHIVE_VER = 2                 # يتغير فقط إذا تغيرت طريقة التحويل (يعيد بناء الملفات)
+FPL_SEASONS = []                    # يدخل في data/index.json → fpl.seasons
+_FPL_NUM += [k for k in ["code"] if k not in _FPL_NUM]     # رقم اللاعب الثابت بين المواسم (لربط الموسم الحالي بالسابقة)
+_FPA_HIST = ["round", "total_points", "value", "minutes", "expected_goals", "expected_assists", "bonus", "opponent_team", "was_home",
+             "starts", "goals_scored", "assists", "clean_sheets", "goals_conceded", "saves", "yellow_cards", "red_cards", "own_goals",
+             "penalties_missed", "penalties_saved", "bps", "expected_goals_conceded", "defensive_contribution", "fixture"]
+
+
+def _fpa_num(v):
+    if v is None or v == "" or v == "None":
+        return None
+    try:
+        x = float(v)
+    except ValueError:
+        return None
+    return int(x) if x == int(x) and "." not in str(v) else x
+
+
+def _fpa_rules(season):
+    """قوانين نقاط الموسم: identifier → {نوع اللاعب: (كل كم, نقاط)}"""
+    r = {"goals_scored": {1: (1, 6), 2: (1, 6), 3: (1, 5), 4: (1, 4)}, "assists": {t: (1, 3) for t in (1, 2, 3, 4)},
+         "clean_sheets": {1: (1, 4), 2: (1, 4), 3: (1, 1)}, "goals_conceded": {1: (2, -1), 2: (2, -1)}, "saves": {1: (3, 1)},
+         "penalties_saved": {1: (1, 5)}, "penalties_missed": {t: (1, -2) for t in (1, 2, 3, 4)},
+         "yellow_cards": {t: (1, -1) for t in (1, 2, 3, 4)}, "red_cards": {t: (1, -3) for t in (1, 2, 3, 4)},
+         "own_goals": {t: (1, -2) for t in (1, 2, 3, 4)}, "bonus": {t: (1, 1) for t in (1, 2, 3, 4)}}
+    if season >= "2025-26":
+        r["goals_scored"][1] = (1, 10)
+        r["defensive_contribution"] = {2: (10, 2), 3: (12, 2), 4: (12, 2)}
+    return r
+
+
+def _fpa_score(h, t, R):
+    m = h["minutes"] or 0
+    p = 0 if m == 0 else (1 if m < 60 else 2)
+    for ident, by in R.items():
+        if t in by and h.get(ident) is not None:
+            step, pts = by[t]
+            p += int(h[ident] // step) * pts
+    return p
+
+
+def _fpa_build(season, get):
+    """يبني ملف الموسم بنفس صيغة data/fpl.json. get(name) ترجع صفوف CSV (قائمة dict)."""
+    teams, pr, fx, gw = get("teams.csv"), get("players_raw.csv"), get("fixtures.csv"), get("gws/merged_gw.csv")
+    types = {int(p["id"]): int(p["element_type"]) for p in pr}
+    pr = [p for p in pr if int(p["element_type"]) <= 4]                  # 2024-25: المدربون (Assistant Manager) ليسوا لاعبين
+    cols = ["id", "wn", "fn", "sn", "tm", "ty", "st", "nw"] + _FPL_NUM
+    rows = [[int(p["id"]), p["web_name"], p["first_name"], p["second_name"], int(p["team"]), int(p["element_type"]),
+             p.get("status") or "a", p.get("news") or ""] + [_fpa_num(p.get(k)) for k in _FPL_NUM] for p in pr]
+    keep = {r[0] for r in rows}
+    hist, R, ok, bad = _collections.defaultdict(list), _fpa_rules(season), 0, 0
+    for g in gw:
+        e = int(g["element"])
+        if e not in keep:
+            continue
+        h = {k: (_fpa_num(g.get(k)) if k != "was_home" else (1 if g.get("was_home") in ("True", "true", "1") else 0)) for k in _FPA_HIST}
+        h["round"] = int(float(g["round"]))
+        hist[str(e)].append([h[k] for k in _FPA_HIST])
+        if _fpa_score(h, types[e], R) == h["total_points"]:
+            ok += 1
+        else:
+            bad += 1
+    for v in hist.values():
+        v.sort(key=lambda x: (x[0], x[-1] or 0))
+    # FPL published expected stats only from gameweek 16 of 2022-23: before that the CSV has 0 for everyone, which is missing, not zero
+    im, ixs = _FPA_HIST.index("minutes"), [_FPA_HIST.index(k) for k in ("expected_goals", "expected_assists", "expected_goals_conceded")]
+    pub = {r[0] for v in hist.values() for r in v if (r[im] or 0) > 0 and any((r[i] or 0) > 0 for i in ixs)}
+    for v in hist.values():
+        for r in v:
+            if r[0] not in pub:
+                for i in ixs:
+                    r[i] = None
+    ko = _collections.defaultdict(list)
+    for f in fx:
+        if f["event"]:
+            ko[int(float(f["event"]))].append(f["kickoff_time"])
+    events = []
+    for e in sorted(ko):
+        k0 = datetime.datetime.fromisoformat(min(ko[e]).replace("Z", "+00:00")) - datetime.timedelta(minutes=90)
+        events.append(dict(id=e, name=f"Gameweek {e}", fin=True, cur=False, nxt=False, dl=k0.strftime("%Y-%m-%dT%H:%M:%SZ"), avg=None))
+    fix = [[int(float(f["event"])), int(f["team_h"]), int(f["team_a"]), _fpa_num(f["team_h_difficulty"]), _fpa_num(f["team_a_difficulty"]),
+            1 if f["finished"] == "True" else 0, _fpa_num(f["team_h_score"]), _fpa_num(f["team_a_score"]), f["kickoff_time"]]
+           for f in fx if f["event"]]
+    sc = {ident: {str(t): dict(kind="step", step=st, pts=float(pt), n=0) for t, (st, pt) in by.items()} for ident, by in R.items()}
+    sc["minutes"] = {str(t): dict(kind="threshold", at=60, lo=1, hi=2, n=0) for t in (1, 2, 3, 4)}
+    n_h = sum(len(v) for v in hist.values())
+    audit = {k: sum(1 for v in hist.values() for r in v if r[i] is not None) for i, k in enumerate(_FPL_HIST_SHORT)}
+    return dict(generated=f"{season} archive", archive=season, av=FPL_ARCHIVE_VER, source="vaastav/Fantasy-Premier-League",
+                cols=cols, rows=rows,
+                teams=[dict(id=int(t["id"]), n=t["name"], s=t["short_name"], st=_fpa_num(t.get("strength")), code=_fpa_num(t.get("code")))
+                       for t in teams],
+                events=events, fix=fix, hist=dict(hist), hcols=list(_FPL_HIST_SHORT), hv=FPL_HIST_VER, haudit=dict(rows=n_h, f=audit),
+                rules=dict(squad=15, play=11, club=3, budget=1000, transfers_cap=20,
+                           types={"1": dict(n="GKP", sel=2, mn=1, mx=1), "2": dict(n="DEF", sel=5, mn=3, mx=5),
+                                  "3": dict(n="MID", sel=5, mn=2, mx=5), "4": dict(n="FWD", sel=3, mn=1, mx=3)}),
+                scoring=sc, scoring_gw=None, postponed=sum(1 for f in fx if not f["event"]),
+                check=dict(rows=ok + bad, reproduced=ok))
+
+
+def _fpa_get(season):
+    def get(name):
+        url = FPL_ARCHIVE_URL.format(season=season, name=name)
+        last = None
+        for i in range(3):
+            try:
+                r = requests.get(url, timeout=60)
+                if r.status_code == 200:
+                    return list(_csv.DictReader(_io.StringIO(r.content.decode("utf-8", errors="replace"))))
+                last = r.status_code
+            except Exception as e:
+                last = type(e).__name__
+            time.sleep(5 * (i + 1))
+        raise RuntimeError(f"{name}: {last}")
+    return get
+
+
+def sync_fpl_archive(hub):
+    global FPL_SEASONS
+    man = gh_get_json(hub, "data/fpl_archive.json") or {}
+    have = {x["season"]: x for x in man.get("seasons", []) if x.get("av") == FPL_ARCHIVE_VER}
+    added = False
+    for s in FPL_ARCHIVE:
+        if s in have:
+            continue
+        try:
+            d = _fpa_build(s, _fpa_get(s))
+            chk = d["check"]
+            if not chk["rows"] or chk["reproduced"] / chk["rows"] < 0.99:
+                log(f"  [Fantasy archive] {s}: القوانين ما تطابق نقاط FPL ({chk}) — ما حفظته")
+                continue
+            gh_put(hub, f"data/fpl_{s}.json", json.dumps(d, ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
+                   f"Add Fantasy season {s}")
+            have[s] = dict(season=s, file=f"fpl_{s}.json", av=FPL_ARCHIVE_VER, rows=chk["rows"],
+                           reproduced=round(chk["reproduced"] / chk["rows"] * 100, 2))
+            added = True
+            log(f"  [Fantasy archive] {s}: {chk['rows']} صف، القوانين تطابق {have[s]['reproduced']}% من نقاط FPL")
+        except Exception as e:
+            log(f"  [Fantasy archive] تعذر جلب {s} ({type(e).__name__}: {e}) — نحاول في المزامنة القادمة")
+    FPL_SEASONS = [have[s] for s in FPL_ARCHIVE if s in have]
+    if added:
+        gh_put(hub, "data/fpl_archive.json", json.dumps(dict(seasons=FPL_SEASONS), ensure_ascii=False).encode("utf-8"),
+               "Update Fantasy archive list")
+
+
+_orig_run_pipeline_fpa = run_pipeline
+
+
+def run_pipeline(hub, pit_key):
+    try:
+        sync_fpl_archive(hub)
+    except Exception as e:      # أي خطأ في الأرشيف ما يوقف بقية المزامنة
+        log(f"  [Fantasy archive] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
+    return _orig_run_pipeline_fpa(hub, pit_key)
+
+
+_orig_gh_put_fpa = gh_put
+
+
+def gh_put(hub, path, content, message):
+    if path == "data/index.json" and FPL_INDEX and FPL_SEASONS:
+        FPL_INDEX["seasons"] = FPL_SEASONS      # إضافة Fantasy تكتب FPL_INDEX في الفهرس
+    return _orig_gh_put_fpa(hub, path, content, message)
+
+
+# ---------------- الواجهة: اختيار الموسم في صفحة الفانتازي ----------------
+_X_SEASONJS = r"""/* ===== Fantasy seasons: the current season (live) or an archived season (2022-23 → 2025-26) ===== */
+const FPS={cur:'',cache:{}};
+const FPS_ARCH_TABS=new Set(['table','scatter','value','compare','teams','fixtures','backtest']);
+const fpsList=()=>((ALL&&ALL.fpl&&ALL.fpl.seasons)||[]);
+const fpsLabel=s=>s.replace('-','/');
+const fpsTabOk=t=>!(FPD&&FPD.archive)||FPS_ARCH_TABS.has(t[0]);
+async function fpsLoad(s){
+ const m=fpsList().find(x=>x.season===s);if(!m)throw new Error('season '+s+' is not in the data');
+ if(FPD&&FPK==='arch:'+s)return FPD;
+ let d=FPS.cache[s];
+ if(!d){const r=await fetch('data/'+m.file+'?v='+encodeURIComponent(m.av||''));if(!r.ok)throw new Error(m.file+' (HTTP '+r.status+')');d=await r.json();
+  d.T=new Map(d.teams.map(t=>[t.id,t]));
+  d.P=d.rows.map(r=>{const o={};d.cols.forEach((c,i)=>o[c]=r[i]);const t=d.T.get(o.tm)||{};
+   o.tn=t.s||'?';o.tf=t.n||'?';o.pos=o.ty;o.name=o.wn;o.price=fpOk(o.now_cost)?o.now_cost/10:null;o.chg=fpOk(o.cost_change_start)?o.cost_change_start/10:null;return o});
+  d.PB=new Map(d.P.map(p=>[p.id,p]));d.archive=s;FPS.cache[s]=d}
+ FPD=d;FPK='arch:'+s;FPLINK=null;return d;
+}
+function fpsSet(v){
+ FPS.cur=v;FP.sel=[];FP.pdet=null;FPBEST={};OX.cache={};OX.bt=null;BT.res=null;BT.line=null;
+ if(v&&!FPS_ARCH_TABS.has(FP.tab))FP.tab='table';
+ R.fantasy($('#app'));
+}
+function fpsSel(){
+ const L=fpsList();if(!L.length)return '';
+ return `<div class="ctl" style="margin-bottom:6px"><select onchange="fpsSet(this.value)" aria-label="Season">${fpOpts([['','Current season'],...[...L].reverse().map(x=>[x.season,'Season '+fpsLabel(x.season)])],FPS.cur)}</select></div>`;
+}
+function fpsHead(d){
+ const m=fpsList().find(x=>x.season===d.archive)||{};
+ return `<div class="mu" style="margin-bottom:8px">Archived season ${esc(fpsLabel(d.archive))}: official FPL data per player and gameweek from the public vaastav/Fantasy-Premier-League archive (prices, status and totals as at the end of that season). The season's scoring rules reproduce FPL's own points for ${m.reproduced!=null?esc(m.reproduced)+'%':'N/A'} of ${m.rows!=null?esc(m.rows):'N/A'} player-gameweeks. The Backtest tab replays the whole season with today's model, using only earlier gameweeks for each prediction. The Optimal XI, My XI, Forecast and prediction tabs belong to the current season.</div><div id="fpmsg" class="mu" style="min-height:18px"></div>`;
+}
+function fpsNoLink(){FPLINK={key:'arch:'+FPD.archive,map:new Map(),on:false,n:0,tot:0};FPD.P.forEach(p=>{p.px=null});return FPLINK}
+"""
+
+_AR_SEASON = {
+    "Current season": "الموسم الحالي", "Season #/#": "موسم #/#", "Season": "الموسم",
+    "## archive": "أرشيف ##",
+    "Archived season #/#: official FPL data per player and gameweek from the public vaastav/Fantasy-Premier-League archive (prices, status and totals as at the end of that season). The season's scoring rules reproduce FPL's own points for #% of # player-gameweeks. The Backtest tab replays the whole season with today's model, using only earlier gameweeks for each prediction. The Optimal XI, My XI, Forecast and prediction tabs belong to the current season": "موسم مؤرشف #/#: بيانات FPL الرسمية لكل لاعب في كل جولة من الأرشيف العام vaastav/Fantasy-Premier-League (الأسعار والحالة والمجاميع كما كانت في نهاية الموسم). قوانين نقاط ذاك الموسم تعيد حساب نقاط FPL نفسها في #% من # (لاعب × جولة). تبويب الاختبار التاريخي يعيد الموسم كاملاً بموديل اليوم، وكل توقع يستخدم الجولات السابقة فقط. تبويبات التشكيلة المثالية وتشكيلتي والتوقعات تخص الموسم الحالي",
+}
+
+
+def _x_season_index(html):
+    def sub(h, old, new):
+        if h.count(old) != 1:
+            log(f"  تنبيه (المواسم): ما لقيت نقطة التعديل بدقة، تخطيتها: {old[:60]}")
+            return h
+        return h.replace(old, new)
+    h = html
+    h = sub(h, "async function fpLoad(){\n const m=ALL.fpl;", "async function fpLoad(){\n if(FPS.cur)return fpsLoad(FPS.cur);\n const m=ALL.fpl;")
+    h = sub(h, "function fpLink(){\n", "function fpLink(){\n if(FPD&&FPD.archive)return fpsNoLink();\n")
+    h = sub(h, "function fpHeader(d){\n", "function fpHeader(d){\n if(d.archive)return fpsSel()+fpsHead(d);\n")
+    h = sub(h, " return `<div class=\"mu\" style=\"margin-bottom:8px\">Official Fantasy Premier League data, as of ",
+            " return fpsSel()+`<div class=\"mu\" style=\"margin-bottom:8px\">Official Fantasy Premier League data, as of ")
+    h = sub(h, "function fpRender(){\n const d=FPD,T=[", "function fpRender(){\n if(FPD&&FPD.archive&&!fpsTabOk([FP.tab]))FP.tab='table';\n const d=FPD,T=[")
+    h = sub(h, "$('#fproot').innerHTML=`<div class=\"ctl\">${T.map(", "$('#fproot').innerHTML=`<div class=\"ctl\">${T.filter(fpsTabOk).map(")
+    h = sub(h, "async function route(){", _X_SEASONJS + "\nasync function route(){")
+    return h
+
+
+INDEX = _x_season_index(INDEX)
+# ======================== نهاية إضافة مواسم الفانتازي ========================
+
+
+# ============================================================================
+# إضافة: مؤشر "الزجاج السائل" (Liquid Glass) للقائمة العلوية فقط (#nav) — الصقها قبل إضافة الواجهة العربية
+# عنصر واحد شفاف خلف الرابط المختار، ينزلق للرابط الجديد ويتمدد قليلاً أثناء الحركة ثم يرجع لشكله.
+# الحركة بـ transform فقط (خفيفة على الجوال)، وتتوقف إذا الجهاز مفعّل فيه "تقليل الحركة".
+# ============================================================================
+_X_LGLCSS = ("#nav{position:relative}#nav.lg a{position:relative;z-index:1}#nav.lg a.on{background:transparent;box-shadow:none}"
+             # كبسولة زجاجية مثل Apple Liquid Glass: تعبئة مصقولة شبه شفافة، حافة لامعة، لمعة علوية ناعمة، وظل خفيف
+             "#nav .lgl{position:absolute;left:0;top:0;width:0;height:0;border-radius:999px;pointer-events:none;z-index:0;opacity:0;"
+             "transform-origin:0 50%;will-change:transform;"
+             "background:linear-gradient(180deg,rgba(255,255,255,.17),rgba(255,255,255,.08) 60%,rgba(255,255,255,.11));"
+             "-webkit-backdrop-filter:blur(14px) saturate(180%);backdrop-filter:blur(14px) saturate(180%);"
+             "box-shadow:inset 0 0 0 1px rgba(255,255,255,.16),inset 0 1.5px 1px rgba(255,255,255,.42),inset 0 -1.5px 1px rgba(255,255,255,.14),"
+             "inset 0 -8px 14px rgba(255,255,255,.05),0 4px 14px rgba(0,0,0,.32)}"
+             "#nav .lgl::after{content:\"\";position:absolute;inset:0;border-radius:inherit;"
+             "background:radial-gradient(120% 70% at 30% 0%,rgba(255,255,255,.28),rgba(255,255,255,0) 60%)}")
+
+_X_LGLJS = r"""/* ===== Liquid Glass indicator: top navigation (#nav) only ===== */
+const LGL={el:null,x:null,w:null,anim:null,q:false};
+function lglPlace(animate){
+ const nav=document.getElementById('nav');if(!nav)return;
+ let g=LGL.el;if(!g){g=LGL.el=document.createElement('div');g.className='lgl';g.setAttribute('aria-hidden','true')}
+ if(g.parentNode!==nav)nav.insertBefore(g,nav.firstChild);
+ nav.classList.add('lg');
+ const a=nav.querySelector('a.on');if(!a){g.style.opacity='0';return}
+ const x=a.offsetLeft,w=a.offsetWidth;g.style.opacity='1';g.style.top=a.offsetTop+'px';g.style.height=a.offsetHeight+'px';
+ if(x===LGL.x&&w===LGL.w)return;
+ const end='translateX('+x+'px) scaleX(1)',x0=LGL.x,w0=LGL.w;
+ g.style.width=w+'px';if(LGL.anim)LGL.anim.cancel();
+ if(animate&&x0!=null&&g.animate&&!matchMedia('(prefers-reduced-motion: reduce)').matches){
+  /* liquid stretch: halfway, the glass is wider (more for a longer trip) and a little flatter, centred between the two tabs */
+  const d=Math.abs(x-x0),mw=(w0+w)/2*(1+Math.min(.18,d/1500)),mc=(x0+w0/2+x+w/2)/2;
+  LGL.anim=g.animate([{transform:'translateX('+x0+'px) scaleX('+(w0/w)+')'},
+   {transform:'translateX('+(mc-mw/2)+'px) scaleX('+(mw/w)+') scaleY(.93)',offset:.55},{transform:end}],
+   {duration:Math.min(640,360+d*.35),easing:'cubic-bezier(.3,.7,.2,1)'});
+ }
+ g.style.transform=end;LGL.x=x;LGL.w=w;
+}
+/* the menu is redrawn on every page change: measure once per frame, after any text change (e.g. Arabic) has been applied */
+const lglKick=()=>{if(LGL.q)return;LGL.q=true;requestAnimationFrame(()=>{LGL.q=false;lglPlace(true)})};
+(function(){const nav=document.getElementById('nav');if(!nav)return;
+ new MutationObserver(lglKick).observe(nav,{childList:true,subtree:true,characterData:true});
+ if(window.ResizeObserver)new ResizeObserver(()=>lglPlace(false)).observe(nav);})();
+"""
+
+
+def _x_lgl_index(html):
+    def sub(h, old, new):
+        if h.count(old) != 1:
+            log(f"  تنبيه (Liquid Glass): ما لقيت نقطة التعديل بدقة، تخطيتها: {old[:60]}")
+            return h
+        return h.replace(old, new)
+    h = html
+    h = sub(h, "</style></head>", _X_LGLCSS + "</style></head>")
+    h = sub(h, "async function route(){", _X_LGLJS + "\nasync function route(){")
+    return h
+
+
+INDEX = _x_lgl_index(INDEX)
+# ======================== نهاية إضافة Liquid Glass ========================
+
+
+# ============================================================================
+# إضافة: نموذج التوقع v2 — نموذج وقت اللعب المدرَّب على أرشيف المواسم (2022/23 → 2025/26)
+# التدريب على 2022/23 + 2023/24، التحقق على 2024/25، والاختبار مرة وحدة على 2025/26 (خطأ 1.845 → 1.716، أفضل في 35 من 35 جولة).
+# التفاصيل والأرقام: ml/RESULTS.md. التعديل في احتمال المشاركة ونسبة 60+ دقيقة والدقائق فقط؛ باقي النموذج كما هو.
+# ============================================================================
+_X_PM2_CONST = ("const PM={N:7,PRIOR_MIN:450,K_FIN:3,N0:4,RECENT:6,EPS:.001,MAXNODES:4000,\n"
+                " /* v2 playing time (trained on the 2022-23 and 2023-24 archive, validated on 2024-25, tested on 2025-26):\n"
+                "    P(play) = (sum w*played + PL_A*PL_MU)/(sum w + PL_A), w = PL_LAM^age over all earlier matches of the season (age 0 = latest),\n"
+                "    i.e. recency weighting with a Beta prior, so a player who played every recent match gets about 0.90, not 1.00.\n"
+                "    The 60+ share and the minutes when playing are weighted Q_LAM^age over his appearances. PT:0 restores v1. */\n"
+                " PT:1,PL_LAM:.5,PL_A:.5,PL_MU:.5,Q_LAM:.8};\nconst PM_VERSION='v2';")
+_X_PM2_PT = (" let pPlay0=fit?1:pl.length/rec.length,p60n=rec.filter(r=>r[3]>=60).length,q60=p60n/pl.length,ePlay=pl.reduce((s,r)=>s+r[3],0)/pl.length;\n"
+             " /* v2: a flagged (not 'a') player uses only his appearances while fit, so pPlay0 is his residual rotation risk and the\n"
+             "    published availability multiplies it as before (the injury is not counted twice) */\n"
+             " if(PM.PT){const all=fit?rows.filter(r=>r[3]>0):rows;let sw=0,sy=0,qa=0,q6=0,qm=0;\n"
+             "  for(let i=all.length-1,k=0;i>=0;i--,k++){const r=all[i],w=Math.pow(PM.PL_LAM,k),v=Math.pow(PM.Q_LAM,k);sw+=w;if(r[3]>0){sy+=w;qa+=v;qm+=v*r[3];if(r[3]>=60)q6+=v}}\n"
+             "  pPlay0=(sy+PM.PL_A*PM.PL_MU)/(sw+PM.PL_A);q60=q6/qa;ePlay=qm/qa}")
+
+
+def _x_pm2_index(html):
+    def sub(h, old, new):
+        if h.count(old) != 1:
+            log(f"  تنبيه (نموذج v2): ما لقيت نقطة التعديل بدقة، تخطيتها: {old[:60]}")
+            return h
+        return h.replace(old, new)
+    h = html
+    h = sub(h, "const PM={N:7,PRIOR_MIN:450,K_FIN:3,N0:4,RECENT:6,EPS:.001,MAXNODES:4000};", _X_PM2_CONST)
+    h = sub(h, " const pPlay0=fit?1:pl.length/rec.length,p60n=rec.filter(r=>r[3]>=60).length,q60=p60n/pl.length,ePlay=pl.reduce((s,r)=>s+r[3],0)/pl.length;", _X_PM2_PT)
+    h = sub(h, " out.rates={lamG,lamA,xg90,xa90,finG:fg,finA:fa_,R,pPlay0,q60,ePlay,e60,recN:rec.length,fit};",
+            " out.rates={lamG,lamA,xg90,xa90,finG:fg,finA:fa_,R,pPlay0,q60,ePlay,e60,recN:PM.PT?(fit?rows.filter(r=>r[3]>0).length:rows.length):rec.length,fit};")
+    h = sub(h, "Playing time: ${r.fit?'recent appearances while fit':'last '+r.recN+' matches'};",
+            "Playing time: ${r.fit?'recent appearances while fit':PM.PT?'all '+r.recN+' matches this season, recent ones weighted most':'last '+r.recN+' matches'};")
+    h = sub(h, "Model tested: <b>v1 = the model used in Predicted Points</b>, unchanged.",
+            "Model tested: <b>v2 = the model used in Predicted Points</b> (playing-time model trained on archived seasons).")
+    h = sub(h, "No model version other than v1 exists yet, and the model has not been tuned on these results, so nothing here is an in-sample fit.",
+            "Model v2's five playing-time parameters were tuned on the 2022-23 and 2023-24 seasons, so replays of those two archived seasons are partly in-sample; 2024-25 was the validation season and 2025-26 the untouched test season (error 1.845 → 1.716 against v1).")
+    h = sub(h, "sr('Model v1',S.pred,false)", "sr('Model '+PM_VERSION,S.pred,false)")
+    h = sub(h, "[['Model v1',mm.n,", "[['Model '+PM_VERSION,mm.n,")
+    h = sub(h, "[['Model (v1)','pred']", "[['Model ('+PM_VERSION+')','pred']")
+    return h
+
+
+_AR_SEASON.update({
+    "Model # (default)": "النموذج # (الافتراضي)", "Model # + penalty regression": "النموذج # + ضبط ركلات الجزاء",
+    "Model #": "النموذج #", "model #": "النموذج #", "model # + penalty regression": "النموذج # + ضبط ركلات الجزاء",
+    "Model (#)": "النموذج (#)", "Model tested:": "النموذج المختبر:",
+    "v# = the model used in Predicted Points": "v# = النموذج المستخدم في النقاط المتوقعة",
+    "(playing-time model trained on archived seasons)": "(نموذج وقت اللعب المدرَّب على المواسم المؤرشفة)",
+    "Model v#'s five playing-time parameters were tuned on the ## and ## seasons, so replays of those two archived seasons are partly in-sample": "معاملات وقت اللعب الخمسة في النموذج v# ضُبطت على موسمي ## و##، فإعادة هذين الموسمين داخل العينة جزئياً",
+    "## was the validation season and ## the untouched test season (error # → # against v#)": "## موسم التحقق و## موسم الاختبار اللي ما لُمس (الخطأ # ← # مقارنة بـ v#)",
+    "Points range calibration and the penalty-regression option": "معايرة نطاق النقاط وخيار ضبط ركلات الجزاء",
+    "Penalty regression vs base model": "ضبط ركلات الجزاء مقابل النموذج الأساسي", "MAE base": "MAE الأساسي",
+    "MAE with penalty regression": "MAE مع ضبط ركلات الجزاء",
+    "Only where the option changes the prediction (penalty takers)": "فقط حيث يغيّر الخيار التوقع (منفذو ركلات الجزاء)",
+    "all # matches this season, recent ones weighted most": "كل الـ# مباريات هذا الموسم، والأحدث لها وزن أكبر",
+    "recent appearances while fit": "المشاركات الأخيرة وهو جاهز", "last # matches": "آخر # مباريات",
+})
+
+
+INDEX = _x_pm2_index(INDEX)
+# ======================== نهاية إضافة نموذج v2 ========================
+
+
+# ============================================================================
+# إضافة: مراجعة الموسم — النموذج يدير فريقاً طوال الموسم (بدون تسريب بيانات) ويقارنه بأفضل تشكيلة لكل جولة بأثر رجعي
+# القائمة تُبنى قبل الجولة 6 من بيانات الجولات 1–5 فقط. نسختان: القائمة ثابتة طوال الموسم، أو انتقال مجاني واحد كل جولة.
+# نتائج المواسم المؤرشفة محسوبة مسبقاً في data/fpl_review.json (نفس الكود)؛ إذا تغير النموذج تنحسب على جهاز الزائر.
+# ============================================================================
+_X_SRJS = r"""/* ===== Season review: the model manages a team through the season (leak-free), against the best possible XI of each gameweek =====
+   The squad of 15 is picked before gameweek SR_FROM with the data of the earlier gameweeks only, within the FPL budget, by the same
+   exact squad optimizer as Optimal XI, valued on the expected points of the next SR_HZ gameweeks. Each later gameweek the model sees
+   only rows of earlier gameweeks (as in Backtest) and picks its XI, captain and vice from the 15. FPL's automatic substitutions and
+   vice-captaincy are applied to the real minutes. Two versions: the squad is kept all season, or 1 free transfer a gameweek is used
+   (banked up to the season's limit, no points hits, no chips). The best XI of each gameweek in hindsight is the best starting XI by
+   real points of any squad of 15 within the budget at that gameweek's prices. */
+const SR={res:{},busy:false,msg:'',view:'fixed',open:false};
+const SR_FROM=6,SR_HZ=6,SR_TH=1,SR_FT_CAP={'2022-23':2,'2023-24':2};
+const srFtCap=d=>SR_FT_CAP[d.archive||'']||(d.rules&&fpOk(d.rules.transfers_cap)&&d.rules.transfers_cap<=5?d.rules.transfers_cap:5);
+/* gameweek r with a horizon: fixtures of rounds r … r+hz−1 are unplayed, everything the model sees is from rounds before r */
+function srRound(d,H,ix,fixAll,r,hz){
+ const last=r+hz-1,ev=d.events.filter(e=>e.id<=last).map(e=>Object.assign({},e,{fin:e.id<r,cur:false,nxt:e.id===r}));
+ const fixR=fixAll.filter(x=>x[0]===r),fix=fixAll.filter(x=>x[0]<r).concat(fixAll.filter(x=>x[0]>=r&&x[0]<=last).map(x=>{const y=x.slice();y[5]=0;y[6]=null;y[7]=null;return y}));
+ const sh=[],tg=[],Hp={},club=new Map(),plays=t=>fixR.some(x=>x[1]===t||x[2]===t);
+ for(const p of d.P){const rows=H[String(p.id)];if(!rows)continue;
+  const rr=rows.filter(x=>x[0]===r),prior=rows.filter(x=>x[0]<r),lx=prior[prior.length-1];
+  /* no row this gameweek: his club from his last match; he is still in the game only if that club has no fixture (a blank gameweek) */
+  const tm=rr.length?btTeamAt(p,rr,fixR,ix):lx?btTeamAt(p,[lx],fixAll.filter(x=>x[0]===lx[0]),ix):p.tm,blank=!rr.length&&lx&&!plays(tm);
+  const o={id:p.id,ty:p.ty,tm,st:'a',nw:'',chance_of_playing_next_round:null,name:p.name};
+  for(const [pf,hc] of BT_MAP)o[pf]=btSum(prior,ix[hc]);btXgScale(o,prior,ix);
+  Hp[String(p.id)]=prior;sh.push(o);club.set(p.id,tm);if(rr.length||blank)tg.push({p,o,rr:rr.length?rr:[lx],blank})}
+ const dd=Object.assign({},d,{events:ev,fix,P:sh,hist:Hp});delete dd._pm;delete dd._pmPred;
+ const C=pmCtx(dd),out=new Map();
+ for(const t of tg){const m=pmPlayer(t.o,C,dd),pv=t.rr[t.rr.length-1][ix.val],gw=C.gws.map(g=>{const x=m.q==='nodata'?null:m.gws.find(y=>y.ev===g);return x?x.pts:0});
+  out.set(t.p.id,{id:t.p.id,t:t.p.ty,club:t.o.tm,c:fpOk(pv)?pv:null,pred:gw,act:t.blank?0:btSum(t.rr,ix.pts)||0,min:t.blank?0:btSum(t.rr,ix.min)||0})}
+ return {r,gws:C.gws,P:out,club};
+}
+/* best XI of a squad for one gameweek's values; captain = highest, vice = second (oxTeam) */
+function srXI(sq,val,RU,forms){const it=sq.map(x=>({id:x.id,t:x.t,c:x.c||0,club:x.club,v:val(x)}));const b=oxSolveXI(it,RU,forms).best;return b?b.team:null}
+/* FPL automatic substitutions: a starter with no minutes is replaced by the first bench player (in order) who played and keeps the formation legal */
+function srAuto(xi,bench,minOf,RU){
+ const out=xi.map(i=>i.id),cnt={1:0,2:0,3:0,4:0},ty=new Map();xi.concat(bench).forEach(i=>ty.set(i.id,i.t));
+ out.forEach(id=>cnt[ty.get(id)]++);const used=new Set(),subs=[];
+ for(let k=0;k<out.length;k++){const id=out[k];if(minOf(id)>0)continue;const t=ty.get(id);
+  for(const b of bench){if(used.has(b.id)||!(minOf(b.id)>0))continue;
+   if(t===1?b.t!==1:b.t===1)continue;const c={...cnt};c[t]--;c[b.t]++;
+   if(b.t!==1&&[2,3,4].some(q=>c[q]<RU.T[q].mn))continue;
+   out[k]=b.id;used.add(b.id);cnt[t]--;cnt[b.t]++;subs.push([id,b.id]);break}}
+ return {ids:out,subs};
+}
+function srSell(h,now){return now==null?h.buy:now>h.buy?h.buy+Math.floor((now-h.buy)/2):now}
+/* the value of a squad over the horizon: sum over gameweeks of its best XI incl. captain */
+function srVal(sq,RU,forms,hz){let s=0;for(let k=0;k<hz;k++){const t=srXI(sq,x=>x.pred[k]||0,RU,forms);s+=t?t.total:0}return s}
+async function srRun(d,onP){
+ const ix=btIx(d);for(const k of ['r','pts','min','opp','h','val'])if(ix[k]===undefined)throw new Error('the stored match history has no "'+k+'" column');
+ const RU=pmRules(d);if(!RU||RU.club==null||RU.budget==null)throw new Error('the game rules (budget, club limit, positions) are missing from the data');
+ const forms=pmForms(RU),H={};Object.keys(d.hist||{}).forEach(k=>{H[k]=d.hist[k].slice().sort((a,b)=>a[0]-b[0])});
+ const fixAll=d.fix.filter(x=>x[0]),rounds=d.events.filter(e=>e.fin&&e.id>=SR_FROM).map(e=>e.id).sort((a,b)=>a-b);
+ if(!rounds.length)throw new Error('the season review needs gameweek '+SR_FROM+' or later to be finished');
+ const cap=srFtCap(d),name=id=>{const p=d.PB.get(id);return p?p.name:'#'+id};
+ /* squad: before gameweek SR_FROM, expected points of the next SR_HZ gameweeks, prices of gameweek SR_FROM */
+ const R0=srRound(d,H,ix,fixAll,rounds[0],SR_HZ),pool=[...R0.P.values()].filter(x=>x.c!=null).map(x=>({id:x.id,t:x.t,c:x.c,club:x.club,v:x.pred.reduce((a,b)=>a+b,0)}));
+ const m=pmMode1(pool,RU,forms);if(!m.best)throw new Error('no squad of 15 within the budget could be built');
+ const b0=m.best.team,ids0=b0.xi.map(i=>i.id).concat(b0.bench.map(i=>i.id)),cost0=ids0.reduce((s,id)=>s+R0.P.get(id).c,0);
+ const V={fixed:{hold:ids0.map(id=>({id,buy:R0.P.get(id).c})),bank:RU.budget-cost0,ft:0,rows:[]},ft:{hold:ids0.map(id=>({id,buy:R0.P.get(id).c})),bank:RU.budget-cost0,ft:0,rows:[]}};
+ const opt=[],last={};
+ for(const r of rounds){
+  const Rr=r===rounds[0]?R0:srRound(d,H,ix,fixAll,r,SR_HZ),P=Rr.P;
+  P.forEach((x,id)=>{if(x.c!=null)last[id]=x.c});
+  const sqOf=hold=>hold.map(h=>P.get(h.id)||{id:h.id,t:d.PB.get(h.id)?d.PB.get(h.id).ty:4,club:Rr.club.get(h.id)??null,c:last[h.id]??null,pred:Rr.gws.map(()=>0),act:0,min:0,gone:true});
+  /* free transfers: before every gameweek after the first, +1 free transfer (banked up to the limit); each transfer is the best single
+     swap by the squad's expected points over the horizon, made only if it gains at least SR_TH point (any gain when the bank is full) */
+  const S=V.ft;let made=[];
+  if(r!==rounds[0]){S.ft=Math.min(cap,S.ft+1);
+   while(S.ft>0){const sq=sqOf(S.hold),base=srVal(sq,RU,forms,Rr.gws.length),cc=new Map();sq.forEach(x=>{if(x.club!=null)cc.set(x.club,(cc.get(x.club)||0)+1)});
+    const own=new Set(S.hold.map(h=>h.id)),hz=x=>x.pred.reduce((a,b)=>a+b,0),cand=[];
+    sq.forEach((o,k)=>{const sell=srSell(S.hold[k],o.c),money=S.bank+sell;
+     P.forEach(x=>{if(own.has(x.id)||x.t!==o.t||x.c==null||x.c>money)return;if(x.club!==o.club&&(cc.get(x.club)||0)>=RU.club)return;cand.push({k,o,x,g:hz(x)-hz(o),sell})})});
+    cand.sort((a,b)=>b.g-a.g||a.x.id-b.x.id);let best=null;
+    for(const c of cand.slice(0,40)){const sq2=sq.slice();sq2[c.k]=c.x;const g=srVal(sq2,RU,forms,Rr.gws.length)-base;if(!best||g>best.g+1e-9)best={...c,g}}
+    if(!best||best.g<(S.ft>=cap?1e-9:SR_TH))break;
+    S.bank+=best.sell-best.x.c;S.hold[best.k]={id:best.x.id,buy:best.x.c};S.ft--;made.push({out:best.o.id,in:best.x.id,g:Math.round(best.g*1000)/1000})}}
+  for(const key of ['fixed','ft']){const Z=V[key],sq=sqOf(Z.hold),t=srXI(sq,x=>x.pred[0]||0,RU,forms);if(!t){Z.rows.push({r,err:true});continue}
+   const xiS=new Set(t.xi.map(i=>i.id)),bench=sq.filter(x=>!xiS.has(x.id)).sort((a,b)=>(a.t===1)-(b.t===1)||(b.pred[0]||0)-(a.pred[0]||0)||a.id-b.id);
+   const minOf=id=>(P.get(id)||{min:0}).min,actOf=id=>(P.get(id)||{act:0}).act,au=srAuto(t.xi,bench,minOf,RU);
+   const capId=minOf(t.cap.id)>0?t.cap.id:(t.vice&&minOf(t.vice.id)>0?t.vice.id:null);
+   const act=au.ids.reduce((s,id)=>s+actOf(id),0)+(capId!=null?actOf(capId):0);
+   Z.rows.push({r,exp:t.total,act,xi:t.xi.map(i=>i.id),cap:t.cap.id,vice:t.vice?t.vice.id:null,capUsed:capId,subs:au.subs,form:t.form.name,tr:key==='ft'?made:[],ft:key==='ft'?Z.ft:null,
+    value:sq.reduce((s,x)=>s+(x.c||0),0),bank:Z.bank})}
+  /* best XI in hindsight: real points, any squad of 15 within the budget at this gameweek's prices */
+  const op=pmMode1([...P.values()].filter(x=>x.c!=null).map(x=>({id:x.id,t:x.t,c:x.c,club:x.club,v:x.act})),RU,forms).best;
+  opt.push(op?{r,pts:op.team.total,xi:op.team.xi.map(i=>i.id),cap:op.team.cap.id,form:op.form.name}:{r,pts:null});
+  if(onP)onP(r,rounds[rounds.length-1]);await oxYield();
+ }
+ return {season:d.archive||'',ver:PM_VERSION,av:d.av||null,from:rounds[0],to:rounds[rounds.length-1],cap,budget:RU.budget,squad:ids0.map(id=>({id,c:R0.P.get(id).c,t:R0.P.get(id).t,v:R0.P.get(id).pred.reduce((a,b)=>a+b,0),xi:b0.xi.some(i=>i.id===id)})),
+  cost0,fixed:V.fixed.rows,ft:V.ft.rows,opt,hz:SR_HZ};
+}
+/* ---------- Season review tab ---------- */
+const SR_VER='sr1',SR_COL={act:'#3987e5',exp:'#d95926',opt:'#199e70',dlt:'#8a9bb0'};
+const srKey=d=>(d.archive||'live:'+d.generated)+'|'+PM_VERSION+'|'+SR_VER;
+async function srStored(d){
+ if(!d.archive)return null;
+ if(SR.file===undefined){try{const r=await fetch('data/fpl_review.json?v='+encodeURIComponent(SR_VER));SR.file=r.ok?await r.json():null}catch(e){SR.file=null}}
+ const R=SR.file&&SR.file.seasons&&SR.file.seasons[d.archive];return R&&R.ver===PM_VERSION&&R.av===(d.av||null)&&SR.file.sr===SR_VER?R:null;
+}
+function fpTReview(el){
+ const d=FPD,k=srKey(d);
+ el.innerHTML=`<div class="card mu" style="font-size:12px"><b>How this works.</b> Before gameweek ${SR_FROM} the model picks its squad of 15 within the £${((d.rules&&d.rules.budget)||1000)/10}m budget using only gameweeks 1–${SR_FROM-1} (the same squad optimizer as Optimal XI, valued on the expected points of the next ${SR_HZ} gameweeks). In every later gameweek it sees only earlier gameweeks, as in Backtest, and picks its XI, captain and vice-captain from the squad; FPL's automatic substitutions and the vice-captain rule are applied to the real minutes. <b>Expected</b> = the model's projection for the XI it picked (captain doubled), <b>Actual</b> = the points that XI really scored, <b>Δ</b> = actual − expected. <b>Best XI in hindsight</b> = the highest-scoring starting XI (captain doubled) of any squad of 15 within the budget at that gameweek's prices, a ceiling no manager reaches. Prices are FPL's prices of each gameweek; chips and points hits are not used.</div>
+ <div class="ctl"><select id="srv" aria-label="Version">${fpOpts([['fixed','Squad kept all season (no transfers)'],['ft','1 free transfer a week']],SR.view)}</select><label style="display:inline-flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="sro" ${SR.open?'checked':''}> Best XI in hindsight on the chart</label></div><div id="srout"><div class="empty">Loading…</div></div>`;
+ $('#srv').onchange=()=>{SR.view=$('#srv').value;srDraw()};$('#sro').onchange=()=>{SR.open=$('#sro').checked;srDraw()};
+ if(SR.res[k])return srDraw();
+ srStored(d).then(R=>{if(R){SR.res[k]=R;srDraw()}else srAsk()});
+}
+function srAsk(){const o=$('#srout');if(!o)return;o.innerHTML=`<div class="mu" style="font-size:12px;margin-bottom:6px">The review replays the season on this device (a few seconds on a laptop, longer on a phone).</div><div class="ctl"><button onclick="srGo()" ${SR.busy?'disabled':''}>Run the season review</button></div><div id="srmsg" class="mu"></div>`}
+async function srGo(){
+ if(SR.busy)return;SR.busy=true;const d=FPD,k=srKey(d);srAsk();
+ try{SR.res[k]=await srRun(d,(r,to)=>{const m=$('#srmsg');if(m)m.textContent='Replaying gameweek '+r+' of '+to+'… (no future data is used)'})}
+ catch(e){SR.busy=false;const m=$('#srmsg');if(m)m.textContent='Could not run the season review: '+e.message;return}
+ SR.busy=false;if(FPD===d&&FP.tab==='review')srDraw();
+}
+function srDraw(){
+ const o=$('#srout'),d=FPD,R=SR.res[srKey(d)];if(!o||!R)return;
+ const rows=R[SR.view].filter(x=>!x.err),om=new Map(R.opt.map(x=>[x.r,x])),nm=id=>{const p=d.PB.get(id);return p?p.name:'#'+id},tn=id=>{const p=d.PB.get(id);return p?p.tn:''};
+ const sum=(L,f)=>L.reduce((s,x)=>s+(f(x)||0),0),A=sum(rows,x=>x.act),E=sum(rows,x=>x.exp),O=sum(rows,x=>{const q=om.get(x.r);return q&&q.pts}),f1=x=>x.toFixed(1);
+ const alt=R[SR.view==='fixed'?'ft':'fixed'].filter(x=>!x.err),altA=sum(alt,x=>x.act),nT=sum(rows,x=>x.tr?x.tr.length:0);
+ const gws=rows.map(x=>x.r),S=[{n:'Actual points',short:'Actual',v:rows.map(x=>x.act),c:SR_COL.act,dash:''},{n:'Expected points',short:'Expected',v:rows.map(x=>x.exp),c:SR_COL.exp,dash:'7 4'}].concat(SR.open?[{n:'Best XI in hindsight',short:'Best XI',v:rows.map(x=>{const q=om.get(x.r);return q?q.pts:null}),c:SR_COL.opt,dash:'2 3'}]:[]);
+ const dl=rows.map(x=>x.act-x.exp);
+ o.innerHTML=`<div class="grid"><div class="kpi"><b>${A}</b><span>Actual points, GW${R.from}–${R.to} (${SR.view==='fixed'?'squad kept':'with '+nT+' free transfer'+(nT===1?'':'s')})</span></div><div class="kpi"><b>${f1(E)}</b><span>Expected by the model for the XIs it picked</span></div><div class="kpi"><b>${(A-E>=0?'+':'')+f1(A-E)}</b><span>Actual − expected over the season (${f1((A-E)/rows.length)} a gameweek)</span></div><div class="kpi"><b>${O}</b><span>Best XI in hindsight, every gameweek (the team reached ${O?Math.round(A/O*100):0}% of it)</span></div><div class="kpi"><b>${altA}</b><span>${SR.view==='fixed'?'With 1 free transfer a week':'Squad kept all season'} (${(altA-A>=0?'+':'')+(altA-A)} points)</span></div></div>
+ <div class="ctl" style="margin:10px 0 2px;font-size:13px;gap:14px">${S.map(s=>`<span style="display:inline-flex;align-items:center;gap:6px"><svg width="26" height="10" aria-hidden="true"><line x1="1" y1="5" x2="25" y2="5" stroke="${s.c}" stroke-width="2.5" stroke-dasharray="${s.dash}"/></svg>${esc(s.n)}</span>`).join('')}<span style="display:inline-flex;align-items:center;gap:6px"><svg width="12" height="12" aria-hidden="true"><rect x="1" y="1" width="10" height="10" rx="2" fill="${SR_COL.dlt}" fill-opacity=".55"/></svg>Δ actual − expected</span></div>
+ ${srChart('srch',gws,S,dl,Math.round(Math.max(340,Math.min(680,o.clientWidth||680))))}
+ <h3>Squad picked before GW${R.from}</h3><div class="mu" style="font-size:12px;margin-bottom:6px">£${(R.cost0/10).toFixed(1)}m of £${(R.budget/10).toFixed(1)}m, chosen with gameweeks 1–${R.from-1} only. Expected points of GW${R.from}–${R.from+R.hz-1} as the model saw them then.</div>
+ ${tbl([['Player'],['Team'],['Pos'],['Price',1],['Expected GW'+R.from+'–'+(R.from+R.hz-1),1]],[...R.squad].sort((a,b)=>b.xi-a.xi||a.t-b.t||b.v-a.v).map(x=>[esc(nm(x.id))+(x.xi?'':' <span class="mu">(bench)</span>'),esc(tn(x.id)),FPPOS[x.t],(x.c/10).toFixed(1),f1(x.v)]))}
+ <h3>Gameweek by gameweek</h3>
+ ${tbl([['GW'],['Captain'],['Expected',1],['Actual',1],['Δ',1],['Best XI in hindsight',1]].concat(SR.view==='ft'?[['Transfers']]:[]),rows.map(x=>{const q=om.get(x.r),cp=x.capUsed==null?'— <span class="mu">(captain and vice did not play)</span>':esc(nm(x.capUsed))+(x.capUsed!==x.cap?' <span class="mu">(vice)</span>':'');
+  return ['GW'+x.r,cp,f1(x.exp),String(x.act),(x.act-x.exp>=0?'+':'')+f1(x.act-x.exp),q&&q.pts!=null?String(q.pts):'N/A'].concat(SR.view==='ft'?[x.tr.length?x.tr.map(t=>esc(nm(t.out))+' → '+esc(nm(t.in))).join('<br>'):'<span class="mu">none ('+x.ft+' banked)</span>']:[])}).concat([['<b>Total</b>','',`<b>${f1(E)}</b>`,`<b>${A}</b>`,`<b>${(A-E>=0?'+':'')+f1(A-E)}</b>`,`<b>${O}</b>`].concat(SR.view==='ft'?[`<b>${nT}</b>`]:[])]))}
+ <div class="mu" style="font-size:12px;margin:6px 0">Model ${esc(R.ver)}. ${SR.view==='ft'?`Free transfers: 1 a gameweek from GW${R.from+1}, banked up to ${R.cap}; each is the best single swap by the squad's expected points over the next ${R.hz} gameweeks and is made when it gains at least ${SR_TH} point (any gain when the bank is full). Selling prices follow FPL (half of any rise, rounded down). `:''}Automatic substitutions: a starter with no minutes is replaced by the first bench player who played and keeps the formation legal. Fixtures of later gameweeks are known in advance, as in the game; their results are not.${d.archive==='2022-23'?' FPL published expected goals and assists only from gameweek 16 of 2022-23: before that the model uses goals and assists in their place.':''}</div>`;
+ srChartWire('srch',gws,S,dl);
+}
+/* lines (points per gameweek) and Δ bars on the same points axis */
+function srChart(id,gws,S,dl,W){
+ /* drawn at the width of the page (340–680 px) so its text keeps its size on a phone */
+ const H=W<500?260:290,L=42,B=30,T=14,Rr=66,vals=S.flatMap(s=>s.v).concat(dl).filter(fpOk);if(!vals.length)return '<div class="empty">No values to draw.</div>';
+ const v0=Math.min(0,...vals),v1=Math.max(...vals),raw=((v1-v0)||1)/5,mag=Math.pow(10,Math.floor(Math.log10(raw))),st=[1,2,2.5,5,10].map(x=>x*mag).find(x=>x>=raw);
+ const lo=Math.floor(v0/st)*st,hi=Math.ceil(v1/st)*st,n=gws.length,bw=(W-L-Rr)/n,sx=i=>L+bw*(i+.5),sy=v=>H-B-(H-B-T)*(v-lo)/((hi-lo)||1);
+ let g=`<rect width="${W}" height="${H}" fill="#0d1520"/>`;
+ for(let v=lo;v<=hi+1e-9;v+=st){g+=`<line x1="${L}" y1="${sy(v).toFixed(1)}" x2="${W-Rr}" y2="${sy(v).toFixed(1)}" stroke="${Math.abs(v)<1e-9?'#8a9bb0':'#25374d'}" stroke-width="${Math.abs(v)<1e-9?1:.6}"/><text x="${L-6}" y="${(sy(v)+4).toFixed(1)}" text-anchor="end" font-size="11" fill="#8a9bb0">${+v.toFixed(2)}</text>`}
+ const every=Math.ceil(n/Math.max(4,Math.floor((W-L-Rr)/46))),lastTick=Math.floor((n-1)/every)*every,tick=i=>i===n-1||(i%every===0&&(i!==lastTick||n-1-i>=every*.7));gws.forEach((w,i)=>{if(tick(i))g+=`<text x="${sx(i).toFixed(1)}" y="${H-10}" text-anchor="middle" font-size="11" fill="#8a9bb0">GW${w}</text>`});
+ const z=sy(0),w=Math.max(2,Math.min(14,bw-2));
+ dl.forEach((v,i)=>{if(!fpOk(v)||Math.abs(v)<1e-9)return;const y=sy(v),h=Math.abs(y-z),r=Math.min(3,h/2,w/2),x=sx(i)-w/2;
+  /* rounded at the data end, square at the zero line */
+  const pth=v>0?`M${x} ${z}V${y+r}Q${x} ${y} ${x+r} ${y}H${x+w-r}Q${x+w} ${y} ${x+w} ${y+r}V${z}Z`:`M${x} ${z}V${y-r}Q${x} ${y} ${x+r} ${y}H${x+w-r}Q${x+w} ${y} ${x+w} ${y-r}V${z}Z`;
+  g+=`<path d="${pth}" fill="${SR_COL.dlt}" fill-opacity=".55"/>`});
+ S.forEach(s=>{let dd='',pen=false;s.v.forEach((v,i)=>{if(!fpOk(v)){pen=false;return}dd+=(pen?'L':'M')+sx(i).toFixed(1)+' '+sy(v).toFixed(1)+' ';pen=true});
+  g+=`<path d="${dd}" fill="none" stroke="${s.c}" stroke-width="2" stroke-dasharray="${s.dash}" stroke-linejoin="round"/>`});
+ const lab=S.map(s=>{let i=s.v.length-1;while(i>=0&&!fpOk(s.v[i]))i--;return i<0?null:{s,i,y:sy(s.v[i])}}).filter(Boolean).sort((a,b)=>a.y-b.y);
+ for(let k=1;k<lab.length;k++)if(lab[k].y-lab[k-1].y<13)lab[k].y=lab[k-1].y+13;
+ lab.forEach(q=>{g+=`<text x="${(sx(q.i)+8).toFixed(1)}" y="${(q.y+4).toFixed(1)}" font-size="11" fill="#e8eef5">${esc(q.s.short)}</text>`});
+ g+=`<line id="${id}x" x1="0" y1="${T}" x2="0" y2="${H-B}" stroke="#e8eef5" stroke-opacity=".5" stroke-width="1" style="display:none"/><rect id="${id}h" x="${L}" y="${T}" width="${W-L-Rr}" height="${H-B-T}" fill="transparent" style="cursor:crosshair"/>`;
+ return `<div style="position:relative;max-width:760px;margin:0 auto" id="${id}" data-w="${W}"><svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block;touch-action:pan-y" role="img" aria-label="Actual and expected points per gameweek">${g}</svg><div id="${id}t" style="position:absolute;display:none;pointer-events:none;background:#152130;border:1px solid #25374d;border-radius:8px;padding:6px 8px;font-size:12px;line-height:1.4;min-width:150px;z-index:2"></div></div><div class="mu" style="font-size:11px;text-align:center">Points per gameweek (y) by gameweek (x); bars = actual − expected. Hover or tap for values; the table below holds every number.</div>`;
+}
+function srChartWire(id,gws,S,dl){
+ const box=document.getElementById(id);if(!box)return;const svg=box.querySelector('svg'),hit=document.getElementById(id+'h'),ln=document.getElementById(id+'x'),tip=document.getElementById(id+'t');
+ const W=+box.dataset.w||680,L=42,Rr=66,bw=(W-L-Rr)/gws.length,sx=i=>L+bw*(i+.5);
+ const row=(c,dash,val,name,bar)=>{const r=document.createElement('div');r.style.cssText='display:flex;align-items:center;gap:6px';const k=document.createElementNS('http://www.w3.org/2000/svg','svg');k.setAttribute('width','16');k.setAttribute('height','8');
+  k.innerHTML=bar?`<rect x="4" y="0" width="8" height="8" rx="2" fill="${c}" fill-opacity=".55"/>`:`<line x1="0" y1="4" x2="16" y2="4" stroke="${c}" stroke-width="2.5" stroke-dasharray="${dash}"/>`;const b=document.createElement('b');b.textContent=val;const n=document.createElement('span');n.style.color='#8a9bb0';n.textContent=name;r.append(k,b,n);return r};
+ const show=ev=>{const r=svg.getBoundingClientRect(),xv=(ev.clientX-r.left)/r.width*W,bi=Math.max(0,Math.min(gws.length-1,Math.floor((xv-L)/bw)));
+  ln.setAttribute('x1',sx(bi));ln.setAttribute('x2',sx(bi));ln.style.display='';tip.textContent='';
+  const h=document.createElement('div');h.style.cssText='color:#8a9bb0;margin-bottom:2px';h.textContent='GW'+gws[bi];tip.appendChild(h);
+  S.forEach(s=>{const v=s.v[bi];tip.appendChild(row(s.c,s.dash,fpOk(v)?(Number.isInteger(v)?String(v):v.toFixed(1)):'N/A',s.n))});
+  tip.appendChild(row(SR_COL.dlt,'',(dl[bi]>=0?'+':'')+dl[bi].toFixed(1),'Δ actual − expected',true));
+  const px=sx(bi)/W*r.width;tip.style.display='block';tip.style.top='8px';tip.style.left=(px>r.width/2?Math.max(0,px-tip.offsetWidth-10):px+10)+'px'};
+ hit.addEventListener('pointermove',show);hit.addEventListener('pointerdown',show);hit.addEventListener('pointerleave',()=>{ln.style.display='none';tip.style.display='none'});
+}
+"""
+
+
+def _x_sr_index(html):
+    def sub(h, old, new):
+        if h.count(old) != 1:
+            log(f"  تنبيه (مراجعة الموسم): ما لقيت نقطة التعديل بدقة، تخطيتها: {old[:60]}")
+            return h
+        return h.replace(old, new)
+    h = html
+    h = sub(h, "['backtest','Backtest']];", "['backtest','Backtest'],['review','Season review']];")
+    h = sub(h, "backtest:fpTBack})[FP.tab]", "backtest:fpTBack,review:fpTReview})[FP.tab]")
+    h = sub(h, "const FPS_ARCH_TABS=new Set(['table','scatter','value','compare','teams','fixtures','backtest']);",
+            "const FPS_ARCH_TABS=new Set(['table','scatter','value','compare','teams','fixtures','backtest','review']);")
+    h = sub(h, "async function route(){", _X_SRJS + "\nasync function route(){")
+    return h
+
+
+_AR_SEASON.update({
+    "Season review": "مراجعة الموسم",
+    "How this works.": "كيف تعمل.",
+    "Before gameweek # the model picks its squad of # within the £#m budget using only gameweeks #–# (the same squad optimizer as Optimal XI, valued on the expected points of the next # gameweeks). In every later gameweek it sees only earlier gameweeks, as in Backtest, and picks its XI, captain and vice-captain from the squad": "قبل الجولة # يختار النموذج قائمته من # لاعباً ضمن ميزانية £#m باستخدام الجولات #–# فقط (نفس محسّن القائمة في التشكيلة المثالية، والتقييم على النقاط المتوقعة للجولات الـ# القادمة). وفي كل جولة بعدها يرى الجولات السابقة فقط، مثل الاختبار التاريخي، ويختار تشكيلته الأساسية والكابتن ونائبه من القائمة",
+    "FPL's automatic substitutions and the vice-captain rule are applied to the real minutes": "وتُطبّق التبديلات التلقائية في FPL وقاعدة نائب الكابتن على الدقائق الفعلية",
+    "= the model's projection for the XI it picked (captain doubled)": "= توقع النموذج للتشكيلة اللي اختارها (الكابتن مضاعف)",
+    "= the points that XI really scored": "= النقاط اللي سجلتها هذه التشكيلة فعلاً",
+    "= actual − expected": "= الفعلي − المتوقع",
+    "Best XI in hindsight": "أفضل تشكيلة بأثر رجعي",
+    "= the highest-scoring starting XI (captain doubled) of any squad of # within the budget at that gameweek's prices, a ceiling no manager reaches. Prices are FPL's prices of each gameweek": "= أعلى تشكيلة أساسية نقاطاً (الكابتن مضاعف) من أي قائمة من # لاعباً ضمن الميزانية بأسعار تلك الجولة، وهو سقف ما يوصله أي مدرب. الأسعار هي أسعار FPL في كل جولة",
+    "chips and points hits are not used": "ولا تُستخدم الشرائح (Chips) ولا خصم النقاط مقابل الانتقالات",
+    "Squad kept all season (no transfers)": "القائمة ثابتة طوال الموسم (بدون انتقالات)",
+    "# free transfer a week": "انتقال مجاني واحد كل جولة",
+    "Best XI in hindsight on the chart": "أفضل تشكيلة بأثر رجعي في الرسم",
+    "Version": "النسخة",
+    "Actual points, GW#–# (squad kept)": "النقاط الفعلية، ج#–# (القائمة ثابتة)",
+    "Actual points, GW#–# (with # free transfers)": "النقاط الفعلية، ج#–# (مع # انتقالات مجانية)",
+    "Actual points, GW#–# (with # free transfer)": "النقاط الفعلية، ج#–# (مع انتقال مجاني واحد)",
+    "Expected by the model for the XIs it picked": "توقع النموذج للتشكيلات اللي اختارها",
+    "Actual − expected over the season (# a gameweek)": "الفعلي − المتوقع خلال الموسم (# لكل جولة)",
+    "Best XI in hindsight, every gameweek (the team reached #% of it)": "أفضل تشكيلة بأثر رجعي في كل جولة (الفريق وصل إلى #% منها)",
+    "With # free transfer a week (+# points)": "مع # انتقال مجاني كل جولة (+# نقطة)",
+    "With # free transfer a week (# points)": "مع # انتقال مجاني كل جولة (# نقطة)",
+    "Squad kept all season (+# points)": "القائمة ثابتة طوال الموسم (+# نقطة)",
+    "Squad kept all season (# points)": "القائمة ثابتة طوال الموسم (# نقطة)",
+    "Actual points": "النقاط الفعلية",
+    "Expected points": "النقاط المتوقعة",
+    "Δ actual − expected": "Δ الفعلي − المتوقع",
+    "Points per gameweek (y) by gameweek (x)": "النقاط في كل جولة (y) حسب الجولة (x)",
+    "bars = actual − expected. Hover or tap for values": "الأعمدة = الفعلي − المتوقع. مرّر أو اضغط لرؤية القيم",
+    "the table below holds every number": "والجدول بالأسفل فيه كل الأرقام",
+    "Squad picked before GW#": "القائمة المختارة قبل ج#",
+    "£#m of £#m, chosen with gameweeks #–# only. Expected points of GW#–# as the model saw them then": "£#m من £#m، اختيرت بالجولات #–# فقط. النقاط المتوقعة للجولات ج#–# كما رآها النموذج وقتها",
+    "Price": "السعر",
+    "Expected GW#–#": "المتوقع ج#–#",
+    "(bench)": "(احتياط)",
+    "(vice)": "(النائب)",
+    "Gameweek by gameweek": "جولة بجولة",
+    "Captain": "الكابتن",
+    "Transfers": "الانتقالات",
+    "Total": "المجموع",
+    "Best XI": "أفضل تشكيلة",
+    "none (# banked)": "لا يوجد (# مدّخرة)",
+    "(captain and vice did not play)": "(الكابتن ونائبه لم يلعبا)",
+    "Model v#. Automatic substitutions: a starter with no minutes is replaced by the first bench player who played and keeps the formation legal. Fixtures of later gameweeks are known in advance, as in the game": "النموذج v#. التبديلات التلقائية: اللاعب الأساسي اللي ما لعب يُستبدل بأول لاعب احتياط لعب ويحافظ على خطة نظامية. مباريات الجولات القادمة معروفة مسبقاً كما في اللعبة",
+    "Model v#. Free transfers: # a gameweek from GW#, banked up to #": "النموذج v#. الانتقالات المجانية: # كل جولة من ج#، وتُدّخر حتى #",
+    "each is the best single swap by the squad's expected points over the next # gameweeks and is made when it gains at least # point (any gain when the bank is full). Selling prices follow FPL (half of any rise, rounded down). Automatic substitutions: a starter with no minutes is replaced by the first bench player who played and keeps the formation legal. Fixtures of later gameweeks are known in advance, as in the game": "كل انتقال هو أفضل تبديل منفرد حسب النقاط المتوقعة للقائمة في الجولات الـ# القادمة، ويُنفّذ إذا زاد # نقطة على الأقل (أي زيادة إذا امتلأت المدّخرة). أسعار البيع حسب FPL (نصف أي ارتفاع، مقرّب للأسفل). التبديلات التلقائية: اللاعب الأساسي اللي ما لعب يُستبدل بأول لاعب احتياط لعب ويحافظ على خطة نظامية. مباريات الجولات القادمة معروفة مسبقاً كما في اللعبة",
+    "their results are not": "لكن نتائجها لا",
+    "their results are not. FPL published expected goals and assists only from gameweek # of ##: before that the model uses goals and assists in their place": "لكن نتائجها لا. FPL نشرت الأهداف والتمريرات الحاسمة المتوقعة من الجولة # في موسم ## فقط: قبلها يستخدم النموذج الأهداف والتمريرات الحاسمة مكانها",
+    "Actual and expected points per gameweek": "النقاط الفعلية والمتوقعة في كل جولة",
+    "The review replays the season on this device (a few seconds on a laptop, longer on a phone)": "المراجعة تعيد الموسم على هذا الجهاز (ثوانٍ على اللابتوب، وأطول على الجوال)",
+    "Run the season review": "شغّل مراجعة الموسم",
+    "Replaying gameweek # of #… (no future data is used)": "جارٍ إعادة الجولة # من #… (بدون أي بيانات مستقبلية)",
+    "Could not run the season review:": "تعذر تشغيل مراجعة الموسم:",
+    "Loading…": "جارٍ التحميل…",
+})
+
+INDEX = _x_sr_index(INDEX)
+# ======================== نهاية إضافة مراجعة الموسم ========================
 
 
 # ============================================================================
@@ -5221,7 +5871,8 @@ _AR_DICT = {
     "Player values are the availability-adjusted expected points of the Predicted Points model for GW# (a double gameweek adds both fixtures": "قيمة كل لاعب هي نقاطه المتوقعة بعد احتساب جاهزيته من نموذج النقاط المتوقعة للجولة # (الجولة المزدوجة تجمع المباراتين",
     "a blank gameweek is #). The XI comes from the exact squad optimizer of the Best Team tab (dynamic programming over the budget with branch and bound for the club limit, # of # players after a lossless dominance prune): it maximises the XI's expected points plus the captain's, subject to a legal #-player squad within the budget. Players marked unavailable or not in a squad are excluded": "والجولة الفارغة = #). التشكيلة من محسّن القائمة الدقيق في تبويب أفضل فريق (برمجة ديناميكية على الميزانية مع تفرّع وتقييد لحد النادي، # من # لاعب بعد تصفية بدون خسارة): يعظّم النقاط المتوقعة للأساسيين مع الكابتن، بشرط قائمة نظامية من # لاعب ضمن الميزانية. اللاعبون غير المتاحين أو خارج القوائم مستبعدون",
     "The #% range comes from # simulations of the same model (fixed seed, so it does not change between visits): minutes, goals, assists, saves, defensive actions, bonus and cards are drawn per player": "نطاق #% يأتي من # محاكاة لنفس النموذج (بذرة ثابتة فلا يتغير بين الزيارات): الدقائق والأهداف والتمريرات الحاسمة والتصديات والأفعال الدفاعية والبونص والبطاقات تُسحب لكل لاعب",
-    "goals against are drawn once per team and fixture, so team-mates' clean sheets move together. Team-mates' attacking returns are drawn independently. In the leak-free replay these lineup ranges came out too narrow, so they are widened by a factor of # around the expected total (default fitted on GW#–# and validated on GW#–#)": "الأهداف المستقبلة تُسحب مرة لكل فريق ومباراة، فالشباك النظيفة لزملاء الفريق تتحرك معاً. المساهمات الهجومية للزملاء تُسحب مستقلة. في الإعادة التاريخية طلعت النطاقات أضيق من الواقع، فتُوسّع بمعامل # حول المجموع المتوقع (القيمة الافتراضية مضبوطة على ج#–# ومتحقق منها على ج#–#)",
+    "goals against are drawn once per team and fixture, so team-mates' clean sheets move together. Each team's goals are drawn once per match and shared out to its scorers and assisters, so team-mates' attacking returns move together and against the opposing defence. In the leak-free replay these lineup ranges came out too narrow, so they are widened by a factor of # around the expected total (default fitted on the ## and ## seasons, validated on ## and tested on ##)": "الأهداف المستقبلة تُسحب مرة لكل فريق ومباراة، فالشباك النظيفة لزملاء الفريق تتحرك معاً. وأهداف كل فريق تُسحب مرة لكل مباراة وتُوزّع على المسجلين وصنّاع الأهداف، فالمساهمات الهجومية للزملاء تتحرك معاً وعكس دفاع الخصم. في الإعادة التاريخية طلعت النطاقات أضيق من الواقع، فتُوسّع بمعامل # حول المجموع المتوقع (القيمة الافتراضية مضبوطة على موسمي ## و##، ومتحقق منها على ## ومختبرة على ##)",
+    "goals against are drawn once per team and fixture, so team-mates' clean sheets move together. Each team's goals are drawn once per match and shared out to its scorers and assisters, so team-mates' attacking returns move together and against the opposing defence. In the leak-free replay these lineup ranges came out too narrow, so they are widened by a factor of # around the expected total (refitted on this device in the Backtest tab)": "الأهداف المستقبلة تُسحب مرة لكل فريق ومباراة، فالشباك النظيفة لزملاء الفريق تتحرك معاً. وأهداف كل فريق تُسحب مرة لكل مباراة وتُوزّع على المسجلين وصنّاع الأهداف، فالمساهمات الهجومية للزملاء تتحرك معاً وعكس دفاع الخصم. في الإعادة التاريخية طلعت النطاقات أضيق من الواقع، فتُوسّع بمعامل # حول المجموع المتوقع (أعيد ضبطها على هذا الجهاز في تبويب الاختبار التاريخي)",
     "the Backtest tab shows the current check. Projections of the very top players have been optimistic (a selection effect: the highest projections include the largest over-estimates), so read the XI total as an upper-leaning estimate": "وتبويب الاختبار التاريخي يعرض الفحص الحالي. توقعات أعلى اللاعبين كانت متفائلة (أثر الاختيار: أعلى التوقعات فيها أكبر المبالغات)، فاعتبر مجموع التشكيلة تقديراً مائلاً للأعلى",
     "FPL taker order (when the data has it) and PitchAPI shot evidence (penalties taken and scored, direct free-kick shots) are shown for information. PitchAPI shots do not record who took a corner or a free-kick cross, so corner duty is only known from FPL's own taker order. Model v# already counts penalty xG inside FPL xG": "ترتيب المنفذين من FPL (إذا توفر) وأدلة تسديدات PitchAPI (ركلات الجزاء المنفذة والمسجلة، والتسديدات من ركلات حرة مباشرة) معروضة للمعلومية. تسديدات PitchAPI لا تسجل من نفّذ الركنية أو العرضية من ركلة حرة، فمنفذ الركنيات يُعرف فقط من ترتيب FPL. النموذج v# يحسب xG ركلات الجزاء ضمن xG من FPL",
     "model v# regresses each taker's realised penalty xG toward the league penalty rate (see Backtest). PitchAPI evidence: # penalties in # Premier League matches, # linked to an FPL player by club and name": "والنموذج v# يقرّب xG ركلات الجزاء لكل منفذ من معدل الدوري (انظر الاختبار التاريخي). أدلة PitchAPI: # ركلة جزاء في # مباراة من الدوري الإنجليزي، # منها مربوطة بلاعب FPL بالنادي والاسم",
@@ -5369,7 +6020,7 @@ _AR_DICT = {
     "Model team, mean points per GW": "فريق النموذج، متوسط النقاط لكل جولة", "Last# average team": "فريق معدل آخر #",
     "Hindsight ceiling": "السقف بأثر رجعي", "GWs where the model team beat last#": "جولات تفوق فيها فريق النموذج على آخر #",
     "Hindsight": "بأثر رجعي", "Model formation": "خطة النموذج", "Run team selection test": "شغّل اختبار اختيار الفريق",
-    "Run calibration and v# comparison": "شغّل المعايرة ومقارنة v#", "Not tested here": "لم يُختبر هنا",
+    "Run calibration and penalty-regression comparison": "شغّل المعايرة ومقارنة ضبط ركلات الجزاء", "Not tested here": "لم يُختبر هنا",
     "Injuries, suspensions and news": "الإصابات والإيقافات والأخبار", "Replaying gameweeks…": "جارٍ إعادة الجولات…",
     "only # gameweeks. Treat every number below as provisional": "# جولات فقط. اعتبر كل رقم أدناه مبدئياً",
     "it becomes meaningful as the season grows": "ويصير له معنى مع تقدم الموسم",
@@ -5456,6 +6107,7 @@ _AR_DICT.update({
     "PitchAPI data is not used. No model version other than v# exists yet, and the model has not been tuned on these results, so nothing here is an in-sample fit": "وبيانات PitchAPI غير مستخدمة. النموذج v# ما عُدّل بناءً على هذه النتائج، فلا شيء هنا ملائمة على نفس العينة",
     "Players selected": "اللاعبون المختارون", "Fixed opt.": "المثالية الثابتة",
 })
+_AR_DICT.update(globals().get("_AR_SEASON", {}))     # نصوص إضافة المواسم
 _AR_INJ = {"Calf": "إصابة في الساق", "Ankle": "إصابة في الكاحل", "Groin": "إصابة في الفخذ", "Hamstring": "إصابة في العضلة الخلفية",
            "Muscular": "إصابة عضلية", "Foot": "إصابة في القدم", "Knee": "إصابة في الركبة", "Unspecified": "إصابة غير محددة",
            "Back": "إصابة في الظهر", "Hip": "إصابة في الورك", "Thigh": "إصابة في الفخذ", "Shoulder": "إصابة في الكتف",

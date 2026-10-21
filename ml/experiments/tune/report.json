@@ -1,0 +1,19 @@
+{
+ "name": "tune",
+ "what_changed": "Yes, the analysis is finished. An earlier run of this experiment did the TRAIN search and the one VALIDATION look. This run re-measured everything and got bit-identical numbers. The search was coordinate descent on TRAIN mean MAE (search.js, written to search.out). It covered PRIOR_MIN, separate shrinkage pseudo-minutes per rate (xg, xa, bon, sv, card), K_FIN, a separate assist pseudo-count K_FIN_A, N0 and RECENT. The config I shipped is the conservative one, with two edits to fp_model.js, both marked [exp_tune] in model.js: (1) K_FIN goes from 3 to 1e6. This removes the finishing-ratio adjustment, so goals use xG and assists use xA alone. (2) A new per-rate shrinkage map PM.SH sets card=1e6, so yellow/red cards, own goals and penalties missed/saved use the position average per 90 instead of the player's own history. Everything else is unchanged: PRIOR_MIN 450, N0 4, RECENT 6. The pure-search optimum also set PRIOR_MIN=150 and SH.xg=100 and reached a TRAIN mean of 1.72259 against 1.72407 for the shipped config. I rejected it on TRAIN evidence alone: its extra gain was 0.0015 +- 0.0010 per gameweek, it won only 39 of 69 gameweeks, and it helped 2023-24 but hurt 2022-23. It was never evaluated on VALIDATION. Other negative results: N0 and RECENT gave no useful gain. RECENT below 6 drops player-rows from the prediction set and RECENT above 6 is worse on the fixed row set. Stronger or weaker shrinkage for bonus and saves did not help.",
+ "train_mae": {
+  "2022-23": 1.687867,
+  "2023-24": 1.76027
+ },
+ "validation_mae": 1.687542,
+ "baseline_validation_mae": 1.693558,
+ "validation_looks": 2,
+ "improved": true,
+ "shippable": true,
+ "model_path": "/tmp/claude-0/-home-user/83a4d5f8-8137-5cb1-9baa-8ac55fed2a66/scratchpad/ml/exp_tune/model.js",
+ "reproduce_command": "sh /tmp/claude-0/-home-user/83a4d5f8-8137-5cb1-9baa-8ac55fed2a66/scratchpad/ml/exp_tune/reproduce.sh",
+ "params": "K_FIN=1e6 (was 3); PM.SH.card=1e6 (cards, own goals and penalties at position average); PRIOR_MIN=450, N0=4, RECENT=6 unchanged; SH.xg/xa/bon/sv/dc=null (fall back to PRIOR_MIN); K_FIN_A=null (falls back to K_FIN)",
+ "validation_bias": 0.033012,
+ "risks": "The gain is small: about -0.006 MAE on every season (TRAIN 1.6951->1.6879 and 1.7659->1.7603; VALIDATION 1.6936->1.6875). On TRAIN it is consistent: 0.0064 +- 0.0013 per gameweek, 50 of 69 gameweeks better. MAE by position on VALIDATION (GKP/DEF/MID/FWD): 1.978/1.678/1.578/2.092 -> 1.978/1.677/1.570/2.075. Most of the gain is MID and FWD and comes from dropping the finishing ratio. Bias moves down: 2022-23 goes from -0.321 to -0.368, a larger under-prediction there; 2023-24 goes from 0.039 to 0.017 and 2024-25 from 0.053 to 0.033. The per-player view changes: a strong finisher no longer gets an uplift above his xG, which users may notice for some players. VALIDATION was looked at twice. The first look was the single planned evaluation of the frozen config. The second was a re-run of the identical config in this session to confirm the result reproduces, and it was bit-identical. No choice used 2024-25. The 2025-26 test season was not used.",
+ "ship_notes": "Copy the PM line and the shr/fin/R changes from model.js (marked [exp_tune]). With the defaults (SH entries null, K_FIN_A null) the code behaves exactly like v1, which I checked by reproducing 1.6951 and 1.7659. It only changes the rates lamG, lamA and R.yc/rc/og/pmi/psv, so the Monte Carlo ranges pick it up with no extra component. The method text now says there is no finishing adjustment when K_FIN >= 1e5. The cleaner way to ship it is to drop the fin() term entirely and use the position average for card-type rates, rather than keeping the 1e6 sentinels. Files: /tmp/claude-0/-home-user/83a4d5f8-8137-5cb1-9baa-8ac55fed2a66/scratchpad/ml/exp_tune/results.json, /tmp/claude-0/-home-user/83a4d5f8-8137-5cb1-9baa-8ac55fed2a66/scratchpad/ml/exp_tune/search.out"
+}

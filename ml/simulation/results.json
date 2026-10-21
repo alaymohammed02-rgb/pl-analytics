@@ -1,0 +1,74 @@
+{
+ "kappa_fitted_on_train": 1.189,
+ "kappa_shipped": 1.19,
+ "seasons": {
+  "2022-23": {
+   "role": "train",
+   "random_xis": 2160,
+   "optimal_xis": 36,
+   "z_sd_random": 1.175,
+   "coverage_random": {
+    "k1": 0.751,
+    "k1_19": 0.811,
+    "k1_25": 0.836
+   },
+   "coverage_optimal": {
+    "k1": 0.917,
+    "k1_19": 0.944,
+    "k1_25": 1
+   },
+   "optimal_xi_actual_minus_mean": -2.58
+  },
+  "2023-24": {
+   "role": "train",
+   "random_xis": 2220,
+   "optimal_xis": 37,
+   "z_sd_random": 1.204,
+   "coverage_random": {
+    "k1": 0.748,
+    "k1_19": 0.81,
+    "k1_25": 0.836
+   },
+   "coverage_optimal": {
+    "k1": 0.811,
+    "k1_19": 0.865,
+    "k1_25": 0.892
+   },
+   "optimal_xi_actual_minus_mean": 1.98
+  },
+  "2024-25": {
+   "role": "validation",
+   "random_xis": 2220,
+   "optimal_xis": 37,
+   "z_sd_random": 1.147,
+   "coverage_random": {
+    "k1": 0.768,
+    "k1_19": 0.828,
+    "k1_25": 0.848
+   },
+   "coverage_optimal": {
+    "k1": 0.757,
+    "k1_19": 0.811,
+    "k1_25": 0.811
+   },
+   "optimal_xi_actual_minus_mean": 4.17
+  },
+  "2025-26": {
+   "role": "test (evaluated once, after kappa was fixed)",
+   "random_xis": 2220,
+   "optimal_xis": 37,
+   "z_sd_random": 1.177,
+   "coverage_random": {
+    "k1": 0.761,
+    "k1_19": 0.825,
+    "k1_25": 0.849
+   },
+   "coverage_optimal": {
+    "k1": 0.676,
+    "k1_19": 0.73,
+    "k1_25": 0.757
+   },
+   "optimal_xi_actual_minus_mean": -0.78
+  }
+ }
+}
