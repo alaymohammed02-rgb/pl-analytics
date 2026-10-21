@@ -8064,10 +8064,13 @@ INDEX = _x_ui_index(INDEX)
 # المزامنة تضيف شي واحد فقط: رابط صورة كل لاعب من PitchAPI (players.get، مربوط برقم اللاعب نفسه)، في ملف صغير لكل دوري.
 # الصفحة تعرض الصورة فقط إذا تأكدت المزامنة إن الصور تنفتح بدون مفتاح؛ وإلا تعرض الحروف الأولى وشعار النادي.
 # ============================================================================
-PHOTO_PER_RUN = 60                # أقصى عدد لاعبين نطلب صورهم في المزامنة الوحدة (لكل الدوريات)
-PHOTO_RETRY_H = 24
-PHOTO_MIN_MIN = 270               # لاعبون لعبوا 270 دقيقة على الأقل (اللي ممكن يظهرون في البطاقات)
+PHOTO_PER_RUN = 100               # أقصى عدد لاعبين نطلب ملفهم (صورة + مركز) في المزامنة الوحدة (لكل الدوريات)
+PHOTO_RETRY_H = 24                # إعادة المحاولة بعد خطأ
+PHOTO_NOIMG_H = 24 * 7            # لاعب ملفه ما فيه صورة: نرجع له بعد أسبوع
+PHOTO_MIN_MIN = 270               # الصور: لاعبون لعبوا 270 دقيقة على الأقل (اللي ممكن يظهرون في البطاقات)
+POS_MIN_MIN = 1                   # المراكز: كل لاعب لعب ولو دقيقة
 PHOTO_INDEX = {}
+PHOTO_POS_IDS = {}               # رقم المركز من PitchAPI لكل لاعب، لكل دوري (تستخدمه إضافة جودة البيانات)
 _PHOTO_READ = []
 
 
@@ -8089,19 +8092,27 @@ def sync_photos(client, hub, lids):
     for lid in lids:
         fn = f"data/photos_{safe_name(lid)}.json"
         old = gh_get_json(hub, fn) or {}
-        P, fail = dict(old.get("p") or {}), dict(old.get("fail") or {})
+        P, fail, Q = dict(old.get("p") or {}), dict(old.get("fail") or {}), dict(old.get("q") or {})
         rows = q("SELECT player_id AS i, SUM(minutes) AS mi FROM pl_adv WHERE league_id=? AND player_id IS NOT NULL GROUP BY player_id", (lid,))
-        want = [r["i"] for r in sorted(rows, key=lambda r: -(r["mi"] or 0)) if (r["mi"] or 0) >= PHOTO_MIN_MIN]
+        mins = {r["i"]: (r["mi"] or 0) for r in rows}
+        want = [r["i"] for r in sorted(rows, key=lambda r: -(r["mi"] or 0)) if (r["mi"] or 0) >= POS_MIN_MIN]
         def due(pid):
-            if pid in P:
+            need = (pid not in Q) or (pid not in P and mins.get(pid, 0) >= PHOTO_MIN_MIN)
+            if not need:
                 return False
-            last = _parse_ts((fail.get(pid) or {}).get("t"))
-            return last is None or (t_now - last).total_seconds() > PHOTO_RETRY_H * 3600
+            f = fail.get(pid) or {}
+            last = _parse_ts(f.get("t"))
+            wait = PHOTO_NOIMG_H if f.get("why") == "no image" and pid in Q else PHOTO_RETRY_H
+            return last is None or (t_now - last).total_seconds() > wait * 3600
         todo = [p for p in want if due(p)][:max(0, budget)]
-        got = 0
+        got = gotq = 0
         for pid in todo:
             res, err = call(client.players.get, pid)
             url = getattr(res, "image_url", None) if res is not None else None
+            pos = getattr(res, "position_id", None) if res is not None else None
+            if pos is not None:
+                Q[pid] = pos
+                gotq += 1
             if url:
                 P[pid] = url
                 fail.pop(pid, None)
@@ -8116,9 +8127,11 @@ def sync_photos(client, hub, lids):
                 public = _photo_public(next(iter(P.values())))
             pub = public
         if todo or pub != old.get("public"):
-            gh_put(hub, fn, json.dumps(dict(public=pub, p=P, fail=fail), ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
+            gh_put(hub, fn, json.dumps(dict(public=pub, p=P, q=Q, fail=fail), ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
                    f"Update player photos ({lid})")
-            log(f"  [Photos] {lid}: {got} صورة جديدة من {len(todo)} طلب، المجموع {len(P)}، تنفتح بدون مفتاح: {pub}")
+            log(f"  [Photos] {lid}: {got} صورة و{gotq} مركز جديد من {len(todo)} طلب، المجموع {len(P)} صورة و{len(Q)} مركز، تنفتح بدون مفتاح: {pub}")
+        if Q:
+            PHOTO_POS_IDS[lid] = Q
         if P:
             PHOTO_INDEX[lid] = dict(photo_file=fn[5:], photo_v=hashlib.sha1(json.dumps([pub, sorted(P.items())]).encode()).hexdigest()[:10])
         if budget <= 0:
@@ -8198,7 +8211,10 @@ const HOME_RULES={
   {k:'tkw',l:'Successful take-ons',g:'dribble',f:a=>a.p90('tkw'),sum:r=>r.tkw},
   {k:'pc',l:'Progressive carries',g:'carry',f:a=>a.p90('pc'),sum:r=>r.pc},
   {k:'tkic',l:'Tackles + interceptions',g:'defend',f:a=>a.has('tk')&&a.has('ic')?a.p90('tk')+a.p90('ic'):null,sum:r=>r.tk==null||r.ic==null?null:r.tk+r.ic}]};
-const HOME={id:null,ver:null,c:null,ph:null};
+const HOME={id:null,ver:null,c:null,ph:null,rp:''};
+/* positions (GK/DF/MF/FW) come from the sync once it has learned them; until most players have one, nothing compares by position */
+const HPOS={DF:'Defenders',MF:'Midfielders',FW:'Forwards'};
+const hPosOk=c=>!!(c.q&&c.q.length&&c.q.filter(a=>a.p).length>=c.q.length*.6);
 const hMean=a=>a.reduce((s,x)=>s+x,0)/(a.length||1),hSd=a=>{const m=hMean(a);return Math.sqrt(hMean(a.map(x=>(x-m)*(x-m))))||1};
 const hF=(v,d=2)=>v==null||!isFinite(v)?'N/A':(+v).toFixed(d);
 const hPl=(id,club)=>'#/player/'+encodeURIComponent(id+'||'+club);
@@ -8278,7 +8294,8 @@ function hScatter(L,fav){
 /* two players as percentiles among every qualified player, six measures */
 function hRadar(c,a,b){
  const ms=HCMP.map(x=>({...x,M:HOME_RULES.metrics.find(m=>m.k===x.k)})),n=ms.length,cx=120,cy=106,R=74;
- const pc=(M,v)=>{if(v==null)return null;let lo=0,eq=0,t=0;c.q.forEach(q=>{const x=M.f(q);if(x==null)return;t++;if(x<v)lo++;else if(x===v)eq++});return t?(lo+eq/2)/t*100:null};
+ const same=hPosOk(c)&&a.p&&a.p===b.p&&HPOS[a.p],pool=same?c.q.filter(x=>x.p===a.p):c.q;
+ const pc=(M,v)=>{if(v==null)return null;let lo=0,eq=0,t=0;pool.forEach(q=>{const x=M.f(q);if(x==null)return;t++;if(x<v)lo++;else if(x===v)eq++});return t?(lo+eq/2)/t*100:null};
  const P=(i,r)=>{const g=-Math.PI/2+i*2*Math.PI/n;return [cx+Math.cos(g)*r,cy+Math.sin(g)*r]},f=p=>p.map(x=>x.toFixed(1)).join(',');
  const pa=ms.map(m=>pc(m.M,m.M.f(a))),pb=ms.map(m=>pc(m.M,m.M.f(b))),poly=p=>p.map((v,i)=>f(P(i,R*(v||0)/100))).join(' ');
  const dots=(p,pl,cl)=>p.map((v,i)=>{const [x,y]=P(i,R*(v||0)/100);return `<circle class="${cl}" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.5"></circle><circle class="hit" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="11" data-tip="${esc(hTip([pl.n,v==null?'N/A':Math.round(v),'percentile',hF(ms[i].M.f(pl)),ms[i].l+' per 90']))}"></circle>`}).join('');
@@ -8288,7 +8305,7 @@ function hRadar(c,a,b){
   <polygon class="ra" points="${poly(pa)}"></polygon><polygon class="rb" points="${poly(pb)}"></polygon>
   ${ms.map((m,i)=>{const [x,y]=P(i,R+14),an=Math.abs(x-cx)<4?'middle':x>cx?'start':'end';return `<text x="${x.toFixed(1)}" y="${(y+3).toFixed(1)}" text-anchor="${an}">${esc(m.s)}</text>`}).join('')}
   ${dots(pb,b,'b')}${dots(pa,a,'a')}</svg>
-  <div class="mu hcap"><span>Percentile among ${c.q.length} players with ${HOME_RULES.minMin}+ minutes; the outer edge is the best in the league</span></div></div>`;
+  <div class="mu hcap"><span>${same?`Percentile among ${pool.length} ${HPOS[a.p].toLowerCase()} with ${HOME_RULES.minMin}+ minutes; the outer edge is the best in the league`:`Percentile among ${pool.length} players with ${HOME_RULES.minMin}+ minutes; the outer edge is the best in the league`}</span></div></div>`;
 }
 /* one tooltip for every chart: marks carry data-tip; dense dots are found by nearest point */
 (function(){let tip=null;
@@ -8374,11 +8391,11 @@ function homeScat(L){
 const HCMP=[{k:'npxg',l:'Non-penalty xG',s:'npxG'},{k:'xag',l:'Expected assists (xAG)',s:'xAG'},{k:'sca',l:'Shot-creating actions',s:'Shot-creating'},{k:'tkw',l:'Successful take-ons',s:'Take-ons'},{k:'pc',l:'Progressive carries',s:'Carries'},{k:'tkic',l:'Tackles + interceptions',s:'Tackles + int.'}];
 function homeVsHtml(c,a,b){
  const met=HCMP.map(x=>{const M=HOME_RULES.metrics.find(m=>m.k===x.k);return [x.l,M.f(a),M.f(b)]});
- return `<div class="hvs"><div class="hvh">${hAvatar(a.id,a.n,a.club,true)}<div><a href="${hPl(a.id,a.club)}"><b>${esc(a.n)}</b></a><div class="mu hcl">${hCrest(a.club)}<span>${esc(a.club)}</span></div><div class="mu">${Math.round(a.s.mi)} min</div></div></div>
-  <div class="hvvs">vs</div><div class="hvh r">${hAvatar(b.id,b.n,b.club,true)}<div><a href="${hPl(b.id,b.club)}"><b>${esc(b.n)}</b></a><div class="mu hcl">${hCrest(b.club)}<span>${esc(b.club)}</span></div><div class="mu">${Math.round(b.s.mi)} min</div></div></div></div>
+ return `<div class="hvs"><div class="hvh">${hAvatar(a.id,a.n,a.club,true)}<div><a href="${hPl(a.id,a.club)}"><b>${esc(a.n)}</b></a><div class="mu hcl">${hCrest(a.club)}<span>${esc(a.club)}</span></div><div class="mu">${a.p?`<span>${esc(a.p)}</span> · `:''}${Math.round(a.s.mi)} min</div></div></div>
+  <div class="hvvs">vs</div><div class="hvh r">${hAvatar(b.id,b.n,b.club,true)}<div><a href="${hPl(b.id,b.club)}"><b>${esc(b.n)}</b></a><div class="mu hcl">${hCrest(b.club)}<span>${esc(b.club)}</span></div><div class="mu">${b.p?`<span>${esc(b.p)}</span> · `:''}${Math.round(b.s.mi)} min</div></div></div></div>
   <div class="hvgrid">${hRadar(c,a,b)}<div class="hrows">${met.map(([l,x,y])=>{const mx=Math.max(x||0,y||0)||1,w=x!=null&&y!=null&&x!==y?(x>y?'a':'b'):'';
    return `<div class="hrow"><b class="${w==='a'?'win':''}">${hF(x)}</b><span class="hbx l"><i style="width:${((x||0)/mx*100).toFixed(0)}%"></i></span><span class="hlab">${esc(l)}</span><span class="hbx"><i style="width:${((y||0)/mx*100).toFixed(0)}%"></i></span><b class="${w==='b'?'win':''}">${hF(y)}</b></div>`}).join('')}</div></div>
-  <p class="mu hnote"><span>Per 90 minutes, season so far.</span> <span>The data has no positions, so the defaults come from the same leaderboard; a striker and a defender are not like for like.</span></p>
+  <p class="mu hnote"><span>Per 90 minutes, season so far.</span> ${hPosOk(c)?(a.p&&a.p===b.p?'<span>Both play in the same position, so the radar compares each with that position only.</span>':'<span>These two play in different positions, so the radar compares each with every outfield player; read it with care.</span>'):'<span>The data has no positions, so the defaults come from the same leaderboard; a striker and a defender are not like for like.</span>'}</p>
   <button class="s" onclick="homeToLab()">Compare in detail</button>`;
 }
 function homeVsPick(){const c=HOME.c;if(!c||!c.q)return;const a=c.q.find(x=>x.id===$('#hva').value),b=c.q.find(x=>x.id===$('#hvb').value);if(a&&b){HOME.vs=[a.id,b.id];$('#hvbody').innerHTML=homeVsHtml(c,a,b)}}
@@ -8386,9 +8403,10 @@ function homeToLab(){const c=HOME.c,v=HOME.vs;if(!c||!v)return;CMP=v.map(id=>{co
 function homeVs(c){
  if(!c.q||c.q.length<10)return '';const M=HOME_RULES.metrics.find(m=>m.k==='npxg'),N=HOME_RULES.metrics.find(m=>m.k==='xag');
  const idx=a=>{const x=M.f(a),y=N.f(a);return x==null||y==null?null:x+y},L=c.q.filter(a=>idx(a)!=null).sort((a,b)=>idx(b)-idx(a));if(L.length<2)return '';
- HOME.vs=HOME.vs&&HOME.vs.every(id=>c.q.some(x=>x.id===id))?HOME.vs:[L[0].id,L[1].id];const A=c.q.find(x=>x.id===HOME.vs[0]),B=c.q.find(x=>x.id===HOME.vs[1]);
- const opts=sel=>[...c.q].sort((a,b)=>a.n.localeCompare(b.n)).map(a=>`<option value="${esc(a.id)}"${a.id===sel?' selected':''}>${esc(a.n)} · ${esc(a.club)}</option>`).join('');
- return `<section class="hsec"><div class="hhd"><h2>Who is better?</h2><span class="mu">The two highest in xG + xAG per 90, or any two you choose</span></div>
+ const L2=hPosOk(c)&&L[0].p?L.filter(a=>a.p===L[0].p):L,B0=(L2.length>1?L2:L)[1];
+ HOME.vs=HOME.vs&&HOME.vs.every(id=>c.q.some(x=>x.id===id))?HOME.vs:[L[0].id,B0.id];const A=c.q.find(x=>x.id===HOME.vs[0]),B=c.q.find(x=>x.id===HOME.vs[1]);
+ const opts=sel=>[...c.q].sort((a,b)=>a.n.localeCompare(b.n)).map(a=>`<option value="${esc(a.id)}"${a.id===sel?' selected':''}>${esc(a.n)} · ${esc(a.club)}${a.p?' · '+esc(a.p):''}</option>`).join('');
+ return `<section class="hsec"><div class="hhd"><h2>Who is better?</h2><span class="mu">${hPosOk(c)?'The two highest in xG + xAG per 90 in the same position, or any two you choose':'The two highest in xG + xAG per 90, or any two you choose'}</span></div>
   <div class="hcard hvc"><div class="ctl hvsel"><select id="hva" aria-label="Player 1" onchange="homeVsPick()">${opts(A.id)}</select><select id="hvb" aria-label="Player 2" onchange="homeVsPick()">${opts(B.id)}</select></div><div id="hvbody">${homeVsHtml(c,A,B)}</div></div></section>`;
 }
 
@@ -8412,16 +8430,18 @@ async function homeFpl(el){
 
 /* ---------- 6. quick rankings ---------- */
 function homeRank(c,k){
- const box=document.getElementById('hrk');if(!box||!c.q)return;HOME.rk=k;const M=HOME_RULES.metrics.find(m=>m.k===k),L=c.q.map(a=>[a,M.f(a)]).filter(x=>x[1]!=null).sort((a,b)=>b[1]-a[1]);
- document.querySelectorAll('#hrkc button').forEach(b=>b.classList.toggle('on',b.dataset.k===k));
+ const box=document.getElementById('hrk');if(!box||!c.q)return;HOME.rk=k;const rp=hPosOk(c)?HOME.rp:'',M=HOME_RULES.metrics.find(m=>m.k===k),L=c.q.filter(a=>!rp||a.p===rp).map(a=>[a,M.f(a)]).filter(x=>x[1]!=null).sort((a,b)=>b[1]-a[1]);
+ document.querySelectorAll('#hrkc button').forEach(b=>b.classList.toggle('on',b.dataset.k===k));document.querySelectorAll('#hrkp button').forEach(b=>b.classList.toggle('on',b.dataset.p===rp));
  box.innerHTML=`<ol class="hrank">${L.slice(0,5).map(([a,v],i)=>`<li><span class="hrn">${i+1}</span>${hAvatar(a.id,a.n,a.club)}<a href="${hPl(a.id,a.club)}" class="hrp"><b>${esc(a.n)}</b><span class="mu">${esc(a.club)}</span><span class="hrb"><i style="width:${Math.max(2,v/(L[0][1]||1)*100).toFixed(1)}%"></i></span></a><b class="hrv">${hF(v)}</b>${i<4&&L[i+1]?`<span class="mu hrg">+${hF(v-L[i+1][1])}</span>`:'<span class="hrg"></span>'}</li>`).join('')}</ol>
   <details class="hfull"><summary>Show all ${L.length} players</summary>${tbl([['#',1],['Player'],['Club'],['Minutes',1],['Per 90',1]],L.map(([a,v],i)=>[i+1,`<a href="${hPl(a.id,a.club)}">${esc(a.n)}</a>`,esc(a.club),Math.round(a.s.mi),hF(v)]))}</details>
   <p class="mu hnote">Per 90 minutes, ${HOME_RULES.minMin}+ minutes this season; the gap is to the next player.</p>`;
 }
+function homeRankPos(p){HOME.rp=p;homeRank(HOME.c,HOME.rk||'sca')
+}
 function homeRanks(c){
  if(!c.q||c.q.length<10)return '';
  return `<section class="hsec"><div class="hhd"><h2>Quick rankings</h2><span class="mu">Per 90 · ${c.q.length} <span>players with</span> ${HOME_RULES.minMin}+ <span>minutes</span></span></div>
-  <div class="hcard"><div class="seg hchips" id="hrkc">${HOME_RULES.metrics.map(M=>`<button data-k="${M.k}" onclick="homeRank(HOME.c,'${M.k}')">${esc(M.l)}</button>`).join('')}</div><div id="hrk"></div></div></section>`;
+  <div class="hcard">${hPosOk(c)?`<div class="seg hchips" id="hrkp">${[['','All positions'],['DF','Defenders'],['MF','Midfielders'],['FW','Forwards']].map(([p,l])=>`<button data-p="${p}" onclick="homeRankPos('${p}')">${l}</button>`).join('')}</div>`:''}<div class="seg hchips" id="hrkc">${HOME_RULES.metrics.map(M=>`<button data-k="${M.k}" onclick="homeRank(HOME.c,'${M.k}')">${esc(M.l)}</button>`).join('')}</div><div id="hrk"></div></div></section>`;
 }
 
 /* ---------- 7. the way into the detailed pages ---------- */
@@ -8593,12 +8613,208 @@ _AR_SEASON.update({
     "Progressive carries per #": "حمل الكرة التقدمي لكل # دقيقة",
     "Tackles + interceptions per #": "الافتكاكات + الاعتراضات لكل # دقيقة",
     "Next best": "التالي",
-    "Average": "المتوسط"
+    "Average": "المتوسط",
+    "Defenders": "المدافعون",
+    "Midfielders": "لاعبو الوسط",
+    "Forwards": "المهاجمون",
+    "All positions": "كل المراكز",
+    "Percentile among # defenders with #+ minutes; the outer edge is the best in the league": "المئين بين # مدافعًا لعبوا #+ دقيقة؛ الحافة الخارجية هي الأفضل في الدوري",
+    "Percentile among # midfielders with #+ minutes; the outer edge is the best in the league": "المئين بين # لاعب وسط لعبوا #+ دقيقة؛ الحافة الخارجية هي الأفضل في الدوري",
+    "Percentile among # forwards with #+ minutes; the outer edge is the best in the league": "المئين بين # مهاجمًا لعبوا #+ دقيقة؛ الحافة الخارجية هي الأفضل في الدوري",
+    "Both play in the same position, so the radar compares each with that position only.": "الاثنان يلعبان في نفس المركز، فالرادار يقارن كل واحد بلاعبي هذا المركز فقط.",
+    "These two play in different positions, so the radar compares each with every outfield player; read it with care.": "الاثنان يلعبان في مراكز مختلفة، فالرادار يقارن كل واحد بكل لاعبي الملعب؛ اقرأه بحذر.",
+    "The two highest in xG + xAG per # in the same position, or any two you choose": "الأعلى في xG + xAG لكل # دقيقة من نفس المركز، أو أي لاعبين تختارهما"
 })
 
 
 INDEX = _x_home_index(INDEX)
 # ======================== نهاية إضافة الصفحة الرئيسية ========================
+
+
+# ============================================================================
+# إضافة: جودة البيانات — مراكز اللاعبين، وإعادة جلب المباريات اللي ناقصها xAG.
+# المراكز: PitchAPI يعطي رقم مركز (position_id) لكل لاعب بدون شرح للأرقام. المزامنة تتعلّم معنى كل رقم من البيانات نفسها:
+#   مراكز لاعبي الدوري الإنجليزي الرسمية في الفانتازي (حارس/مدافع/وسط/مهاجم) + الحراس المعروفين من "xG المواجَهة".
+#   أي رقم ما له أدلة كافية يبقى بدون مركز (ما نخمّن). الجدول المتعلَّم ينحفظ في data/positions_map.json ويظهر في السجل.
+# xAG: بعض المباريات انحفظت "مكتملة" وفيها xAG / xG chain / xG buildup فاضية لكل اللاعبين (PitchAPI يضيفها متأخر غالباً).
+#   كل مزامنة نرجع لعدد محدود منها (مرة في اليوم لكل مباراة، خلال أول DQ_XAG_DAYS يوم بعد المباراة).
+# ============================================================================
+import unicodedata
+
+DQ_POS_MIN_N = 4                  # أقل عدد أدلة لرقم مركز
+DQ_POS_MIN_SHARE = 0.6            # وأقل نسبة للمركز الغالب
+DQ_XAG_PER_RUN = 4                # كم مباراة ناقصة نعيد جلبها لكل دوري في المزامنة الوحدة
+DQ_XAG_RETRY_H = 24
+DQ_XAG_DAYS = 60
+DQ_FPL_POS = {1: "GK", 2: "DF", 3: "MF", 4: "FW"}
+DQ = dict(hub=None, map=None, q={}, done=set())
+
+
+def _dq_norm(s):
+    s = unicodedata.normalize("NFKD", str(s or "")).encode("ascii", "ignore").decode().lower()
+    return " ".join(re.sub(r"[^a-z ]+", " ", s).split())
+
+
+def dq_learn_positions(pos_ids, names, fpl, gk_ids):
+    """pos_ids: {player_id: position_id}  names: {player_id: name}  fpl: data/fpl.json  gk_ids: لاعبين لهم xG مواجَهة.
+    يرجّع (الجدول {position_id: "GK"/"DF"/"MF"/"FW"}, الأدلة)."""
+    keys = {}
+    if fpl and fpl.get("cols"):
+        ix = {c: i for i, c in enumerate(fpl["cols"])}
+        for r in fpl.get("rows", []):
+            ty = DQ_FPL_POS.get(r[ix["ty"]])
+            if not ty:
+                continue
+            for k in {_dq_norm(f"{r[ix['fn']]} {r[ix['sn']]}"), _dq_norm(r[ix["wn"]])}:
+                if k:
+                    keys.setdefault(k, set()).add(ty)
+    uniq = {k: next(iter(v)) for k, v in keys.items() if len(v) == 1}
+    ev = {}
+    for p, pos in pos_ids.items():
+        if pos is None:
+            continue
+        g = uniq.get(_dq_norm(names.get(p)))
+        if p in gk_ids:
+            g = "GK"
+        if g:
+            e = ev.setdefault(str(pos), {})
+            e[g] = e.get(g, 0) + 1
+    m = {}
+    for pos, e in ev.items():
+        n = sum(e.values())
+        g, c = max(e.items(), key=lambda x: x[1])
+        if n >= DQ_POS_MIN_N and c / n >= DQ_POS_MIN_SHARE:
+            m[pos] = g
+    return m, ev
+
+
+def _dq_qfile(L):
+    if L not in DQ["q"]:
+        d = gh_get_json(DQ["hub"], f"data/photos_{safe_name(L)}.json") if DQ["hub"] is not None else None
+        DQ["q"][L] = dict((d or {}).get("q") or {})
+    return DQ["q"][L]
+
+
+def dq_apply_positions(L):
+    """يكتب المركز في جدول stats للاعبين اللي مركزهم فاضي (مرة لكل دوري في المزامنة)."""
+    if L in DQ["done"] or not DQ["map"]:
+        return 0
+    DQ["done"].add(L)
+    Q = _dq_qfile(L)
+    rows = [(DQ["map"].get(str(pos)), L, p) for p, pos in Q.items() if DQ["map"].get(str(pos))]
+    if not rows:
+        return 0
+    c = db()
+    c.executemany("UPDATE stats SET pos=? WHERE league_id=? AND player_id=? AND (pos IS NULL OR pos='')", rows)
+    n = c.total_changes
+    c.commit()
+    c.close()
+    return n
+
+
+_orig_build_league_payload_dq = build_league_payload
+
+
+def build_league_payload(lg):
+    try:
+        dq_apply_positions(lg["id"])
+    except Exception as e:
+        log(f"  [المراكز] تعذر تطبيقها ({type(e).__name__}: {e})")
+    return _orig_build_league_payload_dq(lg)
+
+
+_orig_build_pl_payload_dq = build_pl_payload
+
+
+def build_pl_payload(L):
+    try:
+        dq_apply_positions(L)
+    except Exception as e:
+        log(f"  [المراكز] تعذر تطبيقها ({type(e).__name__}: {e})")
+    return _orig_build_pl_payload_dq(L)
+
+
+def dq_xag_todo(L, t_now=None):
+    """مباريات انحفظت مكتملة لكن xAG فاضي لكل لاعبيها: نعيدها مرة في اليوم، أول DQ_XAG_DAYS يوم."""
+    t_now = t_now or datetime.datetime.now(datetime.timezone.utc)
+    rows = q("SELECT m.match_id i, m.date d, e.fetched_at f FROM matches m JOIN pm e ON e.league_id=m.league_id AND e.match_id=m.match_id "
+             "WHERE m.league_id=? AND e.status='ok' AND EXISTS(SELECT 1 FROM pl_adv p WHERE p.league_id=m.league_id AND p.match_id=m.match_id) "
+             "AND NOT EXISTS(SELECT 1 FROM pl_adv p WHERE p.league_id=m.league_id AND p.match_id=m.match_id AND p.xag IS NOT NULL) "
+             "ORDER BY m.date DESC", (L,))
+    out = []
+    for r in rows:
+        played, last = _parse_ts(str(r["d"] or "")[:10] + " 00:00:00"), _parse_ts(r["f"])   # التاريخ محفوظ بدون وقت
+        if played is None or (t_now - played).days > DQ_XAG_DAYS:
+            continue
+        if last is not None and (t_now - last).total_seconds() < DQ_XAG_RETRY_H * 3600:
+            continue
+        out.append(r["i"])
+    return out, len(rows)
+
+
+_orig_sync_pstats_dq = sync_pstats
+
+
+def sync_pstats(client, league_id, on_progress=None):
+    todo = []
+    try:
+        todo, total = dq_xag_todo(league_id)
+        todo = todo[:DQ_XAG_PER_RUN]
+        if total:
+            log(f"  [xAG] مباريات ناقصها xAG: {total} | نعيد جلب {len(todo)} الحين")
+        if todo:
+            c = db()
+            c.executemany("UPDATE pm SET status='pending' WHERE league_id=? AND match_id=?", [(league_id, m) for m in todo])
+            c.commit()
+            c.close()
+    except Exception as e:
+        log(f"  [xAG] تعذر تحديد المباريات ({type(e).__name__}: {e})")
+    out = _orig_sync_pstats_dq(client, league_id, on_progress)
+    if todo:
+        got = q("SELECT COUNT(DISTINCT match_id) n FROM pl_adv WHERE league_id=? AND xag IS NOT NULL AND match_id IN (%s)"
+                % ",".join("?" * len(todo)), (league_id, *todo))[0]["n"]
+        log(f"  [xAG] بعد إعادة الجلب: {got} من {len(todo)} صار فيها xAG")
+    return out
+
+
+_orig_run_pipeline_dq = run_pipeline
+
+
+def run_pipeline(hub, pit_key):
+    DQ.update(hub=hub, q={}, done=set())
+    try:
+        DQ["map"] = ((gh_get_json(hub, "data/positions_map.json") or {}).get("map")) or None
+    except Exception:
+        DQ["map"] = None
+    out = _orig_run_pipeline_dq(hub, pit_key)
+    try:
+        lids = list((globals().get("_LOGO_REFS") or {}).keys())
+        DQ["q"].update(globals().get("PHOTO_POS_IDS") or {})
+        pos_ids = {}
+        for L in lids:
+            pos_ids.update(_dq_qfile(L))
+        names = {r["i"]: r["n"] for r in q("SELECT player_id i, MAX(player) n FROM pl_adv WHERE player_id IS NOT NULL GROUP BY player_id")}
+        gk = {r["i"] for r in q("SELECT DISTINCT player_id i FROM stats WHERE xg_faced IS NOT NULL AND player_id IS NOT NULL")}
+        m, ev = dq_learn_positions(pos_ids, names, gh_get_json(hub, "data/fpl.json"), gk)
+        if m:
+            log("  [المراكز] الجدول المتعلَّم: " + ", ".join(f"{k}→{v} ({ev[k]})" for k, v in sorted(m.items(), key=lambda x: int(x[0]))))
+            skipped = {k: v for k, v in ev.items() if k not in m}
+            if skipped:
+                log("  [المراكز] أرقام بدون أدلة كافية (تبقى بدون مركز): " + ", ".join(f"{k} {v}" for k, v in skipped.items()))
+            old = gh_get_json(hub, "data/positions_map.json") or {}
+            if old.get("map") != m:
+                gh_put(hub, "data/positions_map.json", json.dumps(dict(map=m, evidence=ev, at=now()), ensure_ascii=False, indent=1).encode("utf-8"),
+                       "Update learned position map")
+        else:
+            log(f"  [المراكز] ما فيه أدلة كافية بعد ({len(pos_ids)} لاعب برقم مركز)")
+    except Exception as e:      # المراكز اختيارية: ما توقف المزامنة
+        log(f"  [المراكز] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
+    return out
+# ======================== نهاية إضافة جودة البيانات ========================
+
+
+
+
 
 
 
