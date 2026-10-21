@@ -412,7 +412,7 @@ function heatRects(c,GL,GW,max,flip){
  return g;
 }
 const heatSvg=(c,GL,GW,max,dir,flip)=>pitchSvg('',null,heatRects(c,GL,GW,max,flip),dir,true);
-const heatLegend=max=>`<div style="max-width:420px;margin:4px 0 8px"><div style="height:8px;border-radius:4px;background:linear-gradient(90deg,${hcol(0)},${hcol(.5)},${hcol(1)})"></div><div class="mu" style="display:flex;justify-content:space-between;font-size:12px"><span>1 action</span><span>${max} actions in one cell</span></div></div>`;
+const heatLegend=max=>typeof heatLegend2==='function'?heatLegend2(max):`<div style="max-width:420px;margin:4px 0 8px"><div style="height:8px;border-radius:4px;background:linear-gradient(90deg,${hcol(0)},${hcol(.5)},${hcol(1)})"></div><div class="mu" style="display:flex;justify-content:space-between;font-size:12px"><span>1 action</span><span>${max} actions in one cell</span></div></div>`;
 R.heatmaps=async function(el){
  el.innerHTML='<h2>Heatmaps</h2>';
  let H=null;try{H=await loadHeat()}catch(e){noData(el,'Could not load heatmap data: '+esc(e.message));return}
@@ -4498,4 +4498,4 @@ async function route(){
   $('#lg').textContent='';
   $('#app').innerHTML=`<div class="empty">No data yet. The first sync is running in the background, reload this page in a few minutes.<br><span class="mu">${esc(e.message)}</span></div>`}
 })();
-</script><link rel="stylesheet" href="assets/features.css?v=1"><script src="assets/threat-map.js?v=1"></script><script src="assets/match-whatif.js?v=1"></script></body></html>
+</script><link rel="stylesheet" href="assets/features.css?v=2"><script src="assets/threat-map.js?v=2"></script><script src="assets/match-whatif.js?v=2"></script></body></html>

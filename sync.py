@@ -8981,7 +8981,7 @@ INDEX = _x_fpx_index(INDEX)
 # الكود في ملفات مستقلة في المستودع: assets/threat-map.js و assets/match-whatif.js و assets/features.css.
 # هذا القسم يضيف روابطها للصفحة فقط (بعد السكربت الرئيسي، فتلقى R و PAGES جاهزة). غيّر FEATURES_V لما تتغير الملفات.
 # ============================================================================
-FEATURES_V = "1"
+FEATURES_V = "2"
 
 
 def _x_feat_index(html):
@@ -8990,6 +8990,12 @@ def _x_feat_index(html):
         log("  تنبيه (ملفات الميزات): ما لقيت نهاية الصفحة بدقة، تخطيتها")
         return html
     v = FEATURES_V
+    # the heat map legend follows the smooth colour scale of assets/threat-map.js when it is loaded
+    leg = "const heatLegend=max=>"
+    if html.count(leg) == 1:
+        html = html.replace(leg, "const heatLegend=max=>typeof heatLegend2==='function'?heatLegend2(max):")
+    else:
+        log("  تنبيه (ملفات الميزات): ما لقيت مفتاح خريطة الحرارة، تخطيته")
     return html.replace(old, f'</script><link rel="stylesheet" href="assets/features.css?v={v}">'
                              f'<script src="assets/threat-map.js?v={v}"></script>'
                              f'<script src="assets/match-whatif.js?v={v}"></script></body></html>')
@@ -8997,6 +9003,7 @@ def _x_feat_index(html):
 
 INDEX = _x_feat_index(INDEX)
 # ======================== نهاية إضافة ملفات الميزات ========================
+
 
 
 
