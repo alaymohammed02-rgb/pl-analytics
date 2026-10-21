@@ -148,5 +148,47 @@
    "__league__": "https://cdn.pitchapi.dev/images/leagues/77c078948ff67bf4bf3b7f156f4dbbd4c46d6eb043a3563098a11b432aa39117.webp"
   },
   "fail": {}
+ },
+ "l_0bfbkO": {
+  "src": {
+   "AEK Athens": "https://cdn.pitchapi.dev/images/teams/7a5e1ea3a61aa9dad0ed73f67c8617b24633f76185bc91c8fab87cf6a69f46fe.webp",
+   "LASK": "https://cdn.pitchapi.dev/images/teams/7e1cc9adf796345eed652d70b6425c8add7abc494151cb677e6f60c63eb518ea.webp",
+   "Club Brugge": "https://cdn.pitchapi.dev/images/teams/27ed7332a13ab1db112824396edb58f2636ca7955b5cf2fd46e64b37afadbee0.webp",
+   "Aston Villa": "https://cdn.pitchapi.dev/images/teams/fba3bf0754a20dffd4acc44c3d5f6b12f7d8ab9c79ae6000a745d30385cd631c.webp",
+   "Borussia Dortmund": "https://cdn.pitchapi.dev/images/teams/9a049cf470f5e8a1b096c1ac46c7a742944c23a6c82be592fd7f2889aa476de5.webp",
+   "Villarreal": "https://cdn.pitchapi.dev/images/teams/9cd74c38ef6d75a878041878ed6f18da3fb9e6cf81baae23d266a64821a63a71.webp",
+   "Real Madrid": "https://cdn.pitchapi.dev/images/teams/9e7141c583abe50554615387c99815ee3663d1a4f888549679523d2acd7f716c.webp",
+   "Inter": "https://cdn.pitchapi.dev/images/teams/66c6a85491df0b8111e1c35695ef712af120a2bf0aa9b03a877377889516611e.webp",
+   "FC Porto": "https://cdn.pitchapi.dev/images/teams/32b58b1949ae598ee4f05086017e0bf309cbc15846c63a60955beccf41726790.webp",
+   "Manchester City": "https://cdn.pitchapi.dev/images/teams/a9cf2c0ab02055725d2a2a279706c44e1d375a2d3ec3cd0f67625ba883f0257d.webp",
+   "Lille": "https://cdn.pitchapi.dev/images/teams/1e97c1ce973c99ad73ddfbeee79d47efeb8946124983ddb3282074045bd3ea7a.webp",
+   "Real Betis": "https://cdn.pitchapi.dev/images/teams/3032d6554f9f217984830cb35b054bd116c0546d5f31686fe446efafe48e79e1.webp",
+   "VfB Stuttgart": "https://cdn.pitchapi.dev/images/teams/3e4064e2cf85702db11b273fb3d69d3bad241733eba932255961f48a2a08b452.webp",
+   "Viking": "https://cdn.pitchapi.dev/images/teams/451feb97f5b2d5f6f3a7a294ea3b95b7b1ed40eca67ef15729cd78071318f4f2.webp",
+   "Barcelona": "https://cdn.pitchapi.dev/images/teams/71881ba9f1d678143d4d2b88feab251ce8a840eca4c46768e756e73e5170687c.webp",
+   "Feyenoord": "https://cdn.pitchapi.dev/images/teams/dcf2421ca736dcdb1b71522260d467a0681d0b4bad3308c2e912f58f37a3511d.webp",
+   "Napoli": "https://cdn.pitchapi.dev/images/teams/0755206cdb935eb37cd5bd42b54afc629d486c010c12029c096def4f5227db6f.webp",
+   "Arsenal": "https://cdn.pitchapi.dev/images/teams/cc89aa6a111b43694223ca0506940e05f825369c259a6c8bf4ab8cf8b080a05b.webp",
+   "Liverpool": "https://cdn.pitchapi.dev/images/teams/5538ce3ddde32fc5d72918ee128c4b04a49443a3586aec8e7e99d911d3d36c99.webp",
+   "Atlético Madrid": "https://cdn.pitchapi.dev/images/teams/e7ed0850dc75498dd5989ac217e4c9345476f9967d89385e5ece1ef5bcd8a330.webp",
+   "Sporting CP": "https://cdn.pitchapi.dev/images/teams/5817bbd34cd3f72b924b6fe60740c7176bc383aa030a4d10832bffab27318dd9.webp",
+   "Galatasaray": "https://cdn.pitchapi.dev/images/teams/b2f762b5bacdd581c3d182ca109615814151ee90e37749cb276d5a9bda88b13a.webp",
+   "Paris Saint-Germain": "https://cdn.pitchapi.dev/images/teams/79197b8594269f02679ffd055d230e2095d99bde56994d5bc4d6b6a01a1ada13.webp",
+   "Slovan Bratislava": "https://cdn.pitchapi.dev/images/teams/19a562f7f6053ae9daba69ad68f5a9be26220b39c30e9f0081ab0ab089b441d8.webp",
+   "Fenerbahçe": "https://cdn.pitchapi.dev/images/teams/c3f91e2fb35d5962a65d5ee8e24dccba47d82e950e152a39e28c1a3e733b8397.webp",
+   "Roma": "https://cdn.pitchapi.dev/images/teams/ad80e0ea1049979b20dd51e024dc82d40e9b665e8081ab02534310f38427b4ef.webp",
+   "PSV Eindhoven": "https://cdn.pitchapi.dev/images/teams/e89b7540c69dc8b8a7b32bc58f807d304e60d8223890a76a60beaef26980e882.webp",
+   "Shakhtar Donetsk": "https://cdn.pitchapi.dev/images/teams/457b04795e1905f9d7ca7e967d13a8c19883a168ff968db24b9023334b4254d2.webp",
+   "Slavia Prague": "https://cdn.pitchapi.dev/images/teams/53729e84362ce320d7bf5e5473466d4fdfd8032c4c0e8725d64563d53935da00.webp",
+   "Lens": "https://cdn.pitchapi.dev/images/teams/d7424c5e0e5cb6adc67ed5a1119d16f497a63f31ca406127d9563afc29e59d11.webp",
+   "Bayern München": "https://cdn.pitchapi.dev/images/teams/1e2afd379a7d354c930f790c1f9ab0c2b50654cf4d47f20ffb269b8cfe309bca.webp",
+   "Bodø/Glimt": "https://cdn.pitchapi.dev/images/teams/8e8bca727ae90fc0fba027bf099bdaf083ba1031aeacb0a8441f7f19039c8364.webp",
+   "Como": "https://cdn.pitchapi.dev/images/teams/35f069058222c070820cbf97102be4379a619b2c9892b41f0ee6c4d1920bdec9.webp",
+   "RB Leipzig": "https://cdn.pitchapi.dev/images/teams/d0ea8dba830e1ec387985c6fa33f8f4c101f61c955c46054bb406a32e57b4e6d.webp",
+   "Manchester United": "https://cdn.pitchapi.dev/images/teams/d64e82187ecc985ae095feba4db1dd6607f7009424f39a745102713bb0e1e6bb.webp",
+   "Sabah FK": "https://cdn.pitchapi.dev/images/teams/81bf98d426f1a8efd9993fcfca036a9efa2ab03aa5d2590b33d902ef9490f678.webp",
+   "__league__": "https://cdn.pitchapi.dev/images/leagues/b1d686d355832acff3032f4b9ee3cf885bf81879dac40c68e6ad033b695c1210.webp"
+  },
+  "fail": {}
  }
 }
