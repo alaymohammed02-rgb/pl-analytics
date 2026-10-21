@@ -24,5 +24,31 @@
    "__league__": "https://cdn.pitchapi.dev/images/leagues/91b2d9475023f0a6197af3d0d9295809f8a2ba871e9a8dc538da6a3d5604bb3e.webp"
   },
   "fail": {}
+ },
+ "l_0ErfuF": {
+  "src": {
+   "Deportivo Alavés": "https://cdn.pitchapi.dev/images/teams/e9f08977249bc4545a47dee37f4730f023cab2f5f4a76a34ce20c185665d2d56.webp",
+   "Getafe": "https://cdn.pitchapi.dev/images/teams/20e0f7f9929f4ff5886dc12a076fc16c191d455f36be5c2f90d9fd83798d9f77.webp",
+   "Sevilla": "https://cdn.pitchapi.dev/images/teams/418e2903a54b8c05e9e9fe996f8757868a0c1027aae798b4f13601018762cd8f.webp",
+   "Rayo Vallecano": "https://cdn.pitchapi.dev/images/teams/812173cd09cb7bfc750a9f8923ade529144c4210847198baba02c07655ebdc0d.webp",
+   "Racing Santander": "https://cdn.pitchapi.dev/images/teams/5678d05be93b701d8cce69ec478e33baf9b71504c96ba5449c6f6664816e16e2.webp",
+   "Villarreal": "https://cdn.pitchapi.dev/images/teams/9cd74c38ef6d75a878041878ed6f18da3fb9e6cf81baae23d266a64821a63a71.webp",
+   "Espanyol": "https://cdn.pitchapi.dev/images/teams/f8174b3077c6d721131a0171d6e57bfbe7d65bd7583f1d0a63befc59ce9b6da0.webp",
+   "Levante": "https://cdn.pitchapi.dev/images/teams/3d4e34694800c927780cbd51435b2cf84ceb631683ce1e7c62549259396fbd04.webp",
+   "Deportivo A Coruña": "https://cdn.pitchapi.dev/images/teams/01b9619ac91f721d102537bda56f4850b484d5552ed33a329b1de3fec6a78067.webp",
+   "Elche": "https://cdn.pitchapi.dev/images/teams/1cc190e198bb61e1cb6616fdc68811525ede3438e3ad58b8c857ac82cfdc0b40.webp",
+   "Atlético Madrid": "https://cdn.pitchapi.dev/images/teams/e7ed0850dc75498dd5989ac217e4c9345476f9967d89385e5ece1ef5bcd8a330.webp",
+   "Málaga": "https://cdn.pitchapi.dev/images/teams/3da2b557c37768939a618508757dbf4923370ed95b9b79a02645e0396dae068b.webp",
+   "Real Betis": "https://cdn.pitchapi.dev/images/teams/3032d6554f9f217984830cb35b054bd116c0546d5f31686fe446efafe48e79e1.webp",
+   "Real Sociedad": "https://cdn.pitchapi.dev/images/teams/ef917e418f18783f60198c20a1fa9ec4983b40bdddba6f23b1eaefa1a4110fc0.webp",
+   "Athletic Club": "https://cdn.pitchapi.dev/images/teams/3df8987ea318edccd9c2d8887b27324fa47c275eea7604e9e9c8539f5a69cda3.webp",
+   "Valencia": "https://cdn.pitchapi.dev/images/teams/798571c3b79c5fbf5e97ebefe2a17884f1e74c3c6d5186e04736f6c482a3c12d.webp",
+   "Celta Vigo": "https://cdn.pitchapi.dev/images/teams/dac7a8cb1fba7c48ce0e6ed3e17439cc771e33f2aca093d2dc5eb23cb10e1533.webp",
+   "Real Madrid": "https://cdn.pitchapi.dev/images/teams/9e7141c583abe50554615387c99815ee3663d1a4f888549679523d2acd7f716c.webp",
+   "Barcelona": "https://cdn.pitchapi.dev/images/teams/71881ba9f1d678143d4d2b88feab251ce8a840eca4c46768e756e73e5170687c.webp",
+   "Osasuna": "https://cdn.pitchapi.dev/images/teams/e88a92bcdd0c1c32989fcffab9239e4a411961c9f8de71a0afe80f09b4b7d89b.webp",
+   "__league__": "https://cdn.pitchapi.dev/images/leagues/4a840c09a3b5d1b2150eeba66e2c31d83d23503c0df04b3ddd04341f9c7b2b48.webp"
+  },
+  "fail": {}
  }
 }
