@@ -26,16 +26,23 @@ from pitchapi import PitchAPI, NotFoundError, PlanUpgradeRequiredError, RateLimi
 # الدوريات المطلوبة. الكود يبحث عنها بالاسم في PitchAPI ويحدد الـID تلقائياً.
 # words = كلمات من اسم الدوري بالإنجليزي | country = للتفريق بين دوريات بنفس الاسم
 # known = ID معروف مسبقاً | exclude = كلمات تستبعد دوريات مشابهة
+# clubs = أندية معروفة في الدوري: PitchAPI ما يرجع الدولة، فإذا فيه أكثر من دوري بنفس الاسم (مثل Serie A الإيطالي والإكوادوري)
+#         نختار الدوري اللي مبارياته فيها هذي الأندية
 LEAGUE_TARGETS = [
     dict(label="الدوري الإنجليزي", words=["premier league"], country="england", known="l_4WFCIZ"),
-    dict(label="الدوري الإسباني", words=["la liga", "laliga", "primera division"], country="spain"),
-    dict(label="الدوري الألماني", words=["bundesliga"], country="germany"),
-    dict(label="الدوري الفرنسي", words=["ligue 1"], country="france"),
-    dict(label="الدوري الإيطالي", words=["serie a"], country="italy"),
-    dict(label="الدوري البرتغالي", words=["primeira liga", "liga portugal"], country="portugal"),
-    dict(label="دوري أبطال أوروبا", words=["champions league"],
+    dict(label="الدوري الإسباني", words=["la liga", "laliga", "primera division"], country="spain", known="l_0ErfuF",
+         clubs=["real madrid", "barcelona", "atletico madrid", "sevilla", "valencia", "villarreal", "real sociedad", "athletic"]),
+    dict(label="الدوري الألماني", words=["bundesliga"], country="germany", known="l_1Isor4",
+         clubs=["bayern", "dortmund", "leverkusen", "leipzig", "frankfurt", "stuttgart", "wolfsburg", "freiburg"]),
+    dict(label="الدوري الفرنسي", words=["ligue 1"], country="france", known="l_3FJFUl",
+         clubs=["paris saint-germain", "marseille", "lyon", "monaco", "lille", "lens", "rennes", "nice"]),
+    dict(label="الدوري الإيطالي", words=["serie a"], country="italy",
+         clubs=["juventus", "inter", "milan", "napoli", "roma", "lazio", "atalanta", "fiorentina", "bologna", "torino"]),
+    dict(label="الدوري البرتغالي", words=["primeira liga", "liga portugal"], country="portugal", known="l_4QexZg",
+         clubs=["benfica", "porto", "sporting", "braga", "vitoria", "guimaraes"]),
+    dict(label="دوري أبطال أوروبا", words=["champions league"], known="l_0bfbkO",
          exclude=["afc", "caf", "concacaf", "conmebol", "asia", "africa", "oceania"]),
-    dict(label="كأس العالم", words=["world cup"], exclude=["club", "beach", "futsal"]),
+    dict(label="كأس العالم", words=["world cup"], known="l_1XLtP0", exclude=["club", "beach", "futsal"]),
 ]
 EXTRA_LEAGUE_IDS = []         # أي دوري ثاني تبغاه: حط الـID هنا (من LIST_LEAGUES)
 GLOBAL_EXCLUDE = ("women", "feminin", "femenin", "qualif", "youth", "u17", "u18",
@@ -426,6 +433,18 @@ def is_blocked(lg):
     s = nrm(txt(getattr(lg, "country", None))) + "|" + nrm(getattr(lg, "name", ""))
     return any(b in s for b in BLOCKED_COUNTRIES)
 
+def _club_hits(client, lg, clubs):
+    """كم نادي من الأندية المعروفة يظهر في مباريات الدوري (يميّز الدوريات اللي لها نفس الاسم)."""
+    res, err = call(lambda: client.leagues.matches(str(lg.id), season=None, status="played"))
+    if res is None:
+        return 0
+    names = set()
+    for m in list(getattr(res, "matches", None) or [])[:400]:
+        for side in ("home_team", "away_team"):
+            names.add(nrm(getattr(getattr(m, side, None), "name", "") or ""))
+    return sum(1 for c in clubs if any(nrm(c) in n for n in names))
+
+
 def resolve_leagues(client):
     res, err = call(client.leagues.list)
     items = list(getattr(res, "leagues", None) or res or []) if res is not None else []
@@ -466,6 +485,16 @@ def resolve_leagues(client):
                     rest = rest.replace(nrm(w), "")
                 return (any(ch.isdigit() for ch in rest), len(nrm(l.name)))
             cands.sort(key=rank)
+            if cands and t.get("clubs"):
+                # PitchAPI ما يرجع الدولة، والاسم قد يتكرر لأكثر من دولة: نختار الدوري اللي فيه الأندية المعروفة (على الأقل 3)
+                hits = [(_club_hits(client, l, t["clubs"]), -i, l) for i, l in enumerate(cands[:5])]
+                best = max(hits, key=lambda x: (x[0], x[1]))
+                log(f"  [{t['label']}] أندية معروفة في كل مرشح: " + " | ".join(f"{l.name} [{l.id}]: {h}" for h, _, l in hits))
+                if best[0] >= 3:
+                    cands = [best[2]] + [l for l in cands if l is not best[2]]
+                else:
+                    log(f"  ✘ {t['label']}: ما لقيت دوري فيه أندية {t['label']} المعروفة — تخطيته بدل ما أختار دوري غلط")
+                    cands = []
             lg = cands[0] if cands else None
             if lg is not None and len(cands) > 1:
                 alts = " | ".join(f"{l.name} [{l.id}]" for l in cands[1:4])
