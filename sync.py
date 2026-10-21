@@ -342,6 +342,7 @@ def sync_league(client, league_id, on_progress=None):
             log("  هذا الدوري يحتاج خطة أعلى في PitchAPI — تخطيته.")
         return False
     ms = list(res.matches)
+    globals().setdefault("_LOGO_REFS", {})[league_id] = [(m.home_team, m.away_team) for m in ms]   # شعارات الفرق (إضافة الشعارات)
     c = db()
     for m in ms:
         c.execute(
@@ -463,6 +464,7 @@ def resolve_leagues(client):
             log(f"  ⊘ تم استبعاد {lg.name} [{lg.id}] (دوري محذوف)")
             return
         seen.add(str(lg.id))
+        globals().setdefault("_LEAGUE_IMG", {})[str(lg.id)] = getattr(lg, "image_url", None)   # شعار الدوري (إضافة الشعارات)
         metas.append(dict(id=str(lg.id), name=lg.name, country=txt(getattr(lg, "country", None))))
 
     log("\nتحديد الدوريات:")
@@ -6178,7 +6180,111 @@ def run_pipeline(hub, pit_key):
     return out
 
 
-_X_THCSS = ":root{--th:#4cc38a;--th-ink:#06210f;--th-hi:#4cc38a;--th-link:#5aa9e6;--th-deep:#0f3b2c;--th-glow:rgba(76,195,138,.28);--th-soft:rgba(76,195,138,.10);--th-bd:rgba(76,195,138,.38);--th-amb:rgba(15,59,44,.55);--th-amb2:rgba(76,195,138,.07);--gold:#e2bd5a;--gold-bd:rgba(226,189,90,.55);--gold-soft:rgba(226,189,90,.12);--glass:var(--sf);--hdr:var(--bg);--glass-hl:rgba(255,255,255,.06);--glass-bd:rgba(255,255,255,.075)}@supports (color:color-mix(in srgb,red 50%,blue)){:root{--glass:color-mix(in srgb,var(--sf) 88%,transparent);--hdr:color-mix(in srgb,var(--bg) 80%,transparent)}}body{background-color:var(--bg);background-image:radial-gradient(1200px 620px at 100% -12%,var(--th-amb),transparent 60%),radial-gradient(1000px 600px at 0% -10%,var(--th-amb2),transparent 62%);background-attachment:fixed;transition:background-color .35s}header{background:var(--hdr);-webkit-backdrop-filter:blur(16px) saturate(150%);backdrop-filter:blur(16px) saturate(150%);border-bottom:1px solid transparent;border-image:linear-gradient(90deg,transparent,var(--th-bd),transparent) 1}@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){header{background:var(--bg)}#nav .lgl{background:rgba(255,255,255,.12)}}.bm{display:inline-block;width:10px;height:10px;border-radius:3px;margin-inline-end:8px;vertical-align:1px;background:linear-gradient(135deg,#4cc38a,#5aa9e6);box-shadow:0 0 0 1px rgba(255,255,255,.18)}a{color:var(--th-link)}.card,.kpi{background:linear-gradient(180deg,var(--glass-hl),rgba(255,255,255,.012) 40%),var(--glass);border-color:var(--glass-bd);box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 8px 22px rgba(0,0,0,.18)}.kpi{background:linear-gradient(150deg,var(--th-kpi,var(--th-soft)),transparent 58%),linear-gradient(180deg,var(--glass-hl),rgba(255,255,255,.012) 40%),var(--glass);transition:border-color .3s,box-shadow .3s}.kpi:hover{border-color:var(--th-bd)}button{background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,0) 55%),var(--th);color:var(--th-ink);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 4px 14px var(--th-soft);transition:background-color .35s,color .35s,box-shadow .35s,border-color .35s}button.s{background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.015)),var(--sf);box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}button.s:hover{border-color:var(--th-bd)}.seg button.on{background:var(--th);color:var(--th-ink)}.chp.on{border-color:var(--th-hi);box-shadow:inset 0 0 0 1px var(--th-hi)}nav a.on{box-shadow:inset 0 -2px var(--th-hi)}#nav .lgl{box-shadow:inset 0 0 0 1px rgba(255,255,255,.16),inset 0 1.5px 1px rgba(255,255,255,.42),inset 0 -1.5px 1px rgba(255,255,255,.14),inset 0 -8px 14px var(--th-soft),0 4px 16px var(--th-glow);transition:box-shadow .35s}input:focus-visible,select:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(--th-hi);outline-offset:2px}h2::after{content:'';display:block;width:44px;height:3px;border-radius:2px;margin-top:6px;background:linear-gradient(90deg,var(--th-hi),transparent)}.wkfact{border-color:var(--th-bd)}.cdot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-inline-end:6px;vertical-align:-1px;background:linear-gradient(135deg,var(--cl1) 50%,var(--cl2) 50%);box-shadow:0 0 0 1px rgba(255,255,255,.28)}.clk{color:inherit;text-decoration:none}.clk:hover{color:var(--th-link);text-decoration:underline}.ltt a{color:inherit;text-decoration:none}.trophy{width:14px;height:14px;flex:none}.chm{display:inline-flex;vertical-align:-2px;margin-inline-start:6px;color:var(--gold)}.champ{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:999px;border:1px solid var(--gold-bd);background:linear-gradient(180deg,rgba(226,189,90,.18),rgba(226,189,90,.05));color:var(--gold);font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;box-shadow:0 0 14px rgba(226,189,90,.12)}.champ .mu2{opacity:.8;font-weight:600;letter-spacing:0}.clubhd{position:relative;display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:14px 16px 14px 22px;margin-bottom:12px;border-radius:14px;border:1px solid var(--glass-bd);background:linear-gradient(135deg,var(--th-soft),rgba(255,255,255,.02) 60%),var(--glass);box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 10px 26px rgba(0,0,0,.22);overflow:hidden}.clubhd h2{margin:0 0 2px}.clubtx{flex:1;min-width:160px}.clubst{position:absolute;inset-block:0;inset-inline-start:0;width:7px;background:linear-gradient(180deg,var(--cl1,var(--th-hi)) 0 50%,var(--cl2,var(--th-hi)) 50% 100%)}.clubhd.is-champ{border-color:var(--gold-bd);background:linear-gradient(135deg,var(--th-soft),var(--gold-soft) 70%),var(--glass);box-shadow:inset 0 1px 0 rgba(226,189,90,.35),0 0 26px rgba(226,189,90,.10),0 10px 26px rgba(0,0,0,.22)}.clubk .kpi{border-top:2px solid var(--th-hi)}html[dir=rtl] .clubhd{padding:14px 22px 14px 16px}@media(max-width:560px){.clubhd{padding-inline-start:18px}.champ{font-size:11px;padding:3px 9px}}@media(prefers-reduced-motion:reduce){button,.kpi,#nav .lgl{transition:none}}.nw{white-space:nowrap}input,progress{accent-color:var(--th)}.ltf.D{background:#8a9bb0}"
+# ---------------- الشعارات: من PitchAPI نفسه (image_url للفرق والدوري)، تُحفظ في المستودع ملف لكل دوري ----------------
+LOGO_MAX_BYTES = 120_000          # شعار أكبر من كذا ما نحفظه (يبقى لون النادي فقط)
+LOGO_PER_RUN = 80                 # أقصى عدد شعارات جديدة في المزامنة الوحدة
+LOGO_RETRY_H = 24                 # شعار فشل تحميله: نعيد المحاولة بعد يوم
+LOGO_INDEX = {}                   # يدخل في data/index.json: اسم ملف الشعارات ونسخته لكل دوري
+_LOGO_DONE = set()
+
+
+def _logo_get(url):
+    """يرجع (data URI, None) أو (None, السبب). مفتاح PitchAPI يُرسل فقط لخادم PitchAPI نفسه."""
+    from urllib.parse import urlparse
+    hdr = {}
+    if (urlparse(url).hostname or "").endswith("pitchapi.dev") and os.environ.get("PITCHAPI_KEY"):
+        hdr["X-API-KEY"] = os.environ["PITCHAPI_KEY"]
+    r = requests.get(url, headers=hdr, timeout=20)
+    ct = (r.headers.get("content-type") or "").split(";")[0].strip().lower()
+    if r.status_code != 200 or not ct.startswith("image/") or not r.content:
+        return None, f"HTTP {r.status_code} {ct or '?'}"
+    if len(r.content) > LOGO_MAX_BYTES:
+        return None, f"{len(r.content)} bytes"
+    return f"data:{ct};base64," + base64.b64encode(r.content).decode("ascii"), None
+
+
+def sync_logos(hub, league_id):
+    refs = globals().get("_LOGO_REFS", {}).get(league_id)
+    if not refs or league_id in _LOGO_DONE:
+        return
+    _LOGO_DONE.add(league_id)
+    fn = f"logos_{safe_name(league_id)}.json"
+    man = gh_get_json(hub, "data/logos_src.json") or {}
+    src = dict((man.get(league_id) or {}).get("src") or {})
+    fail = dict((man.get(league_id) or {}).get("fail") or {})
+    want = {}
+    for pair in refs:
+        for t in pair:
+            n, u = getattr(t, "name", None), getattr(t, "image_url", None)
+            if n and u:
+                want[n] = u
+    lu = globals().get("_LEAGUE_IMG", {}).get(league_id)
+    if lu:
+        want["__league__"] = lu
+    t_now = datetime.datetime.now(datetime.timezone.utc)
+    def due(n, u):
+        if src.get(n) == u:
+            return False
+        last = _parse_ts((fail.get(n) or {}).get("t"))
+        return last is None or (t_now - last).total_seconds() > LOGO_RETRY_H * 3600 or (fail.get(n) or {}).get("u") != u
+    todo = [(n, u) for n, u in want.items() if due(n, u)][:LOGO_PER_RUN]
+    if todo:
+        old = gh_get_json(hub, f"data/{fn}") or {}
+        teams, league = dict(old.get("teams") or {}), old.get("league")
+        bad = []
+        for n, u in todo:
+            try:
+                d, err = _logo_get(u)
+            except Exception as e:
+                d, err = None, type(e).__name__
+            if d:
+                if n == "__league__":
+                    league = d
+                else:
+                    teams[n] = d
+                src[n] = u
+                fail.pop(n, None)
+            else:
+                fail[n] = dict(u=u, t=now(), why=err)
+                bad.append(f"{n}: {err}")
+        if teams or league:
+            gh_put(hub, f"data/{fn}", json.dumps(dict(league=league, teams=teams), ensure_ascii=False, separators=(",", ":")).encode("utf-8"),
+                   f"Update logos ({league_id})")
+        man[league_id] = dict(src=src, fail=fail)
+        gh_put(hub, "data/logos_src.json", json.dumps(man, ensure_ascii=False, indent=1).encode("utf-8"), "Update logo list")
+        log(f"  [Logos] {league_id}: {len(todo) - len(bad)} شعار جديد، {len(bad)} تعذّر" + (f" (مثل {bad[0]})" if bad else ""))
+    if src:
+        LOGO_INDEX[league_id] = dict(logo_file=fn, logo_v=hashlib.sha1(json.dumps(src, sort_keys=True).encode("utf-8")).hexdigest()[:10])
+
+
+_orig_publish_logo = publish
+
+
+def publish(hub, metas, final=False):
+    for m in metas:
+        try:
+            sync_logos(hub, m["id"])
+        except Exception as e:      # الشعارات اختيارية: ما توقف النشر
+            log(f"  [Logos] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
+    return _orig_publish_logo(hub, metas, final)
+
+
+_orig_gh_put_logo = gh_put
+
+
+def gh_put(hub, path, content, message):
+    if path == "data/index.json" and LOGO_INDEX:
+        try:
+            d = json.loads(content.decode("utf-8"))
+            for lg in d.get("leagues", []):
+                lg.update(LOGO_INDEX.get(lg["id"], {}))
+            content = json.dumps(d, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        except Exception as e:
+            log(f"  تنبيه: ما قدرت أضيف الشعارات للفهرس: {e}")
+    return _orig_gh_put_logo(hub, path, content, message)
+
+
+_X_THCSS = ":root{--th:#4cc38a;--th-ink:#06210f;--th-hi:#4cc38a;--th-link:#5aa9e6;--th-deep:#0f3b2c;--th-glow:rgba(76,195,138,.28);--th-soft:rgba(76,195,138,.10);--th-bd:rgba(76,195,138,.38);--th-amb:rgba(15,59,44,.55);--th-amb2:rgba(76,195,138,.07);--gold:#e2bd5a;--gold-bd:rgba(226,189,90,.55);--gold-soft:rgba(226,189,90,.12);--glass:var(--sf);--hdr:var(--bg);--glass-hl:rgba(255,255,255,.06);--glass-bd:rgba(255,255,255,.075)}@supports (color:color-mix(in srgb,red 50%,blue)){:root{--glass:color-mix(in srgb,var(--sf) 88%,transparent);--hdr:color-mix(in srgb,var(--bg) 80%,transparent)}}body{background-color:var(--bg);background-image:radial-gradient(1200px 620px at 100% -12%,var(--th-amb),transparent 60%),radial-gradient(1000px 600px at 0% -10%,var(--th-amb2),transparent 62%);background-attachment:fixed;transition:background-color .35s}header{background:var(--hdr);-webkit-backdrop-filter:blur(16px) saturate(150%);backdrop-filter:blur(16px) saturate(150%);border-bottom:1px solid transparent;border-image:linear-gradient(90deg,transparent,var(--th-bd),transparent) 1}@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){header{background:var(--bg)}#nav .lgl{background:rgba(255,255,255,.12)}}.bm{display:inline-block;width:10px;height:10px;border-radius:3px;margin-inline-end:8px;vertical-align:1px;background:linear-gradient(135deg,#4cc38a,#5aa9e6);box-shadow:0 0 0 1px rgba(255,255,255,.18)}a{color:var(--th-link)}.card,.kpi{background:linear-gradient(180deg,var(--glass-hl),rgba(255,255,255,.012) 40%),var(--glass);border-color:var(--glass-bd);box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 8px 22px rgba(0,0,0,.18)}.kpi{background:linear-gradient(150deg,var(--th-kpi,var(--th-soft)),transparent 58%),linear-gradient(180deg,var(--glass-hl),rgba(255,255,255,.012) 40%),var(--glass);transition:border-color .3s,box-shadow .3s}.kpi:hover{border-color:var(--th-bd)}button{background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,0) 55%),var(--th);color:var(--th-ink);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 4px 14px var(--th-soft);transition:background-color .35s,color .35s,box-shadow .35s,border-color .35s}button.s{background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.015)),var(--sf);box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}button.s:hover{border-color:var(--th-bd)}.seg button.on{background:var(--th);color:var(--th-ink)}.chp.on{border-color:var(--th-hi);box-shadow:inset 0 0 0 1px var(--th-hi)}nav a.on{box-shadow:inset 0 -2px var(--th-hi)}#nav .lgl{box-shadow:inset 0 0 0 1px rgba(255,255,255,.16),inset 0 1.5px 1px rgba(255,255,255,.42),inset 0 -1.5px 1px rgba(255,255,255,.14),inset 0 -8px 14px var(--th-soft),0 4px 16px var(--th-glow);transition:box-shadow .35s}input:focus-visible,select:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(--th-hi);outline-offset:2px}h2::after{content:'';display:block;width:44px;height:3px;border-radius:2px;margin-top:6px;background:linear-gradient(90deg,var(--th-hi),transparent)}.wkfact{border-color:var(--th-bd)}.cdot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-inline-end:6px;vertical-align:-1px;background:linear-gradient(135deg,var(--cl1) 50%,var(--cl2) 50%);box-shadow:0 0 0 1px rgba(255,255,255,.28)}.clk{color:inherit;text-decoration:none}.clk:hover{color:var(--th-link);text-decoration:underline}.ltt a{color:inherit;text-decoration:none}.trophy{width:14px;height:14px;flex:none}.chm{display:inline-flex;vertical-align:-2px;margin-inline-start:6px;color:var(--gold)}.champ{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:999px;border:1px solid var(--gold-bd);background:linear-gradient(180deg,rgba(226,189,90,.18),rgba(226,189,90,.05));color:var(--gold);font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;box-shadow:0 0 14px rgba(226,189,90,.12)}.champ .mu2{opacity:.8;font-weight:600;letter-spacing:0}.clubhd{position:relative;display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:14px 16px 14px 22px;margin-bottom:12px;border-radius:14px;border:1px solid var(--glass-bd);background:linear-gradient(135deg,var(--th-soft),rgba(255,255,255,.02) 60%),var(--glass);box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 10px 26px rgba(0,0,0,.22);overflow:hidden}.clubhd h2{margin:0 0 2px}.clubtx{flex:1;min-width:160px}.clubst{position:absolute;inset-block:0;inset-inline-start:0;width:7px;background:linear-gradient(180deg,var(--cl1,var(--th-hi)) 0 50%,var(--cl2,var(--th-hi)) 50% 100%)}.clubhd.is-champ{border-color:var(--gold-bd);background:linear-gradient(135deg,var(--th-soft),var(--gold-soft) 70%),var(--glass);box-shadow:inset 0 1px 0 rgba(226,189,90,.35),0 0 26px rgba(226,189,90,.10),0 10px 26px rgba(0,0,0,.22)}.clubk .kpi{border-top:2px solid var(--th-hi)}html[dir=rtl] .clubhd{padding:14px 22px 14px 16px}@media(max-width:560px){.clubhd{padding-inline-start:18px}.champ{font-size:11px;padding:3px 9px}}@media(prefers-reduced-motion:reduce){button,.kpi,#nav .lgl{transition:none}}.nw{white-space:nowrap}input,progress{accent-color:var(--th)}.ltf.D{background:#8a9bb0}.brand{display:inline-flex;align-items:center;gap:10px}.lglogo{width:32px;height:32px;object-fit:contain;border-radius:8px;padding:3px;background:rgba(255,255,255,.94);box-shadow:0 2px 10px rgba(0,0,0,.25)}.lglogo[hidden]{display:none}.clogo{width:18px;height:18px;object-fit:contain;vertical-align:-4px;margin-inline-end:7px;filter:drop-shadow(0 0 1px rgba(255,255,255,.55))}.clubimg{width:58px;height:58px;object-fit:contain;flex:none;filter:drop-shadow(0 2px 6px rgba(0,0,0,.35)) drop-shadow(0 0 1px rgba(255,255,255,.5))}@media(max-width:560px){.lglogo{width:28px;height:28px}.clubimg{width:46px;height:46px}}"
 _X_THJS = r"""/* ===== Theme: league colours, club colours and defending champions =====
    One configuration for every colour that carries identity. Layers:
    1. PL Analytics (wordmark, layout) — always the same; THEME.base is the original dark navy look;
@@ -6239,11 +6345,12 @@ function thPalette(base,o={},alt=null){
 const TH_CACHE=new Map();
 function thLeague(id){return THEME.leagues.find(t=>t.ids.includes(id))||null}
 function thLeaguePal(id){const t=thLeague(id);if(!t)return THEME.base;if(!TH_CACHE.has(t.key))TH_CACHE.set(t.key,Object.assign({key:t.key},thPalette(t.base,t.pal||{})));return TH_CACHE.get(t.key)}
-/* the club's leading colour: the more saturated one (for black-and-white clubs the palette uses the lighter one) */
+/* the club's leading colour: its first (main kit / dominant crest) colour, unless that is white, black or grey and the second is not;
+   for black-and-white clubs the palette uses the lighter one */
 function thClubPal(name){
- const n=String(name||'').toLowerCase().trim(),c=THEME.clubs[n];if(!c)return null;
- if(!TH_CACHE.has('club:'+n)){const [a,b]=thHsl(c[0])[1]>=thHsl(c[1])[1]?[c[0],c[1]]:[c[1],c[0]];TH_CACHE.set('club:'+n,Object.assign({key:'club'},thPalette(a,{},b)))}
- return TH_CACHE.get('club:'+n);
+ const n=String(name||'').toLowerCase().trim(),c=THEME.clubs[n]||crestOf(name);if(!c)return null;
+ if(!TH_CACHE.has('club:'+n+'|'+c.join())){const [a,b]=thHsl(c[0])[1]<.12&&thHsl(c[1])[1]>=.12?[c[1],c[0]]:[c[0],c[1]];TH_CACHE.set('club:'+n+'|'+c.join(),Object.assign({key:'club'},thPalette(a,{},b)))}
+ return TH_CACHE.get('club:'+n+'|'+c.join());
 }
 /* applies the league's colours, or the club's when its own page is open (club = the club's name) */
 function applyTheme(club){
@@ -6252,17 +6359,51 @@ function applyTheme(club){
  const v={'--bg':t.bg,'--sf':t.sf,'--ln':t.ln,'--tx':t.tx,'--mu':t.mu,'--th':t.th,'--th-ink':t.ink,'--th-hi':t.hi,'--th-link':t.link,'--th-deep':t.deep,
   '--th-glow':thA(t.hi,.30),'--th-kpi':thA(t.hi,t===THEME.base?.08:.22),'--th-soft':thA(t.hi,.12),'--th-bd':thA(t.hi,.40),'--th-amb':thA(t.hi,t===THEME.base?.06:.16),'--th-amb2':thA(t.deep,t===THEME.base?.5:.9)};
  for(const k in v)s.setProperty(k,v[k]);
- champLoad();
+ champLoad();logoLoad().then(logoHeader);
 }
 /* a club's two colours for its dot and stripe; the accent is its main colour when that reaches 3:1 on the page, else the second */
 function clubColors(name){
- const n=String(name||'').toLowerCase().trim(),c=THEME.clubs[n];if(!c)return null;
+ const n=String(name||'').toLowerCase().trim(),c=THEME.clubs[n]||crestOf(name);if(!c)return null;
  const hi=[c[0],c[1]].find(x=>thCr(x,'#0d1520')>=3)||null;
  return {c1:c[0],c2:c[1],hi};
 }
 const clubVars=name=>{const c=clubColors(name);return c?`--cl1:${c.c1};--cl2:${c.c2};--clhi:${c.hi||'var(--th-hi)'}`:''};
-const clubDot=name=>{const c=clubColors(name);return c?`<i class="cdot" aria-hidden="true" style="${clubVars(name)}"></i>`:''};
+/* the club's logo when the data has one, else a dot in its colours */
+const clubDot=name=>{const s=logoOf(name);if(s)return `<img class="clogo" src="${s}" alt="" aria-hidden="true" loading="lazy">`;const c=clubColors(name);return c?`<i class="cdot" aria-hidden="true" style="${clubVars(name)}"></i>`:''};
 function clubLink(name){return `<a class="clk" href="#/club/${encodeURIComponent(name)}">${clubDot(name)}${esc(name)}</a>${champMark(name)}`}
+
+/* ===== Logos and crest colours =====
+   Club and league logos come from PitchAPI (the same provider as the data) and are stored by the sync in data/logos_<league>.json.
+   A club without configured colours (THEME.clubs) takes its two dominant crest colours; the page palette is then built and
+   checked by thPalette exactly as for every other theme. Without a logo, nothing changes. */
+const LOGO={p:{},d:{}},CREST=new Map();
+function logoLoad(){
+ const id=D&&D.id,m=(ALL.leagues||[]).find(l=>l.id===id)||{};if(!id||!m.logo_file)return Promise.resolve(null);
+ if(!LOGO.p[id])LOGO.p[id]=fetch('data/'+m.logo_file+'?v='+encodeURIComponent(m.logo_v||'')).then(r=>r.ok?r.json():null).catch(()=>null).then(d=>{LOGO.d[id]=d;return d});
+ return LOGO.p[id];
+}
+const logoOf=name=>{const d=LOGO.d[D&&D.id];return (d&&d.teams&&d.teams[name])||null};
+const leagueLogo=()=>{const d=LOGO.d[D&&D.id];return (d&&d.league)||null};
+function logoHeader(){const im=document.getElementById('lglogo');if(!im)return;const s=leagueLogo();if(s){im.src=s;im.alt=D.name;im.hidden=false}else{im.removeAttribute('src');im.hidden=true}}
+/* the crest's two dominant colours: pixels are grouped by hue (20° steps) and lightness, near-white/near-black/grey ones are set
+   aside; a crest that is almost all black and white gives white and black */
+function thCrest(src){return new Promise(res=>{const im=new Image();im.onload=()=>{try{
+ const N=48,c=document.createElement('canvas');c.width=c.height=N;const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(im,0,0,N,N);const p=x.getImageData(0,0,N,N).data;
+ const B=new Map();let op=0,col=0,light=0,dark=0;
+ for(let i=0;i<p.length;i+=4){if(p[i+3]<200)continue;op++;const hx='#'+[p[i],p[i+1],p[i+2]].map(v=>v.toString(16).padStart(2,'0')).join(''),[h,s,l]=thHsl(hx);
+  if(l>.88)light++;else if(l<.14)dark++;if(s<.25||l<.14||l>.88)continue;col++;
+  const k=(Math.round(h/20)%18)+'|'+(l<.42?0:1),b=B.get(k)||{n:0,r:0,g:0,b:0};b.n++;b.r+=p[i];b.g+=p[i+1];b.b+=p[i+2];B.set(k,b)}
+ if(!op){res(null);return}
+ const avg=b=>'#'+[b.r,b.g,b.b].map(v=>Math.round(v/b.n).toString(16).padStart(2,'0')).join(''),L=[...B.values()].sort((a,b)=>b.n-a.n);
+ if(col/op<.08){res(light>=dark?['#ffffff','#000000']:['#000000','#ffffff']);return}
+ const c1=avg(L[0]),h1=thHsl(c1)[0],sec=L.slice(1).find(b=>{const h=thHsl(avg(b))[0],d=Math.min(Math.abs(h-h1),360-Math.abs(h-h1));return d>30&&b.n>=L[0].n*.12});
+ res([c1,sec?avg(sec):(light>=dark?'#ffffff':'#000000')])}catch(e){res(null)}};im.onerror=()=>res(null);im.src=src})}
+/* colours of a club: configured kit colours first, else its crest (computed once) */
+async function crestFor(name){
+ if(THEME.clubs[String(name||'').toLowerCase().trim()])return;const k=(D&&D.id)+'|'+name;if(CREST.has(k))return;
+ const s=logoOf(name);CREST.set(k,s?await thCrest(s):null);
+}
+const crestOf=name=>CREST.get((D&&D.id)+'|'+name)||null;
 
 /* ---------- defending champions ---------- */
 /* data/champions.json (written by the sync from verified results): {leagues:{<league id>:{season,next,team,...}}}.
@@ -6270,7 +6411,7 @@ function clubLink(name){return `<a class="clk" href="#/club/${encodeURIComponent
    and its name matches exactly one club of the league. Nothing is shown when the file or the entry is missing. */
 const CHAMP={p:null,d:null};
 function champLoad(){if(!CHAMP.p)CHAMP.p=fetch('data/champions.json?v='+encodeURIComponent((ALL&&ALL.generated)||'')).then(r=>r.ok?r.json():null).catch(()=>null).then(d=>{CHAMP.d=d;return d});return CHAMP.p}
-const champReady=()=>champLoad();
+const champReady=()=>Promise.all([champLoad(),logoLoad()]);
 /* season of the league's data from its first match: a season starting in July or later is "YYYY-YY", else the calendar year */
 function curSeason(){const ds=D.matches.map(m=>String(m.date||'').slice(0,10)).filter(Boolean).sort();if(!ds.length)return null;const y=+ds[0].slice(0,4),mo=+ds[0].slice(5,7);return mo>=7?y+'-'+String(y+1).slice(2):String(y)}
 function champInfo(){
@@ -6287,14 +6428,14 @@ function champBadge(name){if(!isChamp(name))return '';return `<span class="champ
 R.club=async function(el,arg){
  const name=decodeURIComponent(arg||''),M=D.matches.filter(m=>m.home===name||m.away===name);
  if(!M.length&&!D.stats.some(s=>s.club===name)){el.innerHTML='<div class="empty">Club not found.</div>';return}
- await champReady();
+ await champReady();await crestFor(name);applyTheme(name);
  const sh=await loadSh().catch(()=>null),tx=wkTeamXg(sh?sh.rows:[]),fin=D.matches.filter(m=>wkSc(m.score)&&m.date),mine=fin.filter(m=>m.home===name||m.away===name);
  const lg=ltOk(fin)?ltTable(fin,tx):null,pos=lg?lg.findIndex(r=>r.t===name):-1,me=lg&&pos>=0?lg[pos]:ltTable(mine,tx).find(r=>r.t===name);
  const champ=isChamp(name),cv=clubVars(name),f1=x=>x.toFixed(2);
  const sq=agg().filter(p=>p.club===name).sort((a,b)=>(b.xt??-1)-(a.xt??-1)).slice(0,20);
  const rec=[...mine].sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,5).map(m=>{const g=wkSc(m.score),h=m.home===name,f=h?g[0]:g[1],a=h?g[1]:g[0],r=f>a?'W':f<a?'L':'D';
   return [`<i class="ltf ${r}" title="${r==='W'?'Win':r==='D'?'Draw':'Loss'}"></i>`,esc(m.date.slice(0,10)),mlink(m)]});
- el.innerHTML=`<div class="clubhd${champ?' is-champ':''}" style="${cv}"><div class="clubst" aria-hidden="true"></div><div class="clubtx"><h2>${esc(name)}</h2><div class="mu">${esc(D.name)}${curSeason()?'<span class="nw"> · '+esc(curSeason())+'</span>':''}</div></div>${champ?champBadge(name):''}</div>
+ el.innerHTML=`<div class="clubhd${champ?' is-champ':''}" style="${cv}"><div class="clubst" aria-hidden="true"></div>${logoOf(name)?`<img class="clubimg" src="${logoOf(name)}" alt="" aria-hidden="true">`:''}<div class="clubtx"><h2>${esc(name)}</h2><div class="mu">${esc(D.name)}${curSeason()?'<span class="nw"> · '+esc(curSeason())+'</span>':''}</div></div>${champ?champBadge(name):''}</div>
  <div class="grid clubk" style="${cv}">${[
    [lg&&pos>=0?String(pos+1):'N/A',lg&&pos>=0?'Position of '+lg.length:'Position'],
    [me?String(me.pts):'N/A','Points'],[me?me.w+'-'+me.d+'-'+me.l:'N/A','Won-drawn-lost'],[me?me.f+'-'+me.a:'N/A','Goals for-against'],
@@ -6315,7 +6456,7 @@ def _x_theme_index(html):
         return h.replace(old, new)
     h = html
     h = sub(h, "</style></head>", _X_THCSS + "</style></head>")
-    h = sub(h, '<div class="top"><b>PL Analytics</b>', '<div class="top"><b><i class="bm" aria-hidden="true"></i>PL Analytics</b>')
+    h = sub(h, '<div class="top"><b>PL Analytics</b>', '<div class="top"><span class="brand"><img id="lglogo" class="lglogo" alt="" hidden><b><i class="bm" aria-hidden="true"></i>PL Analytics</b></span>')
     h = sub(h, "try{localStorage.setItem('league',D.id)}catch(e){}\n", "try{localStorage.setItem('league',D.id)}catch(e){}\n applyTheme();\n")
     h = sub(h, "(pg==='player'&&k==='players')?'on':''", "(pg==='player'&&k==='players')||(pg==='club'&&k==='teams')?'on':''")
     h = sub(h, "async teams(el){\n  const r=await api('/api/teams');", "async teams(el){\n  await champReady();const r=await api('/api/teams');")
