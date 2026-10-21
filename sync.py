@@ -343,6 +343,7 @@ def sync_league(client, league_id, on_progress=None):
         return False
     ms = list(res.matches)
     globals().setdefault("_LOGO_REFS", {})[league_id] = [(m.home_team, m.away_team) for m in ms]   # شعارات الفرق (إضافة الشعارات)
+    globals().setdefault("_LEAGUE_SEASON", {})[league_id] = getattr(getattr(res, "league", None), "season", None)   # موسم البيانات (إضافة البطولات)
     c = db()
     for m in ms:
         c.execute(
@@ -455,6 +456,7 @@ def resolve_leagues(client):
         log("تعذر جلب قائمة الدوريات:", err)
         return []
     by_id = {str(l.id): l for l in items}
+    globals()["_LEAGUE_LIST"] = items   # قائمة الدوريات كاملة: للبطولات الأوروبية ومواسمها (إضافة البطولات)
     metas, seen = [], set()
 
     def add(lg):
@@ -6306,13 +6308,14 @@ def gh_put(hub, path, content, message):
     return _orig_gh_put_logo(hub, path, content, message)
 
 
-_X_THCSS = ":root{--th:#4cc38a;--th-ink:#06210f;--th-hi:#4cc38a;--th-link:#5aa9e6;--th-deep:#0f3b2c;--th-glow:rgba(76,195,138,.28);--th-soft:rgba(76,195,138,.10);--th-bd:rgba(76,195,138,.38);--th-amb:rgba(15,59,44,.55);--th-amb2:rgba(76,195,138,.07);--gold:#e2bd5a;--gold-bd:rgba(226,189,90,.55);--gold-soft:rgba(226,189,90,.12);--glass:var(--sf);--hdr:var(--bg);--glass-hl:rgba(255,255,255,.06);--glass-bd:rgba(255,255,255,.075)}@supports (color:color-mix(in srgb,red 50%,blue)){:root{--glass:color-mix(in srgb,var(--sf) 88%,transparent);--hdr:color-mix(in srgb,var(--bg) 80%,transparent)}}body{background-color:var(--bg);background-image:radial-gradient(1200px 620px at 100% -12%,var(--th-amb),transparent 60%),radial-gradient(1000px 600px at 0% -10%,var(--th-amb2),transparent 62%);background-attachment:fixed;transition:background-color .35s}header{background:var(--hdr);-webkit-backdrop-filter:blur(16px) saturate(150%);backdrop-filter:blur(16px) saturate(150%);border-bottom:1px solid transparent;border-image:linear-gradient(90deg,transparent,var(--th-bd),transparent) 1}@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){header{background:var(--bg)}#nav .lgl{background:rgba(255,255,255,.12)}}.bm{display:inline-block;width:10px;height:10px;border-radius:3px;margin-inline-end:8px;vertical-align:1px;background:linear-gradient(135deg,#4cc38a,#5aa9e6);box-shadow:0 0 0 1px rgba(255,255,255,.18)}a{color:var(--th-link)}.card,.kpi{background:linear-gradient(180deg,var(--glass-hl),rgba(255,255,255,.012) 40%),var(--glass);border-color:var(--glass-bd);box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 8px 22px rgba(0,0,0,.18)}.kpi{background:linear-gradient(150deg,var(--th-kpi,var(--th-soft)),transparent 58%),linear-gradient(180deg,var(--glass-hl),rgba(255,255,255,.012) 40%),var(--glass);transition:border-color .3s,box-shadow .3s}.kpi:hover{border-color:var(--th-bd)}button{background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,0) 55%),var(--th);color:var(--th-ink);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 4px 14px var(--th-soft);transition:background-color .35s,color .35s,box-shadow .35s,border-color .35s}button.s{background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.015)),var(--sf);box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}button.s:hover{border-color:var(--th-bd)}.seg button.on{background:var(--th);color:var(--th-ink)}.chp.on{border-color:var(--th-hi);box-shadow:inset 0 0 0 1px var(--th-hi)}nav a.on{box-shadow:inset 0 -2px var(--th-hi)}#nav .lgl{box-shadow:inset 0 0 0 1px rgba(255,255,255,.16),inset 0 1.5px 1px rgba(255,255,255,.42),inset 0 -1.5px 1px rgba(255,255,255,.14),inset 0 -8px 14px var(--th-soft),0 4px 16px var(--th-glow);transition:box-shadow .35s}input:focus-visible,select:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(--th-hi);outline-offset:2px}h2::after{content:'';display:block;width:44px;height:3px;border-radius:2px;margin-top:6px;background:linear-gradient(90deg,var(--th-hi),transparent)}.wkfact{border-color:var(--th-bd)}.cdot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-inline-end:6px;vertical-align:-1px;background:linear-gradient(135deg,var(--cl1) 50%,var(--cl2) 50%);box-shadow:0 0 0 1px rgba(255,255,255,.28)}.clk{color:inherit;text-decoration:none}.clk:hover{color:var(--th-link);text-decoration:underline}.ltt a{color:inherit;text-decoration:none}.trophy{width:14px;height:14px;flex:none}.chm{display:inline-flex;vertical-align:-2px;margin-inline-start:6px;color:var(--gold)}.champ{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:999px;border:1px solid var(--gold-bd);background:linear-gradient(180deg,rgba(226,189,90,.18),rgba(226,189,90,.05));color:var(--gold);font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;box-shadow:0 0 14px rgba(226,189,90,.12)}.champ .mu2{opacity:.8;font-weight:600;letter-spacing:0}.clubhd{position:relative;display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:14px 16px 14px 22px;margin-bottom:12px;border-radius:14px;border:1px solid var(--glass-bd);background:linear-gradient(135deg,var(--th-soft),rgba(255,255,255,.02) 60%),var(--glass);box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 10px 26px rgba(0,0,0,.22);overflow:hidden}.clubhd h2{margin:0 0 2px}.clubtx{flex:1;min-width:160px}.clubst{position:absolute;inset-block:0;inset-inline-start:0;width:7px;background:linear-gradient(180deg,var(--cl1,var(--th-hi)) 0 50%,var(--cl2,var(--th-hi)) 50% 100%)}.clubhd.is-champ{border-color:var(--gold-bd);background:linear-gradient(135deg,var(--th-soft),var(--gold-soft) 70%),var(--glass);box-shadow:inset 0 1px 0 rgba(226,189,90,.35),0 0 26px rgba(226,189,90,.10),0 10px 26px rgba(0,0,0,.22)}.clubk .kpi{border-top:2px solid var(--th-hi)}html[dir=rtl] .clubhd{padding:14px 22px 14px 16px}@media(max-width:560px){.clubhd{padding-inline-start:18px}.champ{font-size:11px;padding:3px 9px}}@media(prefers-reduced-motion:reduce){button,.kpi,#nav .lgl{transition:none}}.nw{white-space:nowrap}input,progress{accent-color:var(--th)}.ltf.D{background:#8a9bb0}.brand{display:inline-flex;align-items:center;gap:10px}.lglogo{width:32px;height:32px;object-fit:contain;border-radius:8px;padding:3px;background:rgba(255,255,255,.94);box-shadow:0 2px 10px rgba(0,0,0,.25)}.lglogo[hidden]{display:none}.clogo{width:18px;height:18px;object-fit:contain;vertical-align:-4px;margin-inline-end:7px;filter:drop-shadow(0 0 1px rgba(255,255,255,.55))}.clubimg{width:58px;height:58px;object-fit:contain;flex:none;filter:drop-shadow(0 2px 6px rgba(0,0,0,.35)) drop-shadow(0 0 1px rgba(255,255,255,.5))}@media(max-width:560px){.lglogo{width:28px;height:28px}.clubimg{width:46px;height:46px}}"
+_X_THCSS = ":root{--th:#4cc38a;--th-ink:#06210f;--th-hi:#4cc38a;--th-link:#5aa9e6;--th-deep:#0f3b2c;--th-glow:rgba(76,195,138,.28);--th-soft:rgba(76,195,138,.10);--th-bd:rgba(76,195,138,.38);--th-amb:rgba(15,59,44,.55);--th-amb2:rgba(76,195,138,.07);--gold:#e2bd5a;--gold-bd:rgba(226,189,90,.55);--gold-soft:rgba(226,189,90,.12);--glass:var(--sf);--hdr:var(--bg);--glass-hl:rgba(255,255,255,.06);--glass-bd:rgba(255,255,255,.075)}@supports (color:color-mix(in srgb,red 50%,blue)){:root{--glass:color-mix(in srgb,var(--sf) 88%,transparent);--hdr:color-mix(in srgb,var(--bg) 80%,transparent)}}body{background-color:var(--bg);background-image:radial-gradient(1200px 620px at 100% -12%,var(--th-amb),transparent 60%),radial-gradient(1000px 600px at 0% -10%,var(--th-amb2),transparent 62%);background-attachment:fixed;transition:background-color .35s}header{background:var(--hdr);-webkit-backdrop-filter:blur(16px) saturate(150%);backdrop-filter:blur(16px) saturate(150%);border-bottom:1px solid transparent;border-image:linear-gradient(90deg,transparent,var(--th-bd),transparent) 1}@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){header{background:var(--bg)}#nav .lgl{background:rgba(255,255,255,.12)}}.bm{display:inline-block;width:10px;height:10px;border-radius:3px;margin-inline-end:8px;vertical-align:1px;background:linear-gradient(135deg,#4cc38a,#5aa9e6);box-shadow:0 0 0 1px rgba(255,255,255,.18)}a{color:var(--th-link)}.card,.kpi{background:linear-gradient(180deg,var(--glass-hl),rgba(255,255,255,.012) 40%),var(--glass);border-color:var(--glass-bd);box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 8px 22px rgba(0,0,0,.18)}.kpi{background:linear-gradient(150deg,var(--th-kpi,var(--th-soft)),transparent 58%),linear-gradient(180deg,var(--glass-hl),rgba(255,255,255,.012) 40%),var(--glass);transition:border-color .3s,box-shadow .3s}.kpi:hover{border-color:var(--th-bd)}button{background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,0) 55%),var(--th);color:var(--th-ink);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 4px 14px var(--th-soft);transition:background-color .35s,color .35s,box-shadow .35s,border-color .35s}button.s{background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.015)),var(--sf);box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}button.s:hover{border-color:var(--th-bd)}.seg button.on{background:var(--th);color:var(--th-ink)}.chp.on{border-color:var(--th-hi);box-shadow:inset 0 0 0 1px var(--th-hi)}nav a.on{box-shadow:inset 0 -2px var(--th-hi)}#nav .lgl{box-shadow:inset 0 0 0 1px rgba(255,255,255,.16),inset 0 1.5px 1px rgba(255,255,255,.42),inset 0 -1.5px 1px rgba(255,255,255,.14),inset 0 -8px 14px var(--th-soft),0 4px 16px var(--th-glow);transition:box-shadow .35s}input:focus-visible,select:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(--th-hi);outline-offset:2px}h2::after{content:'';display:block;width:44px;height:3px;border-radius:2px;margin-top:6px;background:linear-gradient(90deg,var(--th-hi),transparent)}.wkfact{border-color:var(--th-bd)}.cdot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-inline-end:6px;vertical-align:-1px;background:var(--cldot,linear-gradient(135deg,var(--cl1) 50%,var(--cl2) 50%));box-shadow:0 0 0 1px rgba(255,255,255,.28)}.clk{color:inherit;text-decoration:none}.clk:hover{color:var(--th-link);text-decoration:underline}.ltt a{color:inherit;text-decoration:none}.trophy{width:14px;height:14px;flex:none}.chm{display:inline-flex;vertical-align:-2px;margin-inline-start:6px;color:var(--gold)}.champ{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:999px;border:1px solid var(--gold-bd);background:linear-gradient(180deg,rgba(226,189,90,.18),rgba(226,189,90,.05));color:var(--gold);font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;box-shadow:0 0 14px rgba(226,189,90,.12)}.champ .mu2{opacity:.8;font-weight:600;letter-spacing:0}.clubhd{position:relative;display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:14px 16px 14px 26px;margin-bottom:12px;border-radius:14px;border:1px solid var(--glass-bd);background:linear-gradient(135deg,var(--th-soft),rgba(255,255,255,.02) 60%),var(--glass);box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 10px 26px rgba(0,0,0,.22);overflow:hidden}.clubhd h2{margin:0 0 2px}.clubtx{flex:1;min-width:160px}.clubst{position:absolute;inset-block:0;inset-inline-start:0;width:10px;background:var(--clst,linear-gradient(180deg,var(--cl1,var(--th-hi)) 0 50%,var(--cl2,var(--th-hi)) 50% 100%));box-shadow:inset -1px 0 0 rgba(255,255,255,.14)}.clubhd.is-champ{border-color:var(--gold-bd);background:linear-gradient(135deg,var(--th-soft),var(--gold-soft) 70%),var(--glass);box-shadow:inset 0 1px 0 rgba(226,189,90,.35),0 0 26px rgba(226,189,90,.10),0 10px 26px rgba(0,0,0,.22)}.clubk .kpi{border-top:2px solid var(--th-hi)}html[dir=rtl] .clubhd{padding:14px 26px 14px 16px}html[dir=rtl] .clubst{box-shadow:inset 1px 0 0 rgba(255,255,255,.14)}@media(max-width:560px){.clubhd{padding-inline-start:22px}.champ{font-size:11px;padding:3px 9px}}@media(prefers-reduced-motion:reduce){button,.kpi,#nav .lgl{transition:none}}.nw{white-space:nowrap}input,progress{accent-color:var(--th)}.ltf.D{background:#8a9bb0}.brand{display:inline-flex;align-items:center;gap:10px}.lglogo{width:32px;height:32px;object-fit:contain;border-radius:8px;padding:3px;background:rgba(255,255,255,.94);box-shadow:0 2px 10px rgba(0,0,0,.25)}.lglogo[hidden]{display:none}.clogo{width:18px;height:18px;object-fit:contain;vertical-align:-4px;margin-inline-end:7px;filter:drop-shadow(0 0 1px rgba(255,255,255,.55))}.clubimg{width:58px;height:58px;object-fit:contain;flex:none;filter:drop-shadow(0 2px 6px rgba(0,0,0,.35)) drop-shadow(0 0 1px rgba(255,255,255,.5))}@media(max-width:560px){.lglogo{width:28px;height:28px}.clubimg{width:46px;height:46px}}"
 _X_THJS = r"""/* ===== Theme: league colours, club colours and defending champions =====
    One configuration for every colour that carries identity. Layers:
    1. PL Analytics (wordmark, layout) — always the same; THEME.base is the original dark navy look;
    2. the selected league colours the whole page in its shades (THEME.leagues, by PitchAPI league ID); a league without a
       checked identity keeps THEME.base;
-   3. a club's own page is drawn in the club's shades instead (THEME.clubs); elsewhere a club shows a colour dot by its name;
+   3. a club's own page is drawn in the club's shades instead (THEME.clubs: up to four colours, each with its share); its stripe
+      and dot show every colour at its share;
    4. gold, only for a defending champion that data/champions.json verifies for the current season.
    Statistical colours (chart panels and marks, form, heatmaps, status green/red/amber) are not part of the theme. */
 const THEME={
@@ -6326,36 +6329,56 @@ const THEME={
   {key:'seriea',ids:['l_0ALvwF'],label:'Serie A blue',base:'#0059d6'},
   {key:'ucl',ids:['l_0bfbkO'],label:'Champions League navy',base:'#3550c8'}
  ],
- /* primary kit colours (commonly used values, not official brand files) of the clubs in the Premier League, LaLiga, Bundesliga,
-    Serie A and Liga Portugal data; a club not listed takes its crest colours (thCrest), else the league colours. */
+ /* each club's colours with their approximate share of its identity (home kit and crest together), largest first, up to four:
+    'hex:share'. They are commonly used values, not official brand files. '!' marks the colour the club page is drawn in when it is
+    not the first strong colour. A club not listed takes the colours of its crest, measured from the logo (thCrest). */
  clubs:{
-  'afc bournemouth':['#da291c','#000000'],'arsenal':['#ef0107','#ffffff'],'aston villa':['#670e36','#95bfe5'],'brentford':['#e30613','#ffffff'],
-  'brighton & hove albion':['#0057b8','#ffffff'],'chelsea':['#034694','#ffffff'],'coventry city':['#59cbe8','#ffffff'],'crystal palace':['#1b458f','#c4122e'],
-  'everton':['#003399','#ffffff'],'fulham':['#ffffff','#000000'],'hull city':['#f5a12d','#000000'],'ipswich town':['#0044a9','#ffffff'],
-  'leeds united':['#ffffff','#1d428a'],'liverpool':['#c8102e','#ffffff'],'manchester city':['#6cabdd','#ffffff'],'manchester united':['#da291c','#ffffff'],
-  'newcastle united':['#ffffff','#241f20'],'nottingham forest':['#dd0000','#ffffff'],'sunderland':['#eb172b','#ffffff'],'tottenham hotspur':['#ffffff','#132257'],
+  /* Premier League */
+  'afc bournemouth':'da291c:45 000000:43 ffffff:12','arsenal':'ef0107:58 ffffff:30 063672:8 9c824a:4','aston villa':'670e36:58 95bfe5:30 fee505:12',
+  'brentford':'e30613:45 ffffff:35 000000:20','brighton & hove albion':'0057b8:58 ffffff:42','chelsea':'034694:68 ffffff:20 dba111:8 ee242c:4',
+  'coventry city':'59cbe8:70 ffffff:30','crystal palace':'1b458f:46 c4122e:42 ffffff:12','everton':'003399:62 ffffff:38',
+  'fulham':'ffffff:62 000000:33 cc0000:5','hull city':'f5a12d:55 000000:45','ipswich town':'0044a9:62 ffffff:30 de2c37:8',
+  'leeds united':'ffffff:68 1d428a:20 ffcd00:12','liverpool':'c8102e:84 ffffff:6 00b2a9:5 f6eb61:5','manchester city':'6cabdd:62 ffffff:25 1c2c5b:13',
+  'manchester united':'da291c:55 ffffff:22 000000:15 fbe122:8','newcastle united':'ffffff:46 241f20:46 41b6e6:8','nottingham forest':'dd0000:65 ffffff:35',
+  'sunderland':'eb172b:46 ffffff:40 000000:14','tottenham hotspur':'ffffff:62 132257:38',
   /* LaLiga */
-  'athletic club':['#ee2523','#ffffff'],'atlético madrid':['#cb3524','#ffffff'],'barcelona':['#a50044','#004d98'],'celta vigo':['#8ac3ee','#ffffff'],
-  'deportivo a coruña':['#0045a8','#ffffff'],'deportivo alavés':['#0761af','#ffffff'],'elche':['#05642c','#ffffff'],'espanyol':['#0072ce','#ffffff'],
-  'getafe':['#005999','#ffffff'],'levante':['#b4053f','#0c4da2'],'málaga':['#0099d8','#ffffff'],'osasuna':['#d91a21','#0a346f'],
-  'racing santander':['#ffffff','#009b48'],'rayo vallecano':['#ffffff','#e53027'],'real betis':['#00954c','#ffffff'],'real sociedad':['#0067b1','#ffffff'],
-  'sevilla':['#ffffff','#d71920'],'valencia':['#ffffff','#000000'],'villarreal':['#ffe667','#005187'],
+  'athletic club':'ee2523:45 ffffff:40 000000:15','atlético madrid':'cb3524:45 ffffff:35 272e61:20','barcelona':'a50044:42 004d98:42 edbb00:16',
+  'celta vigo':'8ac3ee:65 ffffff:25 e5254e:10','deportivo a coruña':'0045a8:50 ffffff:50','deportivo alavés':'0761af:55 ffffff:45',
+  'elche':'ffffff:62 05642c:33 c3132d:5','espanyol':'0072ce:55 ffffff:45','getafe':'005999:75 ffffff:25','levante':'b4053f:45 0c4da2:45 ffffff:10',
+  'málaga':'0099d8:52 ffffff:40 c69214:8','osasuna':'d91a21:62 0a346f:30 c9a43a:8','racing santander':'ffffff:60 009b48:30 000000:10',
+  'rayo vallecano':'ffffff:72 e53027:28','real betis':'00954c:50 ffffff:45 c78912:5','real madrid':'ffffff:58 febe10:18 !00529f:14 ee3124:10',
+  'real sociedad':'0067b1:52 ffffff:43 e2a03a:5','sevilla':'ffffff:65 d71920:35','valencia':'ffffff:55 000000:30 ee3524:8 fbd200:7',
+  'villarreal':'ffe667:65 005187:25 e30613:10',
   /* Bundesliga */
-  '1. fc köln':['#ed1c24','#ffffff'],'augsburg':['#ba3733','#46714d'],'bayer leverkusen':['#e32221','#000000'],'bayern münchen':['#dc052d','#0066b2'],
-  'borussia dortmund':['#fde100','#000000'],'borussia mönchengladbach':['#ffffff','#00a14b'],'eintracht frankfurt':['#e1000f','#000000'],'elversberg':['#000000','#ffffff'],
-  'freiburg':['#e2001a','#000000'],'hamburger sv':['#0a3f86','#ffffff'],'hoffenheim':['#1961b5','#ffffff'],'mainz 05':['#c3141e','#ffffff'],
-  'paderborn':['#005ca9','#000000'],'rb leipzig':['#dd0741','#ffffff'],'schalke 04':['#004d9d','#ffffff'],'union berlin':['#eb1923','#ffffff'],
-  'vfb stuttgart':['#e32219','#ffffff'],'werder bremen':['#1d9053','#ffffff'],
+  '1. fc köln':'ffffff:55 ed1c24:35 000000:10','augsburg':'ffffff:50 ba3733:30 46714d:20','bayer leverkusen':'e32221:50 000000:40 ffffff:10',
+  'bayern münchen':'dc052d:62 ffffff:25 0066b2:13','borussia dortmund':'fde100:60 000000:40','borussia mönchengladbach':'ffffff:55 000000:30 00a14b:15',
+  'eintracht frankfurt':'e1000f:40 000000:35 ffffff:25','elversberg':'000000:50 ffffff:50','freiburg':'e2001a:45 000000:35 ffffff:20',
+  'hamburger sv':'ffffff:45 0a3f86:30 000000:15 e4002b:10','hoffenheim':'1961b5:62 ffffff:38','mainz 05':'c3141e:62 ffffff:38',
+  'paderborn':'005ca9:45 000000:40 ffffff:15','rb leipzig':'ffffff:55 dd0741:27 0c2043:13 ffc200:5','schalke 04':'004d9d:62 ffffff:38',
+  'union berlin':'eb1923:55 ffffff:35 f8e864:10','vfb stuttgart':'ffffff:60 e32219:30 fce20e:10','werder bremen':'1d9053:62 ffffff:38',
   /* Serie A */
-  'atalanta':['#1e71b8','#000000'],'bologna':['#a21c26','#1a2f48'],'cagliari':['#ad002a','#002350'],'como':['#0c4ea6','#ffffff'],
-  'fiorentina':['#482e92','#ffffff'],'frosinone':['#ffd200','#0047ab'],'genoa':['#a51e36','#002147'],'inter':['#010e80','#000000'],
-  'juventus':['#000000','#ffffff'],'lazio':['#87d8f7','#ffffff'],'lecce':['#ffd200','#e30613'],'milan':['#fb090b','#000000'],
-  'monza':['#e4002b','#ffffff'],'napoli':['#12a0d7','#ffffff'],'parma':['#ffd200','#1b4093'],'roma':['#8e1f2f','#f0bc42'],
-  'sassuolo':['#00a752','#000000'],'torino':['#881f19','#ffffff'],'udinese':['#000000','#ffffff'],
+  'atalanta':'1e71b8:45 000000:45 ffffff:10','bologna':'a21c26:45 1a2f48:45 ffffff:10','cagliari':'ad002a:45 002350:45 ffffff:10',
+  'como':'0c4ea6:65 ffffff:35','fiorentina':'482e92:72 ffffff:20 e30613:8','frosinone':'ffd200:50 0047ab:45 ffffff:5',
+  'genoa':'a51e36:46 002147:46 ffd100:8','inter':'010e80:45 000000:42 ffffff:13','juventus':'000000:50 ffffff:50',
+  'lazio':'87d8f7:62 ffffff:28 d5ba61:10','lecce':'ffd200:50 e30613:50','milan':'fb090b:42 000000:42 ffffff:16','monza':'e4002b:62 ffffff:38',
+  'napoli':'12a0d7:75 ffffff:25','parma':'ffffff:55 000000:20 ffd200:13 1b4093:12','roma':'8e1f2f:65 f0bc42:30 ffffff:5',
+  'sassuolo':'00a752:50 000000:50','torino':'881f19:75 ffffff:25','udinese':'000000:50 ffffff:50','venezia':'000000:60 f36f21:15 00703c:15 ffffff:10',
+  /* Ligue 1 */
+  'angers':'000000:50 ffffff:50','auxerre':'ffffff:55 004c9f:45','brest':'ea1d25:65 ffffff:35','le havre':'86bee1:45 18315d:45 ffffff:10',
+  'lens':'fcd116:50 ec1c24:45 000000:5','lille':'e01e13:55 20325f:35 ffffff:10','lorient':'f36f23:55 000000:35 ffffff:10',
+  'lyon':'ffffff:60 da001a:20 0e23a7:20','marseille':'ffffff:65 2faee0:35','monaco':'e30613:50 ffffff:45 dfa843:5',
+  'nice':'cc0000:45 000000:45 ffffff:10','paris fc':'0c052f:55 499cc9:30 ffffff:15','paris saint-germain':'004170:60 da291c:20 ffffff:20',
+  'rennes':'e23327:50 000000:45 ffffff:5','strasbourg':'009fe3:60 ffffff:30 e30613:10','toulouse':'5b2d86:65 ffffff:35','troyes':'036bad:60 ffffff:40',
   /* Liga Portugal */
-  'benfica':['#e83030','#ffffff'],'fc porto':['#003893','#ffffff'],'sporting cp':['#008057','#ffffff'],'braga':['#d50f19','#ffffff'],
-  'vitória de guimarães':['#ffffff','#000000'],'famalicão':['#1d3c6e','#ffffff'],'rio ave':['#00843d','#ffffff'],'nacional':['#000000','#ffffff'],
-  'estoril':['#ffde00','#0047ab'],'arouca':['#ffde00','#0047ab'],'moreirense':['#00843d','#ffffff'],'santa clara':['#d7262f','#ffffff']
+  'académico viseu':'000000:60 ffffff:40','arouca':'ffde00:55 0047ab:45','benfica':'e83030:62 ffffff:30 c8a659:8','braga':'d50f19:60 ffffff:35 c7a147:5',
+  'estoril':'ffde00:55 0047ab:45','famalicão':'1d3c6e:50 ffffff:35 f1ca1e:15','fc porto':'003893:52 ffffff:43 f4c300:5',
+  'marítimo':'d50f19:45 006b3f:45 ffffff:10','moreirense':'00843d:55 ffffff:45','nacional':'000000:50 ffffff:40 e9bf24:10',
+  'rio ave':'00843d:55 ffffff:45','santa clara':'d7262f:62 ffffff:38','sporting cp':'008057:55 ffffff:45','vitória de guimarães':'ffffff:60 000000:40',
+  /* other Champions League clubs */
+  'aek athens':'fcd309:55 000000:45','bodø/glimt':'fcde00:65 000000:35','club brugge':'0063b3:45 000000:45 ffffff:10',
+  'fenerbahçe':'ffed00:45 002d72:45 ffffff:10','feyenoord':'e30613:45 ffffff:40 000000:15','galatasaray':'a90432:50 fdb912:50',
+  'lask':'000000:50 ffffff:50','psv eindhoven':'ed1c24:55 ffffff:40 000000:5','shakhtar donetsk':'f26522:60 000000:40',
+  'slavia prague':'ffffff:50 e30613:50','slovan bratislava':'4fb3e8:60 ffffff:30 1e3e8c:10'
  },
  gold:'#e2bd5a'
 };
@@ -6389,12 +6412,19 @@ function thPalette(base,o={},alt=null){
 const TH_CACHE=new Map();
 function thLeague(id){return THEME.leagues.find(t=>t.ids.includes(id))||null}
 function thLeaguePal(id){const t=thLeague(id);if(!t)return THEME.base;if(!TH_CACHE.has(t.key))TH_CACHE.set(t.key,Object.assign({key:t.key},thPalette(t.base,t.pal||{})));return TH_CACHE.get(t.key)}
-/* the club's leading colour: its first (main kit / dominant crest) colour, unless that is white, black or grey and the second is not;
-   for black-and-white clubs the palette uses the lighter one */
+/* a club's colours as [{c,w,lead}] (largest share first): configured, else measured from its crest; null when neither */
+const TH_PARSE=new Map();
+function thParse(v){if(!v)return null;if(Array.isArray(v))return v;if(!TH_PARSE.has(v))TH_PARSE.set(v,v.trim().split(/\s+/).map(x=>{const m=/^(!?)([0-9a-f]{6}):(\d+)$/i.exec(x);return m?{c:'#'+m[2].toLowerCase(),w:+m[3],lead:!!m[1]}:null}).filter(Boolean));return TH_PARSE.get(v)}
+const clubCols=name=>thParse(THEME.clubs[String(name||'').toLowerCase().trim()])||crestOf(name);
+const thNeutral=c=>thHsl(c)[1]<.12;
+/* the page is drawn in the club's leading colour: the one marked '!', else its largest colour that is not white, black or grey
+   and has at least a fifth of the share (a small accent does not colour a black-and-white club's page; those use the lighter
+   neutral); the second colour is the next one that differs from it */
 function thClubPal(name){
- const n=String(name||'').toLowerCase().trim(),c=THEME.clubs[n]||crestOf(name);if(!c)return null;
- if(!TH_CACHE.has('club:'+n+'|'+c.join())){const [a,b]=thHsl(c[0])[1]<.12&&thHsl(c[1])[1]>=.12?[c[1],c[0]]:[c[0],c[1]];TH_CACHE.set('club:'+n+'|'+c.join(),Object.assign({key:'club'},thPalette(a,{},b)))}
- return TH_CACHE.get('club:'+n+'|'+c.join());
+ const n=String(name||'').toLowerCase().trim(),L=clubCols(name);if(!L||!L.length)return null;
+ const tot=L.reduce((a,x)=>a+x.w,0)||1,lead=(L.find(x=>x.lead)||L.find(x=>!thNeutral(x.c)&&x.w/tot>=.2)||L[0]).c,alt=(L.find(x=>x.c!==lead)||{c:null}).c,k='club:'+n+'|'+lead+'|'+alt;
+ if(!TH_CACHE.has(k))TH_CACHE.set(k,Object.assign({key:'club'},thPalette(lead,{},alt)));
+ return TH_CACHE.get(k);
 }
 /* applies the league's colours, or the club's when its own page is open (club = the club's name) */
 function applyTheme(club){
@@ -6405,21 +6435,25 @@ function applyTheme(club){
  for(const k in v)s.setProperty(k,v[k]);
  champLoad();logoLoad().then(logoHeader);
 }
-/* a club's two colours for its dot and stripe; the accent is its main colour when that reaches 3:1 on the page, else the second */
+/* a club's colours for its stripe (top to bottom) and dot (clockwise), each band as wide as the colour's share; the accent is its
+   first colour that reaches 3:1 on the page */
 function clubColors(name){
- const n=String(name||'').toLowerCase().trim(),c=THEME.clubs[n]||crestOf(name);if(!c)return null;
- const hi=[c[0],c[1]].find(x=>thCr(x,'#0d1520')>=3)||null;
- return {c1:c[0],c2:c[1],hi};
+ const L=clubCols(name);if(!L||!L.length)return null;const tot=L.reduce((a,x)=>a+x.w,0)||1;let acc=0;
+ const stops=L.map(x=>{const a=acc;acc+=x.w/tot*100;return [x.c,+a.toFixed(2),+acc.toFixed(2)]});
+ return {list:L,c1:L[0].c,c2:(L[1]||L[0]).c,hi:(L.find(x=>thCr(x.c,'#0d1520')>=3)||{c:null}).c,
+  stripe:'linear-gradient(180deg,'+stops.map(([c,a,b])=>`${c} ${a}% ${b}%`).join(',')+')',
+  dot:'conic-gradient('+stops.map(([c,a,b])=>`${c} ${a}% ${b}%`).join(',')+')',
+  title:L.map(x=>x.c+' '+Math.round(x.w/tot*100)+'%').join(', ')};
 }
-const clubVars=name=>{const c=clubColors(name);return c?`--cl1:${c.c1};--cl2:${c.c2};--clhi:${c.hi||'var(--th-hi)'}`:''};
+const clubVars=name=>{const c=clubColors(name);return c?`--cl1:${c.c1};--cl2:${c.c2};--clhi:${c.hi||'var(--th-hi)'};--clst:${c.stripe};--cldot:${c.dot}`:''};
 /* the club's logo when the data has one, else a dot in its colours */
 const clubDot=name=>{const s=logoOf(name);if(s)return `<img class="clogo" src="${s}" alt="" aria-hidden="true" loading="lazy">`;const c=clubColors(name);return c?`<i class="cdot" aria-hidden="true" style="${clubVars(name)}"></i>`:''};
-function clubLink(name){return `<a class="clk" href="#/club/${encodeURIComponent(name)}">${clubDot(name)}${esc(name)}</a>${champMark(name)}`}
+function clubLink(name){return `<a class="clk" href="#/club/${encodeURIComponent(name)}">${clubDot(name)}${esc(name)}</a>${champMark(name)}${euroMarks(name)}`}
 
 /* ===== Logos and crest colours =====
    Club and league logos come from PitchAPI (the same provider as the data) and are stored by the sync in data/logos_<league>.json.
-   A club without configured colours (THEME.clubs) takes its two dominant crest colours; the page palette is then built and
-   checked by thPalette exactly as for every other theme. Without a logo, nothing changes. */
+   A club without configured colours (THEME.clubs) takes the colours measured from its crest, with their shares; the page palette
+   is then built and checked by thPalette exactly as for every other theme. Without a logo, nothing changes. */
 const LOGO={p:{},d:{}},CREST=new Map();
 function logoLoad(){
  const id=D&&D.id,m=(ALL.leagues||[]).find(l=>l.id===id)||{};if(!id||!m.logo_file)return Promise.resolve(null);
@@ -6429,22 +6463,25 @@ function logoLoad(){
 const logoOf=name=>{const d=LOGO.d[D&&D.id];return (d&&d.teams&&d.teams[name])||null};
 const leagueLogo=()=>{const d=LOGO.d[D&&D.id];return (d&&d.league)||null};
 function logoHeader(){const im=document.getElementById('lglogo');if(!im)return;const s=leagueLogo();if(s){im.src=s;im.alt=D.name;im.hidden=false}else{im.removeAttribute('src');im.hidden=true}}
-/* the crest's two dominant colours: pixels are grouped by hue (20° steps) and lightness; near-white, near-black and grey ones
-   are set aside. Purer pixels count more (weight saturation³), so anti-aliased edges do not wash a colour out, and gold counts
-   a third, because in many crests it is trim (Barcelona's stripes, Benfica's eagle); a mostly yellow crest still leads in
-   yellow. A crest that is almost all black and white gives white and black. */
+/* the crest's colours with their shares: opaque pixels are grouped (k-means in Lab, from the most distant colours), groups
+   closer than ΔE 16 are joined, and groups under 4% (anti-aliased edges, small details) are left out; up to four remain */
+function thLab(r,g,b){const f=v=>{v/=255;return v<=.04045?v/12.92:Math.pow((v+.055)/1.055,2.4)},R=f(r),G=f(g),B=f(b),F=t=>t>.008856?Math.cbrt(t):7.787*t+16/116;
+ const X=F((R*.4124+G*.3576+B*.1805)/.95047),Y=F(R*.2126+G*.7152+B*.0722),Z=F((R*.0193+G*.1192+B*.9505)/1.08883);return [116*Y-16,500*(X-Y),200*(Y-Z)]}
+function thClusters(P,k=6){
+ const d2=(a,b)=>(a[0]-b[0])**2+(a[1]-b[1])**2+(a[2]-b[2])**2;let C=[P[0].l];
+ while(C.length<k){let far=null,fd=-1;for(const p of P){const d=Math.min(...C.map(c=>d2(c,p.l)));if(d>fd){fd=d;far=p.l}}if(fd<64)break;C.push(far)}
+ let G=[];for(let it=0;it<10;it++){G=C.map(()=>({n:0,l:[0,0,0],r:[0,0,0]}));
+  for(const p of P){let bi=0,bd=1e9;C.forEach((c,i)=>{const d=d2(c,p.l);if(d<bd){bd=d;bi=i}});const g=G[bi];g.n++;for(let j=0;j<3;j++){g.l[j]+=p.l[j];g.r[j]+=p.r[j]}}
+  C=G.map((g,i)=>g.n?g.l.map(v=>v/g.n):C[i])}
+ let out=G.filter(g=>g.n).map(g=>({n:g.n,l:g.l.map(v=>v/g.n),r:g.r.map(v=>v/g.n)})).sort((a,b)=>b.n-a.n);
+ for(let i=0;i<out.length;i++)for(let j=i+1;j<out.length;j++)if(Math.sqrt(d2(out[i].l,out[j].l))<16){const a=out[i],b=out[j],n=a.n+b.n;a.r=a.r.map((v,q)=>(v*a.n+b.r[q]*b.n)/n);a.l=a.l.map((v,q)=>(v*a.n+b.l[q]*b.n)/n);a.n=n;out.splice(j,1);j=i}
+ const tot=P.length;out=out.filter(g=>g.n/tot>=.04).sort((a,b)=>b.n-a.n).slice(0,4);const s=out.reduce((a,g)=>a+g.n,0);
+ return out.map(g=>({c:'#'+g.r.map(v=>Math.round(v).toString(16).padStart(2,'0')).join(''),w:Math.round(g.n/s*100),lead:false}));
+}
 function thCrest(src){return new Promise(res=>{const im=new Image();im.onload=()=>{try{
- const N=64,c=document.createElement('canvas');c.width=c.height=N;const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(im,0,0,N,N);const p=x.getImageData(0,0,N,N).data;
- const B=new Map();let op=0,col=0,light=0,dark=0;
- for(let i=0;i<p.length;i+=4){if(p[i+3]<200)continue;op++;const hx='#'+[p[i],p[i+1],p[i+2]].map(v=>v.toString(16).padStart(2,'0')).join(''),[h,s,l]=thHsl(hx);
-  if(l>.88)light++;else if(l<.14)dark++;if(s<.25||l<.14||l>.88)continue;col++;
-  const w=s*s*s*(h>=38&&h<=62?1/3:1),k=(Math.round(h/20)%18)+'|'+(l<.42?0:1),b=B.get(k)||{n:0,w:0,r:0,g:0,b:0};
-  b.n++;b.w+=w;b.r+=p[i]*w;b.g+=p[i+1]*w;b.b+=p[i+2]*w;B.set(k,b)}
- if(!op){res(null);return}
- const avg=b=>'#'+[b.r,b.g,b.b].map(v=>Math.round(v/b.w).toString(16).padStart(2,'0')).join(''),L=[...B.values()].filter(b=>b.w>0).sort((a,b)=>b.w-a.w);
- if(col/op<.08||!L.length){res(light>=dark?['#ffffff','#000000']:['#000000','#ffffff']);return}
- const c1=avg(L[0]),h1=thHsl(c1)[0],sec=L.slice(1).find(b=>{const h=thHsl(avg(b))[0],d=Math.min(Math.abs(h-h1),360-Math.abs(h-h1));return d>30&&b.w>=L[0].w*.12});
- res([c1,sec?avg(sec):(light>=dark?'#ffffff':'#000000')])}catch(e){res(null)}};im.onerror=()=>res(null);im.src=src})}
+ const N=48,c=document.createElement('canvas');c.width=c.height=N;const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(im,0,0,N,N);const p=x.getImageData(0,0,N,N).data,P=[];
+ for(let i=0;i<p.length;i+=4)if(p[i+3]>=200)P.push({r:[p[i],p[i+1],p[i+2]],l:thLab(p[i],p[i+1],p[i+2])});
+ res(P.length?thClusters(P):null)}catch(e){res(null)}};im.onerror=()=>res(null);im.src=src})}
 /* colours of a club: configured kit colours first, else its crest (computed once) */
 async function crestFor(name){
  if(THEME.clubs[String(name||'').toLowerCase().trim()])return;const k=(D&&D.id)+'|'+name;if(CREST.has(k))return;
@@ -6458,7 +6495,7 @@ const crestOf=name=>CREST.get((D&&D.id)+'|'+name)||null;
    and its name matches exactly one club of the league. Nothing is shown when the file or the entry is missing. */
 const CHAMP={p:null,d:null};
 function champLoad(){if(!CHAMP.p)CHAMP.p=fetch('data/champions.json?v='+encodeURIComponent((ALL&&ALL.generated)||'')).then(r=>r.ok?r.json():null).catch(()=>null).then(d=>{CHAMP.d=d;return d});return CHAMP.p}
-const champReady=()=>Promise.all([champLoad(),logoLoad()]);
+const champReady=()=>Promise.all([champLoad(),logoLoad(),euroLoad()]);
 /* season of the league's data from its first match: a season starting in July or later is "YYYY-YY", else the calendar year */
 function curSeason(){const ds=D.matches.map(m=>String(m.date||'').slice(0,10)).filter(Boolean).sort();if(!ds.length)return null;const y=+ds[0].slice(0,4),mo=+ds[0].slice(5,7);return mo>=7?y+'-'+String(y+1).slice(2):String(y)}
 function champInfo(){
@@ -6482,13 +6519,14 @@ R.club=async function(el,arg){
  const sq=agg().filter(p=>p.club===name).sort((a,b)=>(b.xt??-1)-(a.xt??-1)).slice(0,20);
  const rec=[...mine].sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,5).map(m=>{const g=wkSc(m.score),h=m.home===name,f=h?g[0]:g[1],a=h?g[1]:g[0],r=f>a?'W':f<a?'L':'D';
   return [`<i class="ltf ${r}" title="${r==='W'?'Win':r==='D'?'Draw':'Loss'}"></i>`,esc(m.date.slice(0,10)),mlink(m)]});
- el.innerHTML=`<div class="clubhd${champ?' is-champ':''}" style="${cv}"><div class="clubst" aria-hidden="true"></div>${logoOf(name)?`<img class="clubimg" src="${logoOf(name)}" alt="" aria-hidden="true">`:''}<div class="clubtx"><h2>${esc(name)}</h2><div class="mu">${esc(D.name)}${curSeason()?'<span class="nw"> · '+esc(curSeason())+'</span>':''}</div></div>${champ?champBadge(name):''}</div>
+ el.innerHTML=`<div class="clubhd${champ?' is-champ':''}" style="${cv}"><div class="clubst" aria-hidden="true" title="${esc((clubColors(name)||{}).title||'')}"></div>${logoOf(name)?`<img class="clubimg" src="${logoOf(name)}" alt="" aria-hidden="true">`:''}<div class="clubtx"><h2>${esc(name)}</h2><div class="mu">${esc(D.name)}${curSeason()?'<span class="nw"> · '+esc(curSeason())+'</span>':''}</div>${clubComps(name)}</div>${champ?champBadge(name):''}</div>
  <div class="grid clubk" style="${cv}">${[
    [lg&&pos>=0?String(pos+1):'N/A',lg&&pos>=0?'Position of '+lg.length:'Position'],
    [me?String(me.pts):'N/A','Points'],[me?me.w+'-'+me.d+'-'+me.l:'N/A','Won-drawn-lost'],[me?me.f+'-'+me.a:'N/A','Goals for-against'],
    [me&&me.nx?f1(me.xf/me.nx):'N/A','xG for a match'],[me&&me.nx?f1(me.xa/me.nx):'N/A','xG against a match']
   ].map(([v,k])=>`<div class="kpi"><b>${v}</b><span>${esc(k)}</span></div>`).join('')}</div>
- ${champ?`<div class="mu" style="font-size:12px;margin:2px 0 12px" title="${esc(champInfo().e.src||'')}">${esc(name)} <span>won the ${esc(champInfo().season)} league, worked out from that season's verified results. The current table is separate: being top now does not make a club champions.</span></div>`:''}
+ ${champ?`<div class="mu" style="font-size:12px;margin:2px 0 12px" title="${esc(champInfo().e.src||'')}">${esc(name)} ${champInfo().e.kind==='cup'?`<span>won the ${esc(champInfo().season)} final, worked out from that season's verified results.</span>`:`<span>won the ${esc(champInfo().season)} league, worked out from that season's verified results. The current table is separate: being top now does not make a club champions.</span>`}</div>`:''}
+ ${await fxSection(D.id,name)}
  <h3>Recent results</h3>${rec.length?tbl([[''],['Date'],['Match']],rec):'<div class="empty">No results in the data yet.</div>'}
  <h3>Players by xT</h3>${sq.length?tbl([['Player'],['Pos'],['Games',1],['Min',1],['xT',1],['xG',1]],sq.map(p=>[`<a href="#/player/${encodeURIComponent(p.key+'||'+p.club)}">${esc(p.player)}</a>`,p.pos||'N/A',p.games,p.minutes==null?'N/A':Math.round(p.minutes),f(p.xt),f(p.xg)])):'<div class="empty">No player data for this club yet.</div>'}`;
 };
@@ -6508,7 +6546,7 @@ def _x_theme_index(html):
     h = sub(h, "(pg==='player'&&k==='players')?'on':''", "(pg==='player'&&k==='players')||(pg==='club'&&k==='teams')?'on':''")
     h = sub(h, "async teams(el){\n  const r=await api('/api/teams');", "async teams(el){\n  await champReady();const r=await api('/api/teams');")
     h = sub(h, "r.rows.map(x=>[esc(x.club),x.matches,x.players,f(x.xt),f(x.xg)])", "r.rows.map(x=>[clubLink(x.club),x.matches,x.players,f(x.xt),f(x.xg)])")
-    h = sub(h, "<span class=\"ltt\">${esc(r.t)}</span>", "<span class=\"ltt\"><a href=\"#/club/${encodeURIComponent(r.t)}\">${clubDot(r.t)}${esc(r.t)}</a>${champMark(r.t)}</span>")
+    h = sub(h, "<span class=\"ltt\">${esc(r.t)}</span>", "<span class=\"ltt\"><a href=\"#/club/${encodeURIComponent(r.t)}\">${clubDot(r.t)}${esc(r.t)}</a>${champMark(r.t)}${euroMarks(r.t)}</span>")
     h = sub(h, "R.table=async function(el){\n", "R.table=async function(el){\n await champReady();\n")
     h = sub(h, "async player(el,arg){\n  const [key,club]=decodeURIComponent(arg).split('||');", "async player(el,arg){\n  await champReady();const [key,club]=decodeURIComponent(arg).split('||');")
     h = sub(h, "<h2>${esc(r.rows[0].player)}</h2><div class=\"mu\">${esc(club)} · ${r.rows[0].pos||'position N/A'}</div>",
@@ -6537,6 +6575,454 @@ _AR_SEASON.update({
 
 INDEX = _x_theme_index(INDEX)
 # ======================== نهاية إضافة هوية الألوان ========================
+
+# ============================================================================
+# إضافة: البطولات — أبطال الموسم الماضي لكل دوري وبطولة أوروبية (من نتائج PitchAPI الموثقة)، مشاركات الأندية هذا الموسم
+# في دوري الأبطال والدوري الأوروبي ودوري المؤتمرات، ومواعيد المباريات القادمة لكل دوري.
+# كل الطلبات هنا قليلة ومحفوظة: الأبطال مرة لكل موسم، المشاركات كل 12 ساعة، المواعيد كل ساعة.
+# ============================================================================
+TITLES_RETRY_H = 24               # بطل ما قدرنا نثبته: نعيد المحاولة بعد يوم
+EURO_REFRESH_H = 12
+FIX_REFRESH_MIN = 60
+FIX_MAX = 80                      # أقصى عدد مباريات قادمة نحفظها لكل دوري
+EURO_PATH = "data/europe.json"
+FIX_PATH = "data/fixtures.json"
+EURO_COMPS = (
+    dict(key="ucl", label="Champions League", known="l_0bfbkO", words=("champions league",), exclude=("afc", "caf", "concacaf", "ofc", "asia", "africa")),
+    dict(key="uel", label="Europa League", words=("europa league",), exclude=("conference",)),
+    dict(key="uecl", label="Conference League", words=("conference league",), exclude=("concacaf",)),
+)
+
+
+def _season_label(s):
+    """'2025/2026' → '2025-26'، '2026' → '2026' (نفس صيغة الموسم في الصفحة)."""
+    s = str(s or "").strip()
+    m = re.match(r"^(\d{4})\D+(\d{2,4})$", s)
+    if m:
+        return f"{m.group(1)}-{m.group(2)[-2:]}"
+    return s if re.match(r"^\d{4}$", s) else None
+
+
+def _season_prev(seasons, cur):
+    """الموسم اللي قبل cur من قائمة المواسم اللي يقبلها PitchAPI للدوري."""
+    ys = sorted({str(s) for s in (seasons or []) if re.match(r"^\d{4}", str(s))}, key=lambda s: s[:4])
+    older = [s for s in ys if s[:4] < str(cur)[:4]]
+    return older[-1] if older else None
+
+
+def _league_title(rows):
+    """rows = [(home, away, gh, ga)] لموسم دوري كامل (كل فريق لعب مع كل فريق ذهاباً وإياباً).
+    البطل = صاحب أكثر النقاط بفارق واضح. إذا تساوى الأول والثاني بالنقاط ما نحكم (معايير كسر التعادل تختلف بين الدوريات)."""
+    # الدوري نفسه = الأندية اللي لعبت الموسم كامل؛ مباريات الملحق مع نادٍ من الدرجة الثانية (لعب مباراة أو اثنتين) ما تدخل
+    games = {}
+    for r in rows:
+        for t in r[:2]:
+            games[t] = games.get(t, 0) + 1
+    top = max(games.values()) if games else 0
+    teams = sorted(t for t, g in games.items() if g * 2 >= top)
+    rows = [r for r in rows if r[0] in teams and r[1] in teams]
+    n = len(teams)
+    if n < 4 or len(rows) != n * (n - 1):
+        return None, f"{len(rows)} of {n * (n - 1)} fixtures"
+    if len({(r[0], r[1]) for r in rows}) != len(rows):
+        return None, "duplicate fixtures"
+    T = {t: [0, 0, 0] for t in teams}
+    for h, a, x, y in rows:
+        for t, f, g in ((h, x, y), (a, y, x)):
+            T[t][0] += 3 if f > g else 1 if f == g else 0
+            T[t][1] += f - g
+            T[t][2] += f
+    o = sorted(T.items(), key=lambda kv: (-kv[1][0], -kv[1][1], -kv[1][2]))
+    (w, a), (u, b) = o[0], o[1]
+    if a[0] == b[0]:
+        return None, f"{w} and {u} level on points"
+    return dict(team=w, pts=a[0], gd=a[1], gf=a[2], runner_up=u, margin=a[0] - b[0], fixtures=len(rows)), None
+
+
+_PEN_PERIOD = re.compile(r"pen|shoot|^ps$", re.I)
+
+
+def _shootout(client, m):
+    """الفائز بركلات الترجيح من أحداث المباراة (إذا موجودة)، وإلا None."""
+    ev, err = call(client.matches.events, m.id)
+    if ev is None:
+        return None, f"events: {err}"
+    evs = list(getattr(ev, "events", None) or [])
+    pens = [e for e in evs if _PEN_PERIOD.search(str(getattr(e, "period", "") or "")) and "goal" in str(getattr(e, "event_type", "")).lower()
+            and "miss" not in str(getattr(e, "event_type", "")).lower()]
+    kinds = sorted({f"{getattr(e, 'period', '')}/{getattr(e, 'event_type', '')}" for e in evs})[:12]
+    hid, aid = str(m.home_team.id), str(m.away_team.id)
+    nh = sum(1 for e in pens if str(getattr(e, "team_id", "")) == hid)
+    na = sum(1 for e in pens if str(getattr(e, "team_id", "")) == aid)
+    if pens and nh != na and nh + na == len(pens):
+        return (m.home_team.name if nh > na else m.away_team.name, f"{nh}-{na}"), None
+    return None, f"no shootout in events ({', '.join(kinds)})"
+
+
+def _cup_title(client, lid, season, ms):
+    """بطل البطولة = الفائز في آخر مباراة من الموسم، بشرط أن PitchAPI يسمّيها النهائي وما بقي للموسم مباريات."""
+    up, err = call(lambda: client.leagues.matches(lid, season=season, status="upcoming"))
+    if up is None or list(up.matches):
+        return None, "season not finished" if up is not None else f"upcoming: {err}"
+    fin = [m for m in ms if m.score_home is not None and m.score_away is not None and m.date]
+    if not fin:
+        return None, "no results"
+    last = max(str(m.date)[:10] for m in fin)
+    on_last = [m for m in fin if str(m.date)[:10] == last]
+    if len(on_last) != 1:
+        return None, f"{len(on_last)} matches on the last day"
+    m = on_last[0]
+    det, err = call(client.matches.get, m.id)
+    rn = str(getattr(det, "round_name", "") or "") if det is not None else ""
+    if not re.search(r"\bfinal\b", rn, re.I) or re.search(r"semi|quarter|1/\d|round of|eighth|third|3rd", rn, re.I):
+        return None, f"last match is not the final (round: {rn or err or '?'})"
+    h, a = m.score_home, m.score_away
+    info = dict(final=f"{m.home_team.name} {h}-{a} {m.away_team.name}", date=last, runner_up=None)
+    if h != a:
+        w = m.home_team.name if h > a else m.away_team.name
+    else:
+        so, why = _shootout(client, m)
+        if not so:
+            return None, f"final drawn {h}-{a}, {why}"
+        w, info["pens"] = so
+    info["runner_up"] = m.away_team.name if w == m.home_team.name else m.home_team.name
+    return dict(team=w, **info), None
+
+
+def sync_titles(client, hub, lids):
+    """data/champions.json: بطل الموسم الماضي لكل دوري (جدول كامل) ولكل بطولة كأس (النهائي). مرة لكل موسم، وما نخمّن أبداً."""
+    items = {str(l.id): l for l in (globals().get("_LEAGUE_LIST") or [])}
+    ch = gh_get_json(hub, FPL_CHAMP_PATH) or {}
+    lg, tried = ch.setdefault("leagues", {}), ch.setdefault("tried", {})
+    t_now = datetime.datetime.now(datetime.timezone.utc)
+    changed = False
+    for lid in lids:
+        L = items.get(lid)
+        if L is None:
+            continue
+        cur = (globals().get("_LEAGUE_SEASON") or {}).get(lid)       # موسم البيانات الحالي (من مزامنة الدوري أو البطولة نفسها)
+        prev = _season_prev(getattr(L, "seasons", None), cur) if cur else None
+        nxt, pl = _season_label(cur), _season_label(prev)
+        if not prev or not nxt or not pl:
+            continue
+        e = lg.get(lid) or {}
+        if e.get("next") == nxt and e.get("team"):
+            continue                                            # محسوب لهذا الموسم
+        last = _parse_ts((tried.get(lid) or {}).get("t"))
+        if (tried.get(lid) or {}).get("next") == nxt and last and (t_now - last).total_seconds() < TITLES_RETRY_H * 3600:
+            continue
+        res, err = call(lambda: client.leagues.matches(lid, season=prev, status="played"))
+        ms = list(getattr(res, "matches", None) or []) if res is not None else []
+        rows = [(m.home_team.name, m.away_team.name, m.score_home, m.score_away) for m in ms
+                if m.score_home is not None and m.score_away is not None]
+        out, why = _league_title(rows) if rows else (None, f"no results ({err})")
+        kind = "league"
+        if out is None and rows:
+            out2, why2 = _cup_title(client, lid, prev, ms)
+            if out2 is not None:
+                out, kind = out2, "cup"
+            else:
+                why = f"league: {why}; cup: {why2}"
+        if out is None:
+            tried[lid] = dict(next=nxt, t=now(), why=why)
+            log(f"  [Titles] {L.name} {pl}: ما قدرت أثبت البطل ({why}) — بدون شارة")
+        else:
+            src = (f"PitchAPI results of {pl}: final table from all {out['fixtures']} fixtures" if kind == "league"
+                   else f"PitchAPI results of {pl}: the final, {out['final']}" + (f", penalties {out['pens']}" if out.get("pens") else ""))
+            lg[lid] = dict(season=pl, next=nxt, kind=kind, name=L.name, src=src, **out)
+            tried.pop(lid, None)
+            log(f"  [Titles] بطل {L.name} {pl}: {out['team']} ({src})")
+        changed = True
+    if changed:
+        ch["note"] = ("Last season's winner per competition, from verified results (a full league table, or the final of a cup). "
+                      "'next' is the season the title is defended in.")
+        gh_put(hub, FPL_CHAMP_PATH, json.dumps(ch, ensure_ascii=False, indent=1).encode("utf-8"), "Update title holders")
+
+
+def _euro_phase(ms, season):
+    """مباريات المرحلة الرئيسية: في موسم خريف-ربيع نستبعد يوليو وأغسطس (التصفيات والملحق)، فالفريق اللي خرج من التصفيات ما يُحسب."""
+    if not re.match(r"^\d{4}-\d{2}$", season or ""):
+        return ms
+    return [m for m in ms if str(getattr(m, "date", "") or "")[5:7] not in ("07", "08")]
+
+
+def sync_europe(client, hub):
+    """data/europe.json: أندية هذا الموسم في البطولات الأوروبية الثلاث، من قوائم مبارياتها في PitchAPI (ما نكتب أي اسم يدوياً)."""
+    old = gh_get_json(hub, EURO_PATH) or {}
+    last = _parse_ts(old.get("t"))
+    t_now = datetime.datetime.now(datetime.timezone.utc)
+    for c in old.get("comps", []):
+        if c.get("season_raw"):
+            globals().setdefault("_LEAGUE_SEASON", {}).setdefault(c["id"], c["season_raw"])
+    items = list(globals().get("_LEAGUE_LIST") or [])
+    if (last and (t_now - last).total_seconds() < EURO_REFRESH_H * 3600) or not items:
+        return [c["id"] for c in old.get("comps", [])]
+    dom = set()
+    for lid, refs in (globals().get("_LOGO_REFS") or {}).items():
+        if lid in ("l_0bfbkO", "l_1XLtP0"):
+            continue
+        for pair in refs:
+            dom.update(str(t.id) for t in pair)
+    oldc = {c["key"]: c for c in old.get("comps", [])}
+    comps, seen = [], {}
+    for C in EURO_COMPS:
+        cands = [l for l in items if str(l.id) == C.get("known")] or [
+            l for l in items if any(w in nrm(l.name) for w in map(nrm, C["words"]))
+            and not any(nrm(x) in nrm(l.name) for x in GLOBAL_EXCLUDE + C["exclude"])]
+        best = None
+        for l in cands[:5]:
+            res, err = call(lambda: client.leagues.matches(str(l.id), season=None, status="all"))
+            if res is None:
+                continue
+            raw = getattr(res.league, "season", None)
+            season = _season_label(raw)
+            ms = _euro_phase(list(res.matches), season)
+            teams = {}
+            for m in ms:
+                for t in (m.home_team, m.away_team):
+                    teams[t.name] = str(t.id)
+            hits = len(set(teams.values()) & dom)
+            log(f"  [Europe] {C['label']}: {l.name} [{l.id}] {season} — {len(teams)} فريق، {hits} منها في دورياتنا")
+            if hits >= 3 and (best is None or hits > best[0]):
+                best = (hits, l, season, teams, raw)
+        if best is None:
+            if C["key"] in oldc:
+                comps.append(oldc[C["key"]])
+            log(f"  [Europe] ✘ {C['label']}: ما لقيتها في PitchAPI بأندية أوروبية معروفة — بدون شارة")
+            continue
+        _, l, season, teams, raw = best
+        globals().setdefault("_LEAGUE_SEASON", {})[str(l.id)] = raw
+        logo, lu = (oldc.get(C["key"]) or {}).get("logo"), getattr(l, "image_url", None)
+        if lu and (oldc.get(C["key"]) or {}).get("logo_src") != lu:
+            try:
+                logo = _logo_get(lu)[0] or logo
+            except Exception:
+                pass
+        comps.append(dict(key=C["key"], id=str(l.id), name=l.name, label=C["label"], season=season, season_raw=raw, logo=logo, logo_src=lu,
+                          teams=sorted(teams), ids=teams))
+        for n in teams:
+            seen.setdefault(n, []).append(C["key"])
+    # فريق موجود في بطولتين (خرج من تصفيات الأعلى ونزل للأدنى): يبقى في الأدنى فقط
+    order = [c["key"] for c in EURO_COMPS]
+    for n, ks in seen.items():
+        if len(ks) > 1:
+            keep = max(ks, key=order.index)
+            for c in comps:
+                if c["key"] != keep and n in c.get("teams", []):
+                    c["teams"].remove(n)
+                    c["ids"].pop(n, None)
+    seasons = {c["season"] for c in comps if c.get("season")}
+    out = dict(t=now(), season=seasons.pop() if len(seasons) == 1 else None, comps=comps,
+               note="Clubs in each UEFA competition this season, from PitchAPI's fixture lists (main phase; qualifying rounds in July and August are left out).")
+    gh_put(hub, EURO_PATH, json.dumps(out, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), "Update European places")
+    return [c["id"] for c in comps]
+
+
+def sync_fixtures(client, hub, lids):
+    """data/fixtures.json: المباريات القادمة لكل دوري (status=upcoming)، كل ساعة، أو أبكر إذا وحدة من المحفوظة صار وقتها."""
+    old = gh_get_json(hub, FIX_PATH) or {}
+    last = _parse_ts(old.get("t"))
+    t_now = datetime.datetime.now(datetime.timezone.utc)
+    today = t_now.strftime("%Y-%m-%d")
+    stale = any(x.get("d", "9") < today for v in (old.get("leagues") or {}).values() for x in v) and (not last or (t_now - last).total_seconds() > 600)
+    if last and (t_now - last).total_seconds() < FIX_REFRESH_MIN * 60 and not stale and set(lids) <= set(old.get("leagues") or {}):
+        return
+    out = dict(old.get("leagues") or {})
+    for lid in lids:
+        res, err = call(lambda: client.leagues.matches(lid, season=None, status="upcoming"))
+        if res is None:
+            log(f"  [Fixtures] {lid}: تعذر ({err})")
+            continue
+        rows = [dict(i=str(m.id), d=str(m.date or "")[:10], k=str(m.time_utc or ""), h=m.home_team.name, a=m.away_team.name)
+                for m in res.matches if m.date]
+        rows.sort(key=lambda x: (x["d"], x["k"], x["h"]))
+        out[lid] = rows[:FIX_MAX]
+    gh_put(hub, FIX_PATH, json.dumps(dict(t=now(), leagues=out), ensure_ascii=False, separators=(",", ":")).encode("utf-8"), "Update fixtures")
+    log("  [Fixtures] " + ", ".join(f"{k}: {len(v)}" for k, v in out.items()))
+
+
+_orig_run_pipeline_cmp = run_pipeline
+
+
+def run_pipeline(hub, pit_key):
+    out = _orig_run_pipeline_cmp(hub, pit_key)
+    lids = list((globals().get("_LOGO_REFS") or {}).keys())
+    try:
+        with PitchAPI(api_key=pit_key) as client:
+            euro = []
+            for step, fn in (("Europe", lambda: euro.extend(sync_europe(client, hub) or [])),
+                             ("Fixtures", lambda: sync_fixtures(client, hub, lids)),
+                             ("Titles", lambda: sync_titles(client, hub, list(dict.fromkeys([l for l in lids + euro if l != FPL_CHAMP_LEAGUE]))))):
+                try:
+                    fn()
+                except Exception as e:      # كلها إضافات: ما توقف المزامنة
+                    log(f"  [{step}] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
+    except Exception as e:
+        log(f"  [Competitions] خطأ ({type(e).__name__}: {e})")
+    return out
+
+
+_X_CMPCSS = ".eub{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;margin-inline-start:5px;vertical-align:-4px;border-radius:5px;background:rgba(255,255,255,.94);padding:1.5px;flex:none;box-shadow:0 1px 3px rgba(0,0,0,.3)}.eub img{width:100%;height:100%;object-fit:contain;display:block}.eub b{font-size:6px;line-height:1;color:#0d1520;letter-spacing:-.03em;white-space:nowrap}.eub.hold{box-shadow:0 0 0 2px var(--gold),0 0 10px rgba(226,189,90,.45)}.eub.big{width:auto;height:auto;gap:7px;padding:4px 11px 4px 4px;margin:0;border-radius:999px;background:rgba(255,255,255,.07);border:1px solid var(--glass-bd);vertical-align:middle;box-shadow:none}html[dir=rtl] .eub.big{padding:4px 4px 4px 11px}.eub.big img{width:22px;height:22px;padding:2px;border-radius:5px;background:#fff}.eub.big>span{font-size:12px;font-weight:600;color:var(--tx)}.eub.big.hold{border-color:var(--gold-bd);background:linear-gradient(180deg,rgba(226,189,90,.16),rgba(226,189,90,.04))}.euh{display:inline-flex;align-items:center;gap:4px;color:var(--gold);font-weight:700}.clubeu{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.eulg{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;font-size:12px;margin-top:10px}.eulg .eub{margin-inline:0 6px}.eulg .chm{margin-inline:0 6px}.fx{display:flex;flex-direction:column;gap:4px}.fxdh{font-size:12px;font-weight:700;color:var(--mu);margin:8px 0 4px;font-variant-numeric:tabular-nums}.fxr{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:10px;align-items:center;padding:8px 12px;margin-bottom:4px;border-radius:11px;border:1px solid var(--glass-bd);background:linear-gradient(180deg,var(--glass-hl),rgba(255,255,255,.01) 50%),var(--glass)}.fxh{text-align:end}.fxa{text-align:start}.fxh,.fxa{min-width:0;overflow-wrap:anywhere;line-height:1.35}.fxr .eub,.fxr .chm{vertical-align:-3px}.fxt{min-width:54px;padding:3px 8px;border-radius:7px;text-align:center;font-weight:700;font-variant-numeric:tabular-nums;background:var(--th-soft);border:1px solid var(--th-bd)}.ltgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,500px),1fr));gap:12px}.ltg h3{margin:6px 0 6px}.ltg .ltr{grid-template-columns:30px minmax(96px,1fr) 26px 24px 24px 24px 34px 32px 44px 94px;gap:3px;padding:7px 8px;font-size:13px}.ltg .ltf{width:16px;height:16px;line-height:16px;margin:0 1px}@media(max-width:560px){.ltg .ltr{grid-template-columns:34px minmax(90px,1fr) 28px 38px 36px 96px}}@media(max-width:560px){.fxr{padding:7px 8px;gap:6px;font-size:13px}.fxt{min-width:46px;padding:2px 5px}.eub.big>span{font-size:11px}}.ltr>.ltt{display:flex;align-items:center;min-width:0}.ltr>.ltt>a{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ltt .chm,.ltt .eub{flex:none}html[dir=rtl] .ltr>.ltt{justify-content:flex-end}@media(max-width:560px){.ltt .eub{width:14px;height:14px;margin-inline-start:3px;border-radius:4px;padding:1px;vertical-align:-2px}.ltt .chm{margin-inline-start:3px}.ltt .trophy{width:12px;height:12px}.ltt .clogo{margin-inline-end:4px}}"
+_X_CMPJS = r"""/* ===== Competitions: European places, title holders, upcoming fixtures and tournament tables =====
+   data/europe.json (sync): this season's clubs in the Champions League, Europa League and Conference League, read from each
+   competition's fixture list in PitchAPI (qualifying rounds in July and August left out); data/champions.json: last season's
+   winner of every competition, from verified results; data/fixtures.json: the upcoming fixtures of every league.
+   Nothing is shown when a file, a season or a name does not match. */
+const EURO={p:null,d:null},FIX={p:null,d:null},EURO_SHORT={ucl:'UCL',uel:'UEL',uecl:'UECL'};
+const cmpV=()=>encodeURIComponent((ALL&&ALL.generated)||'');
+function euroLoad(){if(!EURO.p)EURO.p=fetch('data/europe.json?v='+cmpV()).then(r=>r.ok?r.json():null).catch(()=>null).then(d=>{EURO.d=d;return d});return EURO.p}
+function fixLoad(){if(!FIX.p)FIX.p=fetch('data/fixtures.json?v='+cmpV()).then(r=>r.ok?r.json():null).catch(()=>null).then(d=>{FIX.d=d;return d});return FIX.p}
+/* the European competitions a club plays in this season: only for the same season as the league's data, and not the competition
+   whose page is open */
+function euroComps(){const d=EURO.d,s=D&&curSeason();return d&&d.comps&&s?d.comps.filter(c=>c.season===s&&c.id!==D.id):[]}
+const euroOf=name=>euroComps().filter(c=>(c.teams||[]).includes(name));
+/* last season's winner of a competition, when champions.json has it for the season being played now */
+function holderOf(c){const e=CHAMP.d&&CHAMP.d.leagues&&CHAMP.d.leagues[c.id];return e&&e.team&&e.next===c.season?e:null}
+const isHolder=(c,name)=>{const e=holderOf(c);return !!e&&e.team===name};
+function euroBadge(c,name,big){
+ const h=isHolder(c,name),t=c.label+' '+c.season+(h?' · holders':'');
+ return `<span class="eub eub-${c.key}${h?' hold':''}${big?' big':''}" title="${esc(t)}" aria-label="${esc(t)}">${c.logo?`<img src="${c.logo}" alt="">`:`<b>${EURO_SHORT[c.key]||''}</b>`}${big?`<span>${esc(c.label)}</span>${h?`<span class="euh">${thTrophy}<span>Holders</span></span>`:''}`:''}</span>`;
+}
+const euroMarks=name=>euroOf(name).map(c=>euroBadge(c,name)).join('');
+/* what the small marks next to the clubs mean, under the league table */
+function euroLegend(M){
+ const teams=new Set(M.flatMap(m=>[m.home,m.away])),cs=euroComps().filter(c=>(c.teams||[]).some(t=>teams.has(t))),ch=champInfo();
+ if(!cs.length&&!ch)return '';
+ return `<div class="eulg mu">${cs.map(c=>`<span class="nw">${euroBadge(c,'')}<span>${esc(c.label)}</span></span>`).join('')}${ch?`<span class="nw"><span class="chm">${thTrophy}</span><span>Defending champions</span></span>`:''}${cs.length?`<span class="nw">${esc(cs[0].season)}</span>`:''}</div>`;
+}
+const clubComps=name=>{const cs=euroOf(name);return cs.length?`<div class="clubeu">${cs.map(c=>euroBadge(c,name,true)).join('')}</div>`:''};
+
+/* ---------- upcoming fixtures ---------- */
+/* the date and kick-off in the viewer's time zone when the data has a time (PitchAPI gives it in UTC) */
+function fxWhen(x){
+ const m=/(\d{2}):(\d{2})/.exec(String(x.k||''));if(!m)return {d:x.d,t:''};
+ const dt=new Date(x.d+'T'+m[1]+':'+m[2]+':00Z');if(isNaN(dt))return {d:x.d,t:''};
+ const p=n=>String(n).padStart(2,'0');return {d:`${dt.getFullYear()}-${p(dt.getMonth()+1)}-${p(dt.getDate())}`,t:`${p(dt.getHours())}:${p(dt.getMinutes())}`};
+}
+const fxTeam=n=>`<a class="clk" href="#/club/${encodeURIComponent(n)}">${clubDot(n)}<span>${esc(n)}</span></a>${champMark(n)}${euroMarks(n)}`;
+async function fxSection(id,club){
+ await Promise.all([fixLoad(),champReady()]);
+ const L=((FIX.d&&FIX.d.leagues)||{})[id],head=`<h3>${club?'Next matches':'Upcoming fixtures'}</h3>`;
+ if(!L)return club?'':head+'<div class="empty">No fixture list in the data yet.</div>';
+ const today=new Date().toISOString().slice(0,10),rows=L.filter(x=>x.d>=today&&(!club||x.h===club||x.a===club)).slice(0,club?5:24);
+ if(!rows.length)return club?'':head+'<div class="empty">No upcoming fixtures in the data (the season may be over).</div>';
+ const by=new Map();rows.forEach(x=>{const w=fxWhen(x);if(!by.has(w.d))by.set(w.d,[]);by.get(w.d).push([x,w.t])});
+ return head+'<div class="fx">'+[...by].map(([d,xs])=>`<div class="fxd"><div class="fxdh">${esc(d)}</div>${xs.map(([x,t])=>`<div class="fxr"><span class="fxh">${fxTeam(x.h)}</span><span class="fxt">${t?esc(t):'–'}</span><span class="fxa">${fxTeam(x.a)}</span></div>`).join('')}</div>`).join('')+
+  `</div>${rows.some(x=>fxWhen(x).t)?'<div class="mu" style="font-size:11px;margin-top:4px">Kick-off times in your time zone.</div>':''}`;
+}
+
+/* ---------- tournaments: group tables, a league phase, knockout rounds ---------- */
+const ltSort=M=>[...M].sort((a,b)=>String(a.date).localeCompare(String(b.date))||String(a.match_id).localeCompare(String(b.match_id)));
+/* single round-robin groups and then knockouts (a World Cup): a match is a group match when it is among the first g of both teams;
+   the groups are the sets of teams joined by those matches, and every group must be complete (g+1 teams, each played each once) */
+function ltGroupsOf(M){
+ const S=ltSort(M);
+ for(const g of [3,2,4,5]){
+  const cnt=new Map(),gm=[],ko=[];
+  S.forEach(m=>{const a=cnt.get(m.home)||0,b=cnt.get(m.away)||0;(a<g&&b<g?gm:ko).push(m);cnt.set(m.home,a+1);cnt.set(m.away,b+1)});
+  const par=new Map(),f=x=>{while(par.get(x)!==x){par.set(x,par.get(par.get(x)));x=par.get(x)}return x};
+  gm.forEach(m=>{[m.home,m.away].forEach(t=>{if(!par.has(t))par.set(t,t)});par.set(f(m.home),f(m.away))});
+  const G=new Map();gm.forEach(m=>{const r=f(m.home);if(!G.has(r))G.set(r,[]);G.get(r).push(m)});
+  const groups=[...G.values()];
+  if(groups.length>=2&&groups.every(x=>{const T=new Set(x.flatMap(m=>[m.home,m.away]));return T.size===g+1&&x.length===g*(g+1)/2&&new Set(x.map(m=>[m.home,m.away].sort().join('|'))).size===x.length}))
+   return {groups,ko};
+ }
+ return null;
+}
+/* one league phase and then two-legged ties (the Champions League after January): the phase is the longest run of match days
+   after which every club has played the same number of games, before any pairing repeats */
+function ltPhaseOf(M){
+ const S=ltSort(M),days=[...new Set(S.map(m=>m.date.slice(0,10)))],pairs=new Set(),cnt=new Map();let end=null;
+ for(const d of days){
+  const day=S.filter(m=>m.date.slice(0,10)===d);if(day.some(m=>pairs.has([m.home,m.away].sort().join('|'))))break;
+  day.forEach(m=>{pairs.add([m.home,m.away].sort().join('|'));cnt.set(m.home,(cnt.get(m.home)||0)+1);cnt.set(m.away,(cnt.get(m.away)||0)+1)});
+  const c=[...cnt.values()];if(c.length>=6&&Math.min(...c)===Math.max(...c))end=d;
+ }
+ if(!end)return null;const phase=S.filter(m=>m.date.slice(0,10)<=end),ko=S.filter(m=>m.date.slice(0,10)>end);
+ return ko.length&&ltOk(phase)?{phase,ko}:null;
+}
+function ltStatic(rows){
+ const fm=f=>f.slice(-5).map(r=>`<i class="ltf ${r}" title="${r==='W'?'Win':r==='D'?'Draw':'Loss'}"></i>`).join('');
+ return `<div class="lt"><div class="ltr lth"><span>#</span><span>Team</span><span class="ltl" data-en="P" data-ar="لعب" title="Played"></span><span class="ltx ltl" data-en="W" data-ar="ف" title="Win"></span><span class="ltx ltl" data-en="D" data-ar="ت" title="Draw"></span><span class="ltx ltl" data-en="L" data-ar="خ" title="Loss"></span><span>GD</span><span>Pts</span><span class="ltx">xGD</span><span class="ltfm">Form</span></div>`+
+  rows.map((r,i)=>`<div class="ltr" data-t="${esc(r.t)}"><span>${i+1}</span><span class="ltt"><a href="#/club/${encodeURIComponent(r.t)}">${clubDot(r.t)}${esc(r.t)}</a>${champMark(r.t)}${euroMarks(r.t)}</span><span>${r.p}</span><span class="ltx">${r.w}</span><span class="ltx">${r.d}</span><span class="ltx">${r.l}</span><span>${r.f-r.a>0?'+':''}${r.f-r.a}</span><b>${r.pts}</b><span class="ltx">${r.nx?((r.xf-r.xa>0?'+':'')+(r.xf-r.xa).toFixed(1)):'N/A'}</span><span class="ltfm">${fm(r.form)}</span></div>`).join('')+'</div>';
+}
+/* knockout matches by round: a match's round is one more than the knockout games either team had played before it, so rounds
+   do not depend on the order of the dates; single matches are named by how many are in the round */
+function ltKo(ko,named){
+ if(!ko.length)return '';
+ const k=new Map(),R=[];ltSort(ko).forEach(m=>{const r=Math.max(k.get(m.home)||0,k.get(m.away)||0);(R[r]=R[r]||[]).push(m);k.set(m.home,r+1);k.set(m.away,r+1)});
+ const nm=(r,i)=>{const n=r.length;if(!named)return 'Knockout matches';if(i===R.length-1&&n===2&&i>0&&R[i-1].length===2)return 'Third place and final';
+  if(i===R.length-1&&n===1)return 'Final';return n===2?'Semi-finals':n===4?'Quarter-finals':n>=8&&(n&(n-1))===0?'Round of '+2*n:'Knockout matches'};
+ const out=[];R.forEach((r,i)=>{if(!r)return;const t=nm(r,i),last=out[out.length-1];if(last&&last[0]===t)last[1].push(...r);else out.push([t,[...r]])});
+ return out.map(([t,ms])=>`<h3>${esc(t)}</h3>`+tbl([['Date'],['Match']],ltSort(ms).map(m=>[esc(String(m.date).slice(0,10)),mlink(m)]))).join('');
+}
+function ltTournament(M,tx,root){
+ const g=ltGroupsOf(M);
+ if(g){root.innerHTML=`<div class="mu" style="font-size:12px;margin-bottom:8px"><b>${esc(D.name)}</b><span>: group tables, worked out from who played whom. The data has no group names, so the groups are numbered in the order of their first match.</span></div>`+
+  `<div class="ltgs">${g.groups.sort((a,b)=>String(ltSort(a)[0].date).localeCompare(String(ltSort(b)[0].date))||String(ltSort(a)[0].match_id).localeCompare(String(ltSort(b)[0].match_id))).map((x,i)=>`<div class="ltg"><h3>Group ${i+1}</h3>${ltStatic(ltTable(x,tx))}</div>`).join('')}</div>`+ltKo(g.ko,true);return true}
+ const p=ltPhaseOf(M);
+ if(p){root.innerHTML=`<div class="mu" style="font-size:12px;margin-bottom:8px"><b>${esc(D.name)}</b><span>: the league phase table, then the knockout matches.</span></div><h3>League phase</h3>${ltStatic(ltTable(p.phase,tx))}`+euroLegend(p.phase)+ltKo(p.ko,false);return true}
+ return false;
+}
+"""
+
+
+def _x_cmp_index(html):
+    def sub(h, old, new):
+        if h.count(old) != 1:
+            log(f"  تنبيه (البطولات): ما لقيت نقطة التعديل بدقة، تخطيتها: {old[:60]}")
+            return h
+        return h.replace(old, new)
+    h = html
+    h = sub(h, "</style></head>", _X_CMPCSS + "</style></head>")
+    h = sub(h, "async function route(){", _X_CMPJS + "\nasync function route(){")
+    h = sub(h, " if(!M.length){root.innerHTML='<div class=\"empty\">No results in the data yet.</div>';return}\n",
+            " if(!root)return;   /* the visitor opened another page while the data loaded */\n if(!M.length){root.innerHTML='<div class=\"empty\">No results in the data yet.</div>';return}\n")
+    h = sub(h, "el.innerHTML='<h2>Matches</h2>'+tbl([['Date'],['Match'],['Data']],",
+            "el.innerHTML='<h2>Matches</h2>'+await fxSection(D.id)+'<h3>Results</h3>'+tbl([['Date'],['Match'],['Data']],")
+    h = sub(h, " if(!ltOk(M)){root.innerHTML=`<div class=\"empty\">${esc(D.name)} is a tournament (groups and knockout rounds), so it has no single league table.</div>`;return}\n",
+            " if(!ltOk(M)){if(ltTournament(M,tx,root))return;root.innerHTML=`<div class=\"empty\">${esc(D.name)} is a tournament (groups and knockout rounds), so it has no single league table.</div>`;return}\n")
+    h = sub(h, " $('#ltrng').oninput=e=>{ltStop();ltGo(+e.target.value,true)};\n", " $('#ltrng').oninput=e=>{ltStop();ltGo(+e.target.value,true)};\n root.insertAdjacentHTML('beforeend',euroLegend(LT.M));\n")
+    return h
+
+
+_AR_SEASON.update({
+    "Champions League": "دوري أبطال أوروبا",
+    "Europa League": "الدوري الأوروبي",
+    "Conference League": "دوري المؤتمر الأوروبي",
+    "Holders": "حامل اللقب",
+    "Upcoming fixtures": "المباريات القادمة",
+    "Next matches": "مبارياته القادمة",
+    "Results": "النتائج",
+    "No fixture list in the data yet.": "لا توجد قائمة مباريات في البيانات للحين.",
+    "No upcoming fixtures in the data (the season may be over).": "لا توجد مباريات قادمة في البيانات (قد يكون الموسم انتهى).",
+    "Kick-off times in your time zone.": "مواعيد الانطلاق بتوقيتك المحلي.",
+    "group tables, worked out from who played whom. The data has no group names, so the groups are numbered in the order of their first match": "جداول المجموعات، مستنتجة من المواجهات نفسها. البيانات ما فيها أسماء المجموعات، لذلك رُقّمت حسب ترتيب أول مباراة في كل مجموعة",
+    "the league phase table, then the knockout matches": "جدول مرحلة الدوري، ثم مباريات خروج المغلوب",
+    "League phase": "مرحلة الدوري",
+    "Group #": "المجموعة #",
+    "Knockout matches": "مباريات خروج المغلوب",
+    "Round of #": "دور الـ#",
+    "Quarter-finals": "ربع النهائي",
+    "Semi-finals": "نصف النهائي",
+    "Final": "النهائي",
+    "Third place and final": "المركز الثالث والنهائي",
+    "won the ## final, worked out from that season's verified results.": "فاز بنهائي ## حسب نتائج ذاك الموسم الموثقة."
+})
+
+
+INDEX = _x_cmp_index(INDEX)
+# ======================== نهاية إضافة البطولات ========================
+
+
+
+
+
+
+
+
+
+
 
 
 # ============================================================================
