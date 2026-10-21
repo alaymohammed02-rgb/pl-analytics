@@ -89,3 +89,32 @@
   "PitchAPI returned no shots for this match, so there is no threat to map.":"PitchAPI ما رجّع تسديدات لهذي المباراة، فما فيه خطورة نرسمها.",
   "# shots from this zone, xG #":"# تسديدات من هذه المنطقة، xG #","# shot from this zone, xG #":"تسديدة واحدة من هذه المنطقة، xG #"}).forEach(([k,v])=>{if(!(k in AR))AR[k]=v});
 })();
+/* ===== Smooth heat map: one continuous colour field over the whole pitch (blue = no activity → red = the busiest cell) =====
+   PitchAPI bins actions on a coarse grid (16×12). For display the cell values are softened with their neighbours and
+   interpolated between cell centres, then coloured; the numbers are unchanged and each spot still shows its cell's exact count
+   on hover. Falls back to the original cells when the browser cannot draw on a canvas. */
+const HEAT_JET=[[0,[22,40,150]],[.14,[18,92,225]],[.3,[0,185,235]],[.45,[35,205,140]],[.58,[150,225,60]],[.7,[250,225,45]],[.84,[255,135,35]],[1,[226,32,32]]];
+function heatJet(t){t=Math.max(0,Math.min(1,t));for(let i=1;i<HEAT_JET.length;i++)if(t<=HEAT_JET[i][0]){const [a,ca]=HEAT_JET[i-1],[b,cb]=HEAT_JET[i],u=(t-a)/((b-a)||1);return ca.map((v,k)=>Math.round(v+(cb[k]-v)*u))}return HEAT_JET[HEAT_JET.length-1][1]}
+const HEAT_TOP=.6;   /* the colour scale tops out at 60% of the busiest cell, so one crowded cell (often the goal area) does not wash out the rest */
+const heatGrad=()=>'linear-gradient(90deg,'+HEAT_JET.map(([p,c])=>`rgb(${c.join(',')}) ${Math.round(p*100)}%`).join(',')+')';
+function heatLegend2(max){return `<div style="max-width:420px;margin:4px 0 8px"><div style="height:8px;border-radius:4px;background:${heatGrad()}"></div><div class="mu" style="display:flex;justify-content:space-between;font-size:12px"><span>No actions</span><span>${Math.max(1,Math.round(max*HEAT_TOP))}+ actions in one cell</span></div><div class="mu" style="font-size:11.5px;margin-top:2px">Smoothed for display between PitchAPI's cells; hover a spot for its exact count.</div></div>`}
+if(typeof heatRects==='function'){const heatCellsOrig=heatRects;
+ heatRects=function(c,GL,GW,max,flip){
+  let cv=null;try{cv=document.createElement('canvas')}catch(e){}const g=cv&&cv.getContext&&cv.getContext('2d');if(!g||!(max>0))return heatCellsOrig(c,GL,GW,max,flip);
+  const W=210,H=136;cv.width=W;cv.height=H;
+  const raw=(x,y)=>{x=Math.max(0,Math.min(GL-1,x));y=Math.max(0,Math.min(GW-1,y));return c.acc[(flip?GW-1-y:y)*GL+x]||0};
+  /* soften: each cell half itself, half its neighbours (3×3 weights 1-2-1) */
+  const F=new Float32Array(GL*GW);
+  for(let y=0;y<GW;y++)for(let x=0;x<GL;x++){let s=0,w=0;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const xx=x+dx,yy=y+dy;if(xx<0||yy<0||xx>=GL||yy>=GW)continue;const k=(2-Math.abs(dx))*(2-Math.abs(dy));s+=k*raw(xx,yy);w+=k}F[y*GL+x]=.55*raw(x,y)+.45*s/w}
+  const f=(x,y)=>F[Math.max(0,Math.min(GW-1,y))*GL+Math.max(0,Math.min(GL-1,x))];
+  const img=g.createImageData(W,H);
+  for(let py=0;py<H;py++){const gy=(py+.5)/H*GW-.5,y0=Math.floor(gy),fy=gy-y0;
+   for(let px=0;px<W;px++){const gx=(px+.5)/W*GL-.5,x0=Math.floor(gx),fx=gx-x0;
+    const v=(f(x0,y0)*(1-fx)+f(x0+1,y0)*fx)*(1-fy)+(f(x0,y0+1)*(1-fx)+f(x0+1,y0+1)*fx)*fy,col=heatJet(Math.pow(Math.max(0,v)/(max*HEAT_TOP),.6)),o=(py*W+px)*4;
+    img.data[o]=col[0];img.data[o+1]=col[1];img.data[o+2]=col[2];img.data[o+3]=255}}
+  g.putImageData(img,0,0);
+  const cw=105/GL,ch=68/GW;let hover='';
+  c.acc.forEach((n,i)=>{if(!n)return;const x=i%GL,y=Math.floor(i/GL),yy=flip?GW-1-y:y;hover+=`<rect x="${(x*cw).toFixed(3)}" y="${(yy*ch).toFixed(3)}" width="${cw.toFixed(3)}" height="${ch.toFixed(3)}" fill="transparent"><title>cell ${x},${y}: ${n} actions</title></rect>`});
+  return `<image class="heat-smooth" href="${cv.toDataURL('image/png')}" x="0" y="0" width="105" height="68" preserveAspectRatio="none"/>`+hover;
+ }}
+if(typeof AR==='object')Object.entries({"No actions":"بدون أفعال","#+ actions in one cell":"#+ فعل في الخانة الواحدة","Smoothed for display between PitchAPI's cells; hover a spot for its exact count.":"منعّمة للعرض بين خانات PitchAPI؛ مرّر على أي نقطة لترى العدد الدقيق لخانتها."}).forEach(([k,v])=>{if(!(k in AR))AR[k]=v});
