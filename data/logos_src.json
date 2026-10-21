@@ -50,5 +50,29 @@
    "__league__": "https://cdn.pitchapi.dev/images/leagues/4a840c09a3b5d1b2150eeba66e2c31d83d23503c0df04b3ddd04341f9c7b2b48.webp"
   },
   "fail": {}
+ },
+ "l_1Isor4": {
+  "src": {
+   "Bayern München": "https://cdn.pitchapi.dev/images/teams/1e2afd379a7d354c930f790c1f9ab0c2b50654cf4d47f20ffb269b8cfe309bca.webp",
+   "VfB Stuttgart": "https://cdn.pitchapi.dev/images/teams/3e4064e2cf85702db11b273fb3d69d3bad241733eba932255961f48a2a08b452.webp",
+   "1. FC Köln": "https://cdn.pitchapi.dev/images/teams/b586b79d51436583827db4053e71f243046c61dd2523b5a50d7cc05a921900ec.webp",
+   "Hoffenheim": "https://cdn.pitchapi.dev/images/teams/b5ac3a3e493c752b9eb37367f9d58d704dbccf83b0b325090c5b89c327f212fd.webp",
+   "Elversberg": "https://cdn.pitchapi.dev/images/teams/98b28fb2c34b0949734eda402fd3becbc6ba1b1c2867e0ec858fbc7a748bfa78.webp",
+   "Bayer Leverkusen": "https://cdn.pitchapi.dev/images/teams/2e47f0a718e58090d287870e5eef626c90b236d75fff1e901cd6b35235adb0c7.webp",
+   "Mainz 05": "https://cdn.pitchapi.dev/images/teams/78d5a44b02c256582756d96a8783071ad2369b050e514c17359836acca508669.webp",
+   "Paderborn": "https://cdn.pitchapi.dev/images/teams/587f916f87bf03b606e1661d39cd8b2d6977c3fa206239cd84549e3f110e88a0.webp",
+   "Union Berlin": "https://cdn.pitchapi.dev/images/teams/12972f5dd87b070eac925c03c551c66a612801a33cd23516daae2cd0977ae1c0.webp",
+   "Eintracht Frankfurt": "https://cdn.pitchapi.dev/images/teams/452b5eefc3ee2e2ba11aaedb9f1d2f0c25fb2019ac3636c9e5b2104abad54b04.webp",
+   "RB Leipzig": "https://cdn.pitchapi.dev/images/teams/d0ea8dba830e1ec387985c6fa33f8f4c101f61c955c46054bb406a32e57b4e6d.webp",
+   "Borussia Mönchengladbach": "https://cdn.pitchapi.dev/images/teams/900d05c66e5abaad118cad096fa73364f6c70c74faf9619f86eab52f3c700aff.webp",
+   "Borussia Dortmund": "https://cdn.pitchapi.dev/images/teams/9a049cf470f5e8a1b096c1ac46c7a742944c23a6c82be592fd7f2889aa476de5.webp",
+   "Hamburger SV": "https://cdn.pitchapi.dev/images/teams/aeb175ab92cb3317ad4f19f71de974531b67a4552a18b2be523c81f4384f375f.webp",
+   "Freiburg": "https://cdn.pitchapi.dev/images/teams/7dc233f0e2db0efee3f17464cf336dc780c92250ad52bd28652c5965ce87e114.webp",
+   "Werder Bremen": "https://cdn.pitchapi.dev/images/teams/9d49871d125a1287776ac7b6707f594a67dcb299298a7ca069c68dd3863cb861.webp",
+   "Augsburg": "https://cdn.pitchapi.dev/images/teams/2095e7ed15bb5cd6a1204fc1f564eb70e835c50ea0943d20a562f1aa36e950d9.webp",
+   "Schalke 04": "https://cdn.pitchapi.dev/images/teams/8ace7ac79ea52faa76a9d14e828a42ac9186d4a4eb84b8c2ee2ee0f890f2109c.webp",
+   "__league__": "https://cdn.pitchapi.dev/images/leagues/f798d3b662336f2336cbd121d4e83958ae3205fb9922b6716e2e9bd5eb7c6050.webp"
+  },
+  "fail": {}
  }
 }
