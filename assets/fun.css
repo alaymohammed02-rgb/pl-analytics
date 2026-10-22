@@ -176,3 +176,30 @@
 .rr-h{margin:18px 0 2px}.rr-sub{margin:0 0 8px;font-size:12.5px}
 .rr-ch{display:flex;flex-wrap:wrap;gap:8px}.rr-ch b{color:var(--gold);margin-inline-start:4px}
 @media (max-width:560px){.rr-c{grid-template-columns:1fr}.rr-b{flex-direction:row;gap:8px;justify-content:flex-start;padding:8px 10px}.rr-s{font-size:15px}.rr-n{font-size:44px}}
+/* Menu drawer (assets/drawer.js): the top section buttons, page links and the phone's bottom bar give way to one ☰ button */
+html.dr-on #secnav,html.dr-on #nav,html.dr-on #secbar{display:none!important}
+@media(max-width:760px){html.dr-on body{padding-bottom:env(safe-area-inset-bottom)}html.dr-on{scroll-padding-bottom:0}}
+#mnubtn{display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:6px 12px;flex:none;order:-2}
+html.dr-on header .top{justify-content:flex-start}html.dr-on header .top .brand{order:-1}html.dr-on header .top #gsrch{margin-inline:auto}
+#mnubtn svg{width:20px;height:20px}
+#drwov{position:fixed;inset:0;z-index:60;background:rgba(5,8,12,.55);opacity:0;transition:opacity .2s}
+html.dr-open #drwov{opacity:1}
+#drw{position:fixed;inset-block:0;inset-inline-start:0;z-index:61;width:min(330px,86vw);display:flex;flex-direction:column;overflow:hidden;
+ background:var(--sf,#152130);border-inline-end:1px solid var(--glass-bd,rgba(255,255,255,.12));box-shadow:0 0 40px rgba(0,0,0,.5);
+ transform:translateX(-102%);transition:transform .22s ease}
+[dir=rtl] #drw,html[lang=ar] #drw{transform:translateX(102%)}
+#drw[hidden],#drwov[hidden]{display:none!important}
+html.dr-open #drw{transform:none}
+.drw-h{display:flex;align-items:center;justify-content:space-between;padding:14px 14px 10px;border-bottom:1px solid var(--ln)}
+.drw-h b{font-size:17px}
+.drw-x{min-width:40px;min-height:40px;padding:0;font-size:16px}
+.drw-n{display:block!important;overflow-y:auto;overflow-x:hidden;white-space:normal;padding:6px 8px calc(16px + env(safe-area-inset-bottom));flex:1}
+.drw-s h3{display:flex;align-items:center;gap:8px;margin:12px 8px 4px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mu)}
+.drw-s h3 svg{width:16px;height:16px}
+.drw-s ul{list-style:none;margin:0;padding:0}
+.drw-s a{display:block;padding:10px 12px;border-radius:10px;color:var(--tx);text-decoration:none;font-size:14.5px}
+.drw-s a:hover,.drw-s a:focus-visible{background:rgba(255,255,255,.07)}
+.drw-s a:focus-visible{outline:2px solid var(--th-hi);outline-offset:-2px}
+.drw-s a.on{background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,0) 60%),var(--th);color:var(--th-ink);font-weight:700}
+@media(max-width:560px){#mnubtn .mnu-t{display:none}#mnubtn{padding:6px 9px}html.dr-on header .brand b{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}}
+@media(prefers-reduced-motion:reduce){#drw,#drwov{transition:none}}
