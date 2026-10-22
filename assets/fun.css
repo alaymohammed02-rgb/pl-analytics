@@ -240,3 +240,31 @@ html.dr-open #drw{transform:none}
 #instip .tap-hint,#tapbub .tap-hint{margin-top:5px;padding-top:5px;border-top:1px solid var(--ln);color:var(--gold)!important;font-weight:700}
 svg .tap-armed circle,svg .tap-armed image,svg .tap-armed rect{stroke:#fff;stroke-width:3}
 .tap-armed:not(svg *){outline:2px solid var(--gold);outline-offset:2px;border-radius:6px}
+/* ===== Height: defensive line height (assets/line-height.js) ===== */
+.dl .card{margin-bottom:14px}
+.dl-intro p{margin:6px 0;font-size:13.5px;line-height:1.6}
+.dl-ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.dl-ctl select{max-width:100%}
+.dl-ctl .seg button{min-width:0;padding:6px 12px}
+.dl-ctl .seg button[aria-pressed=true]{background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,0) 55%),var(--th);color:var(--th-ink)}
+.dl-cov{flex-basis:100%;margin:2px 0 0;font-size:12px}
+.dl-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start;margin-bottom:14px}
+.dl-two .card{margin-bottom:0}
+.dl-map{max-width:440px;margin:0 auto}
+.dl-ln{cursor:pointer}
+.dl-ln line{stroke:var(--th-hi);stroke-width:1.4;opacity:.75}
+.dl-ln polyline{stroke:var(--mu);stroke-width:.8;opacity:.6}
+.dl-ln.me line{stroke:#e6e3dc;stroke-width:3;opacity:1}
+.dl-ln.me .ph-lt{font-weight:700}
+.dl-ln:hover line,.dl-ln:focus line{stroke-width:3;opacity:1}
+.dl-v{font-variant-numeric:tabular-nums;fill:var(--th-link)}
+.dl-me p{font-size:13.5px;margin:6px 0 10px}
+.dl-bars .ph-bn bdi{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:ltr}
+html[dir=rtl] .dl-bars .ph-bn bdi{text-align:right}
+.dl-t td,.dl-t th{white-space:nowrap}
+.dl-t td:nth-child(2){white-space:normal}
+.dl-src p{font-size:13px;line-height:1.65;margin:6px 0}
+.dl-att{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin-top:10px;padding:10px 12px;border-radius:10px;background:#0f1722;font-size:12px}
+.dl-att img{display:block;height:22px;width:auto}
+@media(max-width:860px){.dl-two{grid-template-columns:1fr}}
+@media(max-width:560px){.dl-t th:nth-child(1),.dl-t td:nth-child(1){display:none}.dl-ctl .seg{width:100%}.dl-ctl .seg button{flex:1;padding:6px 4px;font-size:12px}}
