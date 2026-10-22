@@ -8984,8 +8984,10 @@ INDEX = _x_fpx_index(INDEX)
 # الكود في ملفات مستقلة في المستودع: assets/*.js و assets/features.css و manifest.webmanifest و sw.js و assets/icons/.
 # هذا القسم يضيف روابطها للصفحة فقط (بعد السكربت الرئيسي، فتلقى R و PAGES جاهزة). غيّر FEATURES_V لما تتغير الملفات.
 # ============================================================================
-FEATURES_V = "4"
-FEATURES_JS = ("pla-data", "share-card", "threat-map", "match-whatif", "player-page", "match-centre", "home-extra")
+FEATURES_V = "7"
+FEATURES_JS = ("pla-data", "share-card", "threat-map", "match-whatif", "player-page", "match-centre", "home-extra", "team-round",
+               "preview", "club-extra", "rankings-extra", "fantasy-extra", "insights-core", "hidden-gems", "player-dna", "team-dna",
+               "reality-check", "matches-board")
 
 
 def _x_feat_index(html):
@@ -9013,7 +9015,7 @@ def _x_feat_index(html):
     js = "".join(f'<script src="assets/{n}.js?v={v}"></script>' for n in FEATURES_JS)
     sw = ("<script>if('serviceWorker' in navigator&&location.protocol==='https:')addEventListener('load',()=>"
           "navigator.serviceWorker.register('sw.js').catch(()=>null))</script>")
-    return html.replace(old, f'</script><link rel="stylesheet" href="assets/features.css?v={v}">{js}{sw}</body></html>')
+    return html.replace(old, f'</script><link rel="stylesheet" href="assets/features.css?v={v}"><link rel="stylesheet" href="assets/insights.css?v={v}">{js}{sw}</body></html>')
 
 
 INDEX = _x_feat_index(INDEX)
@@ -9318,9 +9320,11 @@ HV_PER_RUN = 60           # كم مباراة نطلب لها إحصائيات �
 HV_TRIES = 3
 HV_WANT = (("tc", r"touch"), ("xg", r"^expectedgoals$|^xg$"), ("sh", r"^totalshots$|^shots$|^shotstotal$"),
            ("pa", r"^accuratepasses$|^successfulpasses$|^passesaccurate$"), ("dw", r"^duelswon$|^duelwon$"),
-           ("rc", r"recover"), ("dr", r"^successfuldribbles$|^dribblessuccessful$|^takeonswon$"), ("km", r"distance|sprint"))
+           ("rc", r"recover"), ("dr", r"^successfuldribbles$|^dribblessuccessful$|^dribblessucceeded$|^takeonswon$"), ("km", r"distance|sprint"),
+           ("mi", r"^minutesplayed$"))
 LV_INDEX = {}
 _LV_DONE = []
+LV_HAVE = {}              # الملفات المشتركة الموجودة (live / h2h): الفهرس يقول للصفحة إنها موجودة، فما تطلب ملف غير موجود
 
 
 def _lv_kick(f):
@@ -9354,7 +9358,12 @@ def _lv_ev(e, home_id):
 def sync_live(client, hub, lids, t_now=None):
     t_now = t_now or datetime.datetime.now(datetime.timezone.utc)
     fix = gh_get_json(hub, FIX_PATH) or {}
-    old = gh_get_json(hub, LV_PATH) or {}
+    old = gh_get_json(hub, LV_PATH)
+    if old is not None:
+        LV_HAVE["live"] = 1
+    if "h2h" not in LV_HAVE and gh_get_json(hub, H2H_PATH) is not None:   # الفهرس ينشر قبل خطوة H2H: نعرف من الحين إن الملف موجود
+        LV_HAVE["h2h"] = 1
+    old = old or {}
     before = json.dumps(old.get("m") or {}, sort_keys=True)       # للمقارنة: M تعدّل نفس القواميس
     M = {k: v for k, v in copy.deepcopy(old.get("m") or {}).items()
          if _lv_kick(v) is not None and (t_now - _lv_kick(v)).total_seconds() < LV_KEEP_H * 3600}
@@ -9411,6 +9420,7 @@ def sync_live(client, hub, lids, t_now=None):
     out = dict(t=now(), m=M)
     if json.dumps(M, sort_keys=True) != before:
         gh_put(hub, LV_PATH, json.dumps(out, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), "Update live")
+        LV_HAVE["live"] = 1
         log(f"  [Live] {len(win)} مباراة قريبة: {lu_n} تشكيلة رسمية جديدة، أحداث {ev_n} مباراة")
 
 
@@ -9445,8 +9455,7 @@ def hv_fetch(client, mid, keymap, allkeys):
                     vals[k] = num(getattr(getattr(en, "stat", None), "value", None))
             per[1 if "first" in str(getattr(h, "period", "")).lower() else 2] = vals
         rows[str(pid)] = (str(getattr(p, "team_id", "") or ""), per)
-    if not keymap:
-        keymap.update(hv_pick(sorted(allkeys)))
+    keymap.update({c: k for c, k in hv_pick(sorted(allkeys)).items() if c not in keymap})   # مقاييس جديدة تنضاف، القديمة ثابتة
     codes = [c for c, _ in HV_WANT if c in keymap]
     out = {pid: [tid] + [[per.get(n, {}).get(keymap[c]) for c in codes] if n in per else None for n in (1, 2)]
            for pid, (tid, per) in rows.items()}
@@ -9468,13 +9477,14 @@ def sync_halves(client, hub, lids):
         H, st, keymap = dict(d.get("m") or {}), dict(d.get("st") or {}), dict(d.get("km") or {})
         todo = []
         for r in q("SELECT match_id i, date d FROM matches WHERE league_id=? AND score IS NOT NULL AND score<>'' AND status IN ('ok','partial') ORDER BY date DESC", (L,)):
-            if r["i"] in H:
-                continue
+            if r["i"] in H and set(keymap) <= set(H[r["i"]].get("c") or []):
+                continue                      # محفوظة بكل المقاييس (لو انضاف مقياس جديد، نجيبها مرة ثانية)
             n, t = (st.get(r["i"]) or [0, None])[:2]
             last = _parse_ts(t)
             if n >= HV_TRIES or (last is not None and (t_now - last).total_seconds() < MX_RETRY_H * 3600):
                 continue
             todo.append(r["i"])
+        todo.sort(key=lambda i: i in H)        # الجديدة قبل إعادة جلب المحفوظة
         todo = todo[:budget]
         got = 0
         for mid in todo:
@@ -9512,7 +9522,10 @@ H2H_PER_RUN = 25
 def sync_h2h(client, hub, lids):
     t_now = datetime.datetime.now(datetime.timezone.utc)
     fix = gh_get_json(hub, FIX_PATH) or {}
-    old = gh_get_json(hub, H2H_PATH) or {}
+    old = gh_get_json(hub, H2H_PATH)
+    if old is not None:
+        LV_HAVE["h2h"] = 1
+    old = old or {}
     up = {}
     for lid, rows in (fix.get("leagues") or {}).items():
         if lids and lid not in lids:
@@ -9536,7 +9549,59 @@ def sync_h2h(client, hub, lids):
                           getattr(x, "score_home", None), getattr(x, "score_away", None)] for x in (getattr(res, "recent_matches", None) or []) if getattr(x, "finished", False)][:10])
     if M != (old.get("m") or {}):
         gh_put(hub, H2H_PATH, json.dumps(dict(t=now(), m=M), ensure_ascii=False, separators=(",", ":")).encode("utf-8"), "Update head-to-head")
+        LV_HAVE["h2h"] = 1
         log(f"  [H2H] {len(todo)} مباراة جديدة، المحفوظ {len(M)}")
+
+
+# ---------- جدول المباريات لكل الدوريات (صفحة النظرة العامة): طلب واحد date.get لكل يوم ----------
+SCH_PATH = "data/schedule.json"
+SCH_BACK, SCH_AHEAD = 7, 7       # من 7 أيام قبل لـ7 أيام بعد
+SCH_FULL_MIN = 60                # كل الأيام مرة في الساعة؛ أمس واليوم وبكرة كل مزامنة
+
+
+def sync_schedule(client, hub, lids, t_now=None):
+    t_now = t_now or datetime.datetime.now(datetime.timezone.utc)
+    old = gh_get_json(hub, SCH_PATH)
+    if old is not None:
+        LV_HAVE["sch"] = 1
+    old = old or {}
+    day = lambda k: (t_now + datetime.timedelta(days=k)).strftime("%Y-%m-%d")
+    want = [day(k) for k in range(-SCH_BACK, SCH_AHEAD + 1)]
+    last = _parse_ts(old.get("full"))
+    full = last is None or (t_now - last).total_seconds() > SCH_FULL_MIN * 60
+    ask = want if full else [day(-1), day(0), day(1)]
+    D_ = {k: v for k, v in (old.get("d") or {}).items() if k in want}
+    Lg, Cr = dict(old.get("L") or {}), dict(old.get("C") or {})
+    keep = set(lids or [])
+    for d in ask:
+        res, err = call(lambda d=d: client.date.get(d, status="all"))
+        time.sleep(REQUEST_DELAY)
+        if err == "rate_limit":
+            break
+        if res is None:
+            continue
+        rows = []
+        for x in getattr(res, "matches", None) or []:
+            lg = getattr(x, "league", None)
+            lid = str(getattr(lg, "id", "") or "")
+            if keep and lid not in keep:
+                continue
+            h, a = getattr(x, "home_team", None), getattr(x, "away_team", None)
+            if lid not in Lg:
+                Lg[lid] = dict(n=getattr(lg, "name", ""), img=getattr(lg, "image_url", None))
+            for t in (h, a):
+                if t is not None and getattr(t, "image_url", None):
+                    Cr[getattr(t, "name", "")] = t.image_url
+            rows.append([lid, str(x.id), str(getattr(x, "time_utc", "") or ""), getattr(h, "name", ""), getattr(a, "name", ""),
+                         getattr(x, "score_home", None), getattr(x, "score_away", None), str(getattr(x, "status", "") or "")])
+        rows.sort(key=lambda r: (r[0], r[2], r[3]))
+        D_[d] = rows
+    stamp = t_now.strftime("%Y-%m-%d %H:%M:%S")
+    out = dict(t=stamp, full=stamp if full else old.get("full"), L=Lg, C=Cr, d=D_)
+    if json.dumps(dict(L=Lg, C=Cr, d=D_), sort_keys=True) != json.dumps(dict(L=old.get("L") or {}, C=old.get("C") or {}, d=old.get("d") or {}), sort_keys=True) or full:
+        gh_put(hub, SCH_PATH, json.dumps(out, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), "Update schedule")
+        LV_HAVE["sch"] = 1
+        log(f"  [الجدول] {len(ask)} يوم، {sum(len(v) for v in D_.values())} مباراة في {len(D_)} يوم")
 
 
 def _lv_index_all(hub):
@@ -9555,10 +9620,11 @@ def gh_put(hub, path, content, message):
     if path == "data/index.json":
         try:
             _lv_index_all(hub)
-            if LV_INDEX:
+            if LV_INDEX or LV_HAVE:
                 d = json.loads(content.decode("utf-8"))
                 for lg in d.get("leagues", []):
                     lg.update(LV_INDEX.get(lg["id"], {}))
+                d.update(LV_HAVE)
                 content = json.dumps(d, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         except Exception as e:
             log(f"  تنبيه: ما قدرت أضيف ملفات الشوطين للفهرس: {e}")
@@ -9572,6 +9638,10 @@ def run_pipeline(hub, pit_key):
     try:                                  # أول شي: التشكيلات الرسمية وحالة المباريات (خفيفة وسريعة)
         with PitchAPI(api_key=pit_key) as client:
             sync_live(client, hub, None)
+            try:
+                sync_schedule(client, hub, [l["id"] for l in (gh_get_json(hub, "data/index.json") or {}).get("leagues", [])])
+            except Exception as e:
+                log(f"  [الجدول] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
     except Exception as e:
         log(f"  [Live] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
     out = _orig_run_pipeline_lv(hub, pit_key)
@@ -9587,6 +9657,11 @@ def run_pipeline(hub, pit_key):
         log(f"  [الشوطين/H2H] خطأ ({type(e).__name__}: {e})")
     return out
 # ======================== نهاية إضافة المباشر والشوطين ========================
+
+
+
+
+
 
 
 
