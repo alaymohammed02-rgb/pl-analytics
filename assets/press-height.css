@@ -1,0 +1,34 @@
+/* ===== Pressing & defensive height (assets/press-height.js) ===== */
+.ph .card{margin-bottom:14px}
+.ph-def p{margin:6px 0;font-size:13px;line-height:1.6}
+.ph-ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.ph-ctl label{display:inline-flex;gap:6px;align-items:center;font-size:12.5px}
+.ph-cov{flex-basis:100%;margin:2px 0 0;font-size:12px}
+.ph-svg svg{width:100%;height:auto;display:block;direction:ltr}
+.ph-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start}
+.ph-two .card{margin-bottom:0}
+.ph-dash h4{margin:14px 0 4px;font-size:14px}
+.ph-leg{display:flex;flex-wrap:wrap;gap:14px;font-size:12.5px}
+.ph-k{display:inline-block;width:18px;height:0;border-top:3px solid;vertical-align:middle;margin-inline-end:6px}
+.ph-k.t{border-color:var(--th-hi)}.ph-k.o{border-color:#e6e3dc}.ph-k.a{border-top:2px dashed var(--th-hi)}
+.ph-l{fill:none;stroke-width:2.4}.ph-l.t{stroke:var(--th-hi)}.ph-l.o{stroke:#e6e3dc;opacity:.85}
+.ph-d{stroke:var(--sf);stroke-width:2;cursor:pointer}.ph-d.t{fill:var(--th-hi)}.ph-d.o{fill:#e6e3dc}
+.ph-d.on{stroke:var(--tx);stroke-width:2.5}
+.ph-av{stroke:var(--th-hi);stroke-width:1.6;stroke-dasharray:6 5;opacity:.9}
+.ph-avt{fill:var(--th-hi)}
+.ph-selx{stroke:var(--tx);stroke-width:1;opacity:.35;stroke-dasharray:2 3}
+.ph-op{font-size:9.5px;opacity:.85}
+.ph-sel{font-size:13px;margin:8px 0 0}
+.ph-read{margin-top:10px;border-top:1px solid var(--ln);padding-top:8px}
+.ph-read p{margin:6px 0;font-size:13.5px;line-height:1.6}
+.ph-pitch rect,.ph-pitch line,.ph-pitch circle{fill:none;stroke:rgba(255,255,255,.55);stroke-width:1}
+.ph-pitch text{font-size:9px}
+.ph-ln line{stroke-width:1.6}
+.ph-ln polyline{stroke-width:.9;opacity:.75}
+.ph-lt{font-size:10.5px;fill:var(--tx)}
+.ph-ln:hover line,.ph-ln:focus line{stroke-width:3}
+.ph-q{font-size:10px;fill:var(--mu)}
+.ph-pt image{filter:drop-shadow(0 1px 2px rgba(0,0,0,.6))}
+.ph-me{fill:none;stroke:var(--th-hi);stroke-width:2}
+.ph bdi[dir=ltr]{white-space:nowrap}
+@media(max-width:860px){.ph-two{grid-template-columns:1fr}}
