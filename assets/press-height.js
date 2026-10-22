@@ -1,4 +1,7 @@
-/* ===== Pressing & defensive height (#/pressline, in Analysis after PPDA) =====
+/* ===== Pressing (#/ppda, the menu's PPDA renamed Pressing) and Height (#/height, under construction), in Analysis =====
+   Pressing: the team's PPDA match by match with the shared filters and every team's PPDA, above the PPDA page's own tables.
+   Height: an "under construction" notice for now; its measures and charts (below) are kept in this file but not shown.
+   #/pressline, the old combined page, leads to Pressing.
    Data, all from PitchAPI through files the site already loads (no new request):
    - PPDA: matches.advanced → teams[].defending.ppda (opponent passes ÷ defensive actions), one value per team per match, in
      data/<league>_adv.json (pp, op, da). Lower = the opponent was allowed fewer passes per defensive action = more pressing.
@@ -13,7 +16,8 @@
    Averages are always over the matches shown (same team, same filters); a match without a value is a gap, never a zero. */
 (function(){
  if(typeof R!=='object'||typeof INS!=='object')return;
- INS.addPage('pressline','Pressing & height','analysis','ppda');
+ {const p=typeof PAGES!=='undefined'&&PAGES.find(x=>x[0]==='ppda');if(p)p[1]='Pressing'}
+ INS.addPage('height','Height','analysis','ppda');
  const MIN_LEAGUE=3;          /* a team appears on the league charts with 3+ matches with data in the range */
  const S={team:'',opp:'',from:'',to:'',rev:false,sel:'',hm:'cb'};
  const HM={cb:{en:"Centre-backs' average position",ar:'متوسط تمركز قلبي الدفاع',axis:'centre-backs (m)'},adx:{en:'Defensive action height',ar:'ارتفاع الأفعال الدفاعية',axis:'defensive actions (m)'}};let S_LG=null;
@@ -40,13 +44,13 @@
     if(xs.length)out.set(mid+'|'+(sd==='h'?m.home:m.away),{v:xs.reduce((a,b)=>a+b,0)/xs.length,n:xs.length})})});
   return out;
  }
- async function data(){
-  const [A,P]=await Promise.all([loadAdv().catch(()=>null),loadPl().catch(()=>null)]);
+ async function data(withH=true){
+  const [A,P]=await Promise.all([loadAdv().catch(()=>null),withH?loadPl().catch(()=>null):null]);
   const date=new Map(D.matches.map(m=>[m.match_id,m]));
   const by=new Map();
   ((A&&A.team)||[]).forEach(r=>{const k=r.m+'|'+r.n;const o=by.get(k)||{m:r.m,n:r.n};o.pp=r.pp;o.op=r.op;o.da=r.da;by.set(k,o)});
   ((P&&P.team)||[]).forEach(r=>{const k=r.m+'|'+r.n;const o=by.get(k)||{m:r.m,n:r.n};o.adx=r.adx;by.set(k,o)});
-  (await cbOf(date)).forEach((c,k)=>{const [m,...n]=k.split('|');const o=by.get(k)||{m,n:n.join('|')};o.cb=c.v;o.cbn=c.n;by.set(k,o)});
+  if(withH)(await cbOf(date)).forEach((c,k)=>{const [m,...n]=k.split('|');const o=by.get(k)||{m,n:n.join('|')};o.cb=c.v;o.cbn=c.n;by.set(k,o)});
   const rows=[...by.values()].filter(r=>date.has(r.m)).map(r=>{const m=date.get(r.m);return {...r,d:String(m.date||'').slice(0,10),match:m,opp:m.home===r.n?m.away:m.home,home:m.home===r.n}});
   const pair=new Map(rows.map(r=>[r.m+'|'+r.n,r]));
   rows.forEach(r=>{const o=pair.get(r.m+'|'+r.opp);r.o_pp=o?o.pp:null;r.o_op=o?o.op:null;r.o_da=o?o.da:null;r.o_adx=o?o.adx:null;r.o_cb=o?o.cb:null});
@@ -62,69 +66,86 @@
  }
  const median=a=>{const s=a.filter(ok).sort((x,y)=>x-y);if(!s.length)return null;const i=s.length/2;return s.length%2?s[Math.floor(i)]:(s[i-1]+s[i])/2};
 
- R.pressline=async function(el){
-  el.innerHTML='<h2>Pressing &amp; height</h2><div id="phroot" class="ins ph"><div class="empty skel">Loading…</div></div>';
-  const root=el.querySelector('#phroot'),lg=D.id;
+ /* ---------- Pressing (#/ppda, the menu's "PPDA" renamed "Pressing"): the team's PPDA match by match with the shared filters,
+    every team's PPDA, then the PPDA page's own definition and tables below, unchanged ---------- */
+ const ORIG_PPDA=R.ppda;
+ R.ppda=async function(el){
+  el.innerHTML='<h2>Pressing</h2><div id="phroot" class="ins ph"><div class="empty skel">Loading…</div></div><div id="phorig"></div>';
+  const o=el.querySelector('#phorig'),jobs=[pressView(el.querySelector('#phroot'))];
+  if(typeof ORIG_PPDA==='function'){const p=ORIG_PPDA(o);const h=o.querySelector('h2');if(h)h.remove();jobs.push(p)}
+  await Promise.all(jobs);
+ };
+ /* the old combined page: its links lead to Pressing */
+ R.pressline=async function(){location.replace('#/ppda')};
+ /* ---------- Height: under construction (the measures and charts below stay in this file, not shown) ---------- */
+ R.height=async function(el){
+  el.innerHTML=`<h2>Height</h2><div class="card ph-uc"><div class="ph-uci" aria-hidden="true">🚧</div><h3>Under construction</h3>
+   <p>${two('We are building a defensive line height measure from PitchAPI data: the centre-backs\' position with the ball, without the ball, and the two together. It will be shown here once it has been checked against the data.','نشتغل على مقياس لارتفاع خط الدفاع من بيانات PitchAPI: تمركز قلبي الدفاع مع الكرة، وبدون الكرة، والاثنين مع بعض. بيظهر هنا بعد ما نتحقق منه على البيانات.')}</p>
+   <p class="mu">${two('Pressing (PPDA) is in the Pressing tab.','الضغط (PPDA) في خانة الضغط.')} <a href="#/ppda">Pressing →</a></p></div>`;
+ };
+ async function pressView(root){
+  if(!root)return;const lg=D.id;
   const meta=(ALL.leagues||[]).find(l=>l.id===D.id),leagues=(ALL.leagues||[]).filter(okLeague);
   if(S_LG!==D.id){S_LG=D.id;Object.assign(S,{team:'',opp:'',from:'',to:'',sel:''})}
   const lgSel=`<select id="phlg" aria-label="Competition">${leagues.map(l=>`<option value="${esc(l.id)}"${l.id===D.id?' selected':''}>${esc(l.name)}</option>`).join('')}${okLeague(meta)?'':`<option value="" selected>${esc(meta?meta.name:'')}</option>`}</select>`;
   const wire=()=>{const s=root.querySelector('#phlg');if(s)s.onchange=async()=>{if(!s.value)return;root.innerHTML='<div class="empty">Loading league…</div>';await setLeague(s.value);if(typeof CMP!=='undefined')CMP=[];if(typeof head==='function')head();route()}};
   if(!okLeague(meta)){root.innerHTML=`<div class="ctl">${lgSel}</div><div class="empty">${/world cup/i.test(meta&&meta.name||'')?'<span>The World Cup is not part of this page.</span>':'<span>No pressing data for this competition yet.</span>'} <span>Choose another competition.</span></div>`;wire();return}
-  const rows=await data();if(!root.isConnected||D.id!==lg)return;
+  const rows=await data(false);if(!root.isConnected||D.id!==lg)return;
   if(!rows.length){root.innerHTML=`<div class="ctl">${lgSel}</div><div class="empty">No pressing data for this competition yet.</div>`;wire();return}
   const dates=[...new Set(rows.map(r=>r.d))].sort(),teams=[...new Set(rows.map(r=>r.n))].sort((a,b)=>a.localeCompare(b));
   if(!S.team||!teams.includes(S.team)){const fv=typeof favOf==='function'?favOf():null;S.team=fv&&teams.includes(fv)?fv:teams[0]}
   if(S.from&&!dates.includes(S.from))S.from='';if(S.to&&!dates.includes(S.to))S.to='';
   const draw=()=>{
    const from=S.from||dates[0],to=S.to||dates[dates.length-1],inR=r=>r.d>=from&&r.d<=to;
-   const R_=rows.filter(inR),TS=teamSeason(R_).filter(t=>t.nh>=MIN_LEAGUE&&t.np>=MIN_LEAGUE);
+   const R_=rows.filter(inR),TS=teamSeason(R_).filter(t=>t.np>=MIN_LEAGUE);
    const mine=R_.filter(r=>r.n===S.team&&(!S.opp||r.opp===S.opp));
    const opps=[...new Set(R_.filter(r=>r.n===S.team).map(r=>r.opp))].sort((a,b)=>a.localeCompare(b));
    if(S.opp&&!opps.includes(S.opp))S.opp='';
    root.innerHTML=`<div class="card ph-def"><b>What is measured</b>
-     <p>${two(`<b>Centre-backs' average position</b> — for each starting centre-back (official lineup slot in the defensive line, not on a flank: the two central defenders of a back four, the three of a back three or five), the average of where his actions in the match took place, along the pitch, in metres from his own goal: Σ(actions × cell centre) ÷ Σ actions, from PitchAPI's heat maps (cells of 6.6 m). The team's value is the mean of its centre-backs (each with ${CB_MIN}+ actions). It covers the whole match, with and without the ball, so it is where the centre-backs played on average, not the line held without the ball.`,
-      `<b>متوسط تمركز قلبي الدفاع</b> — لكل قلب دفاع أساسي (خانته في التشكيلة الرسمية في خط الدفاع ومو على الطرف: قلبي الدفاع في الرباعي، والثلاثة في الثلاثي أو الخماسي)، متوسط مكان أفعاله في المباراة على طول الملعب، بالمتر من مرماه: Σ(الأفعال × منتصف الخانة) ÷ Σ الأفعال، من خرائط الحرارة في PitchAPI (خانات 6.6 م). قيمة الفريق متوسط قلبي دفاعه (كل واحد ${nb(CB_MIN)} أفعال أو أكثر). تشمل المباراة كاملة، بالكرة وبدونها: يعني وين لعبوا بالمتوسط، مو الخط اللي يمسكونه بدون كرة.`)}</p>
-     <p>${two(`<b>Defensive action height</b> — PitchAPI's average distance, in metres from the team's own goal line (pitch 105 m long), of the team's defensive actions in a match. Higher = the team wins the ball back further up the pitch. <b>This is not the defensive line height</b>: PitchAPI does not provide that, and it cannot be computed from its data (it needs the defenders' positions without the ball).`,
-      `<b>ارتفاع الأفعال الدفاعية</b> — متوسط بُعد الأفعال الدفاعية للفريق في المباراة عن خط مرماه، بالمتر (الملعب 105 م)، من PitchAPI. أعلى = الفريق يسترجع الكرة أبعد عن مرماه. <b>هذا مو ارتفاع خط الدفاع</b>: PitchAPI ما يعطيه، وما ينحسب من بياناته (يحتاج مواقع المدافعين بدون الكرة).`)}</p>
-     <p>${two(`<b>PPDA</b> — opponent passes ÷ defensive actions (PitchAPI). Lower = fewer passes allowed per defensive action = more intense pressing.`,`<b>PPDA</b> — تمريرات الخصم ÷ الأفعال الدفاعية (PitchAPI). أقل = تمريرات أقل مسموحة لكل فعل دفاعي = ضغط أشد.`)}</p></div>
+     <p>${two(`<b>PPDA</b> — opponent passes ÷ defensive actions, in the pressing zone (PitchAPI). Lower = fewer passes allowed per defensive action = more intense pressing.`,`<b>PPDA</b> — تمريرات الخصم ÷ الأفعال الدفاعية، في منطقة الضغط (PitchAPI). أقل = تمريرات أقل مسموحة لكل فعل دفاعي = ضغط أشد.`)}</p></div>
     <div class="card ctl ph-ctl">${lgSel}
      <select id="phse" aria-label="Season" disabled><option>Current season</option></select>
-     <select id="phhm" aria-label="Height measure">${Object.entries(HM).map(([k,v])=>`<option value="${k}"${k===S.hm?' selected':''}>${v.en}</option>`).join('')}</select>
      <select id="phtm" aria-label="Team">${teams.map(t=>`<option${t===S.team?' selected':''}>${esc(t)}</option>`).join('')}</select>
      <select id="phop" aria-label="Opponent"><option value="">All opponents</option>${opps.map(t=>`<option${t===S.opp?' selected':''}>${esc(t)}</option>`).join('')}</select>
      <label class="mu"><span>From</span> <select id="phfr">${dates.map(d=>`<option${d===from?' selected':''}>${d}</option>`).join('')}</select></label>
      <label class="mu"><span>To</span> <select id="phto">${dates.map(d=>`<option${d===to?' selected':''}>${d}</option>`).join('')}</select></label>
      <button type="button" class="s" id="phrs">Reset</button>
-     <p class="mu ph-cov">${two(`Current season only (the site holds no earlier season for this). ${R_.length/2|0} matches in the range; teams with ${MIN_LEAGUE}+ matches with data appear on the league charts (${TS.length}).`,`الموسم الحالي فقط (الموقع ما فيه موسم سابق لهذا). ${nb(R_.length/2|0)} مباراة في الفترة؛ الفرق اللي لها ${nb(MIN_LEAGUE)} مباريات أو أكثر ببيانات تظهر في رسوم الدوري (${nb(TS.length)}).`)}</p></div>
-    <div class="ph-dash card"><h3><span>Team</span> · ${nm(S.team)}${S.opp?` <span class="mu">· <span>against</span> ${nm(S.opp)}</span>`:''}</h3>${dash(mine)}</div>
-    <div class="ph-two"><div class="card"><h3>${two(HM[S.hm].en+', every team',HM[S.hm].ar+' لكل الفرق')}</h3>${lineMap(TS)}</div>
-     <div class="card"><h3>Tactical identity map</h3>${idMap(TS)}</div></div>`;
+     <p class="mu ph-cov">${two(`Current season only (the site holds no earlier season for this). ${R_.length/2|0} matches in the range; teams with ${MIN_LEAGUE}+ matches with data appear on the league chart (${TS.length}).`,`الموسم الحالي فقط (الموقع ما فيه موسم سابق لهذا). ${nb(R_.length/2|0)} مباراة في الفترة؛ الفرق اللي لها ${nb(MIN_LEAGUE)} مباريات أو أكثر ببيانات تظهر في رسم الدوري (${nb(TS.length)}).`)}</p></div>
+    <div class="ph-dash card"><h3><span>Team</span> · ${nm(S.team)}${S.opp?` <span class="mu">· <span>against</span> ${nm(S.opp)}</span>`:''}</h3>${dash(mine,false)}</div>
+    <div class="card"><h3>PPDA, every team</h3>${ppdaBars(TS)}</div>`;
    wire();
    const q=s=>root.querySelector(s);
-   q('#phhm').onchange=e=>{S.hm=e.target.value;S.sel='';draw()};
    q('#phtm').onchange=e=>{S.team=e.target.value;S.opp='';S.sel='';draw()};
    q('#phop').onchange=e=>{S.opp=e.target.value;S.sel='';draw()};
    q('#phfr').onchange=e=>{S.from=e.target.value;if((S.to||dates[dates.length-1])<S.from)S.to=S.from;S.sel='';draw()};
    q('#phto').onchange=e=>{S.to=e.target.value;if((S.from||dates[0])>S.to)S.from=S.to;S.sel='';draw()};
    q('#phrs').onclick=()=>{Object.assign(S,{opp:'',from:'',to:'',sel:'',rev:false});draw()};
-   const rv=q('#phrev');if(rv)rv.onclick=()=>{S.rev=!S.rev;draw()};
-   /* a match picked in one chart is picked in the other */
    root.querySelectorAll('[data-pm]').forEach(p=>p.addEventListener('click',()=>{S.sel=S.sel===p.dataset.pm?'':p.dataset.pm;draw()}));
+   root.querySelectorAll('[data-tm]').forEach(p=>p.addEventListener('click',()=>{S.team=p.dataset.tm;S.opp='';S.sel='';draw();const d=root.querySelector('.ph-dash');if(d&&d.scrollIntoView)d.scrollIntoView({block:'start',behavior:'smooth'})}));
   };
   draw();
- };
+ }
+ /* every team's PPDA over the range (pooled, as on the season table below), most pressing first; tap a team to open it above */
+ function ppdaBars(TS){
+  const L=TS.filter(t=>ok(t.ppda)).sort((a,b)=>a.ppda-b.ppda);if(!L.length)return '<div class="empty">No team with enough matches in the range.</div>';
+  const mx=Math.max(...L.map(t=>t.ppda)),md=median(L.map(t=>t.ppda));
+  return `<ol class="ph-bars">${L.map((t,i)=>{const logo=typeof logoOf==='function'&&logoOf(t.n);
+   return `<li class="${t.n===S.team?'me':''}"><button type="button" data-tm="${esc(t.n)}"${INS.tipAttr([t.n,'PPDA: '+f2(t.ppda),t.np+' matches'])}><span class="ph-br">${i+1}</span>${logo?`<img src="${esc(logo)}" alt="" width="16" height="16">`:''}<span class="ph-bn">${nm(t.n)}</span><span class="ph-bb"><i style="width:${(t.ppda/mx*100).toFixed(1)}%;background:${col(t.n)}"></i></span><b>${f2(t.ppda)}</b></button></li>`}).join('')}</ol>
+   <p class="mu ins-note">${two(`Shortest bar = most intense pressing. Each value is Σ opponent passes ÷ Σ defensive actions over the team's matches in the range; league median ${nb(f2(md))}. Tap a team to see it match by match above.`,`أقصر عمود = أشد ضغط. كل قيمة هي Σ تمريرات الخصم ÷ Σ الأفعال الدفاعية في مباريات الفريق ضمن الفترة؛ وسيط الدوري ${nb(f2(md))}. اضغط فريق تشوفه مباراة مباراة فوق.`)}</p>`;
+ }
 
  /* ---------- the team: two charts on the same matches, then what the numbers say ---------- */
- function dash(L){
-  const H=L.filter(r=>ok(r[S.hm])),P=L.filter(r=>ok(r.pp));
+ function dash(L,withH=true){
+  const H=withH?L.filter(r=>ok(r[S.hm])):[],P=L.filter(r=>ok(r.pp));
   if(!H.length&&!P.length)return '<div class="empty">No match with these values for this team in the range.</div>';
   const sel=L.find(r=>r.m===S.sel);
-  const c1=chart(L,S.hm,'o_'+S.hm,HM[S.hm].en,'m',1),c2=chart(L,'pp','o_pp','PPDA','',0);
+  const c1=withH?chart(L,S.hm,'o_'+S.hm,HM[S.hm].en,'m',1):'',c2=chart(L,'pp','o_pp','PPDA','',0);
   return `<div class="ins-leg ph-leg"><span><i class="ph-k t"></i>${nm(S.team)}</span><span><i class="ph-k o"></i><span>Opponent, same match</span></span><span><i class="ph-k a"></i>${two(`${nm(S.team)} average, these matches`,`متوسط ${nm(S.team)} في هالمباريات`)}</span></div>
-   <div class="ph-ch"><h4>${two(HM[S.hm].en,HM[S.hm].ar)} <span class="mu">· <span>metres from own goal, higher = further up</span></span></h4>${c1}</div>
+   ${withH?`<div class="ph-ch"><h4>${two(HM[S.hm].en,HM[S.hm].ar)} <span class="mu">· <span>metres from own goal, higher = further up</span></span></h4>${c1}</div>`:''}
    <div class="ph-ch"><h4>PPDA <span class="mu">· <span>lower = more intense pressing</span></span></h4>${c2}</div>
-   ${sel?`<p class="ph-sel">${two(`<b>${esc(sel.d)}</b> ${nm(sel.match.home)} ${nb(esc(sel.match.score))} ${nm(sel.match.away)} — height ${nm(S.team)} ${nb(f1(sel[S.hm]))} m, ${nm(sel.opp)} ${nb(f1(sel['o_'+S.hm]))} m; PPDA ${nb(f2(sel.pp))} / ${nb(f2(sel.o_pp))}.`,`<b>${nb(esc(sel.d))}</b> ${nm(sel.match.home)} ${nb(esc(sel.match.score))} ${nm(sel.match.away)} — الارتفاع: ${nm(S.team)} ${nb(f1(sel[S.hm])+' م')}، ${nm(sel.opp)} ${nb(f1(sel['o_'+S.hm])+' م')}؛ PPDA ‏${nb(f2(sel.pp))} / ${nb(f2(sel.o_pp))}.`)} <a href="#/match/${encodeURIComponent(sel.m)}">Match centre →</a></p>`:`<p class="mu ph-tip"><span>Tap a match in either chart to pick it in both.</span></p>`}
-   <div class="ph-read">${reading(L)}</div>`;
+   ${sel?`<p class="ph-sel">${withH?two(`<b>${esc(sel.d)}</b> ${nm(sel.match.home)} ${nb(esc(sel.match.score))} ${nm(sel.match.away)} — height ${nm(S.team)} ${nb(f1(sel[S.hm]))} m, ${nm(sel.opp)} ${nb(f1(sel['o_'+S.hm]))} m; PPDA ${nb(f2(sel.pp))} / ${nb(f2(sel.o_pp))}.`,`<b>${nb(esc(sel.d))}</b> ${nm(sel.match.home)} ${nb(esc(sel.match.score))} ${nm(sel.match.away)} — الارتفاع: ${nm(S.team)} ${nb(f1(sel[S.hm])+' م')}، ${nm(sel.opp)} ${nb(f1(sel['o_'+S.hm])+' م')}؛ PPDA ‏${nb(f2(sel.pp))} / ${nb(f2(sel.o_pp))}.`)
+     :two(`<b>${esc(sel.d)}</b> ${nm(sel.match.home)} ${nb(esc(sel.match.score))} ${nm(sel.match.away)} — PPDA ${nm(S.team)} ${nb(f2(sel.pp))}, ${nm(sel.opp)} ${nb(f2(sel.o_pp))}.`,`<b>${nb(esc(sel.d))}</b> ${nm(sel.match.home)} ${nb(esc(sel.match.score))} ${nm(sel.match.away)} — PPDA: ${nm(S.team)} ${nb(f2(sel.pp))}، ${nm(sel.opp)} ${nb(f2(sel.o_pp))}.`)} <a href="#/match/${encodeURIComponent(sel.m)}">Match centre →</a></p>`:`<p class="mu ph-tip"><span>Tap a match in either chart to pick it in both.</span></p>`}
+   <div class="ph-read">${reading(L,withH)}</div>`;
  }
  function chart(L,k,ko,aria,unit,dec){
   const W=760,Hh=230,Lm=40,Rm=14,T=14,B=44,pts=L.map((r,i)=>({r,i,v:r[k],o:r[ko]}));
@@ -147,8 +168,8 @@
  }
  const short=n=>{const w=String(n||'').replace(/\b(FC|CF|AFC|SC|AC|SSC|AS|RC|CD|UD|SD|RCD|SV|VfB|VfL|TSG|1\.)\b/g,'').trim().split(/\s+/);return (w.sort((a,b)=>b.length-a.length)[0]||n).slice(0,10)};
  /* what the numbers say: trend (how it changes) apart from quality (whether it worked, which is not judged here) */
- function reading(L){
-  const k=S.hm,H=L.filter(r=>ok(r[k])),P=L.filter(r=>ok(r.pp));
+ function reading(L,withH=true){
+  const k=S.hm,H=withH?L.filter(r=>ok(r[k])):[],P=L.filter(r=>ok(r.pp));
   const out=[];
   if(H.length<4&&P.length<4)return `<p class="mu">${two('Fewer than 4 matches with data: no trend is read from so few.','أقل من 4 مباريات ببيانات: ما نقرأ اتجاه من عدد بهالقلة.')}</p>`;
   const t=nm(S.team);
@@ -168,7 +189,7 @@
    out.push(two(`Against its opponents in the same matches: ${d>=0?'higher':'deeper'} by ${nb(f1(Math.abs(d)))} m on average; higher than the opponent in ${nb(c)} of ${nb(HO.length)} matches.`,`مقارنة بخصومه في نفس المباريات: ${d>=0?'أعلى':'أعمق'} بـ${nb(f1(Math.abs(d)))} م بالمتوسط؛ أعلى من الخصم في ${nb(c)} من ${nb(HO.length)} مباراة.`))}
   if(PO.length>=4){const k=PO.filter(r=>r.pp<r.o_pp).length;
    out.push(two(`Its PPDA was lower than the opponent's (it pressed more) in ${nb(k)} of ${nb(PO.length)} matches.`,`الـPPDA حقه كان أقل من الخصم (ضغط أكثر) في ${nb(k)} من ${nb(PO.length)} مباراة.`))}
-  out.push(`<span class="mu">${two('These describe how the team defends, not whether it worked: a higher line or a lower PPDA is not by itself better.','هذي تصف طريقة دفاع الفريق، مو إذا نجحت: الدفاع الأعلى أو الـPPDA الأقل مو أفضل بحد ذاته.')}</span>`);
+  out.push(`<span class="mu">${withH?two('These describe how the team defends, not whether it worked: a higher line or a lower PPDA is not by itself better.','هذي تصف طريقة دفاع الفريق، مو إذا نجحت: الدفاع الأعلى أو الـPPDA الأقل مو أفضل بحد ذاته.'):two('These describe how the team presses, not whether it worked: a lower PPDA is not by itself better.','هذي تصف طريقة ضغط الفريق، مو إذا نجحت: الـPPDA الأقل مو أفضل بحد ذاته.')}</span>`);
   return out.map(s=>`<p>${s}</p>`).join('');
  }
 
@@ -217,7 +238,8 @@
   "Each line is a team's average defensive action height over its matches in the range, drawn at that distance from its own goal (bottom). Not a defensive line: see above.":"كل خط هو متوسط ارتفاع الأفعال الدفاعية للفريق في مبارياته ضمن الفترة، مرسوم على هالبعد من مرماه (تحت). مو خط دفاع: شوف فوق.",
   "own goal · # m":"المرمى · # م","# m":"# م","High + intense press":"عالي + ضغط شديد","High, less press":"عالي، ضغط أقل","Deep + intense press":"عميق + ضغط شديد","Deep, less press":"عميق، ضغط أقل",
   "PPDA → lower = more pressing":"PPDA ← أقل = ضغط أكثر","↑ centre-backs (m)":"↑ قلبي الدفاع (م)","↑ defensive actions (m)":"↑ الأفعال الدفاعية (م)",
-  "Height measure":"مقياس الارتفاع","Centre-backs' average position":"متوسط تمركز قلبي الدفاع"});
+  "Height measure":"مقياس الارتفاع","Centre-backs' average position":"متوسط تمركز قلبي الدفاع",
+  "Height":"الارتفاع","Under construction":"تحت الإنشاء","Pressing →":"الضغط ←","PPDA, every team":"PPDA لكل الفرق"});
  /* this file can arrive after the site has drawn its first page (the menu without this page, or this page not yet known):
     draw it again */
  if(typeof D==='object'&&D&&typeof route==='function')route();

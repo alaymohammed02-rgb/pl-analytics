@@ -32,3 +32,20 @@
 .ph-me{fill:none;stroke:var(--th-hi);stroke-width:2}
 .ph bdi[dir=ltr]{white-space:nowrap}
 @media(max-width:860px){.ph-two{grid-template-columns:1fr}}
+/* Pressing: every team's PPDA */
+.ph-bars{list-style:none;margin:0;padding:0;display:grid;gap:3px}
+.ph-bars button{all:unset;box-sizing:border-box;width:100%;display:grid;grid-template-columns:22px 18px minmax(0,9rem) minmax(0,1fr) 3.2em;gap:8px;align-items:center;padding:4px 6px;border-radius:8px;cursor:pointer;font-size:13px}
+.ph-bars button:hover,.ph-bars button:focus-visible{background:rgba(255,255,255,.06)}
+.ph-bars button:focus-visible{outline:2px solid var(--th-hi)}
+.ph-bars li.me button{background:rgba(255,255,255,.08);box-shadow:inset 3px 0 0 var(--th-hi)}
+.ph-br{color:var(--mu);text-align:end;font-variant-numeric:tabular-nums}
+.ph-bn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ph-bb{height:10px;background:rgba(255,255,255,.07);border-radius:5px;overflow:hidden;direction:ltr}
+.ph-bb i{display:block;height:100%;border-radius:5px}
+.ph-bars b{text-align:end;font-variant-numeric:tabular-nums}
+@media (max-width:560px){.ph-bars button{grid-template-columns:20px 16px minmax(0,6.5rem) minmax(0,1fr) 3em;gap:6px;font-size:12.5px}}
+/* Height: under construction */
+.ph-uc{text-align:center;padding:28px 18px}
+.ph-uci{font-size:40px;line-height:1}
+.ph-uc h3{margin:10px 0 6px}
+.ph-uc p{max-width:560px;margin:8px auto;line-height:1.6}
