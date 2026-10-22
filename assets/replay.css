@@ -96,4 +96,5 @@
 .ms p{line-height:1.75;margin:0 0 10px}
 .ms p:last-child{margin-bottom:0}
 .ms .ms-note{font-size:12px;line-height:1.5}
+.ms bdi[dir=ltr]{white-space:nowrap}   /* a score or an xG pair never breaks across lines */
 html[lang=ar] .ms .ms-en,html:not([lang=ar]) .ms .ms-ar{display:none}
