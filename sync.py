@@ -8988,7 +8988,7 @@ FEATURES_V = "14"
 FEATURES_JS = ("pla-data", "share-card", "threat-map", "match-whatif", "player-page", "match-centre", "home-extra", "team-round",
                "preview", "club-extra", "rankings-extra", "fantasy-extra", "insights-core", "hidden-gems", "player-dna", "team-dna",
                "reality-check", "matches-board", "match-replay", "match-story", "overview", "press-height",
-               "season-sim")
+               "season-sim", "luck-table")
 
 
 def _x_feat_index(html):
