@@ -12,7 +12,7 @@
   const out=S.map(s=>({k:s.k,n:s.n,ic:s.ic||'',p:s.p.filter(k=>name.has(k)).map(k=>[k,name.get(k)])}));
   const rest=PAGES.filter(p=>!known.has(p[0]));if(rest.length&&out[0])out[0].p.push(...rest.map(p=>[p[0],p[1]]));
   return out};
- let btn=null,box=null,ov=null;
+ let btn=null,box=null,ov=null,want=false;
  function build(){
   const top=document.querySelector('header .top');if(!top||document.getElementById('mnubtn'))return;
   btn=document.createElement('button');btn.type='button';btn.id='mnubtn';btn.className='s';btn.setAttribute('aria-label','Menu');btn.setAttribute('aria-expanded','false');btn.setAttribute('aria-controls','drw');
@@ -38,9 +38,10 @@
  }
  function open(on){
   if(!box)return;const R=document.documentElement;
-  if(on){fill();box.hidden=false;ov.hidden=false;requestAnimationFrame(()=>R.classList.add('dr-open'));btn.setAttribute('aria-expanded','true');
+  want=!!on;
+  if(on){fill();box.hidden=false;ov.hidden=false;requestAnimationFrame(()=>{if(want)R.classList.add('dr-open')});btn.setAttribute('aria-expanded','true');
    const f=box.querySelector('a.on')||box.querySelector('a');if(f)f.focus({preventScroll:false})}
-  else{if(!R.classList.contains('dr-open')&&box.hidden)return;R.classList.remove('dr-open');btn.setAttribute('aria-expanded','false');
+  else{if(!R.classList.contains('dr-open')&&box.hidden)return;   /* also when closed again before the opening frame: want is false then */R.classList.remove('dr-open');btn.setAttribute('aria-expanded','false');
    const done=()=>{if(!R.classList.contains('dr-open')){box.hidden=true;ov.hidden=true}};
    if(matchMedia('(prefers-reduced-motion: reduce)').matches)done();else setTimeout(done,220);
    if(document.activeElement&&box.contains(document.activeElement))btn.focus()}
