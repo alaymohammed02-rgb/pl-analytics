@@ -87,3 +87,43 @@
 .tw-cmp .ctl{margin:4px 0 6px}
 @media (max-width:560px){.tw-w.big{flex-wrap:wrap}.tw-open{margin-inline-start:0}.tw-t th,.tw-t td{padding:6px 4px;font-size:12px}
  .tw-t .sm-wide{display:none}.tw-t .sm-narrow{display:inline}.tw-t th bdi{display:inline-block;max-width:5.2rem;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}.tw-g{min-width:2.4em}}
+/* Player cards */
+.pc-intro p{margin:6px 0;line-height:1.6}
+.pc-ctl{align-items:flex-end}
+.pc-vs{font-weight:800;color:var(--mu);padding:0 4px 10px}
+.pc-duel{display:grid;grid-template-columns:repeat(2,minmax(0,300px));justify-content:center;gap:18px;margin-bottom:14px}
+.pc-card{position:relative;border-radius:22px;padding:14px 14px 12px;color:#fff;overflow:hidden;
+ background:linear-gradient(180deg,rgba(9,14,22,.30),rgba(9,14,22,.62) 55%,rgba(9,14,22,.88)),radial-gradient(120% 70% at 50% 0%,rgba(255,255,255,.16),transparent 60%),linear-gradient(160deg,var(--c1),var(--c2) 70%,#0b121b);
+ border:1px solid rgba(255,255,255,.18);box-shadow:0 10px 30px rgba(0,0,0,.35),inset 0 0 0 3px rgba(255,255,255,.06);min-width:0}
+.pc-card::after{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.10) 45%,transparent 60%);pointer-events:none}
+.pc-top{display:flex;justify-content:space-between;align-items:flex-start}
+.pc-rt{display:flex;flex-direction:column;align-items:center;border-radius:12px;padding:4px 10px;color:#0d1520;min-width:54px}
+.pc-rt b{font-size:26px;line-height:1.1}.pc-rt small{font-size:10.5px;font-weight:700}
+.pc-pos{display:flex;flex-direction:column;align-items:center;gap:4px}
+.pc-pos b{font-size:22px;text-shadow:0 1px 3px rgba(0,0,0,.5)}
+.pc-ph{width:120px;height:120px;margin:-6px auto 6px;border-radius:50%;overflow:hidden;display:grid;place-items:center;background:rgba(0,0,0,.25);border:3px solid rgba(255,255,255,.25)}
+.pc-ph img{width:100%;height:100%;object-fit:cover}.pc-ph span{font-size:38px;font-weight:800;text-shadow:0 2px 4px rgba(0,0,0,.5)}
+.pc-nm{text-align:center;font-weight:800;font-size:19px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,.5)}
+.pc-cl{text-align:center;font-size:12px;opacity:.85;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:8px}
+.pc-at{list-style:none;margin:0;padding:8px 0 0;border-top:1px solid rgba(255,255,255,.2);display:grid;grid-template-columns:1fr 1fr;gap:4px 12px}
+.pc-at li{display:flex;align-items:baseline;gap:8px;border-radius:6px;padding:1px 4px;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+.pc-at b{font-size:20px;min-width:1.6em;text-align:end;font-variant-numeric:tabular-nums}
+.pc-at span{font-size:12px;opacity:.9;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pc-at li.w{background:rgba(76,195,138,.38)}.pc-at li.l{opacity:.6}
+.pc-ft{text-align:center;font-size:12px;opacity:.85;margin-top:8px}
+.pc-act,.pc-mb{display:flex;justify-content:center;flex-wrap:wrap;gap:6px;margin-top:10px;position:relative;z-index:1}
+.pc-act button,.pc-mb button{font-size:12px;min-height:34px}
+.pc-save[aria-pressed="true"]{border-color:var(--gold);color:var(--gold)}
+.pc-res h3{margin-bottom:8px}
+.pc-t{width:100%}.pc-t td.w{color:var(--g);font-weight:700}.pc-t td.l{opacity:.7}
+.pc-t tr.pc-g td{font-weight:700;color:var(--mu);padding-top:12px}
+.pc-back summary{cursor:pointer;margin:12px 0 6px;font-weight:600}
+.pc-mine{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
+.pc-card.mini{padding:10px}.pc-card.mini .pc-ph{width:76px;height:76px}.pc-card.mini .pc-ph span{font-size:26px}
+.pc-card.mini .pc-nm{font-size:15px}.pc-card.mini .pc-rt b{font-size:20px}.pc-card.mini .pc-at b{font-size:16px}
+@media (max-width:560px){.pc-duel{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ .pc-card{padding:10px 8px;border-radius:16px}.pc-ph{width:72px;height:72px}.pc-ph span{font-size:24px}.pc-nm{font-size:14.5px}
+ .pc-rt{min-width:40px;padding:2px 6px}.pc-rt b{font-size:18px}.pc-pos b{font-size:16px}.pc-pos img{width:20px;height:20px}
+ .pc-at{grid-template-columns:1fr;gap:2px}.pc-at b{font-size:15px}.pc-at span{font-size:11px}
+ .pc-act{flex-direction:column}.pc-act button{width:100%}
+ .pc-ctl{flex-direction:column;align-items:stretch}.pc-ctl .tw-s{flex:none}.pc-vs{text-align:center;padding:0}}
