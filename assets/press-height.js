@@ -15,7 +15,8 @@
  if(typeof R!=='object'||typeof INS!=='object')return;
  INS.addPage('pressline','Pressing & height','analysis','ppda');
  const MIN_LEAGUE=3;          /* a team appears on the league charts with 3+ matches with data in the range */
- const S={team:'',opp:'',from:'',to:'',rev:false,sel:''};let S_LG=null;
+ const S={team:'',opp:'',from:'',to:'',rev:false,sel:'',hm:'cb'};
+ const HM={cb:{en:"Centre-backs' average position",ar:'متوسط تمركز قلبي الدفاع',axis:'centre-backs (m)'},adx:{en:'Defensive action height',ar:'ارتفاع الأفعال الدفاعية',axis:'defensive actions (m)'}};let S_LG=null;
  const f1=v=>v==null?'–':(+v).toFixed(1),f2=v=>v==null?'–':(+v).toFixed(2);
  const okLeague=l=>l&&!/world cup/i.test(l.name)&&l.adv_file&&l.pl_file;
  const col=n=>{const c=typeof clubColors==='function'&&clubColors(n);return (c&&(c.hi||c.c1))||'#8fb3ff'};
@@ -23,15 +24,32 @@
  const nb=x=>`<bdi dir="ltr">${x}</bdi>`,nm=x=>`<bdi>${esc(x)}</bdi>`;
 
  /* ---------- the data: one row per team per match, the opponent's values of the same match beside it ---------- */
+ /* centre-backs: starters whose official lineup slot is in the defensive line (PitchAPI codes 30-39) and not on a flank
+    (pitch_y between 0.15 and 0.85): the two central defenders of a back four, the three of a back three or five */
+ const isCB=p=>Number.isInteger(p[3])&&Math.floor(p[3]/10)===3&&p[5]!=null&&p[5]>.15&&p[5]<.85;
+ const CB_MIN=10;   /* actions in the match for a centre-back's position to count */
+ /* a player's average position in a match = Σ(actions × cell centre) ÷ Σ actions, along the pitch, in metres from his own goal
+    (PitchAPI heat maps, his team's own attacking frame: cell 0 starts at his goal line, 16 cells of 105/16 m) */
+ const avgX=h=>{let n=0,s=0;for(let i=0;i<h.length;i+=3){s+=(h[i]+.5)*105/16*h[i+2];n+=h[i+2]}return n>=CB_MIN?s/n:null};
+ async function cbOf(date){
+  const [H,X]=await Promise.all([typeof loadHeat==='function'?loadHeat().catch(()=>null):null,typeof mxLoad==='function'?mxLoad().catch(()=>null):null]);
+  const out=new Map();if(!H||!H.rows||!X||!X.m)return out;
+  const heat=new Map(H.rows.filter(r=>r.t==='p').map(r=>[r.m+'|'+r.k,r]));
+  Object.entries(X.m).forEach(([mid,e])=>{const m=date.get(mid),lu=e&&e.lu;if(!m||!lu)return;
+   ['h','a'].forEach(sd=>{const L=lu[sd];if(!L||!L.xi)return;const xs=L.xi.filter(isCB).map(p=>{const r=heat.get(mid+'|'+p[0]);return r?avgX(r.h):null}).filter(v=>v!=null);
+    if(xs.length)out.set(mid+'|'+(sd==='h'?m.home:m.away),{v:xs.reduce((a,b)=>a+b,0)/xs.length,n:xs.length})})});
+  return out;
+ }
  async function data(){
   const [A,P]=await Promise.all([loadAdv().catch(()=>null),loadPl().catch(()=>null)]);
   const date=new Map(D.matches.map(m=>[m.match_id,m]));
   const by=new Map();
   ((A&&A.team)||[]).forEach(r=>{const k=r.m+'|'+r.n;const o=by.get(k)||{m:r.m,n:r.n};o.pp=r.pp;o.op=r.op;o.da=r.da;by.set(k,o)});
   ((P&&P.team)||[]).forEach(r=>{const k=r.m+'|'+r.n;const o=by.get(k)||{m:r.m,n:r.n};o.adx=r.adx;by.set(k,o)});
+  (await cbOf(date)).forEach((c,k)=>{const [m,...n]=k.split('|');const o=by.get(k)||{m,n:n.join('|')};o.cb=c.v;o.cbn=c.n;by.set(k,o)});
   const rows=[...by.values()].filter(r=>date.has(r.m)).map(r=>{const m=date.get(r.m);return {...r,d:String(m.date||'').slice(0,10),match:m,opp:m.home===r.n?m.away:m.home,home:m.home===r.n}});
   const pair=new Map(rows.map(r=>[r.m+'|'+r.n,r]));
-  rows.forEach(r=>{const o=pair.get(r.m+'|'+r.opp);r.o_pp=o?o.pp:null;r.o_op=o?o.op:null;r.o_da=o?o.da:null;r.o_adx=o?o.adx:null});
+  rows.forEach(r=>{const o=pair.get(r.m+'|'+r.opp);r.o_pp=o?o.pp:null;r.o_op=o?o.op:null;r.o_da=o?o.da:null;r.o_adx=o?o.adx:null;r.o_cb=o?o.cb:null});
   rows.sort((a,b)=>a.d.localeCompare(b.d)||a.m.localeCompare(b.m));
   return rows;
  }
@@ -39,7 +57,7 @@
  const mean=a=>{const b=a.filter(ok);return b.length?b.reduce((s,x)=>s+x,0)/b.length:null};
  /* a team's season values over the range: PPDA pooled (Σ opponent passes ÷ Σ defensive actions, as on the PPDA page), height = mean */
  function teamSeason(rows){
-  const T=new Map();rows.forEach(r=>{const t=T.get(r.n)||{n:r.n,op:0,da:0,np:0,h:[],m:0};t.m++;if(ok(r.op)&&r.da>0){t.op+=r.op;t.da+=r.da;t.np++}if(ok(r.adx))t.h.push(r.adx);T.set(r.n,t)});
+  const T=new Map();rows.forEach(r=>{const t=T.get(r.n)||{n:r.n,op:0,da:0,np:0,h:[],m:0};t.m++;if(ok(r.op)&&r.da>0){t.op+=r.op;t.da+=r.da;t.np++}if(ok(r[S.hm]))t.h.push(r[S.hm]);T.set(r.n,t)});
   return [...T.values()].map(t=>({n:t.n,m:t.m,np:t.np,nh:t.h.length,ppda:t.da>0?t.op/t.da:null,h:mean(t.h)}));
  }
  const median=a=>{const s=a.filter(ok).sort((x,y)=>x-y);if(!s.length)return null;const i=s.length/2;return s.length%2?s[Math.floor(i)]:(s[i-1]+s[i])/2};
@@ -64,11 +82,14 @@
    const opps=[...new Set(R_.filter(r=>r.n===S.team).map(r=>r.opp))].sort((a,b)=>a.localeCompare(b));
    if(S.opp&&!opps.includes(S.opp))S.opp='';
    root.innerHTML=`<div class="card ph-def"><b>What is measured</b>
+     <p>${two(`<b>Centre-backs' average position</b> — for each starting centre-back (official lineup slot in the defensive line, not on a flank: the two central defenders of a back four, the three of a back three or five), the average of where his actions in the match took place, along the pitch, in metres from his own goal: Σ(actions × cell centre) ÷ Σ actions, from PitchAPI's heat maps (cells of 6.6 m). The team's value is the mean of its centre-backs (each with ${CB_MIN}+ actions). It covers the whole match, with and without the ball, so it is where the centre-backs played on average, not the line held without the ball.`,
+      `<b>متوسط تمركز قلبي الدفاع</b> — لكل قلب دفاع أساسي (خانته في التشكيلة الرسمية في خط الدفاع ومو على الطرف: قلبي الدفاع في الرباعي، والثلاثة في الثلاثي أو الخماسي)، متوسط مكان أفعاله في المباراة على طول الملعب، بالمتر من مرماه: Σ(الأفعال × منتصف الخانة) ÷ Σ الأفعال، من خرائط الحرارة في PitchAPI (خانات 6.6 م). قيمة الفريق متوسط قلبي دفاعه (كل واحد ${nb(CB_MIN)} أفعال أو أكثر). تشمل المباراة كاملة، بالكرة وبدونها: يعني وين لعبوا بالمتوسط، مو الخط اللي يمسكونه بدون كرة.`)}</p>
      <p>${two(`<b>Defensive action height</b> — PitchAPI's average distance, in metres from the team's own goal line (pitch 105 m long), of the team's defensive actions in a match. Higher = the team wins the ball back further up the pitch. <b>This is not the defensive line height</b>: PitchAPI does not provide that, and it cannot be computed from its data (it needs the defenders' positions without the ball).`,
       `<b>ارتفاع الأفعال الدفاعية</b> — متوسط بُعد الأفعال الدفاعية للفريق في المباراة عن خط مرماه، بالمتر (الملعب 105 م)، من PitchAPI. أعلى = الفريق يسترجع الكرة أبعد عن مرماه. <b>هذا مو ارتفاع خط الدفاع</b>: PitchAPI ما يعطيه، وما ينحسب من بياناته (يحتاج مواقع المدافعين بدون الكرة).`)}</p>
      <p>${two(`<b>PPDA</b> — opponent passes ÷ defensive actions (PitchAPI). Lower = fewer passes allowed per defensive action = more intense pressing.`,`<b>PPDA</b> — تمريرات الخصم ÷ الأفعال الدفاعية (PitchAPI). أقل = تمريرات أقل مسموحة لكل فعل دفاعي = ضغط أشد.`)}</p></div>
     <div class="card ctl ph-ctl">${lgSel}
      <select id="phse" aria-label="Season" disabled><option>Current season</option></select>
+     <select id="phhm" aria-label="Height measure">${Object.entries(HM).map(([k,v])=>`<option value="${k}"${k===S.hm?' selected':''}>${v.en}</option>`).join('')}</select>
      <select id="phtm" aria-label="Team">${teams.map(t=>`<option${t===S.team?' selected':''}>${esc(t)}</option>`).join('')}</select>
      <select id="phop" aria-label="Opponent"><option value="">All opponents</option>${opps.map(t=>`<option${t===S.opp?' selected':''}>${esc(t)}</option>`).join('')}</select>
      <label class="mu"><span>From</span> <select id="phfr">${dates.map(d=>`<option${d===from?' selected':''}>${d}</option>`).join('')}</select></label>
@@ -76,10 +97,11 @@
      <button type="button" class="s" id="phrs">Reset</button>
      <p class="mu ph-cov">${two(`Current season only (the site holds no earlier season for this). ${R_.length/2|0} matches in the range; teams with ${MIN_LEAGUE}+ matches with data appear on the league charts (${TS.length}).`,`الموسم الحالي فقط (الموقع ما فيه موسم سابق لهذا). ${nb(R_.length/2|0)} مباراة في الفترة؛ الفرق اللي لها ${nb(MIN_LEAGUE)} مباريات أو أكثر ببيانات تظهر في رسوم الدوري (${nb(TS.length)}).`)}</p></div>
     <div class="ph-dash card"><h3><span>Team</span> · ${nm(S.team)}${S.opp?` <span class="mu">· <span>against</span> ${nm(S.opp)}</span>`:''}</h3>${dash(mine)}</div>
-    <div class="ph-two"><div class="card"><h3>Defensive action height, every team</h3>${lineMap(TS)}</div>
+    <div class="ph-two"><div class="card"><h3>${two(HM[S.hm].en+', every team',HM[S.hm].ar+' لكل الفرق')}</h3>${lineMap(TS)}</div>
      <div class="card"><h3>Tactical identity map</h3>${idMap(TS)}</div></div>`;
    wire();
    const q=s=>root.querySelector(s);
+   q('#phhm').onchange=e=>{S.hm=e.target.value;S.sel='';draw()};
    q('#phtm').onchange=e=>{S.team=e.target.value;S.opp='';S.sel='';draw()};
    q('#phop').onchange=e=>{S.opp=e.target.value;S.sel='';draw()};
    q('#phfr').onchange=e=>{S.from=e.target.value;if((S.to||dates[dates.length-1])<S.from)S.to=S.from;S.sel='';draw()};
@@ -94,14 +116,14 @@
 
  /* ---------- the team: two charts on the same matches, then what the numbers say ---------- */
  function dash(L){
-  const H=L.filter(r=>ok(r.adx)),P=L.filter(r=>ok(r.pp));
+  const H=L.filter(r=>ok(r[S.hm])),P=L.filter(r=>ok(r.pp));
   if(!H.length&&!P.length)return '<div class="empty">No match with these values for this team in the range.</div>';
   const sel=L.find(r=>r.m===S.sel);
-  const c1=chart(L,'adx','o_adx','Defensive action height (m)','m',1),c2=chart(L,'pp','o_pp','PPDA','',0);
+  const c1=chart(L,S.hm,'o_'+S.hm,HM[S.hm].en,'m',1),c2=chart(L,'pp','o_pp','PPDA','',0);
   return `<div class="ins-leg ph-leg"><span><i class="ph-k t"></i>${nm(S.team)}</span><span><i class="ph-k o"></i><span>Opponent, same match</span></span><span><i class="ph-k a"></i>${two(`${nm(S.team)} average, these matches`,`متوسط ${nm(S.team)} في هالمباريات`)}</span></div>
-   <div class="ph-ch"><h4>Defensive action height <span class="mu">· <span>metres from own goal, higher = further up</span></span></h4>${c1}</div>
+   <div class="ph-ch"><h4>${two(HM[S.hm].en,HM[S.hm].ar)} <span class="mu">· <span>metres from own goal, higher = further up</span></span></h4>${c1}</div>
    <div class="ph-ch"><h4>PPDA <span class="mu">· <span>lower = more intense pressing</span></span></h4>${c2}</div>
-   ${sel?`<p class="ph-sel">${two(`<b>${esc(sel.d)}</b> ${nm(sel.match.home)} ${nb(esc(sel.match.score))} ${nm(sel.match.away)} — height ${nm(S.team)} ${nb(f1(sel.adx))} m, ${nm(sel.opp)} ${nb(f1(sel.o_adx))} m; PPDA ${nb(f2(sel.pp))} / ${nb(f2(sel.o_pp))}.`,`<b>${nb(esc(sel.d))}</b> ${nm(sel.match.home)} ${nb(esc(sel.match.score))} ${nm(sel.match.away)} — الارتفاع: ${nm(S.team)} ${nb(f1(sel.adx)+' م')}، ${nm(sel.opp)} ${nb(f1(sel.o_adx)+' م')}؛ PPDA ‏${nb(f2(sel.pp))} / ${nb(f2(sel.o_pp))}.`)} <a href="#/match/${encodeURIComponent(sel.m)}">Match centre →</a></p>`:`<p class="mu ph-tip"><span>Tap a match in either chart to pick it in both.</span></p>`}
+   ${sel?`<p class="ph-sel">${two(`<b>${esc(sel.d)}</b> ${nm(sel.match.home)} ${nb(esc(sel.match.score))} ${nm(sel.match.away)} — height ${nm(S.team)} ${nb(f1(sel[S.hm]))} m, ${nm(sel.opp)} ${nb(f1(sel['o_'+S.hm]))} m; PPDA ${nb(f2(sel.pp))} / ${nb(f2(sel.o_pp))}.`,`<b>${nb(esc(sel.d))}</b> ${nm(sel.match.home)} ${nb(esc(sel.match.score))} ${nm(sel.match.away)} — الارتفاع: ${nm(S.team)} ${nb(f1(sel[S.hm])+' م')}، ${nm(sel.opp)} ${nb(f1(sel['o_'+S.hm])+' م')}؛ PPDA ‏${nb(f2(sel.pp))} / ${nb(f2(sel.o_pp))}.`)} <a href="#/match/${encodeURIComponent(sel.m)}">Match centre →</a></p>`:`<p class="mu ph-tip"><span>Tap a match in either chart to pick it in both.</span></p>`}
    <div class="ph-read">${reading(L)}</div>`;
  }
  function chart(L,k,ko,aria,unit,dec){
@@ -126,23 +148,24 @@
  const short=n=>{const w=String(n||'').replace(/\b(FC|CF|AFC|SC|AC|SSC|AS|RC|CD|UD|SD|RCD|SV|VfB|VfL|TSG|1\.)\b/g,'').trim().split(/\s+/);return (w.sort((a,b)=>b.length-a.length)[0]||n).slice(0,10)};
  /* what the numbers say: trend (how it changes) apart from quality (whether it worked, which is not judged here) */
  function reading(L){
-  const H=L.filter(r=>ok(r.adx)),P=L.filter(r=>ok(r.pp));
+  const k=S.hm,H=L.filter(r=>ok(r[k])),P=L.filter(r=>ok(r.pp));
   const out=[];
   if(H.length<4&&P.length<4)return `<p class="mu">${two('Fewer than 4 matches with data: no trend is read from so few.','أقل من 4 مباريات ببيانات: ما نقرأ اتجاه من عدد بهالقلة.')}</p>`;
   const t=nm(S.team);
-  if(H.length>=4){const n=Math.min(3,Math.floor(H.length/2)),a=mean(H.slice(-n).map(r=>r.adx)),b=mean(H.slice(0,-n).map(r=>r.adx)),d=a-b;
-   out.push(Math.abs(d)>=2?two(`${t} defended ${d>0?'higher':'deeper'} in its last ${n} matches: defensive actions ${nb(f1(a))} m from its goal on average, against ${nb(f1(b))} m in the ${H.length-n} before (${nb((d>0?'+':'')+f1(d))} m).`,
-     `${t} دافع ${d>0?'أعلى':'أعمق'} في آخر ${nb(n)} مباريات: أفعاله الدفاعية على بُعد ${nb(f1(a))} م من مرماه بالمتوسط، مقابل ${nb(f1(b))} م في الـ${nb(H.length-n)} قبلها (${nb((d>0?'+':'')+f1(d))} م).`)
-    :two(`${t}'s defensive action height has stayed about the same: ${nb(f1(a))} m in its last ${n} matches, ${nb(f1(b))} m before.`,`ارتفاع الأفعال الدفاعية لـ${t} تقريبًا ثابت: ${nb(f1(a))} م في آخر ${nb(n)} مباريات، و${nb(f1(b))} م قبلها.`))}
+  if(H.length>=4){const n=Math.min(3,Math.floor(H.length/2)),a=mean(H.slice(-n).map(r=>r[k])),b=mean(H.slice(0,-n).map(r=>r[k])),d=a-b;
+   const what=k==='cb'?['its centre-backs played','قلبي دفاعه لعبوا على']:['its defensive actions were','أفعاله الدفاعية كانت على'];
+   out.push(Math.abs(d)>=2?two(`${t} defended ${d>0?'higher':'deeper'} in its last ${n} matches: ${what[0]} ${nb(f1(a))} m from its goal on average, against ${nb(f1(b))} m in the ${H.length-n} before (${nb((d>0?'+':'')+f1(d))} m).`,
+     `${t} دافع ${d>0?'أعلى':'أعمق'} في آخر ${nb(n)} مباريات: ${what[1]} بُعد ${nb(f1(a))} م من مرماه بالمتوسط، مقابل ${nb(f1(b))} م في الـ${nb(H.length-n)} قبلها (${nb((d>0?'+':'')+f1(d))} م).`)
+    :two(`${t}'s ${HM[k].en.toLowerCase()} has stayed about the same: ${nb(f1(a))} m in its last ${n} matches, ${nb(f1(b))} m before.`,`${HM[k].ar} لـ${t} تقريبًا ثابت: ${nb(f1(a))} م في آخر ${nb(n)} مباريات، و${nb(f1(b))} م قبلها.`))}
   if(P.length>=4){const n=Math.min(3,Math.floor(P.length/2));
    const a=mean(P.slice(-n).map(r=>r.pp)),b=mean(P.slice(0,-n).map(r=>r.pp)),rel=b?(a-b)/b:0;
    out.push(Math.abs(rel)>=.15?two(`It pressed ${rel<0?'more':'less'} intensely in its last ${n} matches: PPDA ${nb(f2(a))} against ${nb(f2(b))} before (${nb((rel>0?'+':'')+Math.round(rel*100)+'%')}).`,
      `ضغط بشدة ${rel<0?'أكبر':'أقل'} في آخر ${nb(n)} مباريات: PPDA ‏${nb(f2(a))} مقابل ${nb(f2(b))} قبلها (${nb((rel>0?'+':'')+Math.round(rel*100)+'%')}).`)
     :two(`Its pressing intensity has stayed about the same: PPDA ${nb(f2(a))} in its last ${n} matches, ${nb(f2(b))} before.`,`شدة ضغطه تقريبًا ثابتة: PPDA ‏${nb(f2(a))} في آخر ${nb(n)} مباريات، و${nb(f2(b))} قبلها.`))}
   /* against its opponents in the same matches */
-  const HO=H.filter(r=>ok(r.o_adx)),PO=P.filter(r=>ok(r.o_pp));
-  if(HO.length>=4){const d=mean(HO.map(r=>r.adx-r.o_adx)),k=HO.filter(r=>r.adx>r.o_adx).length;
-   out.push(two(`Against its opponents in the same matches: ${d>=0?'higher':'deeper'} by ${nb(f1(Math.abs(d)))} m on average; higher than the opponent in ${nb(k)} of ${nb(HO.length)} matches.`,`مقارنة بخصومه في نفس المباريات: ${d>=0?'أعلى':'أعمق'} بـ${nb(f1(Math.abs(d)))} م بالمتوسط؛ أعلى من الخصم في ${nb(k)} من ${nb(HO.length)} مباراة.`))}
+  const HO=H.filter(r=>ok(r['o_'+k])),PO=P.filter(r=>ok(r.o_pp));
+  if(HO.length>=4){const d=mean(HO.map(r=>r[k]-r['o_'+k])),c=HO.filter(r=>r[k]>r['o_'+k]).length;
+   out.push(two(`Against its opponents in the same matches: ${d>=0?'higher':'deeper'} by ${nb(f1(Math.abs(d)))} m on average; higher than the opponent in ${nb(c)} of ${nb(HO.length)} matches.`,`مقارنة بخصومه في نفس المباريات: ${d>=0?'أعلى':'أعمق'} بـ${nb(f1(Math.abs(d)))} م بالمتوسط؛ أعلى من الخصم في ${nb(c)} من ${nb(HO.length)} مباراة.`))}
   if(PO.length>=4){const k=PO.filter(r=>r.pp<r.o_pp).length;
    out.push(two(`Its PPDA was lower than the opponent's (it pressed more) in ${nb(k)} of ${nb(PO.length)} matches.`,`الـPPDA حقه كان أقل من الخصم (ضغط أكثر) في ${nb(k)} من ${nb(PO.length)} مباراة.`))}
   out.push(`<span class="mu">${two('These describe how the team defends, not whether it worked: a higher line or a lower PPDA is not by itself better.','هذي تصف طريقة دفاع الفريق، مو إذا نجحت: الدفاع الأعلى أو الـPPDA الأقل مو أفضل بحد ذاته.')}</span>`);
@@ -160,11 +183,11 @@
    <rect x="${X0+pw*(13.84/68)}" y="${yv(105)}" width="${pw*(40.32/68)}" height="${yv(105-16.5)-yv(105)}"/><rect x="${X0+pw*(13.84/68)}" y="${yv(16.5)}" width="${pw*(40.32/68)}" height="${yv(0)-yv(16.5)}"/>
    <text x="${X0+pw/2}" y="${yv(0)+13}" class="ins-ax">own goal · 0 m</text><text x="${X0+pw/2}" y="${yv(105)-5}" class="ins-ax">105 m</text></g>`;
   const lines=ord.map((t,i)=>{const y=yv(t.h),c=col(t.n),yy=ly(i),logo=typeof logoOf==='function'&&logoOf(t.n);
-   return `<g class="ph-ln"${INS.tipAttr([t.n,'Defensive action height: '+f1(t.h)+' m','PPDA: '+f2(t.ppda),t.nh+' matches'])}><line x1="${X0}" x2="${X1}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" stroke="${c}"/><polyline points="${X1},${y.toFixed(1)} ${X1+14},${y.toFixed(1)} ${LX-6},${yy.toFixed(1)}" stroke="${c}" fill="none"/><circle cx="${LX-6}" cy="${yy.toFixed(1)}" r="2.6" fill="${c}"/>
+   return `<g class="ph-ln"${INS.tipAttr([t.n,HM[S.hm].en+': '+f1(t.h)+' m','PPDA: '+f2(t.ppda),t.nh+' matches'])}><line x1="${X0}" x2="${X1}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" stroke="${c}"/><polyline points="${X1},${y.toFixed(1)} ${X1+14},${y.toFixed(1)} ${LX-6},${yy.toFixed(1)}" stroke="${c}" fill="none"/><circle cx="${LX-6}" cy="${yy.toFixed(1)}" r="2.6" fill="${c}"/>
     ${logo?`<image href="${esc(logo)}" x="${LX}" y="${(yy-6).toFixed(1)}" width="12" height="12"/>`:''}<text x="${LX+16}" y="${(yy+4).toFixed(1)}" class="ph-lt"><tspan fill="${c}" font-weight="700">${f1(t.h)}</tspan> ${esc(t.n.length>19?t.n.slice(0,18)+'…':t.n)}</text></g>`}).join('');
   return `<div class="ph-svg ph-map"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Defensive action height, every team">${pitch}${lines}</svg></div>
    <div class="ctl"><button type="button" class="s" id="phrev">${S.rev?'Highest first':'Lowest first'}</button></div>
-   <p class="mu ins-note"><span>Each line is a team's average defensive action height over its matches in the range, drawn at that distance from its own goal (bottom). Not a defensive line: see above.</span></p>`;
+   <p class="mu ins-note">${two(`Each line is a team's average over its matches in the range, drawn at that distance from its own goal (bottom). Not the line held without the ball: see above.`,`كل خط هو متوسط الفريق في مبارياته ضمن الفترة، مرسوم على هالبعد من مرماه (تحت). مو الخط اللي يمسكه بدون كرة: شوف فوق.`)}</p>`;
  }
  /* PPDA × height, with the league's medians as the quadrant boundaries */
  function idMap(TS){
@@ -175,13 +198,13 @@
   const X=v=>Lm+(1-(v-(x0-px))/((x1+px)-(x0-px)))*(W-Lm-Rm),Y=v=>T+(1-(v-(y0-py))/((y1+py)-(y0-py)))*(H-T-B);
   const q=(x,y,a,t)=>`<text x="${x}" y="${y}" class="ph-q" text-anchor="${a}">${t}</text>`;
   const pts=L.map(t=>{const logo=typeof logoOf==='function'&&logoOf(t.n),x=X(t.ppda),y=Y(t.h),me=t.n===S.team;
-   return `<g class="ph-pt${me?' me':''}"${INS.tipAttr([t.n,'PPDA: '+f2(t.ppda),'Defensive action height: '+f1(t.h)+' m',t.np+' matches'])}>${me?`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="13" class="ph-me"/>`:''}${logo?`<image href="${esc(logo)}" x="${(x-9).toFixed(1)}" y="${(y-9).toFixed(1)}" width="18" height="18"/>`:`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5" fill="${col(t.n)}"/>`}</g>`}).join('');
+   return `<g class="ph-pt${me?' me':''}"${INS.tipAttr([t.n,'PPDA: '+f2(t.ppda),HM[S.hm].en+': '+f1(t.h)+' m',t.np+' matches'])}>${me?`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="13" class="ph-me"/>`:''}${logo?`<image href="${esc(logo)}" x="${(x-9).toFixed(1)}" y="${(y-9).toFixed(1)}" width="18" height="18"/>`:`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="5" fill="${col(t.n)}"/>`}</g>`}).join('');
   return `<div class="ph-svg"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Tactical identity map">
    <line x1="${X(mx).toFixed(1)}" x2="${X(mx).toFixed(1)}" y1="${T}" y2="${H-B}" class="ins-med"/><line x1="${Lm}" x2="${W-Rm}" y1="${Y(my).toFixed(1)}" y2="${Y(my).toFixed(1)}" class="ins-med"/>
    ${q(W-Rm-4,T+12,'end','High + intense press')}${q(Lm+4,T+12,'start','High, less press')}${q(W-Rm-4,H-B-6,'end','Deep + intense press')}${q(Lm+4,H-B-6,'start','Deep, less press')}
    <line x1="${Lm}" x2="${W-Rm}" y1="${H-B}" y2="${H-B}" class="ins-axl"/><line x1="${Lm}" x2="${Lm}" y1="${T}" y2="${H-B}" class="ins-axl"/>
    <text x="${Lm}" y="${H-B+16}" class="ins-ax" text-anchor="start">${f2(x1+px)}</text><text x="${W-Rm}" y="${H-B+16}" class="ins-ax e">${f2(x0-px)}</text>
-   <text x="${(Lm+W-Rm)/2}" y="${H-8}" class="ins-axt" text-anchor="middle">PPDA → lower = more pressing</text><text x="${Lm+2}" y="${T-10}" class="ins-axt">↑ higher defensive actions (m)</text>${pts}</svg></div>
+   <text x="${(Lm+W-Rm)/2}" y="${H-8}" class="ins-axt" text-anchor="middle">PPDA → lower = more pressing</text><text x="${Lm+2}" y="${T-10}" class="ins-axt">↑ ${esc(HM[S.hm].axis)}</text>${pts}</svg></div>
    <p class="mu ins-note">${two(`Lines: the league's medians (PPDA ${nb(f2(mx))}, height ${nb(f1(my))} m). PPDA is drawn right to left, so more pressing is to the right. Indicative profiles, not a verdict on a team's style.`,`الخطوط: وسيط الدوري (PPDA ‏${nb(f2(mx))}، الارتفاع ${nb(f1(my))} م). الـPPDA مرسوم من اليمين لليسار، فالضغط الأكثر على اليمين. ملامح تقريبية، مو حكم على أسلوب الفريق.`)}</p>`;
  }
  INS.ar({"Pressing & height":"الضغط والارتفاع","Pressing &amp; height":"الضغط والارتفاع","What is measured":"وش نقيس","Competition":"البطولة","Season":"الموسم","Current season":"الموسم الحالي","Team":"الفريق","Opponent":"الخصم",
@@ -193,7 +216,9 @@
   "Too few teams with both values in the range.":"فرق قليلة عندها القيمتين في الفترة.","Match centre →":"مركز المباراة ←","No values.":"ما فيه قيم.","Loading league…":"نحمّل الدوري…",
   "Each line is a team's average defensive action height over its matches in the range, drawn at that distance from its own goal (bottom). Not a defensive line: see above.":"كل خط هو متوسط ارتفاع الأفعال الدفاعية للفريق في مبارياته ضمن الفترة، مرسوم على هالبعد من مرماه (تحت). مو خط دفاع: شوف فوق.",
   "own goal · # m":"المرمى · # م","# m":"# م","High + intense press":"عالي + ضغط شديد","High, less press":"عالي، ضغط أقل","Deep + intense press":"عميق + ضغط شديد","Deep, less press":"عميق، ضغط أقل",
-  "PPDA → lower = more pressing":"PPDA ← أقل = ضغط أكثر","↑ higher defensive actions (m)":"↑ أفعال دفاعية أعلى (م)"});
- /* this file can arrive after the site has drawn its first page: if that page is this one, draw it again */
- if(typeof D==='object'&&D&&typeof route==='function'&&typeof uiPage==='function'&&uiPage()==='pressline')route();
+  "PPDA → lower = more pressing":"PPDA ← أقل = ضغط أكثر","↑ centre-backs (m)":"↑ قلبي الدفاع (م)","↑ defensive actions (m)":"↑ الأفعال الدفاعية (م)",
+  "Height measure":"مقياس الارتفاع","Centre-backs' average position":"متوسط تمركز قلبي الدفاع"});
+ /* this file can arrive after the site has drawn its first page (the menu without this page, or this page not yet known):
+    draw it again */
+ if(typeof D==='object'&&D&&typeof route==='function')route();
 })();
