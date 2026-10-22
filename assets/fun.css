@@ -1,5 +1,5 @@
 /* ===== Season simulator, Player twins, Player cards, Beat the model, Luck table (assets/season-sim.js and the others) ===== */
-.sm .card,.tw .card,.pc .card,.bm .card,.lk .card{margin-bottom:14px}
+.sm .card,.tw .card,.pc .card,.btm .card,.lk .card{margin-bottom:14px}
 .sm-intro p{margin:6px 0;line-height:1.6}
 .sm-h{font-size:12.5px;margin:0 0 8px}
 .sm-fx{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px}
@@ -127,3 +127,34 @@
  .pc-at{grid-template-columns:1fr;gap:2px}.pc-at b{font-size:15px}.pc-at span{font-size:11px}
  .pc-act{flex-direction:column}.pc-act button{width:100%}
  .pc-ctl{flex-direction:column;align-items:stretch}.pc-ctl .tw-s{flex:none}.pc-vs{text-align:center;padding:0}}
+/* Beat the model */
+.bm-vs{display:flex;align-items:center;justify-content:center;gap:18px}
+.bm-s{display:flex;flex-direction:column;align-items:center;min-width:90px;padding:10px 14px;border-radius:14px;border:1px solid var(--ln)}
+.bm-s b{font-size:40px;line-height:1.05}.bm-s span{font-size:12.5px;color:var(--mu)}
+.bm-s.you b{color:var(--th-hi)}
+.bm-x{font-weight:700;text-align:center;max-width:9rem}
+.bm-sub{text-align:center;font-size:12.5px;margin:10px 0 4px}
+.bm-rules{text-align:center;font-size:12px;margin:0}
+.bm-day{margin:14px 0 6px;font-size:13.5px;color:var(--mu)}
+.bm-fx{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.bm-fx li{display:grid;grid-template-columns:3.2em minmax(0,1fr) auto minmax(0,1fr) 7.5em;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--ln);border-radius:12px}
+.bm-h{text-align:end;white-space:nowrap;font-weight:600;min-width:0}
+.bm-a{white-space:nowrap;font-weight:600;min-width:0}
+.bm-h bdi,.bm-a bdi{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}
+.bm-sc{display:flex;align-items:center;gap:4px}
+.bm-sc i{font-style:normal;color:var(--mu)}
+.bm-in{display:inline-flex;align-items:center;border:1px solid var(--ln);border-radius:10px;overflow:hidden;direction:ltr}
+.bm-in button{width:30px;min-height:40px;border:0;border-radius:0;background:rgba(255,255,255,.05);color:var(--tx);font-size:18px;padding:0;cursor:pointer}
+.bm-in input{flex:none;width:2.4em;min-width:0;padding:0;min-height:40px;border:0;border-radius:0;text-align:center;font-size:18px;font-weight:700;background:transparent;color:var(--tx);-moz-appearance:textfield;appearance:textfield}
+.bm-in input::-webkit-outer-spin-button,.bm-in input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.bm-st{font-size:12px;text-align:end;white-space:nowrap}.bm-ok{color:var(--g)}
+.bm-hist{list-style:none;margin:0;padding:0}
+.bm-hist a{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:8px 4px;border-bottom:1px solid var(--ln);color:var(--tx);text-decoration:none;font-size:13px}
+.bm-hist a:hover{background:rgba(255,255,255,.05)}
+.bm-hm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bm-p{white-space:nowrap;padding:2px 8px;border-radius:8px;background:rgba(255,255,255,.05);font-size:12.5px}
+.bm-p.bm-3{background:rgba(76,195,138,.30)}.bm-p.bm-1{background:rgba(226,189,90,.25)}.bm-p.bm-0{opacity:.7}
+@media (max-width:560px){.bm-fx li{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-areas:"t st" "h a" "sc sc";row-gap:8px}
+ .bm-t{grid-area:t}.bm-st{grid-area:st}.bm-h{grid-area:h;text-align:start}.bm-sc{grid-area:sc;justify-content:center}.bm-a{grid-area:a;text-align:end}
+ .bm-in button{width:26px}.bm-in input{width:2em}
+ .bm-hist a{grid-template-columns:1fr 1fr;}.bm-hm{grid-column:1/-1}}
