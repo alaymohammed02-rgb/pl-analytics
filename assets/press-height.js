@@ -49,7 +49,7 @@
   const date=new Map(D.matches.map(m=>[m.match_id,m]));
   const by=new Map();
   ((A&&A.team)||[]).forEach(r=>{const k=r.m+'|'+r.n;const o=by.get(k)||{m:r.m,n:r.n};o.pp=r.pp;o.op=r.op;o.da=r.da;by.set(k,o)});
-  ((P&&P.team)||[]).forEach(r=>{const k=r.m+'|'+r.n;const o=by.get(k)||{m:r.m,n:r.n};o.adx=r.adx;by.set(k,o)});
+  ((P&&P.team)||[]).forEach(r=>{const k=r.m+'|'+r.n;const o=by.get(k)||{m:r.m,n:r.n};o.adx=r.adx;o.tilt=r.tilt;by.set(k,o)});
   if(withH)(await cbOf(date)).forEach((c,k)=>{const [m,...n]=k.split('|');const o=by.get(k)||{m,n:n.join('|')};o.cb=c.v;o.cbn=c.n;by.set(k,o)});
   const rows=[...by.values()].filter(r=>date.has(r.m)).map(r=>{const m=date.get(r.m);return {...r,d:String(m.date||'').slice(0,10),match:m,opp:m.home===r.n?m.away:m.home,home:m.home===r.n}});
   const pair=new Map(rows.map(r=>[r.m+'|'+r.n,r]));
@@ -57,6 +57,7 @@
   rows.sort((a,b)=>a.d.localeCompare(b.d)||a.m.localeCompare(b.m));
   return rows;
  }
+ INS.phRows=data;       /* the per-match team rows (adx, tilt, centre-backs' average position cb), used by the Height page */
  const ok=v=>v!=null&&isFinite(v);
  const mean=a=>{const b=a.filter(ok);return b.length?b.reduce((s,x)=>s+x,0)/b.length:null};
  /* a team's season values over the range: PPDA pooled (Σ opponent passes ÷ Σ defensive actions, as on the PPDA page), height = mean */
