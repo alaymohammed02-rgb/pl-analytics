@@ -71,8 +71,12 @@
  const ORIG_PPDA=R.ppda;
  R.ppda=async function(el){
   el.innerHTML='<h2>Pressing</h2><div id="phroot" class="ins ph"><div class="empty skel">Loading…</div></div><div id="phorig"></div>';
-  const o=el.querySelector('#phorig'),jobs=[pressView(el.querySelector('#phroot'))];
-  if(typeof ORIG_PPDA==='function'){const p=ORIG_PPDA(o);const h=o.querySelector('h2');if(h)h.remove();jobs.push(p)}
+  /* one request for the advanced file, shared by both parts (loadAdv keeps it once it has arrived) */
+  const lg=D.id;await loadAdv().catch(()=>null);if(!el.isConnected||D.id!==lg)return;
+  const o=el.querySelector('#phorig');if(!o)return;const jobs=[pressView(el.querySelector('#phroot'))];
+  /* the PPDA page's own renderer looks its controls up in the whole document: when the user has already left this page, its
+     error is about a page that is gone and must not replace the one now on screen */
+  if(typeof ORIG_PPDA==='function'){const p=ORIG_PPDA(o);const h=o.querySelector('h2');if(h)h.remove();jobs.push(Promise.resolve(p).catch(e=>{if(o.isConnected)throw e}))}
   await Promise.all(jobs);
  };
  /* the old combined page: its links lead to Pressing */

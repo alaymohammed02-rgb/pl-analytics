@@ -42,18 +42,21 @@
   const FX=((((typeof FIX==='object'&&FIX.d&&FIX.d.leagues)||{})[lid])||[]).filter(x=>{const t=Date.parse(x.k||x.d);return t>now&&t<soon}).sort((a,b)=>String(a.k||a.d).localeCompare(String(b.k||b.d)));
   const paint=()=>{
    P=read();const done=P.filter(x=>x.r),wait=P.filter(x=>!x.r&&Date.now()>=Date.parse(x.k));
-   const you=done.reduce((s,x)=>s+x.r.you,0),mod=done.filter(x=>x.r.mod!=null).reduce((s,x)=>s+x.r.mod,0);
-   const ex=done.filter(x=>x.r.you===3).length,ok1=done.filter(x=>x.r.you>=1).length,mex=done.filter(x=>x.r.mod===3).length,mok=done.filter(x=>x.r.mod!=null&&x.r.mod>=1).length;
+   /* the duel counts only matches the model had a pick for, so both totals cover the same matches */
+   const hh=done.filter(x=>x.r.mod!=null),solo=done.filter(x=>x.r.mod==null),soloPts=solo.reduce((s,x)=>s+x.r.you,0);
+   const you=hh.reduce((s,x)=>s+x.r.you,0),mod=hh.reduce((s,x)=>s+x.r.mod,0);
+   const ex=hh.filter(x=>x.r.you===3).length,ok1=hh.filter(x=>x.r.you>=1).length,mex=hh.filter(x=>x.r.mod===3).length,mok=hh.filter(x=>x.r.mod>=1).length;
    const day=t=>new Date(t).toLocaleDateString(lc(),{weekday:'long',day:'numeric',month:'long'}),hm=t=>new Date(t).toLocaleTimeString(lc(),{hour:'2-digit',minute:'2-digit'});
    const groups=[];FX.forEach(x=>{const d=day(x.k||x.d);let g=groups.find(z=>z.d===d);if(!g){g={d,L:[]};groups.push(g)}g.L.push(x)});
    const mine=new Map(P.map(x=>[x.mid,x]));
-   root.innerHTML=`<div class="card bm-board"><div class="bm-vs"><div class="bm-s you"><b>${nb(you)}</b><span>You</span></div><span class="bm-x">${done.length?(you>mod?two('You lead','أنت متقدم'):you<mod?two('The model leads','النموذج متقدم'):two('Level','تعادل')):two('No results yet','ما فيه نتائج للحين')}</span><div class="bm-s mod"><b>${nb(mod)}</b><span>Model</span></div></div>
-     <p class="mu bm-sub">${two(`${done.length} matches played · exact scores: you ${ex}, model ${mex} · right results: you ${ok1}, model ${mok}`,`${nb(done.length)} مباراة انلعبت · نتائج بالضبط: أنت ${nb(ex)}، النموذج ${nb(mex)} · نتيجة صحيحة: أنت ${nb(ok1)}، النموذج ${nb(mok)}`)}</p>
+   root.innerHTML=`<div class="card bm-board"><div class="bm-vs"><div class="bm-s you"><b>${nb(you)}</b><span>You</span></div><span class="bm-x">${hh.length?(you>mod?two('You lead','أنت متقدم'):you<mod?two('The model leads','النموذج متقدم'):two('Level','تعادل')):two('No results yet','ما فيه نتائج للحين')}</span><div class="bm-s mod"><b>${nb(mod)}</b><span>Model</span></div></div>
+     <p class="mu bm-sub">${two(`${hh.length} matches played · exact scores: you ${ex}, model ${mex} · right results: you ${ok1}, model ${mok}`,`${nb(hh.length)} مباراة انلعبت · نتائج بالضبط: أنت ${nb(ex)}، النموذج ${nb(mex)} · نتيجة صحيحة: أنت ${nb(ok1)}، النموذج ${nb(mok)}`)}</p>
+     ${solo.length?`<p class="mu bm-sub">${two(`Not in the duel: ${solo.length} match(es) the model had no pick for (too few matches with shot data then); you scored ${soloPts} there.`,`خارج المواجهة: ${nb(solo.length)} مباراة ما كان للنموذج فيها توقع (مباريات قليلة ببيانات التسديد وقتها)؛ جبت فيها ${nb(soloPts)}.`)}</p>`:''}
      <p class="mu bm-rules">${two('Exact score: 3 points. Right result (win, draw or loss): 1 point. The model\'s pick is sealed when you save yours and shown from kick-off.','النتيجة بالضبط: 3 نقاط. النتيجة الصحيحة (فوز أو تعادل أو خسارة): نقطة. توقع النموذج ينختم لما تحفظ توقعك ويظهر من بداية المباراة.')}</p></div>
     <div class="card"><h3><span>Upcoming</span> · ${nm(D.name)}</h3>${groups.length?groups.map(g=>`<h4 class="bm-day">${esc(g.d)}</h4><ul class="bm-fx">${g.L.map(x=>{const s=mine.get(x.i);
       return `<li data-mid="${esc(x.i)}"><span class="bm-t mu">${esc(hm(x.k||x.d))}</span><span class="bm-h">${nm(x.h)}</span>
        <span class="bm-sc">${inp('h',s?s.hs:null)}<i>–</i>${inp('a',s?s.as:null)}</span><span class="bm-a">${nm(x.a)}</span>
-       <span class="bm-st">${s?`<span class="bm-ok">✓ <span>Saved</span></span>`:`<span class="mu">${two('Not predicted','ما توقعت')}</span>`}</span></li>`}).join('')}</ul>`).join(''):`<div class="empty">${two(`No ${esc(D.name)} fixtures in the next ${BM_DAYS} days in the data. Choose another league at the top.`,`ما فيه مباريات لـ${nm(D.name)} في الـ${nb(BM_DAYS)} يوم الجاية في البيانات. اختر دوري ثاني من فوق.`)}</div>`}
+       <span class="bm-st">${s?`<span class="bm-ok">✓ <span>Prediction saved</span></span>`:`<span class="mu">${two('Not predicted','ما توقعت')}</span>`}</span></li>`}).join('')}</ul>`).join(''):`<div class="empty">${two(`No ${esc(D.name)} fixtures in the next ${BM_DAYS} days in the data. Choose another league at the top.`,`ما فيه مباريات لـ${nm(D.name)} في الـ${nb(BM_DAYS)} يوم الجاية في البيانات. اختر دوري ثاني من فوق.`)}</div>`}
      ${mm?'':`<p class="mu ins-note">${two('The model needs more matches with shot data in this league before it can pick: your predictions still count.','النموذج يحتاج مباريات أكثر ببيانات التسديد في هالدوري قبل ما يتوقع: توقعاتك تنحسب عادي.')}</p>`}</div>
     ${wait.length?`<div class="card"><h3>Waiting for the result</h3><ul class="bm-hist">${wait.map(x=>row(x)).join('')}</ul></div>`:''}
     <div class="card"><h3>Results</h3>${done.length?`<ul class="bm-hist">${done.slice().sort((a,b)=>b.k.localeCompare(a.k)).map(x=>row(x)).join('')}</ul>`:`<div class="empty">${two('Your scored predictions appear here after the final whistle.','توقعاتك المحسوبة تظهر هنا بعد صافرة النهاية.')}</div>`}
@@ -73,15 +76,16 @@
    const m=old&&old.m!==undefined?old.m:(()=>{const r=mm?mm(x.h,x.a):null;return r?pick(r.lh,r.la):null})();
    const rec={lid:D.id,ln:D.name,mid:x.i,h:x.h,a:x.a,k:new Date(Date.parse(x.k||x.d)).toISOString(),at:old?old.at:new Date().toISOString(),hs,as,m};
    if(i>=0)P_[i]=rec;else P_.push(rec);if(!write(P_)){li.querySelector('.bm-st').textContent='Not saved: storage blocked';return}
-   const st=li.querySelector('.bm-st');st.innerHTML=`<span class="bm-ok">✓ <span>Saved</span></span>`;
+   const st=li.querySelector('.bm-st');st.innerHTML=`<span class="bm-ok">✓ <span>Prediction saved</span></span>`;
   };
   const row=x=>{const started=Date.now()>=Date.parse(x.k),r=x.r,lab=v=>v==null?'':v===3?'bm-3':v===1?'bm-1':'bm-0';
-   return `<li><a href="#/match/${encodeURIComponent(x.mid)}"><span class="bm-hm"><span class="mu">${esc(new Date(x.k).toLocaleDateString(lc(),{day:'numeric',month:'short'}))}${x.lid!==D.id?' · '+esc(x.ln):''}</span> ${nm(x.h)} ${r?`<b>${nb(r.h+'–'+r.a)}</b>`:'<b>?</b>'} ${nm(x.a)}</span>
+   const tag=x.lid===D.id?`a href="#/match/${encodeURIComponent(x.mid)}"`:'div class="bm-row"',end=x.lid===D.id?'a':'div';
+   return `<li><${tag}><span class="bm-hm"><span class="mu">${esc(new Date(x.k).toLocaleDateString(lc(),{day:'numeric',month:'short'}))}${x.lid!==D.id?' · '+esc(x.ln):''}</span> ${nm(x.h)} ${r?`<b>${nb(r.h+'–'+r.a)}</b>`:'<b>?</b>'} ${nm(x.a)}</span>
     <span class="bm-p ${lab(r&&r.you)}"><span>You</span> ${nb(x.hs+'–'+x.as)}${r?` <b>${nb('+'+r.you)}</b>`:''}</span>
-    <span class="bm-p ${lab(r&&r.mod)}"><span>Model</span> ${x.m?(started?nb(x.m.hs+'–'+x.m.as):'🔒'):'–'}${r&&r.mod!=null?` <b>${nb('+'+r.mod)}</b>`:''}</span></a></li>`};
+    <span class="bm-p ${lab(r&&r.mod)}"><span>Model</span> ${x.m?(started?nb(x.m.hs+'–'+x.m.as):'🔒'):'–'}${r&&r.mod!=null?` <b>${nb('+'+r.mod)}</b>`:''}</span></${end}></li>`};
   paint();
  };
- INS.ar({"Beat the model":"تغلب على النموذج","You":"أنت","Model":"النموذج","Saved":"محفوظ","Upcoming":"الجاية","Waiting for the result":"ننتظر النتيجة","Results":"النتائج",
+ INS.ar({"Beat the model":"تغلب على النموذج","You":"أنت","Model":"النموذج","Prediction saved":"انحفظ التوقع","Upcoming":"الجاية","Waiting for the result":"ننتظر النتيجة","Results":"النتائج",
   "Delete all my predictions":"احذف كل توقعاتي","Home goals":"أهداف المستضيف","Away goals":"أهداف الضيف","Home goals minus one":"أهداف المستضيف ناقص واحد","Home goals plus one":"أهداف المستضيف زائد واحد",
   "Away goals minus one":"أهداف الضيف ناقص واحد","Away goals plus one":"أهداف الضيف زائد واحد","Not saved: storage blocked":"ما انحفظ: التخزين ممنوع"});
  if(typeof D==='object'&&D&&typeof route==='function')route();

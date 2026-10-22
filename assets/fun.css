@@ -149,7 +149,7 @@
 .bm-in input::-webkit-outer-spin-button,.bm-in input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 .bm-st{font-size:12px;text-align:end;white-space:nowrap}.bm-ok{color:var(--g)}
 .bm-hist{list-style:none;margin:0;padding:0}
-.bm-hist a{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:8px 4px;border-bottom:1px solid var(--ln);color:var(--tx);text-decoration:none;font-size:13px}
+.bm-hist a,.bm-hist .bm-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:8px 4px;border-bottom:1px solid var(--ln);color:var(--tx);text-decoration:none;font-size:13px}
 .bm-hist a:hover{background:rgba(255,255,255,.05)}
 .bm-hm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bm-p{white-space:nowrap;padding:2px 8px;border-radius:8px;background:rgba(255,255,255,.05);font-size:12.5px}
@@ -157,4 +157,4 @@
 @media (max-width:560px){.bm-fx li{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-areas:"t st" "h a" "sc sc";row-gap:8px}
  .bm-t{grid-area:t}.bm-st{grid-area:st}.bm-h{grid-area:h;text-align:start}.bm-sc{grid-area:sc;justify-content:center}.bm-a{grid-area:a;text-align:end}
  .bm-in button{width:26px}.bm-in input{width:2em}
- .bm-hist a{grid-template-columns:1fr 1fr;}.bm-hm{grid-column:1/-1}}
+ .bm-hist a,.bm-hist .bm-row{grid-template-columns:1fr 1fr;}.bm-hm{grid-column:1/-1}}

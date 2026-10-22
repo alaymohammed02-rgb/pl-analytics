@@ -14,7 +14,7 @@
  if(typeof R!=='object'||typeof INS!=='object')return;
  INS.addPage('sim','Season simulator','league','table');
  const N=10000,SEED=20261022,TOP=4,BOT=3,N0=3;
- const S={lock:{},team:'',lg:''};let RES=null,RUN=0;
+ const S={lock:{},team:'',lg:''};let RES=null,RUN=0,SIMRUN=0;
  const two=(en,ar)=>`<span class="fx-en">${en}</span><span class="fx-ar" dir="rtl">${ar}</span>`;
  const nb=x=>`<bdi dir="ltr">${x}</bdi>`,nm=x=>`<bdi>${esc(x)}</bdi>`;
  const pc=v=>v>=.995?'>99%':v>0&&v<.005?'<1%':Math.round(v*100)+'%';
@@ -78,9 +78,11 @@
   if(M.err){root.innerHTML=`<div class="empty">${M.err==='few'?two(`Too few matches with shot data in ${esc(D.name)} yet (${M.n}; 10 needed) for the model.`,`مباريات قليلة ببيانات التسديد في ${nm(D.name)} للحين (${nb(M.n)}؛ نحتاج ${nb(10)}) للنموذج.`):two('The results in the data do not form a home-and-away league, so the fixtures left cannot be worked out.','النتائج في البيانات ما تشكّل دوري ذهاب وإياب، فما نقدر نطلع المباريات الباقية.')}</div>`;return}
   if(!M.left.length){root.innerHTML=`<div class="empty">${two('Every match of the season has been played: the table is final.','كل مباريات الموسم انلعبت: الترتيب نهائي.')}</div>`;return}
   /* the next fixtures, to pick results for: PitchAPI's fixture list, only those still to play */
-  await (typeof fixLoad==='function'?fixLoad():null);
+  await (typeof fixLoad==='function'?fixLoad():null);if(!root.isConnected||D.id!==lg||run!==RUN)return;
   const left=new Set(M.left.map(x=>x.h+'|'+x.a));
   const next=((((typeof FIX==='object'&&FIX.d&&FIX.d.leagues)||{})[lg])||[]).filter(x=>left.has(x.h+'|'+x.a)&&Date.parse(x.k||x.d)>Date.now()).sort((a,b)=>String(a.k||a.d).localeCompare(String(b.k||b.d))).slice(0,10);
+  /* a pick whose fixture is no longer offered (kicked off, or played) is dropped, so no hidden pick stays in the simulations */
+  const offered=new Set(next.map(x=>x.h+'|'+x.a));Object.keys(S.lock).forEach(k=>{if(!offered.has(k))delete S.lock[k]});
   const key=()=>lg+'|'+M.played.length+'|'+JSON.stringify(S.lock);
   const paint=()=>{
    const nT=M.teams.length,lc=document.documentElement.lang==='ar'?'ar-u-ca-gregory-nu-latn':'en-GB';
@@ -97,9 +99,9 @@
    go();
   };
   const go=async()=>{
-   const out=root.querySelector('#smout'),k=key(),my=++RUN;
-   if(!RES||RES.k!==k){const r=await simulate(M,S.lock,s=>{if(my!==RUN||!out.isConnected)return false;out.innerHTML=`<div class="empty">${two(`Simulating… ${s.toLocaleString('en')} / ${N.toLocaleString('en')}`,`نحاكي… ${nb(s.toLocaleString('en')+' / '+N.toLocaleString('en'))}`)}</div>`});
-    if(!r||my!==RUN||!out.isConnected)return;RES={k,rows:r}}
+   const out=root.querySelector('#smout'),k=key(),my=++SIMRUN;
+   if(!RES||RES.k!==k){const r=await simulate(M,S.lock,s=>{if(my!==SIMRUN||!out.isConnected)return false;out.innerHTML=`<div class="empty">${two(`Simulating… ${s.toLocaleString('en')} / ${N.toLocaleString('en')}`,`نحاكي… ${nb(s.toLocaleString('en')+' / '+N.toLocaleString('en'))}`)}</div>`});
+    if(!r||my!==SIMRUN||!out.isConnected)return;RES={k,rows:r}}
    table(out,RES.rows,M);
   };
   paint();
