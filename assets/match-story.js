@@ -50,30 +50,31 @@
  }
  /* ---------- the words ---------- */
  const nm=x=>`<bdi>${esc(x)}</bdi>`,num=x=>`<bdi dir="ltr">${x}</bdi>`;
+ const xs=(a,b)=>num(`xG ${a}–${b}`);
  const ck=(r,ar)=>num(ar?r.clock.replace(/'/g,''):r.clock),sc=(a,b)=>num(`${a}–${b}`);
  function write(F,ar){
   const T=(en,a)=>ar?a:en,W=F.win,L=W==='h'?'a':'h',Wn=W&&nm(F.name(W)),Ln=W&&nm(F.name(L)),ws=W&&F.off[W==='h'?0:1],ls=W&&F.off[W==='h'?1:0];
   const by=(d,word)=>ar?(d===1?'بهدف':d===2?'بهدفين':`بـ${num(d)} أهداف`):(d===1?'a goal':`${d} goals`);
   const p1=[],p2=[],part=F.etGap||!F.goalsOk;   /* the shot file lacks part of the match: xG is told as it is, not judged */
-  const xgPart=()=>T(`xG in the shot data PitchAPI has: ${nm(F.H)} ${sc(x2(F.xg.h),x2(F.xg.a))} ${nm(F.A)}.`,`xG في بيانات التسديدات المتوفرة من PitchAPI: ${nm(F.H)} ${sc(x2(F.xg.h),x2(F.xg.a))} ${nm(F.A)}.`);
+  const xgPart=()=>T(`xG in the shot data PitchAPI has: ${nm(F.H)} ${sc(x2(F.xg.h),x2(F.xg.a))} ${nm(F.A)}.`,`xG في بيانات التسديدات المتوفرة من PitchAPI: ${nm(F.H)} ${num(x2(F.xg.h))} و${nm(F.A)} ${num(x2(F.xg.a))}.`);
   /* result, and how the chances compare */
   if(W){p1.push(T(`${Wn} beat ${Ln} ${sc(ws,ls)}.`,`فاز ${Wn} على ${Ln} ${sc(ws,ls)}.`));
    if(F.xg&&part)p1.push(xgPart());
    else if(F.xg){const xw=F.xg[W],xl=F.xg[L];
-    p1.push(xw-xl>=CLOSE?T(`The chances backed it up: xG ${sc(x2(xw),x2(xl))}.`,`والفرص تدعم النتيجة: xG ${sc(x2(xw),x2(xl))}.`)
-     :xl-xw>=CLOSE?T(`${Ln} had the better chances (xG ${sc(x2(xl),x2(xw))}), but ${Wn} made theirs count.`,`${Ln} صنع فرص أخطر (xG ${sc(x2(xl),x2(xw))})، لكن ${Wn} استغل فرصه.`)
-     :T(`The chances were close: xG ${sc(x2(xw),x2(xl))}.`,`الفرص كانت متقاربة: xG ${sc(x2(xw),x2(xl))}.`))}}
+    p1.push(xw-xl>=CLOSE?T(`The chances backed it up: ${xs(x2(xw),x2(xl))}.`,`والفرص تدعم النتيجة: ${xs(x2(xw),x2(xl))}.`)
+     :xl-xw>=CLOSE?T(`${Ln} had the better chances (${xs(x2(xl),x2(xw))}), but ${Wn} made theirs count.`,`${Ln} صنع فرص أخطر (${xs(x2(xl),x2(xw))})، لكن ${Wn} استغل فرصه.`)
+     :T(`The chances were close: ${xs(x2(xw),x2(xl))}.`,`الفرص كانت متقاربة: ${xs(x2(xw),x2(xl))}.`))}}
   else{p1.push(T(`${nm(F.H)} and ${nm(F.A)} drew ${sc(F.off[0],F.off[1])}.`,`تعادل ${nm(F.H)} و${nm(F.A)} ${sc(F.off[0],F.off[1])}.`));
    if(F.xg&&part)p1.push(xgPart());
    else if(F.xg){const d=F.xg.h-F.xg.a,b=d>=0?'h':'a',o=b==='h'?'a':'h';
-    p1.push(Math.abs(d)>=CLOSE?T(`${nm(F.name(b))} created more (xG ${sc(x2(F.xg[b]),x2(F.xg[o]))}).`,`${nm(F.name(b))} صنع فرص أكثر (xG ${sc(x2(F.xg[b]),x2(F.xg[o]))}).`)
-     :T(`The chances were close too: xG ${sc(x2(F.xg.h),x2(F.xg.a))}.`,`والفرص بعد كانت متقاربة: xG ${sc(x2(F.xg.h),x2(F.xg.a))}.`))}}
+    p1.push(Math.abs(d)>=CLOSE?T(`${nm(F.name(b))} created more (${xs(x2(F.xg[b]),x2(F.xg[o]))}).`,`${nm(F.name(b))} صنع فرص أكثر (${xs(x2(F.xg[b]),x2(F.xg[o]))}).`)
+     :T(`The chances were close too: ${xs(x2(F.xg.h),x2(F.xg.a))}.`,`والفرص بعد كانت متقاربة: ${xs(x2(F.xg.h),x2(F.xg.a))}.`))}}
   /* the goals */
   if(F.goalsOk&&F.first){const r=F.first,t=nm(F.name(r.side)),p=nm(r.pn||'');
    p1.push(r.og?T(`An own goal by ${p} put ${t} ahead (${ck(r)}).`,`هدف عكسي من ${p} قدّم ${t} (الدقيقة ${ck(r,1)}).`)
     :r.st==='Penalty'?T(`${p} opened the scoring for ${t} from the penalty spot (${ck(r)}).`,`${p} افتتح التسجيل لـ${t} من ركلة جزاء (الدقيقة ${ck(r,1)}).`)
     :T(`${p} opened the scoring for ${t} (${ck(r)}).`,`${p} افتتح التسجيل لـ${t} (الدقيقة ${ck(r,1)}).`));
-   if(F.ht.h!==F.off[0]||F.ht.a!==F.off[1])p1.push(T(`At half-time it was ${nm(F.H)} ${sc(F.ht.h,F.ht.a)} ${nm(F.A)}.`,`وبين الشوطين كانت ${nm(F.H)} ${sc(F.ht.h,F.ht.a)} ${nm(F.A)}.`));
+   if(F.ht.h!==F.off[0]||F.ht.a!==F.off[1])p1.push(T(`At half-time it was ${nm(F.H)} ${sc(F.ht.h,F.ht.a)} ${nm(F.A)}.`,`وبين الشوطين: ${nm(F.H)} ${num(F.ht.h)} و${nm(F.A)} ${num(F.ht.a)}.`));
    if(W&&F.def[W]>=1)p1.push(T(`${Wn} came from ${by(F.def[W])} down to win.`,`${Wn} قلب تأخره ${by(F.def[W])} إلى فوز.`));
    if(!W){const last=F.seq[F.seq.length-1],s=last.r.side;if(F.def[s]>=1)p1.push(T(`${nm(F.name(s))} came back from ${by(F.def[s])} down.`,`${nm(F.name(s))} عوّض تأخره ${by(F.def[s])}.`))}
    const d=F.decider;
@@ -84,9 +85,9 @@
   if(F.spell){const s=F.spell,t=nm(F.name(s.side)),fr=num(ar?s.from.replace(/'/g,''):s.from),to=num(ar?s.to.replace(/'/g,''):s.to),g=F.spellGoal;
    p2.push(T(`${t}'s strongest spell was ${fr}–${to}`,`أقوى فترات ${t} كانت ${fr}–${to}`)+(g?T(`, and it brought a goal (${nm(g.pn||'')}, ${ck(g)}).`,`، وجابت هدف (${nm(g.pn||'')}، الدقيقة ${ck(g,1)}).`):'.'))}
   if(F.swing){const s=F.swing,t=nm(F.name(s.s)),a=num(x2(s.x1)),b=num(x2(s.x2));
-   p2.push(s.d>0?T(`${t} grew after the break: xG ${a} in the first half, ${b} in the second.`,`${t} تحسّن بعد الاستراحة: xG ${a} في الشوط الأول و${b} في الثاني.`)
-    :T(`${t} faded after the break: xG ${a} in the first half, ${b} in the second.`,`${t} تراجع بعد الاستراحة: xG ${a} في الشوط الأول و${b} في الثاني.`))}
-  if(F.best){const r=F.best;p2.push(T(`The best chance not taken: ${nm(r.pn||'')} (${nm(F.name(r.own))}, ${ck(r)}), xG ${num(x2(r.xg))}.`,`أخطر فرصة ما دخلت: ${nm(r.pn||'')} (${nm(F.name(r.own))}، الدقيقة ${ck(r,1)})، xG ${num(x2(r.xg))}.`))}
+   p2.push(s.d>0?T(`${t} grew after the break: xG ${a} in the first half, ${b} in the second.`,`${t} تحسّن بعد الاستراحة: ${num('xG '+x2(s.x1))} في الشوط الأول و${b} في الثاني.`)
+    :T(`${t} faded after the break: xG ${a} in the first half, ${b} in the second.`,`${t} تراجع بعد الاستراحة: ${num('xG '+x2(s.x1))} في الشوط الأول و${b} في الثاني.`))}
+  if(F.best){const r=F.best;p2.push(T(`The best chance not taken: ${nm(r.pn||'')} (${nm(F.name(r.own))}, ${ck(r)}), ${num('xG '+x2(r.xg))}.`,`أخطر فرصة ما دخلت: ${nm(r.pn||'')} (${nm(F.name(r.own))}، الدقيقة ${ck(r,1)})، ${num('xG '+x2(r.xg))}.`))}
   if(F.missed)p2.push(T(`${nm(F.name(F.missed.s))} missed ${F.missed.n} big chances.`,`${nm(F.name(F.missed.s))} أضاع ${F.missed.n===2?'فرصتين كبيرتين':num(F.missed.n)+' فرص كبيرة'}.`));
   if(F.potm)p2.push(T(`${nm(F.potm.n)} was the highest-rated player (${num(F.potm.r.toFixed(1))}).`,`${nm(F.potm.n)} كان صاحب أعلى تقييم (${num(F.potm.r.toFixed(1))}).`));
   /* what the data cannot tell */
