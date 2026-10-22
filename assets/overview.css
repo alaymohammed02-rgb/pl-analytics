@@ -1,0 +1,32 @@
+/* ===== Overview for every league (assets/overview.js) ===== */
+.ov-lead{margin-top:-4px}
+.ovw .hsec{margin-bottom:22px}
+/* your teams */
+.ovt-l{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 10px}
+.ovt-c{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--th-bd,var(--ln));background:var(--th-soft,rgba(255,255,255,.04));border-radius:999px;padding:4px 6px 4px 10px;font-size:13px}
+.ovt-c a{color:var(--tx);font-weight:700;text-decoration:none}
+.ovt-c .mu{font-size:11.5px}
+.ovt-x{border:0;background:transparent;color:var(--mu);font-size:16px;line-height:1;cursor:pointer;padding:2px 6px;min-height:0}
+.ovt-x:hover,.ovt-x:focus-visible{color:var(--tx)}
+.ovt-add{flex-wrap:wrap}
+.mb-star{color:var(--th-hi)}
+/* the matches board: your teams' group and rows */
+.mb-g.mb-fav .mb-lh{background:var(--th-soft,rgba(255,255,255,.05))}
+.mb-g.mb-fav .mb-star{font-size:18px;width:22px;text-align:center}
+.mb-r.mine .mb-tm{font-weight:700}
+/* facts */
+.ovf-l{list-style:none;margin:8px 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(235px,1fr));gap:12px}
+.ovf-c{display:flex;flex-direction:column;gap:8px;background:var(--sf);border:1px solid var(--ln);border-radius:14px;padding:14px 14px 12px;min-width:0}
+.ovf-top{display:flex;align-items:center;gap:8px;font-size:12.5px;flex-wrap:wrap}
+.ovf-top img{width:20px;height:20px;object-fit:contain}
+.ovf-b{margin-inline-start:auto;font-size:12px;font-weight:800;color:var(--th-ink,#0d1520);background:var(--th-hi);border-radius:999px;padding:2px 9px;white-space:nowrap}
+.ovf-t{margin:0;font-size:15px;line-height:1.6;font-weight:600}
+.ovf-r{margin:0;font-size:12.5px;line-height:1.5}
+.ovf-go{font-size:13px;align-self:flex-start}
+.ovf-team{margin-top:10px}
+.ovf-team h3{margin:0 0 4px;display:flex;align-items:center;gap:6px}
+.ovf-team h3 a{color:var(--tx);text-decoration:none}
+.ovf bdi[dir=ltr]{white-space:nowrap}
+/* the facts are written in both languages; the page language shows one */
+html[lang=ar] .fx-en,html:not([lang=ar]) .fx-ar{display:none}
+@media(max-width:640px){.ovf-l{grid-template-columns:1fr}.ovf-t{font-size:14.5px}}
