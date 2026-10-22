@@ -65,7 +65,8 @@
  /* ---------- matchday strip ---------- */
  let TICK=null;
  async function mdStrip(home,c){
-  const fx=typeof fixLoad==='function'?await fixLoad().catch(()=>null):null;
+  if(window.MB_ON)return;           /* the all-leagues matches board (assets/matches-board.js) replaces this strip */
+  const [fx,lv0]=await Promise.all([typeof fixLoad==='function'?fixLoad().catch(()=>null):null,typeof liveLoad==='function'?liveLoad():null]);let LV=lv0;
   if(!document.body.contains(home))return;
   const now=Date.now(),L=((fx&&fx.leagues&&fx.leagues[D.id])||[]).filter(f=>f.k&&!isNaN(Date.parse(f.k))).map(f=>({...f,t:Date.parse(f.k)})).sort((a,b)=>a.t-b.t);
   const done=new Set((c.fin||[]).map(m=>m.home+'|'+m.away+'|'+String(m.date).slice(0,10)));
@@ -77,14 +78,23 @@
   const lastD=c.last,res=(c.round||(c.fin||[]).filter(m=>String(m.date).slice(0,10)===lastD)).slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))||a.home.localeCompare(b.home));
   if(!nxt.length&&!res.length)return;
   const fdate=t=>new Date(t).toLocaleDateString(lc(),{weekday:'short',day:'numeric',month:'short'}),ftime=t=>new Date(t).toLocaleTimeString(lc(),{hour:'2-digit',minute:'2-digit'});
-  const card=(h,a,mid,inner,cls)=>`<${mid?'a href="#/match/'+encodeURIComponent(mid)+'"':'div'} class="md-c${cls?' '+cls:''}"><span class="md-tm">${crest(h)}<span>${esc(h)}</span></span>${inner}<span class="md-tm">${crest(a)}<span>${esc(a)}</span></span></${mid?'a':'div'}>`;
+  const card=(h,a,href,inner,cls)=>`<${href?'a href="'+href+'"':'div'} class="md-c${cls?' '+cls:''}"><span class="md-tm">${crest(h)}<span>${esc(h)}</span></span>${inner}<span class="md-tm">${crest(a)}<span>${esc(a)}</span></span></${href?'a':'div'}>`;
+  /* an upcoming fixture: kick-off and countdown; once PitchAPI's data says it started, its score and minute; "XI" once the official lineups are out */
+  const upCard=f=>{const e=LV&&LV.m&&LV.m[String(f.i)],st=typeof lvState==='function'?lvState(e):'pre',xi=e&&e.lu?'<span class="md-xi" title="Official lineups are out">XI</span>':'';
+   const inner=st==='live'?`<span class="md-mid"><b class="md-sc">${e.sh??'–'} – ${e.sa??'–'}</b><span class="md-live">● <span>Live</span>${lvMinute(e)?' '+esc(lvMinute(e)):''}</span>${xi}</span>`
+    :st==='ft'?`<span class="md-mid"><b class="md-sc">${e.sh??''} – ${e.sa??''}</b><span class="mu">FT</span>${xi}</span>`
+    :`<span class="md-mid">${multi?`<span class="md-day">${esc(new Date(f.t).toLocaleDateString(lc(),{weekday:'short',day:'numeric'}))}</span>`:''}<b>${esc(ftime(f.t))}</b><span class="md-cd" data-t="${f.t}"></span>${xi}</span>`;
+   return card(f.h,f.a,'#/preview/'+encodeURIComponent(f.i),inner,'up'+(st==='live'?' live':''))};
   const sec=document.createElement('section');sec.className='hsec md';sec.id='mds';
   sec.innerHTML=(nxt.length?`<div class="hhd"><h2>${tod.length?'Today':'Next matchday'}</h2><span class="mu nw">${esc(D.name)} · ${esc(fdate(tod.length?now:nxt[0].t))}${tod.length?'':` · <span>kick-off in</span> <b class="md-cd" data-t="${nxt[0].t}"></b>`}</span></div>
-   <div class="md-row">${nxt.map(f=>card(f.h,f.a,null,`<span class="md-mid">${multi?`<span class="md-day">${esc(new Date(f.t).toLocaleDateString(lc(),{weekday:'short',day:'numeric'}))}</span>`:''}<b>${esc(ftime(f.t))}</b><span class="md-cd" data-t="${f.t}"></span></span>`,'up')).join('')}</div>`:'')+
+   <div class="md-row md-up">${nxt.map(upCard).join('')}</div>`:'')+
    (res.length?`<div class="hhd md-rh"><h2>Latest results</h2><span class="mu nw">${res.length>1&&c.from&&c.from!==lastD?esc(fdate(Date.parse(c.from+'T12:00:00Z')))+' – ':''}${esc(fdate(Date.parse(lastD+'T12:00:00Z')))}</span></div>
-   <div class="md-row">${res.map(m=>{const s=wkSc(m.score);return card(m.home,m.away,m.match_id,`<span class="md-mid"><b class="md-sc">${s?s[0]+' – '+s[1]:esc(m.score)}</b><span class="mu">FT</span></span>`)}).join('')}</div>`:'');
+   <div class="md-row">${res.map(m=>{const s=wkSc(m.score);return card(m.home,m.away,'#/match/'+encodeURIComponent(m.match_id),`<span class="md-mid"><b class="md-sc">${s?s[0]+' – '+s[1]:esc(m.score)}</b><span class="mu">FT</span></span>`)}).join('')}</div>`:'');
   const hero=home.firstElementChild;home.insertBefore(sec,hero);
-  tick();if(TICK)clearInterval(TICK);TICK=setInterval(()=>{if(!document.body.contains(sec)){clearInterval(TICK);TICK=null;return}tick()},1000);
+  tick();if(TICK)clearInterval(TICK);let n=0;
+  TICK=setInterval(async()=>{if(!document.body.contains(sec)){clearInterval(TICK);TICK=null;return}tick();
+   /* once a minute, while a fixture is within 2 hours of kick-off or under way: re-read data/live.json */
+   if(++n%60===0&&nxt.some(f=>Math.abs(f.t-Date.now())<3*36e5)){const l=await liveLoad();if(l&&document.body.contains(sec)){LV=l;const row=sec.querySelector('.md-up');if(row){row.innerHTML=nxt.map(upCard).join('');tick()}}}},1000);
   /* the countdown is written in the page language here: the translator skips text like "3d 4h" (no two letters in a row) */
   function tick(){const n=Date.now(),ar=typeof ARL==='object'&&ARL.on,u=ar?['ي','س','د']:['d','h','m'];sec.querySelectorAll('.md-cd').forEach(e=>{const d=+e.dataset.t-n;let s;
    if(d<=0)s=e.closest('.md-c')?(ar?'انطلقت':'Kicked off'):(ar?'الحين':'now');
@@ -94,7 +104,7 @@
  if(typeof AR==='object')Object.entries({
   "Player of the round":"لاعب الجولة","Key passes":"تمريرات مفتاحية","Highest PitchAPI rating in the round":"أعلى تقييم PitchAPI في الجولة",
   "# of # matches rated":"# من # مباريات فيها تقييم","minutes":"دقيقة","min":"د",
-  "Today":"اليوم","Next matchday":"الجولة القادمة","kick-off in":"تنطلق بعد","Latest results":"آخر النتائج","FT":"نهاية المباراة","Kicked off":"انطلقت","now":"الحين"
+  "Today":"اليوم","Next matchday":"الجولة القادمة","kick-off in":"تنطلق بعد","Latest results":"آخر النتائج","FT":"نهاية المباراة","Kicked off":"انطلقت","now":"الحين","Live":"مباشر","Official lineups are out":"نزلت التشكيلات الرسمية"
  }).forEach(([k,v])=>{if(!(k in AR))AR[k]=v});
  /* the home may have been drawn before this file arrived (the scripts load while the data is fetched): add the extras to it */
  (function late(k){const home=document.getElementById('home');if(!home||home.dataset.hx)return;

@@ -132,6 +132,13 @@
   return `<div class="card mc-lu"><h3>Lineups</h3><div class="mc-pw">${svg(false)}${svg(true)}</div><div class="mc-sides">${side('h')}${side('a')}</div>
    <p class="mu mc-note"><span>Positions as PitchAPI places the starting XI.</span>${C.rt?' <span>Coloured chips are PitchAPI match ratings (0–10).</span>':''} <span>Substitutes without a rating did not come on or were not rated.</span></p></div>`;
  }
+ /* the lineup block for any two sides (the match preview uses it for the official lineups before kick-off) */
+ window.mcLineupBlock=function(home,away,lu,link){
+  const C={home,away,lu,rt:null,mo:null,link:link||new Map(),pl:[],m:{}};
+  ['h','a'].forEach(s=>{const L=lu&&lu[s];if(!L)return;(L.xi||[]).forEach(p=>C.pl.push({id:p[0],n:p[1],no:p[2],side:s,xi:1,x:p[4],y:p[5],cap:p[6],r:null}));
+   (L.sb||[]).forEach(p=>C.pl.push({id:p[0],n:p[1],no:p[2],side:s,xi:0,r:null}))});
+  return mcLineups(C).replace('<h3>Lineups</h3>','<h3>Official lineups</h3>').replace(' <span>Substitutes without a rating did not come on or were not rated.</span>','');
+ };
  /* ---------- ratings ---------- */
  function mcRatings(C){
   if(!C.rt)return C.lu||C.mo?`<div class="card mc-rts"><h3>Player ratings</h3><div class="empty">No PitchAPI ratings for this match yet.</div></div>`:'';
