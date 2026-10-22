@@ -41,7 +41,9 @@
   const heat=new Map(H.rows.filter(r=>r.t==='p').map(r=>[r.m+'|'+r.k,r]));
   Object.entries(X.m).forEach(([mid,e])=>{const m=date.get(mid),lu=e&&e.lu;if(!m||!lu)return;
    ['h','a'].forEach(sd=>{const L=lu[sd];if(!L||!L.xi)return;const xs=L.xi.filter(isCB).map(p=>{const r=heat.get(mid+'|'+p[0]);return r?avgX(r.h):null}).filter(v=>v!=null);
-    if(xs.length)out.set(mid+'|'+(sd==='h'?m.home:m.away),{v:xs.reduce((a,b)=>a+b,0)/xs.length,n:xs.length})})});
+    /* every outfield starter (not the goalkeeper, slot 11): the team's average position, when at least 9 of the 10 have data */
+    const os=L.xi.filter(p=>p[3]!==11).map(p=>{const r=heat.get(mid+'|'+p[0]);return r?avgX(r.h):null}).filter(v=>v!=null);
+    if(xs.length)out.set(mid+'|'+(sd==='h'?m.home:m.away),{v:xs.reduce((a,b)=>a+b,0)/xs.length,n:xs.length,o:os.length>=9?os.reduce((a,b)=>a+b,0)/os.length:null})})});
   return out;
  }
  async function data(withH=true){
@@ -50,7 +52,7 @@
   const by=new Map();
   ((A&&A.team)||[]).forEach(r=>{const k=r.m+'|'+r.n;const o=by.get(k)||{m:r.m,n:r.n};o.pp=r.pp;o.op=r.op;o.da=r.da;by.set(k,o)});
   ((P&&P.team)||[]).forEach(r=>{const k=r.m+'|'+r.n;const o=by.get(k)||{m:r.m,n:r.n};o.adx=r.adx;o.tilt=r.tilt;by.set(k,o)});
-  if(withH)(await cbOf(date)).forEach((c,k)=>{const [m,...n]=k.split('|');const o=by.get(k)||{m,n:n.join('|')};o.cb=c.v;o.cbn=c.n;by.set(k,o)});
+  if(withH)(await cbOf(date)).forEach((c,k)=>{const [m,...n]=k.split('|');const o=by.get(k)||{m,n:n.join('|')};o.cb=c.v;o.cbn=c.n;o.ox=c.o;by.set(k,o)});
   const rows=[...by.values()].filter(r=>date.has(r.m)).map(r=>{const m=date.get(r.m);return {...r,d:String(m.date||'').slice(0,10),match:m,opp:m.home===r.n?m.away:m.home,home:m.home===r.n}});
   const pair=new Map(rows.map(r=>[r.m+'|'+r.n,r]));
   rows.forEach(r=>{const o=pair.get(r.m+'|'+r.opp);r.o_pp=o?o.pp:null;r.o_op=o?o.op:null;r.o_da=o?o.da:null;r.o_adx=o?o.adx:null;r.o_cb=o?o.cb:null});

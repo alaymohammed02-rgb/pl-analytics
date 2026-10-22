@@ -9,8 +9,8 @@
      defender is often outside the camera's view, so the deepest visible one overstates the line (by about 6 m in those 20 matches).
      A model trained on SkillCorner frames (what the camera shows → where the deepest outfield player really is) corrects that:
      tested on matches it had not seen, a team's match average is off by 0.31 m on average (1.06 m at most).
-   Current season of the selected league (first choice): an ESTIMATE, not a measurement. line = a + b·CB + c·tilt per measure, fitted on the
-   834 team-matches above (CB = the starting centre-backs' average position from PitchAPI's heat maps, tilt = field tilt); data/dlh.json
+   Current season of the selected league (first choice): an ESTIMATE, not a measurement. line = a + b·CB (+ c·ALL) + d·tilt per measure, fitted on the
+   833 team-matches above (CB = the starting centre-backs' average position, ALL = the starting outfield players' average position, both from PitchAPI's heat maps, tilt = field tilt); data/dlh.json
    holds the coefficients and the leave-one-competition-out errors, which the page prints next to the numbers.
    With the ball / without it: the team in possession at that event. Together: the mean of the two (as asked), shown with both. */
 (function(){
@@ -32,8 +32,9 @@
   let v=null;
   try{
    const rows=(await INS.phRows(true)).filter(r=>r.cb!=null&&isFinite(r.cb)&&r.tilt!=null&&isFinite(r.tilt)),K=X.est.coef;
-   const at=(k,r)=>K[k][0]+K[k][1]*r.cb+K[k][2]*r.tilt,T=new Map(),Mt=new Map();
-   rows.forEach(r=>{const o={in:at('in',r),out:at('out',r)};
+   /* a measure's terms (cb, out, tilt) are looked up on the row; a term the row lacks makes the match unusable for that measure */
+   const at=(k,r)=>{const c=K[k];let v=c.b[0];for(let i=0;i<c.t.length;i++){const x=r[c.t[i]==='out'?'ox':c.t[i]];if(x==null||!isFinite(x))return null;v+=c.b[i+1]*x}return v},T=new Map(),Mt=new Map();
+   rows.forEach(r=>{const o={in:at('in',r),out:at('out',r)};if(o.in==null||o.out==null)return;
     const t=T.get(r.n)||{n:r.n,m:0,i:0,o:0};t.m++;t.i+=o.in;t.o+=o.out;T.set(r.n,t);
     const m=Mt.get(r.m)||{d:r.d,h:r.match.home,a:r.match.away,sc:String(r.match.score||''),t:{}};m.t[r.n]=o;Mt.set(r.m,m)});
    const teams=[...T.values()].filter(t=>t.m>=3).map(t=>({n:t.n,m:t.m,in:t.i/t.m,out:t.o/t.m}));
@@ -76,13 +77,16 @@
  /* how the estimate is made, how well it did on data with a known answer, and what is not proven */
  function estCard(X,m){
   const E=X.est,V=E.val[m],K=E.coef[m],fx=n=>(+n).toFixed(2),nm2={avg:['both together','الاثنين مع بعض'],in:['with the ball','مع الكرة'],out:['without the ball','بدون الكرة']}[m];
+  const TN={cb:['CB','CB'],out:['ALL','الكل'],tilt:['tilt','الميل']};
+  const fe=`${fx(K.b[0])}${K.t.map((t,i)=>` + ${fx(K.b[i+1])} × ${TN[t][0]}`).join('')}`,fa=`${nb(fx(K.b[0]))}${K.t.map((t,i)=>` + ${nb(fx(K.b[i+1]))} × ${TN[t][1]}`).join('')}`;
+  const usesPos=K.t.some(t=>t==='cb'||t==='out'),sh=Math.abs(V.shift1);
   return `<div class="card dl-est"><h3>${two('An estimate, not a measurement','تقدير مو قياس')}</h3>
-   <p>${two(`No free source measures the line in the current season, so this is a formula fitted on the ${E.n} team-matches of the ${E.comps} past competitions, where the line is known. ${nm2[0][0].toUpperCase()+nm2[0].slice(1)}: <b dir="ltr">line = ${fx(K[0])} + ${fx(K[1])} × CB + ${fx(K[2])} × tilt</b>, where <b>CB</b> is the starting centre-backs' average position (m from their goal, from PitchAPI's heat maps) and <b>tilt</b> is the field tilt (%).`,
-    `ما فيه مصدر مجاني يقيس الخط في الموسم الحالي، فهذي معادلة مبنية على ${nb(E.n)} فريق-مباراة من ${nb(E.comps)} بطولة سابقة نعرف فيها الخط. ${nm2[1]}: <b dir="rtl">الخط = ${nb(fx(K[0]))} + ${nb(fx(K[1]))} × CB + ${nb(fx(K[2]))} × الميل</b>، حيث <b>CB</b> متوسط مكان قلبي الدفاع الأساسيين (بالمتر من مرماهم، من خرائط PitchAPI) و<b>الميل</b> هو ميل الملعب Field Tilt (%).`)}</p>
-   <p>${two(`Tested by hiding one competition at a time, a team's season average is off by <b>${V.season_mae} m</b> on average (${V.season_max} m at most) — against ${V.base_mae} m if the same value is guessed for every team. A single match is off by ${V.match_mae} m.`,
-    `باختبار تخبّي فيه بطولة وحدة كل مرة، متوسط الفريق في الموسم يخطئ بـ<b>${nb(V.season_mae+' م')}</b> بالمتوسط (أقصى ${nb(V.season_max+' م')}) — مقابل ${nb(V.base_mae+' م')} لو خمّنا نفس القيمة لكل الفرق. والمباراة الوحدة تخطئ بـ${nb(V.match_mae+' م')}.`)}</p>
-   <p class="mu">${two(`Not proven: it was not tested inside one club league (too few club teams have enough matches in the open data), and PitchAPI's centre-back position is assumed to be measured like StatsBomb's (the levels are close: about 37–38 m in the site's leagues, 35–40 m in StatsBomb's club competitions). Use it to compare teams, not as an exact value.`,
-    `غير مثبت: ما انختبرت داخل دوري أندية واحد (فرق الأندية في البيانات المفتوحة ما عندها مباريات كافية)، ونفترض إن مكان قلبي الدفاع في PitchAPI يقاس مثل StatsBomb (المستويات قريبة: حوالي ${nb('37')} إلى ${nb('38')} م في دوريات الموقع، ومن ${nb('35')} إلى ${nb('40')} م في بطولات الأندية عند StatsBomb). استخدمه للمقارنة بين الفرق، مو كقيمة دقيقة.`)}</p></div>`;
+   <p>${two(`No free source measures the line in the current season, so this is a formula fitted on the ${E.n} team-matches of the ${E.comps} past competitions, where the line is known. ${nm2[0][0].toUpperCase()+nm2[0].slice(1)}: <b dir="ltr">line = ${fe}</b>. <b>CB</b> = the starting centre-backs' average position, <b>ALL</b> = the average position of the starting outfield players (both in m from their own goal, from PitchAPI's heat maps), <b>tilt</b> = field tilt (%).`,
+    `ما فيه مصدر مجاني يقيس الخط في الموسم الحالي، فهذي معادلة مبنية على ${nb(E.n)} فريق-مباراة من ${nb(E.comps)} بطولة سابقة نعرف فيها الخط. ${nm2[1]}: <b dir="rtl">الخط = ${fa}</b>. <b>CB</b> = متوسط مكان قلبي الدفاع الأساسيين، <b>الكل</b> = متوسط مكان لاعبي الميدان الأساسيين (الاثنين بالمتر من مرماهم، من خرائط PitchAPI)، <b>الميل</b> = ميل الملعب Field Tilt (%).`)}</p>
+   <p>${two(`Tested by hiding one competition at a time, a team's season average is off by <b>${V.season_mae} m</b> on average (${V.season_max} m at most) — against ${V.base_mae} m if the same value is guessed for every team. A single match is off by ${V.match_mae} m. The estimates are not squeezed or stretched (held-out slope ${V.slope}), and a whole competition can sit up to about ${V.bias_max} m too high or too low.`,
+    `باختبار تخبّي فيه بطولة وحدة كل مرة، متوسط الفريق في الموسم يخطئ بـ<b>${nb(V.season_mae+' م')}</b> بالمتوسط (أقصى ${nb(V.season_max+' م')}) — مقابل ${nb(V.base_mae+' م')} لو خمّنا نفس القيمة لكل الفرق. والمباراة الوحدة تخطئ بـ${nb(V.match_mae+' م')}. التقدير ما هو مضغوط ولا ممدود (الميل ${nb(V.slope)})، وبطولة كاملة ممكن تكون أعلى أو أدنى بحوالي ${nb(V.bias_max+' م')}.`)}</p>
+   <p class="mu">${two(`Not proven: it was not tested inside one club league (too few club teams have enough matches in the open data), and PitchAPI's positions are assumed to be measured like StatsBomb's (the levels are close: about 37 to 38 m for centre-backs in the site's leagues, 35 to 40 m in StatsBomb's club competitions). ${usesPos?`If PitchAPI measured every position 1 m differently, all the numbers would move by ${sh.toFixed(2)} m together and the order of teams would hardly change.`:`This measure hardly depends on the positions (1 m of difference moves it by ${sh.toFixed(2)} m).`} Use it to compare teams, not as an exact value.`,
+    `غير مثبت: ما انختبرت داخل دوري أندية واحد (فرق الأندية في البيانات المفتوحة ما عندها مباريات كافية)، ونفترض إن مواقع PitchAPI تقاس مثل StatsBomb (المستويات قريبة: حوالي ${nb('37')} إلى ${nb('38')} م لقلبي الدفاع في دوريات الموقع، ومن ${nb('35')} إلى ${nb('40')} م في بطولات الأندية عند StatsBomb). ${usesPos?`لو PitchAPI يقيس كل المواقع بفرق متر، كل الأرقام تتحرك مع بعض بـ${nb(sh.toFixed(2)+' م')} وترتيب الفرق ما يتغير تقريبًا.`:`هذا المقياس ما يعتمد تقريبًا على المواقع (فرق متر يحركه ${nb(sh.toFixed(2)+' م')}).`} استخدمه للمقارنة بين الفرق، مو كقيمة دقيقة.`)}</p></div>`;
  }
  /* the teams on a pitch: a line at each team's height (own goal at the bottom) */
  function pitch(T){
