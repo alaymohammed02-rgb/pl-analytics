@@ -234,3 +234,9 @@ html.dr-open #drw{transform:none}
 .as-flag{display:inline-block;min-width:16px;text-align:center;border-radius:50%;background:var(--r);color:#fff;font-size:11px;font-weight:800}
 @media (max-width:560px){.as-own,.as-nxh{display:none}.as-t th,.as-t td{padding:6px 4px;font-size:12px}.as-tn bdi{display:inline-block;max-width:6.5rem;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}
  .as-l{font-size:13px}.as-q{font-size:14px}}
+/* Charts: first tap shows, second tap opens (assets/tap-twice.js) */
+#tapbub{position:fixed;z-index:90;pointer-events:none;max-width:260px;padding:7px 10px;border-radius:10px;background:var(--sf);border:1px solid var(--th-bd,var(--ln));box-shadow:0 8px 24px rgba(0,0,0,.35);font-size:12px;color:var(--tx);left:0;top:0}
+#tapbub[hidden]{display:none}
+#instip .tap-hint,#tapbub .tap-hint{margin-top:5px;padding-top:5px;border-top:1px solid var(--ln);color:var(--gold)!important;font-weight:700}
+svg .tap-armed circle,svg .tap-armed image,svg .tap-armed rect{stroke:#fff;stroke-width:3}
+.tap-armed:not(svg *){outline:2px solid var(--gold);outline-offset:2px;border-radius:6px}
