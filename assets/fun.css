@@ -1,0 +1,30 @@
+/* ===== Season simulator, Player twins, Player cards, Beat the model, Luck table (assets/season-sim.js and the others) ===== */
+.sm .card,.tw .card,.pc .card,.bm .card,.lk .card{margin-bottom:14px}
+.sm-intro p{margin:6px 0;line-height:1.6}
+.sm-h{font-size:12.5px;margin:0 0 8px}
+.sm-fx{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px}
+.sm-f{border:1px solid var(--ln);border-radius:10px;padding:6px 8px}
+.sm-fd{font-size:11.5px;margin-bottom:4px}
+.sm-fb{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:4px}
+.sm-fb button{display:flex;flex-direction:column;align-items:center;gap:1px;padding:6px 4px;min-height:44px;font-size:12px;line-height:1.2;border-radius:8px;background:rgba(255,255,255,.05);color:var(--tx);border:1px solid transparent;cursor:pointer;overflow:hidden}
+.sm-fb button bdi,.sm-fb button span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sm-fb button small{color:var(--mu);font-size:11px}
+.sm-fb button.on{border-color:var(--th-hi);background:rgba(255,255,255,.12)}
+.sm-fb button.on small{color:var(--tx)}
+.sm-t{width:100%}
+.sm-t tr[data-t]{cursor:pointer}
+.sm-t tr.me td{background:rgba(255,255,255,.07)}
+.sm-t tr[data-t]:focus-visible{outline:2px solid var(--th-hi);outline-offset:-2px}
+.sm-lg{vertical-align:-3px;margin-inline-end:6px}
+.sm-rg{font-size:11px;white-space:nowrap}
+.sm-pc{min-width:150px}
+.sm-st{display:grid;grid-template-columns:repeat(var(--n),1fr);gap:1px;height:14px;direction:ltr}
+.sm-st i{display:block;border-radius:2px;background:var(--th-hi)}
+.sm-b{fill:var(--th-hi);opacity:.55}.sm-b.on{opacity:1}
+.sm-me h3 img{vertical-align:-4px}
+.sm-narrow{display:none}
+.sm-me .ph-svg{max-width:760px}
+@media (max-width:560px){.sm-pc,.sm-now,.sm-wide{display:none}.sm-narrow{display:inline}.sm-rg{display:block}
+ .sm-t th,.sm-t td{padding:6px 5px;font-size:12.5px}
+ .sm-tn{white-space:nowrap}
+ .sm-tn bdi{display:inline-block;max-width:6rem;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}}

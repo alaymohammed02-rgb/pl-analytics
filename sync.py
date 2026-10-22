@@ -8984,10 +8984,11 @@ INDEX = _x_fpx_index(INDEX)
 # الكود في ملفات مستقلة في المستودع: assets/*.js و assets/features.css و manifest.webmanifest و sw.js و assets/icons/.
 # هذا القسم يضيف روابطها للصفحة فقط (بعد السكربت الرئيسي، فتلقى R و PAGES جاهزة). غيّر FEATURES_V لما تتغير الملفات.
 # ============================================================================
-FEATURES_V = "13"
+FEATURES_V = "14"
 FEATURES_JS = ("pla-data", "share-card", "threat-map", "match-whatif", "player-page", "match-centre", "home-extra", "team-round",
                "preview", "club-extra", "rankings-extra", "fantasy-extra", "insights-core", "hidden-gems", "player-dna", "team-dna",
-               "reality-check", "matches-board", "match-replay", "match-story", "overview", "press-height")
+               "reality-check", "matches-board", "match-replay", "match-story", "overview", "press-height",
+               "season-sim")
 
 
 def _x_feat_index(html):
@@ -9015,7 +9016,7 @@ def _x_feat_index(html):
     js = "".join(f'<script src="assets/{n}.js?v={v}"></script>' for n in FEATURES_JS)
     sw = ("<script>if('serviceWorker' in navigator&&location.protocol==='https:')addEventListener('load',()=>"
           "navigator.serviceWorker.register('sw.js').catch(()=>null))</script>")
-    return html.replace(old, f'</script><link rel="stylesheet" href="assets/features.css?v={v}"><link rel="stylesheet" href="assets/insights.css?v={v}"><link rel="stylesheet" href="assets/replay.css?v={v}"><link rel="stylesheet" href="assets/overview.css?v={v}"><link rel="stylesheet" href="assets/press-height.css?v={v}">{js}{sw}</body></html>')
+    return html.replace(old, f'</script><link rel="stylesheet" href="assets/features.css?v={v}"><link rel="stylesheet" href="assets/insights.css?v={v}"><link rel="stylesheet" href="assets/replay.css?v={v}"><link rel="stylesheet" href="assets/overview.css?v={v}"><link rel="stylesheet" href="assets/press-height.css?v={v}"><link rel="stylesheet" href="assets/fun.css?v={v}">{js}{sw}</body></html>')
 
 
 INDEX = _x_feat_index(INDEX)
