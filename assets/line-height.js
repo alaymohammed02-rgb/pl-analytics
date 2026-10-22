@@ -9,6 +9,9 @@
      defender is often outside the camera's view, so the deepest visible one overstates the line (by about 6 m in those 20 matches).
      A model trained on SkillCorner frames (what the camera shows → where the deepest outfield player really is) corrects that:
      tested on matches it had not seen, a team's match average is off by 0.31 m on average (1.06 m at most).
+   Current season of the selected league (first choice): an ESTIMATE, not a measurement. line = a + b·CB (+ c·ALL) + d·tilt per measure, fitted on the
+   833 team-matches above (CB = the starting centre-backs' average position, ALL = the starting outfield players' average position, both from PitchAPI's heat maps, tilt = field tilt); data/dlh.json
+   holds the coefficients and the leave-one-competition-out errors, which the page prints next to the numbers.
    With the ball / without it: the team in possession at that event. Together: the mean of the two (as asked), shown with both. */
 (function(){
  if(typeof R!=='object'||typeof INS!=='object')return;
@@ -16,27 +19,50 @@
  const two=(en,ar)=>`<span class="fx-en">${en}</span><span class="fx-ar" dir="rtl">${ar}</span>`;
  const nb=x=>`<bdi dir="ltr">${x}</bdi>`,nm=x=>`<bdi>${esc(x)}</bdi>`;
  const f1=v=>v==null?'–':(+v).toFixed(1);
+ const lbl={get cur(){return document.documentElement.lang==='ar'?'الموسم الحالي (تقدير)':'current season (estimate)'}};
  const M={avg:['Both together','الاثنين مع بعض'],in:['With the ball','مع الكرة'],out:['Without the ball','بدون الكرة']};
  const load=()=>{if(!DP)DP=fetch('data/dlh.json?v='+encodeURIComponent((typeof ALL==='object'&&ALL&&ALL.generated)||'')).then(r=>r.ok?r.json():null).catch(()=>null);return DP};
  const val=(t,m)=>m==='avg'?(t.in!=null&&t.out!=null?(t.in+t.out)/2:null):t[m];
+ /* The current season of the selected league: an estimate from a formula (a + b·centre-backs' average position + c·field tilt, fitted
+    on the past competitions below), per match and per team. Needs the league's PitchAPI files; null when it has none. */
+ let EST=null;
+ async function estimate(X){
+  const lg=D&&D.id;if(!X.est||typeof INS.phRows!=='function')return null;
+  if(EST&&EST.id===lg)return EST.v;
+  let v=null;
+  try{
+   const rows=(await INS.phRows(true)).filter(r=>r.cb!=null&&isFinite(r.cb)&&r.tilt!=null&&isFinite(r.tilt)),K=X.est.coef;
+   /* a measure's terms (cb, out, tilt) are looked up on the row; a term the row lacks makes the match unusable for that measure */
+   const at=(k,r)=>{const c=K[k];let v=c.b[0];for(let i=0;i<c.t.length;i++){const x=r[c.t[i]==='out'?'ox':c.t[i]];if(x==null||!isFinite(x))return null;v+=c.b[i+1]*x}return v},T=new Map(),Mt=new Map();
+   rows.forEach(r=>{const o={in:at('in',r),out:at('out',r)};if(o.in==null||o.out==null)return;
+    const t=T.get(r.n)||{n:r.n,m:0,i:0,o:0};t.m++;t.i+=o.in;t.o+=o.out;T.set(r.n,t);
+    const m=Mt.get(r.m)||{d:r.d,h:r.match.home,a:r.match.away,sc:String(r.match.score||''),t:{}};m.t[r.n]=o;Mt.set(r.m,m)});
+   const teams=[...T.values()].filter(t=>t.m>=3).map(t=>({n:t.n,m:t.m,in:t.i/t.m,out:t.o/t.m}));
+   if(teams.length>=4)v={k:'cur',cur:true,c:(typeof lgMeta==='function'&&lgMeta().name)||'Current league',s:'',g:'male',n:Mt.size,teams,matches:[...Mt.values()]};
+  }catch(e){v=null}
+  if(D&&D.id===lg)EST={id:lg,v};
+  return v;
+ }
  R.height=async function(el){
   el.innerHTML='<h2>Defensive line height</h2><div id="dlroot" class="ins dl"><div class="empty skel">Loading…</div></div>';
-  const root=el.querySelector('#dlroot'),X=await load();if(!root.isConnected)return;
+  const root=el.querySelector('#dlroot'),lg0=D&&D.id,X0=await load(),CUR=X0?await estimate(X0):null;if(!root.isConnected||(D&&D.id!==lg0))return;
+  const X=X0&&CUR?{...X0,comps:[CUR,...X0.comps]}:X0;
   if(!X||!X.comps||!X.comps.length){root.innerHTML='<div class="empty">The defensive line data is not available.</div>';return}
-  if(!S.c||!X.comps.some(c=>c.k===S.c))S.c=(X.comps.find(c=>/Bundesliga/.test(c.c))||X.comps[0]).k;
+  if(!S.c||!X.comps.some(c=>c.k===S.c))S.c=CUR?'cur':(X.comps.find(c=>/Bundesliga/.test(c.c))||X.comps[0]).k;
   const draw=()=>{
    const C=X.comps.find(c=>c.k===S.c),T=C.teams.filter(t=>val(t,S.m)!=null).sort((a,b)=>val(b,S.m)-val(a,S.m));
    if(!S.team||!T.some(t=>t.n===S.team))S.team=(T.slice().sort((a,b)=>b.m-a.m)[0]||{}).n;
    const me=C.teams.find(t=>t.n===S.team);
    root.innerHTML=`<div class="card dl-intro"><p>${two(`<b>How high does a team defend?</b> The distance between its own goal line and its deepest outfield player, in metres (pitch 105 m), measured <b>with the ball</b>, <b>without it</b>, and the two together.`,`<b>كم يدافع الفريق عاليًا؟</b> المسافة بين خط مرماه وآخر لاعب ميدان عنده، بالمتر (الملعب 105 م)، <b>مع الكرة</b> و<b>بدون الكرة</b> والاثنين مع بعض.`)}</p>
-     <p class="mu">${two(`From free open data of past competitions (StatsBomb 360). Free line data for the current season does not exist, so the site's leagues are not here.`,`من بيانات مفتوحة مجانية لبطولات سابقة (StatsBomb 360). ما فيه بيانات خط دفاع مجانية للموسم الحالي، فدوريات الموقع مو هنا.`)}</p></div>
-    <div class="card ctl dl-ctl"><select id="dlc" aria-label="Competition">${X.comps.map(c=>`<option value="${esc(c.k)}"${c.k===S.c?' selected':''}>${esc(c.c)} ${esc(c.s)}${c.g==='female'?' (W)':''}</option>`).join('')}</select>
+     <p class="mu">${CUR?two(`The first choice is this league's current season: an <b>estimate</b>, since no free source measures it. The other choices are <b>measured</b>, from free open data of past competitions (StatsBomb 360).`,`أول خيار هو الموسم الحالي لهذا الدوري: <b>تقدير</b>، لأن ما فيه مصدر مجاني يقيسه. باقي الخيارات <b>مقاسة</b> من بيانات مفتوحة مجانية لبطولات سابقة (StatsBomb 360).`):two(`From free open data of past competitions (StatsBomb 360). Free line data for the current season does not exist, so the site's leagues are not here.`,`من بيانات مفتوحة مجانية لبطولات سابقة (StatsBomb 360). ما فيه بيانات خط دفاع مجانية للموسم الحالي، فدوريات الموقع مو هنا.`)}</p></div>
+    <div class="card ctl dl-ctl"><select id="dlc" aria-label="Competition">${X.comps.map(c=>`<option value="${esc(c.k)}"${c.k===S.c?' selected':''}>${c.cur?esc(c.c)+' · '+esc(lbl.cur):esc(c.c)+' '+esc(c.s)+(c.g==='female'?' (W)':'')}</option>`).join('')}</select>
      <div class="seg" role="group" aria-label="Measure">${Object.entries(M).map(([k,v])=>`<button type="button" data-m="${k}" aria-pressed="${k===S.m}">${two(v[0],v[1])}</button>`).join('')}</div>
-     <p class="mu dl-cov">${two(`${C.n} matches · ${T.length} teams. In a club season only some clubs' matches are published (the opponents appear once or twice).`,`${nb(C.n)} مباراة · ${nb(T.length)} فريق. في مواسم الأندية تنشر StatsBomb مباريات أندية محددة بس (والخصوم يظهرون مرة أو مرتين).`)}</p></div>
+     <p class="mu dl-cov">${C.cur?two(`${C.n} matches · ${T.length} teams (3+ matches each). Estimated, not measured.`,`${nb(C.n)} مباراة · ${nb(T.length)} فريق (3 مباريات أو أكثر لكل فريق). تقدير مو قياس.`):two(`${C.n} matches · ${T.length} teams. In a club season only some clubs' matches are published (the opponents appear once or twice).`,`${nb(C.n)} مباراة · ${nb(T.length)} فريق. في مواسم الأندية تنشر StatsBomb مباريات أندية محددة بس (والخصوم يظهرون مرة أو مرتين).`)}</p></div>
     <div class="dl-two"><div class="card"><h3>${two(M[S.m][0]+', every team',M[S.m][1]+' لكل الفرق')}</h3>${pitch(T)}</div>
      <div class="card"><h3>${two('Ranking','الترتيب')}</h3>${bars(T)}</div></div>
     ${me?`<div class="card dl-me"><h3>${nm(me.n)}</h3>${detail(me,C)}</div>`:''}
-    <div class="card dl-src"><h3>${two('Where the numbers come from','من وين الأرقام')}</h3>
+    ${C.cur?estCard(X,S.m):''}
+    <div class="card dl-src"><h3>${two(C.cur?'The measured part: where it comes from':'Where the numbers come from',C.cur?'الجزء المقاس: من وين يجي':'من وين الأرقام')}</h3>
      <p>${two(`StatsBomb's free 360 data gives, for every event, the players the TV camera shows. The deepest defender is often outside the picture, so the deepest <i>visible</i> player overstates the line. A correction model was trained on SkillCorner's free full-tracking data (${X.val.matches} matches, every player in every frame): from what the camera shows, it estimates where the deepest outfield player really is. Tested on matches it had not seen, a team's average in a match is off by <b>${X.val.mae.toFixed(2)} m</b> on average (${X.val.max.toFixed(2)} m at most); the uncorrected deepest-visible player is off by ${X.val.raw.toFixed(1)} m.`,
        `بيانات 360 المجانية من StatsBomb تعطي في كل لقطة اللاعبين اللي تشوفهم كاميرا البث. آخر مدافع كثير يكون برا الصورة، فآخر لاعب <i>ظاهر</i> يبالغ في ارتفاع الخط. دربنا نموذج تصحيح على بيانات التتبع الكاملة المجانية من SkillCorner (${nb(X.val.matches)} مباراة، كل لاعب في كل لقطة): من اللي تشوفه الكاميرا، يقدّر وين آخر لاعب ميدان فعلًا. على مباريات ما شافها، يخطئ في متوسط الفريق بالمباراة بـ<b>${nb(X.val.mae.toFixed(2)+' م')}</b> بالمتوسط (أقصى ${nb(X.val.max.toFixed(2)+' م')})؛ بدون التصحيح الخطأ ${nb(X.val.raw.toFixed(1)+' م')}.`)}</p>
      <p class="mu">${two('The model learnt from Australian league broadcasts; StatsBomb\'s competitions are filmed the same way, but its error there could not be measured (no full tracking of those matches is free).','النموذج تعلّم من بث الدوري الأسترالي؛ بطولات StatsBomb تتصور بنفس الطريقة، لكن خطأه عليها ما ينقاس (ما فيه تتبع كامل مجاني لهالمباريات).')}</p>
@@ -48,6 +74,20 @@
   };
   draw();
  };
+ /* how the estimate is made, how well it did on data with a known answer, and what is not proven */
+ function estCard(X,m){
+  const E=X.est,V=E.val[m],K=E.coef[m],fx=n=>(+n).toFixed(2),nm2={avg:['both together','الاثنين مع بعض'],in:['with the ball','مع الكرة'],out:['without the ball','بدون الكرة']}[m];
+  const TN={cb:['CB','CB'],out:['ALL','الكل'],tilt:['tilt','الميل']};
+  const fe=`${fx(K.b[0])}${K.t.map((t,i)=>` + ${fx(K.b[i+1])} × ${TN[t][0]}`).join('')}`,fa=`${nb(fx(K.b[0]))}${K.t.map((t,i)=>` + ${nb(fx(K.b[i+1]))} × ${TN[t][1]}`).join('')}`;
+  const usesPos=K.t.some(t=>t==='cb'||t==='out'),sh=Math.abs(V.shift1);
+  return `<div class="card dl-est"><h3>${two('An estimate, not a measurement','تقدير مو قياس')}</h3>
+   <p>${two(`No free source measures the line in the current season, so this is a formula fitted on the ${E.n} team-matches of the ${E.comps} past competitions, where the line is known. ${nm2[0][0].toUpperCase()+nm2[0].slice(1)}: <b dir="ltr">line = ${fe}</b>. <b>CB</b> = the starting centre-backs' average position, <b>ALL</b> = the average position of the starting outfield players (both in m from their own goal, from PitchAPI's heat maps), <b>tilt</b> = field tilt (%).`,
+    `ما فيه مصدر مجاني يقيس الخط في الموسم الحالي، فهذي معادلة مبنية على ${nb(E.n)} فريق-مباراة من ${nb(E.comps)} بطولة سابقة نعرف فيها الخط. ${nm2[1]}: <b dir="rtl">الخط = ${fa}</b>. <b>CB</b> = متوسط مكان قلبي الدفاع الأساسيين، <b>الكل</b> = متوسط مكان لاعبي الميدان الأساسيين (الاثنين بالمتر من مرماهم، من خرائط PitchAPI)، <b>الميل</b> = ميل الملعب Field Tilt (%).`)}</p>
+   <p>${two(`Tested by hiding one competition at a time, a team's season average is off by <b>${V.season_mae} m</b> on average (${V.season_max} m at most) — against ${V.base_mae} m if the same value is guessed for every team. A single match is off by ${V.match_mae} m. The estimates are not squeezed or stretched (held-out slope ${V.slope}), and a whole competition can sit up to about ${V.bias_max} m too high or too low.`,
+    `باختبار تخبّي فيه بطولة وحدة كل مرة، متوسط الفريق في الموسم يخطئ بـ<b>${nb(V.season_mae+' م')}</b> بالمتوسط (أقصى ${nb(V.season_max+' م')}) — مقابل ${nb(V.base_mae+' م')} لو خمّنا نفس القيمة لكل الفرق. والمباراة الوحدة تخطئ بـ${nb(V.match_mae+' م')}. التقدير ما هو مضغوط ولا ممدود (الميل ${nb(V.slope)})، وبطولة كاملة ممكن تكون أعلى أو أدنى بحوالي ${nb(V.bias_max+' م')}.`)}</p>
+   <p class="mu">${two(`Not proven: it was not tested inside one club league (too few club teams have enough matches in the open data), and PitchAPI's positions are assumed to be measured like StatsBomb's (the levels are close: about 37 to 38 m for centre-backs in the site's leagues, 35 to 40 m in StatsBomb's club competitions). ${usesPos?`If PitchAPI measured every position 1 m differently, all the numbers would move by ${sh.toFixed(2)} m together and the order of teams would hardly change.`:`This measure hardly depends on the positions (1 m of difference moves it by ${sh.toFixed(2)} m).`} Use it to compare teams, not as an exact value.`,
+    `غير مثبت: ما انختبرت داخل دوري أندية واحد (فرق الأندية في البيانات المفتوحة ما عندها مباريات كافية)، ونفترض إن مواقع PitchAPI تقاس مثل StatsBomb (المستويات قريبة: حوالي ${nb('37')} إلى ${nb('38')} م لقلبي الدفاع في دوريات الموقع، ومن ${nb('35')} إلى ${nb('40')} م في بطولات الأندية عند StatsBomb). ${usesPos?`لو PitchAPI يقيس كل المواقع بفرق متر، كل الأرقام تتحرك مع بعض بـ${nb(sh.toFixed(2)+' م')} وترتيب الفرق ما يتغير تقريبًا.`:`هذا المقياس ما يعتمد تقريبًا على المواقع (فرق متر يحركه ${nb(sh.toFixed(2)+' م')}).`} استخدمه للمقارنة بين الفرق، مو كقيمة دقيقة.`)}</p></div>`;
+ }
  /* the teams on a pitch: a line at each team's height (own goal at the bottom) */
  function pitch(T){
   if(!T.length)return '<div class="empty">No team with this measure.</div>';
@@ -68,11 +108,11 @@
  }
  function detail(t,C){
   const ms=C.matches.filter(m=>m.t[t.n]).sort((a,b)=>a.d.localeCompare(b.d));
-  return `<p>${two(`With the ball <b>${f1(t.in)} m</b> · without it <b>${f1(t.out)} m</b> · together <b>${f1(val(t,'avg'))} m</b>, over ${t.m} match${t.m===1?'':'es'}.`,`مع الكرة <b>${nb(f1(t.in)+' م')}</b> · بدون الكرة <b>${nb(f1(t.out)+' م')}</b> · الاثنين <b>${nb(f1(val(t,'avg'))+' م')}</b>، في ${nb(t.m)} مباراة.`)}</p>
+  return `<p>${two(`With the ball <b>${C.cur?'≈ ':''}${f1(t.in)} m</b> · without it <b>${C.cur?'≈ ':''}${f1(t.out)} m</b> · together <b>${C.cur?'≈ ':''}${f1(val(t,'avg'))} m</b>, over ${t.m} match${t.m===1?'':'es'}.`,`مع الكرة <b>${nb((C.cur?'≈ ':'')+f1(t.in)+' م')}</b> · بدون الكرة <b>${nb((C.cur?'≈ ':'')+f1(t.out)+' م')}</b> · الاثنين <b>${nb((C.cur?'≈ ':'')+f1(val(t,'avg'))+' م')}</b>، في ${nb(t.m)} مباراة.`)}</p>
    <div class="wrap"><table class="dl-t"><thead><tr><th>Date</th><th>Match</th><th class="n">With the ball</th><th class="n">Without the ball</th></tr></thead><tbody>
     ${ms.map(m=>{const v=m.t[t.n];return `<tr><td>${esc(m.d)}</td><td>${nm(m.h)} ${nb(esc(m.sc))} ${nm(m.a)}</td><td class="n">${f1(v.in)}</td><td class="n">${f1(v.out)}</td></tr>`}).join('')}</tbody></table></div>`;
  }
- INS.ar({"Defensive line height":"ارتفاع خط الدفاع","Ranking":"الترتيب","Measure":"المقياس","Competition":"البطولة","With the ball":"مع الكرة","Without the ball":"بدون الكرة","Date":"التاريخ","Match":"المباراة",
+ INS.ar({"Defensive line height":"ارتفاع خط الدفاع","An estimate, not a measurement":"تقدير مو قياس","Ranking":"الترتيب","Measure":"المقياس","Competition":"البطولة","With the ball":"مع الكرة","Without the ball":"بدون الكرة","Date":"التاريخ","Match":"المباراة",
   "The defensive line data is not available.":"بيانات خط الدفاع مو متوفرة.","No team with this measure.":"ما فيه فريق بهالمقياس.","own goal · # m":"المرمى · # م"});
  if(typeof D==='object'&&D&&typeof route==='function')route();
 })();
