@@ -3984,12 +3984,12 @@ let FAV_T={d:null,t:[]};
 const favTeams=()=>{if(!D)return [];if(FAV_T.d!==D)FAV_T={d:D,t:[...new Set(D.matches.flatMap(m=>[m.home,m.away]))].sort()};return FAV_T.t};
 /* your team in the open league: the one you chose here, else a team you chose in another league that plays in this one */
 function favOf(){if(!D)return null;const o=favRead(),T=new Set(favTeams());if(o.fav[D.id]&&T.has(o.fav[D.id]))return o.fav[D.id];return Object.values(o.fav).find(t=>T.has(t))||null}
-function favThemeName(){const o=favRead();return o.colors?favOf():null}
+function favThemeName(){return null}   /* a league page keeps the league's colours (your teams are on the overview); a club page its club's */
 function favSet(name){const o=favRead();if(name)o.fav[D.id]=name;else delete o.fav[D.id];delete o.skip[D.id];favWrite(o);applyTheme(uiPage()==='club'?decodeURIComponent(((location.hash||'').split('/')[2])||''):null);route()}
 function favSkip(){const o=favRead();o.skip[D.id]=1;favWrite(o);const c=document.getElementById('favcard');if(c)c.remove()}
 function favColors(on){const o=favRead();o.colors=!!on;favWrite(o);applyTheme(null)}
 async function favCard(){
- const app=document.getElementById('app');if(!app||uiPage()!=='overview'||document.getElementById('favcard'))return;const h2=app.querySelector('h2');if(!h2)return;
+ const app=document.getElementById('app');if(!app||uiPage()!=='round'||document.getElementById('favcard'))return;const h2=app.querySelector('h2');if(!h2)return;
  const o=favRead(),fv=favOf(),box=document.createElement('div');box.id='favcard';box.className='card favcard';(app.querySelector('#home .hhero-s')||h2).after(box);
  if(!fv){if(o.skip[D.id]){box.remove();return}
   box.innerHTML=`<b>Which team do you support?</b> <span class="mu">Its page comes first here, its row stands out in tables, and the site can take its colours.</span>
@@ -4297,7 +4297,7 @@ function homeHub(){
 
 /* ---------- putting it on the overview ---------- */
 async function homeMount(){
- const app=document.getElementById('app');if(!app||uiPage()!=='overview'||document.getElementById('home'))return;const h2=app.querySelector('h2');if(!h2)return;
+ const app=document.getElementById('app');if(!app||uiPage()!=='round'||document.getElementById('home'))return;const h2=app.querySelector('h2');if(!h2)return;
  const home=document.createElement('div');home.id='home';home.innerHTML='<div class="empty skel">Loading…</div>';h2.after(home);
  let c=null;try{c=await homeData()}catch(e){}
  if(!document.body.contains(home))return;
@@ -4314,7 +4314,7 @@ async function homeMount(){
  const fc=document.getElementById('favcard'),hs=home.querySelector('.hhero-s');if(fc&&hs)hs.after(fc);
  const fp=document.getElementById('hfpl');if(fp){const go=()=>homeFpl(fp);if('IntersectionObserver' in window){const io=new IntersectionObserver(es=>{if(es.some(e=>e.isIntersecting)){io.disconnect();go()}},{rootMargin:'300px'});io.observe(fp)}else go()}
 }
-(function(){const app=document.getElementById('app');if(app)new MutationObserver(()=>{if(uiPage()==='overview'&&!document.getElementById('home'))setTimeout(homeMount,0)}).observe(app,{childList:true})})();
+(function(){const app=document.getElementById('app');if(app)new MutationObserver(()=>{if(uiPage()==='round'&&!document.getElementById('home'))setTimeout(homeMount,0)}).observe(app,{childList:true})})();
 
 /* ===== Fantasy extras: the model's team season by season, and the Patterns tab =====
    Season by season: the Season review of every archived season (data/fpl_review.json, same code and model version), next to this
@@ -4498,4 +4498,4 @@ async function route(){
   $('#lg').textContent='';
   $('#app').innerHTML=`<div class="empty">No data yet. The first sync is running in the background, reload this page in a few minutes.<br><span class="mu">${esc(e.message)}</span></div>`}
 })();
-</script><link rel="stylesheet" href="assets/features.css?v=10"><link rel="stylesheet" href="assets/insights.css?v=10"><link rel="stylesheet" href="assets/replay.css?v=10"><script src="assets/pla-data.js?v=10"></script><script src="assets/share-card.js?v=10"></script><script src="assets/threat-map.js?v=10"></script><script src="assets/match-whatif.js?v=10"></script><script src="assets/player-page.js?v=10"></script><script src="assets/match-centre.js?v=10"></script><script src="assets/home-extra.js?v=10"></script><script src="assets/team-round.js?v=10"></script><script src="assets/preview.js?v=10"></script><script src="assets/club-extra.js?v=10"></script><script src="assets/rankings-extra.js?v=10"></script><script src="assets/fantasy-extra.js?v=10"></script><script src="assets/insights-core.js?v=10"></script><script src="assets/hidden-gems.js?v=10"></script><script src="assets/player-dna.js?v=10"></script><script src="assets/team-dna.js?v=10"></script><script src="assets/reality-check.js?v=10"></script><script src="assets/matches-board.js?v=10"></script><script src="assets/match-replay.js?v=10"></script><script src="assets/match-story.js?v=10"></script><script>if('serviceWorker' in navigator&&location.protocol==='https:')addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>null))</script></body></html>
+</script><link rel="stylesheet" href="assets/features.css?v=11"><link rel="stylesheet" href="assets/insights.css?v=11"><link rel="stylesheet" href="assets/replay.css?v=11"><link rel="stylesheet" href="assets/overview.css?v=11"><script src="assets/pla-data.js?v=11"></script><script src="assets/share-card.js?v=11"></script><script src="assets/threat-map.js?v=11"></script><script src="assets/match-whatif.js?v=11"></script><script src="assets/player-page.js?v=11"></script><script src="assets/match-centre.js?v=11"></script><script src="assets/home-extra.js?v=11"></script><script src="assets/team-round.js?v=11"></script><script src="assets/preview.js?v=11"></script><script src="assets/club-extra.js?v=11"></script><script src="assets/rankings-extra.js?v=11"></script><script src="assets/fantasy-extra.js?v=11"></script><script src="assets/insights-core.js?v=11"></script><script src="assets/hidden-gems.js?v=11"></script><script src="assets/player-dna.js?v=11"></script><script src="assets/team-dna.js?v=11"></script><script src="assets/reality-check.js?v=11"></script><script src="assets/matches-board.js?v=11"></script><script src="assets/match-replay.js?v=11"></script><script src="assets/match-story.js?v=11"></script><script src="assets/overview.js?v=11"></script><script>if('serviceWorker' in navigator&&location.protocol==='https:')addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>null))</script></body></html>

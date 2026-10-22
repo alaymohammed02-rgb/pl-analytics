@@ -6,8 +6,8 @@
    that has kicked off shows "Awaiting result" until then: there is no live score in the data.
    Days are the viewer's own local days. A league can be folded; the folded leagues are remembered on this device only. */
 (function(){
- if(typeof homeMount!=='function')return;
- window.MB_ON=true;            /* replaces the one-league matchday strip */
+ if(typeof R!=='object')return;
+ /* the board belongs to the overview (assets/overview.js mounts it with mbMount); the league's own page keeps its matchday strip */
  const lc=()=>document.documentElement.lang==='ar'?'ar-u-ca-gregory-nu-latn':'en-GB';
  const dayKey=t=>{const d=new Date(t);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
  const fold={get(){try{return new Set(JSON.parse(localStorage.getItem('mb_fold')||'[]'))}catch(e){return new Set()}},set(s){try{localStorage.setItem('mb_fold',JSON.stringify([...s]))}catch(e){}}};
@@ -45,16 +45,19 @@
    const F=fold.get(),L=R_.list.filter(x=>x.day===DAY),order=(ALL.leagues||[]).map(l=>l.id),by=new Map();
    L.sort((a,b)=>(a.t||0)-(b.t||0)||a.h.localeCompare(b.h)).forEach(x=>{(by.get(x.lid)||by.set(x.lid,[]).get(x.lid)).push(x)});
    const lids=[...by.keys()].sort((a,b)=>(order.indexOf(a)+1||99)-(order.indexOf(b)+1||99));
+   /* your teams first: their matches of the day, from every league (they stay in their league's list too) */
+   const fav=new Set(typeof favList==='function'?favList().map(f=>f.t):[]),mine=L.filter(x=>fav.has(x.h)||fav.has(x.a));
+   if(mine.length){by.set('★',mine);lids.unshift('★')}
    const allF=lids.length&&lids.every(l=>F.has(l));
    sec.innerHTML=`<h2 class="mb-h">Matches</h2><div class="mb-days" role="tablist">${days.map(d=>`<button type="button" role="tab" aria-selected="${d===DAY}" class="${d===DAY?'on':''}" data-d="${d}">${esc(lab(d))}</button>`).join('')}</div>
-    ${lids.length?lids.map(lid=>{const img=lgImg(R_.s,lid),f=F.has(lid);return `<div class="mb-g${f?' f':''}"><button type="button" class="mb-lh" data-l="${esc(lid)}" aria-expanded="${!f}">${img?`<img src="${esc(img)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">`:'<span class="mb-cr mb-nd"></span>'}<b>${esc(lgName(R_.s,lid))}</b><span class="mb-n mu">${by.get(lid).length}</span><span class="mb-ch" aria-hidden="true"></span></button>
+    ${lids.length?lids.map(lid=>{const img=lid==='★'?null:lgImg(R_.s,lid),f=F.has(lid);return `<div class="mb-g${f?' f':''}${lid==='★'?' mb-fav':''}"><button type="button" class="mb-lh" data-l="${esc(lid)}" aria-expanded="${!f}">${lid==='★'?'<span class="mb-star" aria-hidden="true">★</span>':img?`<img src="${esc(img)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">`:'<span class="mb-cr mb-nd"></span>'}<b>${lid==='★'?'Your teams':esc(lgName(R_.s,lid))}</b><span class="mb-n mu">${by.get(lid).length}</span><span class="mb-ch" aria-hidden="true"></span></button>
      <div class="mb-rows">${by.get(lid).map(x=>{const st=state(x),tm=x.t?new Date(x.t).toLocaleTimeString(lc(),{hour:'numeric',minute:'2-digit'}):'',L_=st==='ft'||st==='off'?{e:null,s:'',xi:''}:live(x),e=L_.e,mn=e&&typeof lvMinute==='function'?lvMinute(e):null;
       /* a missing score is shown as –, never as 0 */
       const mid=st==='ft'?`<b class="mb-sc">${x.sh} – ${x.sa}</b><span class="mb-s">FT</span>`:st==='off'?`<b class="mb-t">–</b><span class="mb-s">${esc(x.st)}</span>`
        :L_.s==='live'?`<b class="mb-sc">${e.sh??'–'} – ${e.sa??'–'}</b><span class="mb-s md-live">● <span>Live</span>${mn?' '+esc(mn):''}</span>${L_.xi}`
        :L_.s==='ft'&&e.sh!=null&&e.sa!=null?`<b class="mb-sc">${e.sh} – ${e.sa}</b><span class="mb-s">FT</span>${L_.xi}`
        :st==='wait'?`<b class="mb-t">${esc(tm)}</b><span class="mb-s mb-w">Awaiting result</span>${L_.xi}`:`<b class="mb-t">${esc(tm||'–')}</b>${L_.xi}`;
-      return `<a class="mb-r" href="#/${st==='ft'?'match':'preview'}/${encodeURIComponent(x.id)}" data-lid="${esc(x.lid)}"><span class="mb-tm h">${esc(x.h)}</span>${crest(R_.s,x.lid,x.h)}<span class="mb-m">${mid}</span>${crest(R_.s,x.lid,x.a)}<span class="mb-tm a">${esc(x.a)}</span></a>`}).join('')}</div></div>`}).join('')
+      return `<a class="mb-r${fav.has(x.h)||fav.has(x.a)?' mine':''}" href="#/${st==='ft'?'match':'preview'}/${encodeURIComponent(x.id)}" data-lid="${esc(x.lid)}"><span class="mb-tm h">${esc(x.h)}</span>${crest(R_.s,x.lid,x.h)}<span class="mb-m">${mid}</span>${crest(R_.s,x.lid,x.a)}<span class="mb-tm a">${esc(x.a)}</span></a>`}).join('')}</div></div>`}).join('')
      :(()=>{const prev=days.filter(d=>d<DAY&&R_.list.some(x=>x.day===d)).pop(),next=days.find(d=>d>DAY&&R_.list.some(x=>x.day===d));
        return `<div class="empty mb-empty"><span>No matches in the site's leagues on this day.</span>${prev||next?`<span class="mb-jump">${prev?`<button type="button" class="s" data-d="${prev}">← <span>${esc(lab(prev))}</span></button>`:''}${next?`<button type="button" class="s" data-d="${next}"><span>${esc(lab(next))}</span> →</button>`:''}</span>`:''}</div>`})()}
     ${lids.length?`<div class="mb-all"><button type="button" class="s" data-all="${allF?'show':'hide'}">${allF?'Show all':'Hide all'} <span aria-hidden="true">${allF?'⌄':'⌃'}</span></button></div>`:''}
@@ -72,13 +75,12 @@
   });
   draw();
   home.insertBefore(sec,home.firstElementChild);
+  sec.addEventListener('mb-redraw',()=>draw(false));   /* your teams changed */
   /* once a minute, while a match of the site's leagues is within 3 hours of kick-off: re-read data/live.json (no request when the sync has not announced it) */
   if(typeof liveLoad==='function'&&ALL.live){const T=setInterval(async()=>{if(!document.body.contains(sec)){clearInterval(T);return}
    if(!R_.list.some(x=>x.t&&Math.abs(x.t-Date.now())<3*36e5&&x.sh==null))return;const l=await liveLoad();if(l&&document.body.contains(sec)){LV=l;draw(false)}},60000)}
  }
- const hm=homeMount;
- homeMount=async function(){const r=await hm.apply(this,arguments);const home=document.getElementById('home');if(home&&home.querySelector('.hsec'))board(home).catch(e=>console.warn('matches board',e));return r};
- (function late(k){const home=document.getElementById('home');if(!home||home.dataset.mb||home.querySelector('#mb'))return;if(!home.querySelector('.hsec')){if(k<40)setTimeout(()=>late(k+1),250);return}board(home).catch(e=>console.warn('matches board',e))})(0);
- if(typeof INS==='object')INS.ar({"Matches":"المباريات","Today":"اليوم","Yesterday":"أمس","Tomorrow":"بكرة","Awaiting result":"بانتظار النتيجة","No matches in the site's leagues on this day.":"ما فيه مباريات لدوريات الموقع في هذا اليوم.",
+ window.mbMount=box=>board(box).catch(e=>console.warn('matches board',e));
+ if(typeof INS==='object')INS.ar({"Matches":"المباريات","Your teams":"فرقك","Today":"اليوم","Yesterday":"أمس","Tomorrow":"بكرة","Awaiting result":"بانتظار النتيجة","No matches in the site's leagues on this day.":"ما فيه مباريات لدوريات الموقع في هذا اليوم.",
   "Show all":"إظهار الكل","Hide all":"إخفاء الكل","Times in your time zone.":"الأوقات بتوقيتك.","PitchAPI publishes a result after the match has ended, so there are no live scores here.":"PitchAPI ينشر النتيجة بعد ما تخلص المباراة، فما فيه نتائج مباشرة هنا.","Loading league…":"نحمّل الدوري…"});
 })();
