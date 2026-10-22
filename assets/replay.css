@@ -92,3 +92,8 @@
 @media(max-width:640px){.rp-pt.h,.rp-ch.w{display:none}.rp-pt.v,.rp-ch.n{display:block}.rp-ar::after{content:'↑'}.rp-ar.a::after{content:'↓'}}
 @media(max-width:640px){.rp-cr{width:40px;height:40px}.rp-sc{font-size:34px}.rp-big-t{font-size:24px}.rp-ovs{font-size:22px}}
 @media(prefers-reduced-motion:reduce){.rp-ov.on,.rp-s.g.lt .rp-ring{animation:none}.rp-dt,.rp-path{transition:none}}
+/* ===== Match story (assets/match-story.js): written in both languages, the page language shows one ===== */
+.ms p{line-height:1.75;margin:0 0 10px}
+.ms p:last-child{margin-bottom:0}
+.ms .ms-note{font-size:12px;line-height:1.5}
+html[lang=ar] .ms .ms-en,html:not([lang=ar]) .ms .ms-ar{display:none}

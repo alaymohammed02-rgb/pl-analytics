@@ -65,6 +65,7 @@
   return E.sort((a,b)=>a.T-b.T||(a.k==='ko'?-1:0));
  }
 
+ window.rpBuild=build;   /* shared with match-story.js */
  R.replay=async function(el,id){
   id=decodeURIComponent(id||'');
   const m=D&&D.matches&&D.matches.find(x=>x.match_id===id);
@@ -82,7 +83,7 @@
  function play(root,G,E){
   const {m,TL}=G,END=TL.END;
   let T=0,on=false,hold=0,holdKind='',last=0,raf=0,drag=false,filt=store.get('rp_feed','key'),sp=+store.get('rp_speed','30');if(!SPEEDS.includes(sp))sp=30;
-  let shown=-1,feedN=-1,goalsN=-1;
+  let shown=-1,feedN=-1,goalsN=-1,wasFt=null;
   const crest=c=>{const s=typeof logoOf==='function'&&logoOf(c);return s?`<img class="rp-cr" src="${esc(s)}" alt="" aria-hidden="true">`:`<span class="rp-cr rp-dot" style="${typeof clubVars==='function'?clubVars(c):''}"></span>`};
   root.innerHTML=`<div class="card rp-sb"><div class="rp-t">${crest(m.home)}<b class="rp-n">${esc(m.home)}</b></div>
     <div class="rp-mid"><span class="rp-badge"><span>Replay</span></span><b class="rp-sc" id="rpsc">0 – 0</b><b class="rp-clk" id="rpclk">0'</b><span class="mu rp-xg" id="rpxg"></span></div>
@@ -117,7 +118,8 @@
   const hush=()=>{ov.className='rp-ov';ov.innerHTML=''};
   const W_={};const put=(el,k,v)=>{if(W_[k]!==v){W_[k]=v;el.textContent=v}};
   function render(){
-   const s=score(T),ft=T>=END-1e-9,scT=ft&&G.off?`${G.off[0]} – ${G.off[1]}`:`${s.h} – ${s.a}`,ck=ft?'FT':holdKind==='ht'?'HT':clockOf(TL,T);
+   const s=score(T),ft=T>=END-1e-9;if(ft!==wasFt){wasFt=ft;root.dispatchEvent(new CustomEvent('rp-ft',{detail:ft}))}   /* match-story.js shows its card at the final whistle */
+   const scT=ft&&G.off?`${G.off[0]} – ${G.off[1]}`:`${s.h} – ${s.a}`,ck=ft?'FT':holdKind==='ht'?'HT':clockOf(TL,T);
    put(sc,'sc',scT);put(clk,'clk',ck);put(xg,'xg',`xG ${f2(sum(G.shots,'h',T))} – ${f2(sum(G.shots,'a',T))}`);
    if(!drag){sk.value=T;sk.setAttribute('aria-valuetext',ck+', '+scT)}
    /* shots: the ones taken so far, the latest one marked with its path */
