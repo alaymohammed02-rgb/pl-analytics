@@ -60,3 +60,30 @@
  .lk-bars button{grid-template-columns:minmax(0,7.5rem) minmax(0,1fr) 3.2em;gap:6px;font-size:12.5px}
  .lk-t th,.lk-t td{padding:6px 4px;font-size:12.5px}.lk-nm,.lk-t .sm-wide{display:none}.lk-t .sm-narrow{display:inline}
  .lk-t .lk-tn{white-space:nowrap}.lk-t .lk-tn bdi{display:inline-block;max-width:6rem;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}}
+/* Player twins */
+.tw-intro p{margin:6px 0;line-height:1.6}
+.tw-ctl{align-items:flex-end}
+.tw-s{display:flex;flex-direction:column;gap:4px;font-size:12.5px;flex:1 1 260px}
+.tw-s input{min-height:40px;font-size:14px;width:100%;box-sizing:border-box}
+.tw-w{display:flex;align-items:center;gap:10px;min-width:0;flex:1}
+.tw-w img{flex:none}
+.tw-dot{flex:none;width:18px;height:18px;border-radius:50%;background:rgba(255,255,255,.12)}
+.tw-w.big .tw-dot{width:28px;height:28px}
+.tw-n{display:flex;flex-direction:column;min-width:0}
+.tw-n b,.tw-n .mu{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tw-n .mu{font-size:12px}
+.tw-w.big b{font-size:18px}
+.tw-open{margin-inline-start:auto;flex:none}
+.tw-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:minmax(0,1fr);gap:4px}
+.tw-list li{min-width:0}
+.tw-list button{all:unset;box-sizing:border-box;width:100%;display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;cursor:pointer;border:1px solid transparent}
+.tw-list button:hover,.tw-list button:focus-visible{background:rgba(255,255,255,.06)}
+.tw-list button:focus-visible{outline:2px solid var(--th-hi)}
+.tw-list li.on button{border-color:var(--th-hi);background:rgba(255,255,255,.07)}
+.tw-r{flex:none;width:18px;color:var(--mu);text-align:center}
+.tw-p{flex:none;font-size:18px;color:var(--th-hi)}
+.tw-t{width:100%}
+.tw-g{display:inline-block;min-width:3.2em;padding:1px 6px;border-radius:6px;background:linear-gradient(90deg,rgba(76,195,138,.35) var(--w),rgba(255,255,255,.05) var(--w));text-align:center;direction:ltr}
+.tw-cmp .ctl{margin:4px 0 6px}
+@media (max-width:560px){.tw-w.big{flex-wrap:wrap}.tw-open{margin-inline-start:0}.tw-t th,.tw-t td{padding:6px 4px;font-size:12px}
+ .tw-t .sm-wide{display:none}.tw-t .sm-narrow{display:inline}.tw-t th bdi{display:inline-block;max-width:5.2rem;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}.tw-g{min-width:2.4em}}
