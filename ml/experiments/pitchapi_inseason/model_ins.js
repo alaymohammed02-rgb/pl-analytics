@@ -209,7 +209,11 @@ const PM={N:7,PRIOR_MIN:450,K_FIN:3,N0:4,RECENT:6,EPS:.001,MAXNODES:4000,
  /* [s4] in-season PitchAPI evidence from earlier gameweeks (d.ins): GA/AA = share of the xG/xA total taken from PitchAPI, GB/AB = extra
     evidence weight (adds PitchAPI's matches to the sample), GS = share of shots on target in the goal proxy, AK = share of key passes in
     the assist proxy. All 0 = v3 exactly. Calibrations (FPL units per PitchAPI unit, by position) are fitted on TRAIN in d.ins.cal. */
- GA:0,GB:0,GS:0,AA:0,AB:0,AK:0};
+ GA:0,GB:0,GS:0,AA:0,AB:0,AK:0,
+ /* [s5] line-ups and heat maps of earlier gameweeks (d.lu): SB = logit shift of P(play) by his last match's squad state
+    [not in squad, unused sub, came on, started] (fitted on TRAIN); RG/RA = log change of the goal/assist rate per cell of
+    recent-minus-season average position along the pitch (RH = recency weight per match). All 0/null = v3 exactly. */
+ SB:null,RG:0,RA:0,RH:.5};
 const PM_VERSION='v3';
 /* v3: FPL awards more assists than xA expects (rebounds, penalties won, deflections), the same in every season and position:
    the assist rate from xA is scaled by position (fitted on 2022-23 to 2024-25, validated on 2025-26, tested on this season's
@@ -288,6 +292,11 @@ function pmPlayer(p,C,d){
  const xg90=shrI(p.expected_goals,P.xg,gP,PM.GA,PM.GB),fg=fin(p.goals_scored,p.expected_goals),xa90=shrI(p.expected_assists,P.xa,aP,PM.AA,PM.AB),fa_=fin(p.assists,p.expected_assists);
  if(xg90!=null&&fg!=null)lamG=xg90*fg;else{lamG=shr(p.goals_scored,P.g);out.flags.push('No xG in the data: goal rate uses goals only')}
  if(xa90!=null&&fa_!=null)lamA=xa90*fa_*((PM.AF&&PM.AF[t])||1);else{lamA=shr(p.assists,P.a);out.flags.push('No xA in the data: assist rate uses assists only')}
+ /* [s5] role change: recent average position (recency weight RH^age) against his season average, from the heat maps */
+ const LR=(PM.SB||PM.RG||PM.RA)&&d.lu&&d.lu.players?(d.lu.players[String(p.id)]||[]).filter(r=>r[0]<C.next):[];
+ if((PM.RG||PM.RA)&&lamG!=null&&lamA!=null){const H_=LR.filter(r=>r[4]!=null);if(H_.length>=3){let sw=0,sx=0,ss=0;
+  for(let i=H_.length-1,k=0;i>=0;i--,k++){const w=Math.pow(PM.RH,k);sw+=w;sx+=w*H_[i][4];ss+=H_[i][4]}
+  const dx=sx/sw-ss/H_.length;lamG*=Math.exp(PM.RG*dx);lamA*=Math.exp(PM.RA*dx)}}
  if(lamG==null||lamA==null){out.q='nodata';out.flags.push('Goal or assist data missing');return out}
  const R={bon:shr(p.bonus,P.bon),yc:shr(p.yellow_cards,P.yc),rc:shr(p.red_cards,P.rc),og:shr(p.own_goals,P.og),pmi:shr(p.penalties_missed,P.pm),psv:shr(p.penalties_saved,P.ps),sv:shr(p.saves,P.sv),dc:shr(p.defensive_contribution,P.dc)};
  const miss=[];if(R.bon==null)miss.push('bonus');if(R.yc==null)miss.push('cards');if(t===1&&R.sv==null)miss.push('saves');if(t!==1&&R.dc==null)miss.push('defensive contribution');
@@ -298,6 +307,8 @@ function pmPlayer(p,C,d){
  if(PM.PT){const all=fit?rows.filter(r=>r[3]>0):rows;let sw=0,sy=0,qa=0,q6=0,qm=0;
   for(let i=all.length-1,k=0;i>=0;i--,k++){const r=all[i],w=Math.pow(PM.PL_LAM,k),v=Math.pow(PM.Q_LAM,k);sw+=w;if(r[3]>0){sy+=w;qa+=v;qm+=v*r[3];if(r[3]>=60)q6+=v}}
   pPlay0=(sy+PM.PL_A*PM.PL_MU)/(sw+PM.PL_A);q60=q6/qa;ePlay=qm/qa}
+ /* [s5] squad state of his last match with a line-up (only for a player not flagged: a flag already carries his availability) */
+ if(PM.SB&&!fit&&LR.length&&pPlay0>0&&pPlay0<1){const b=PM.SB[LR[LR.length-1][1]]||0;if(b)pPlay0=1/(1+Math.exp(-(Math.log(pPlay0/(1-pPlay0))+b)))}
  const g60=rec.filter(r=>r[3]>=60),e60=g60.length?g60.reduce((s,r)=>s+r[3],0)/g60.length:90;
  if(rec.length<4)out.flags.push('Fewer than 4 recent matches to estimate playing time');
  if(p.minutes<270)out.flags.push('Under 270 minutes this season: rates lean on the position average');

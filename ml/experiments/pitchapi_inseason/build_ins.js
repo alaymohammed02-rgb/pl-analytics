@@ -35,7 +35,7 @@ for(const r of PL.rows){const f=m2f.get(r[pc.m]);if(!f)continue;const mi=r[pc.mi
  o.rows.push({ev:f[0],fk:fxKey(f),club:r[pc.c],v:[mi,g('xg'),g('xag'),g('sot'),g('kp'),g('sca'),g('bx'),dfa.some(x=>x==null)?null:dfa.reduce((s,x)=>s+x,0),g('sh'),g('gca'),g('gl'),g('ast'),g('xt'),g('vaep')]})}
 // 3. link (fpLink rule, within the clubs the FPL player played for this season)
 const clubsOf=p=>{const s=new Set([p.tm]);for(const r of d.hist[String(p.id)]||[]){if(!(r[ix.min]>0))continue;const opp=r[ix.opp],h=r[ix.h],x=d.fix.find(x=>x[0]===r[ix.r]&&(h===1?x[2]===opp:x[1]===opp));if(x)s.add(h===1?x[1]:x[2])}return [...s].map(t=>tname.get(t))};
-const res={season,cols:['ev',...COLS],players:{},link:{},map:{paMatches:done.length,mapped:m2f.size,unmapped:unm,ambiguous:amb}};
+const res={season,cols:['ev',...COLS],players:{},paid:{},mfx:Object.fromEntries([...m2f].map(([k,x])=>[k,[x[0],x[1],x[2]]])),link:{},map:{paMatches:done.length,mapped:m2f.size,unmapped:unm,ambiguous:amb}};
 let want=0,got=0,rowsKept=0,rowsNoFpl=0;const used=new Map();
 for(const p of d.P){
  const mins=(d.hist[String(p.id)]||[]).reduce((s,r)=>s+(r[ix.min]||0),0);if(mins>0)want++;
@@ -50,9 +50,9 @@ for(const p of d.P){
  const fplFx=new Set((d.hist[String(p.id)]||[]).filter(r=>r[ix.min]>0).map(r=>{const opp=r[ix.opp],h=r[ix.h],x=d.fix.find(x=>x[0]===r[ix.r]&&(h===1?x[2]===opp:x[1]===opp));return x?fxKey(x):null}));
  const rows=[];for(const r of hit[1].rows){if(fplFx.has(r.fk)){rows.push([r.ev,...r.v]);rowsKept++}else rowsNoFpl++}
  if(!rows.length)continue;
- (used.get(hit[0])||used.set(hit[0],[]).get(hit[0])).push(p.id);res.players[p.id]=rows.sort((a,b)=>a[0]-b[0]);got++}
+ (used.get(hit[0])||used.set(hit[0],[]).get(hit[0])).push(p.id);res.players[p.id]=rows.sort((a,b)=>a[0]-b[0]);res.paid[p.id]=hit[0];got++}
 // a PitchAPI player linked to two FPL players is dropped for both (the rule asks for one match only)
-let twice=0;used.forEach(ids=>{if(ids.length>1){twice++;ids.forEach(id=>{delete res.players[id];got--})}});
+let twice=0;used.forEach(ids=>{if(ids.length>1){twice++;ids.forEach(id=>{delete res.players[id];delete res.paid[id];got--})}});
 res.link={fplPlayersWithMinutes:want,linked:got,paPlayers:pa.size,paUsedTwice:twice,rowsKept,rowsNoFplMatch:rowsNoFpl};
 fs.writeFileSync(out,JSON.stringify(res));
 console.log(season,JSON.stringify(res.link),'matches',m2f.size+'/'+done.length,'unmapped',unm.length,unm.slice(0,5).join('; '));
