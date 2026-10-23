@@ -11,7 +11,7 @@ const REV=JSON.parse(fs.readFileSync((process.env.PLREPO||__dirname+'/..')+'/dat
   if(lang==='ar'){await pg.click('#langbtn');await pg.waitForTimeout(500)}
   const tabs=await pg.$$eval('#fproot .ctl button',a=>a.map(x=>x.textContent));
   ok(tabs.includes(lang==='ar'?'مراجعة الموسم':'Season review'),vw+' '+lang+': current season has the Season review tab ('+tabs.length+' tabs)');
-  await pg.selectOption('select[aria-label="Season"], select[aria-label="الموسم"]','2024-25');await pg.waitForTimeout(1500);
+  await pg.selectOption('#fproot select[aria-label="Season"], #fproot select[aria-label="الموسم"]','2024-25');await pg.waitForTimeout(1500);
   const tabs2=await pg.$$eval('#fproot .ctl button',a=>a.map(x=>x.textContent));
   const tr=lang==='ar'?'مراجعة الموسم':'Season review';ok(tabs2.includes(tr),'archived season 2024-25 has the tab: '+tabs2.join(' | '));
   await pg.click(`#fproot .ctl button:text-is("${tr}")`);await pg.waitForSelector('#srout .kpi',{timeout:30000});
@@ -39,7 +39,7 @@ const REV=JSON.parse(fs.readFileSync((process.env.PLREPO||__dirname+'/..')+'/dat
    const t0=Date.now();const got=await pg.evaluate(async()=>{const R=await srRun(FPD);return [R.fixed.reduce((a,x)=>a+x.act,0),R.ft.reduce((a,x)=>a+x.act,0),R.opt.reduce((a,x)=>a+x.pts,0),JSON.stringify(R)]});
    ok(got[0]===sum(R.fixed,'act')&&got[1]===sum(R.ft,'act')&&got[2]===sum(R.opt,'pts')&&got[3].replace(/(\d\.\d{6})\d+/g,'$1')===JSON.stringify(R).replace(/(\d\.\d{6})\d+/g,'$1'),'browser recomputation is identical to data/fpl_review.json ('+((Date.now()-t0)/1000).toFixed(0)+'s)');
    /* current season: the button runs it on the device */
-   await pg.selectOption('select[aria-label="Season"]','');await pg.waitForTimeout(1500);await pg.click('#fproot .ctl button:text-is("Season review")');await pg.waitForSelector('#srout button');
+   await pg.selectOption('#fproot select[aria-label="Season"]','');await pg.waitForTimeout(1500);await pg.click('#fproot .ctl button:text-is("Season review")');await pg.waitForSelector('#srout button');
    await pg.click('#srout button');await pg.waitForFunction(()=>document.querySelector('#srout .kpi')||/Could not/.test(document.querySelector('#srout').innerText),null,{timeout:600000});
    const cur=await pg.innerText('#srout');ok(/Actual points/.test(cur),'current season review runs on the device: '+cur.split('\n').slice(0,2).join(' | '));
    await pg.screenshot({path:SH+'review_current.png'});}

@@ -33,7 +33,7 @@ const num=s=>parseFloat(String(s).replace('−','-'));
  const untr=sel=>{const o=[];document.querySelectorAll(sel).forEach(r=>{const w=document.createTreeWalker(r,NodeFilter.SHOW_TEXT);let n;while(n=w.nextNode()){if(n.parentNode.closest('select,option,.fx-en,bdi'))continue;const t=n.nodeValue.trim();if(/[A-Za-z]{3}/.test(t)&&!/[؀-ۿ]/.test(t)&&!/^(xG|xPts|PitchAPI|PPDA)\b/.test(t))o.push(t)}});return [...new Set(o)]};
  for(const lang of ['ar','en']){const {ctx,pg,errs}=await open(b,{vw:390,lang});await pg.waitForSelector('.lk-me',{timeout:60000});await pg.waitForTimeout(500);
   ok(await pg.evaluate(()=>document.scrollingElement.scrollWidth<=innerWidth+1),lang+' phone: no horizontal scroll');
-  ok(await pg.$eval('.lk-t',t=>t.parentNode.scrollWidth<=t.parentNode.clientWidth+1),lang+' phone: the table fits its card');
+  {const w=await pg.$eval('.lk-t',t=>[t.parentNode.scrollWidth,t.parentNode.clientWidth,t.scrollWidth,innerWidth]);ok(w[0]<=w[1]+1,lang+' phone: the table fits its card (scroll '+w[0]+', box '+w[1]+', table '+w[2]+', window '+w[3]+')')}
   if(lang==='ar'){const u=await pg.evaluate(untr,'#app');ok(!u.length,'Arabic: page translated '+u.slice(0,6).join(' | '));ok(await pg.$eval('#nav a[href="#/luck"]',a=>a.textContent.trim())==='جدول الحظ','Arabic menu: جدول الحظ')}
   ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await ctx.close()}
  await b.close();console.log(fails?fails+' FAILED':'all passed');process.exit(fails?1:0)})();

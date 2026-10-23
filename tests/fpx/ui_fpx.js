@@ -53,7 +53,7 @@ const tab=async(pg,t)=>{await pg.click(`#fproot .ctl button:text-is("${t}")`);aw
    ok(!left.length,'Arabic: the Patterns page is translated '+left.slice(0,4).join(' | '));
    ok(await pg.evaluate(()=>document.scrollingElement.scrollWidth<=innerWidth),'phone: no horizontal scroll');
   }
-  await pg.selectOption('select[aria-label="Season"], select[aria-label="الموسم"]','2024-25');await pg.waitForTimeout(1500);
+  await pg.selectOption('#fproot select[aria-label="Season"], #fproot select[aria-label="الموسم"]','2024-25');await pg.waitForTimeout(1500);
   ok((await pg.$$eval('#fproot .ctl button',a=>a.map(x=>x.textContent))).includes(T),'an archived season keeps the Patterns tab');
   ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await ctx.close()}
  await b.close();console.log(fails?fails+' FAILED':'all passed');process.exit(fails?1:0)})();
