@@ -37,8 +37,97 @@
      "got": 40,
      "ok": 40,
      "complete": false
+    },
+    "2024-25": {
+     "name": "Premier League",
+     "light": true,
+     "api": "2024/2025",
+     "id": "l_4WFCIZ_2024-25",
+     "n": 380,
+     "t": "2026-10-23 05:10:14",
+     "err": null,
+     "plan": false,
+     "req": 1500,
+     "sec": 440,
+     "files": {
+      "s": "2024-25",
+      "id": "l_4WFCIZ_2024-25",
+      "file": "l_4WFCIZ_2024-25.json",
+      "v": "edfcec96ab",
+      "size": 4922432,
+      "pl_file": "l_4WFCIZ_2024-25_pl.json",
+      "pl_v": "d51ff24f99",
+      "sh_file": "l_4WFCIZ_2024-25_sh.json",
+      "sh_v": "c7409f2e77"
+     },
+     "got": 300,
+     "ok": 300,
+     "complete": false
     }
-   }
+   },
+   "api_seasons": [
+    "2021/2022",
+    "2022/2023",
+    "2023/2024",
+    "2024/2025",
+    "2025/2026",
+    "2026/2027"
+   ]
+  },
+  "l_0ErfuF": {
+   "cur": "2026-27",
+   "api_seasons": [
+    "2021/2022",
+    "2022/2023",
+    "2023/2024",
+    "2024/2025",
+    "2025/2026",
+    "2026/2027"
+   ]
+  },
+  "l_1Isor4": {
+   "cur": "2026-27",
+   "api_seasons": [
+    "2021/2022",
+    "2022/2023",
+    "2023/2024",
+    "2024/2025",
+    "2025/2026",
+    "2026/2027"
+   ]
+  },
+  "l_3FJFUl": {
+   "cur": "2026-27",
+   "api_seasons": [
+    "2021/2022",
+    "2022/2023",
+    "2023/2024",
+    "2024/2025",
+    "2025/2026",
+    "2026/2027"
+   ]
+  },
+  "l_0ALvwF": {
+   "cur": "2026-27",
+   "api_seasons": [
+    "2021/2022",
+    "2022/2023",
+    "2023/2024",
+    "2024/2025",
+    "2025/2026",
+    "2026/2027"
+   ]
+  },
+  "l_4QexZg": {
+   "cur": "2026-27",
+   "api_seasons": [
+    "2021/2022",
+    "2022/2023",
+    "2023/2024",
+    "2024/2025",
+    "2025/2026",
+    "2026/2027"
+   ]
   }
  },
  "note": "Finished past seasons from PitchAPI, fetched once per match (same file formats as the current season, season in the file name). n = matches in PitchAPI, got = fetched, req/sec = requests and seconds spent."
