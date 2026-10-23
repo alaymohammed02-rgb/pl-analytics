@@ -28,7 +28,7 @@ const hash=pg=>pg.evaluate(()=>decodeURIComponent(location.hash));
   const sel='#app [data-tip] a[href^="#/player/"]',href=await pg.$eval(sel,a=>a.getAttribute('href'));
   await pg.tap(sel);await pg.waitForTimeout(400);
   ok(await hash(pg)==='#/gems','phone, player in a chart, first tap: the page stays');
-  {let tx='';for(let i=0;i<15&&!/اضغط مرة ثانية لفتح صفحة اللاعب/.test(tx);i++){if(i)await pg.waitForTimeout(200);tx=await pg.evaluate(()=>{const t=document.getElementById('instip'),b=document.getElementById('tapbub');return (t&&t.classList.contains('on')?t.textContent:'')+(b&&!b.hidden?b.textContent:'')})}ok(/اضغط مرة ثانية لفتح صفحة اللاعب/.test(tx),'and says in Arabic: tap again to open the player page (found: "'+tx+'")')}
+  {let tx='';for(let i=0;i<15&&!/اضغط مرة ثانية لفتح صفحة اللاعب/.test(tx);i++){if(i)await pg.waitForTimeout(200);tx=await pg.evaluate(()=>{const t=document.getElementById('instip'),b=document.getElementById('tapbub');return (t&&t.classList.contains('on')?t.textContent:'')+(b&&(!b.hidden||document.querySelector('.tap-armed'))?b.textContent:'')})}ok(/اضغط مرة ثانية لفتح صفحة اللاعب/.test(tx),'and says in Arabic: tap again to open the player page (found: "'+tx+'")')}
   await pg.tap(sel);await pg.waitForTimeout(800);ok(await hash(pg)===decodeURIComponent(href),'second tap: the player page');
   ok(await pg.evaluate(()=>!document.querySelector('.tap-armed')&&(!document.getElementById('tapbub')||document.getElementById('tapbub').hidden)),'nothing left marked after leaving');
   ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await ctx.close()}
