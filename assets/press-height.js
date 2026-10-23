@@ -43,7 +43,9 @@
    ['h','a'].forEach(sd=>{const L=lu[sd];if(!L||!L.xi)return;const xs=L.xi.filter(isCB).map(p=>{const r=heat.get(mid+'|'+p[0]);return r?avgX(r.h):null}).filter(v=>v!=null);
     /* every outfield starter (not the goalkeeper, slot 11): the team's average position, when at least 9 of the 10 have data */
     const os=L.xi.filter(p=>p[3]!==11).map(p=>{const r=heat.get(mid+'|'+p[0]);return r?avgX(r.h):null}).filter(v=>v!=null);
-    if(xs.length)out.set(mid+'|'+(sd==='h'?m.home:m.away),{v:xs.reduce((a,b)=>a+b,0)/xs.length,n:xs.length,o:os.length>=9?os.reduce((a,b)=>a+b,0)/os.length:null})})});
+    /* every starter in the defensive line (slots 30-39: centre-backs and full- or wing-backs): the defenders' average position, when 3 or more have data */
+    const ds=L.xi.filter(p=>Number.isInteger(p[3])&&Math.floor(p[3]/10)===3).map(p=>{const r=heat.get(mid+'|'+p[0]);return r?avgX(r.h):null}).filter(v=>v!=null);
+    if(xs.length)out.set(mid+'|'+(sd==='h'?m.home:m.away),{v:xs.reduce((a,b)=>a+b,0)/xs.length,n:xs.length,o:os.length>=9?os.reduce((a,b)=>a+b,0)/os.length:null,d:ds.length>=3?ds.reduce((a,b)=>a+b,0)/ds.length:null,dn:ds.length})})});
   return out;
  }
  async function data(withH=true){
@@ -52,14 +54,14 @@
   const by=new Map();
   ((A&&A.team)||[]).forEach(r=>{const k=r.m+'|'+r.n;const o=by.get(k)||{m:r.m,n:r.n};o.pp=r.pp;o.op=r.op;o.da=r.da;by.set(k,o)});
   ((P&&P.team)||[]).forEach(r=>{const k=r.m+'|'+r.n;const o=by.get(k)||{m:r.m,n:r.n};o.adx=r.adx;o.tilt=r.tilt;by.set(k,o)});
-  if(withH)(await cbOf(date)).forEach((c,k)=>{const [m,...n]=k.split('|');const o=by.get(k)||{m,n:n.join('|')};o.cb=c.v;o.cbn=c.n;o.ox=c.o;by.set(k,o)});
+  if(withH)(await cbOf(date)).forEach((c,k)=>{const [m,...n]=k.split('|');const o=by.get(k)||{m,n:n.join('|')};o.cb=c.v;o.cbn=c.n;o.ox=c.o;o.dx=c.d;o.dxn=c.dn;by.set(k,o)});
   const rows=[...by.values()].filter(r=>date.has(r.m)).map(r=>{const m=date.get(r.m);return {...r,d:String(m.date||'').slice(0,10),match:m,opp:m.home===r.n?m.away:m.home,home:m.home===r.n}});
   const pair=new Map(rows.map(r=>[r.m+'|'+r.n,r]));
   rows.forEach(r=>{const o=pair.get(r.m+'|'+r.opp);r.o_pp=o?o.pp:null;r.o_op=o?o.op:null;r.o_da=o?o.da:null;r.o_adx=o?o.adx:null;r.o_cb=o?o.cb:null});
   rows.sort((a,b)=>a.d.localeCompare(b.d)||a.m.localeCompare(b.m));
   return rows;
  }
- INS.phRows=data;       /* the per-match team rows (adx, tilt, centre-backs' average position cb), used by the Height page */
+ INS.phRows=data;       /* the per-match team rows (adx, tilt, centre-backs' average position cb, outfield ox, defenders dx), used by the Height page */
  const ok=v=>v!=null&&isFinite(v);
  const mean=a=>{const b=a.filter(ok);return b.length?b.reduce((s,x)=>s+x,0)/b.length:null};
  /* a team's season values over the range: PPDA pooled (Σ opponent passes ÷ Σ defensive actions, as on the PPDA page), height = mean */
