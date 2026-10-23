@@ -1,0 +1,10 @@
+const {chromium}=require('/opt/node-tools/node_modules/playwright');
+(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+ const ctx=await b.newContext({viewport:{width:390,height:900}});await ctx.addInitScript(()=>{if(!sessionStorage.getItem('s')){sessionStorage.setItem('s','1');localStorage.clear();localStorage.setItem('league','l_4WFCIZ');localStorage.setItem('lang','en')}});
+ const pg=await ctx.newPage();
+ await pg.goto('http://127.0.0.1:8765/index.html#'+(process.argv[2]||'/player/p_3fAmwG%7C%7CTottenham%20Hotspur'));await pg.waitForTimeout(6000);
+ console.log(await pg.evaluate(()=>{const out=[];const els=[...document.querySelectorAll('#app *')];const seen=new Set();
+  const chk=t=>{let x=t;const hist=[x];for(let i=0;i<6;i++){const y=arT(x);if(y==null||y===x)return null;x=y;hist.push(x)}return hist};
+  els.forEach(e=>{['title','aria-label','alt','placeholder'].forEach(a=>{const v=e.getAttribute(a);if(v&&!seen.has(v)){seen.add(v);const h=chk(v);if(h)out.push(['attr',a,h])}});
+   e.childNodes.forEach(n=>{if(n.nodeType===3&&n.nodeValue.trim()&&!seen.has(n.nodeValue)){seen.add(n.nodeValue);const h=chk(n.nodeValue);if(h)out.push(['text',h])}})});return JSON.stringify(out.slice(0,5),null,1)}));
+ await b.close()})();
