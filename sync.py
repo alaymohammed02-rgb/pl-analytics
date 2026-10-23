@@ -11080,5 +11080,344 @@ INDEX = _x_ar_index(INDEX)
 
 
 
+# ============================================================================
+# إضافة: المواسم السابقة للدوريات (PitchAPI) — نفس صيغ ملفات الموسم الحالي، بأسماء فيها الموسم
+#   data/<league>_<season>.json و _adv / _heat / _pl / _sh / _mx / _rt / _hv (مثلاً data/l_4WFCIZ_2025-26_sh.json)
+# الموسم المنتهي ما يتغير: كل مباراة تنجلب مرة وحدة فقط (والفاشلة بسبب انقطاع تُعاد بعد يوم)، بحد أقصى PS_PER_RUN مباراة
+# في المزامنة الوحدة لكل الدوريات، فالمزامنات المجدولة تكمل الباقي. الحالة في data/seasons.json، والفهرس data/index.json
+# فيه "seasons" = المواسم المتوفرة لكل دوري. نفس دوال الجلب والحفظ حق الموسم الحالي، تحت معرّف دوري خاص بالموسم
+# (<league>_<season>)، والطلب المكرر لنفس المباراة يُعاد استخدامه بدل ما ينطلب مرة ثانية.
+# ما تغيّر أي سطر في مزامنة الموسم الحالي: هذا القسم يشتغل بعدها، ولو فشل ما يأثر عليها.
+# ============================================================================
+PS_PATH = "data/seasons.json"
+PS_LEAGUES = ["l_4WFCIZ", "l_0ErfuF", "l_1Isor4", "l_3FJFUl", "l_0ALvwF", "l_4QexZg"]   # الدوريات المحلية الست
+PS_ON = ["l_4WFCIZ"]          # الدوريات المفعّلة الحين (أول تجربة: الدوري الإنجليزي فقط، نقيس التكلفة قبل التوسع)
+PS_BACK = 1                   # كم موسم سابق لكل دوري
+PS_PER_RUN = 40               # أقصى عدد مباريات نجلبها في المزامنة الوحدة (لكل الدوريات)
+PS_RETRY_H = 24               # مباراة فشلت بسبب انقطاع أو حد الطلبات: نعيدها بعد يوم
+PS_PLAN_RETRY_D = 7           # الاشتراك رفض الموسم: نجرب مرة ثانية بعد أسبوع
+PS_KEYS = ("file", "adv_file", "heat_file", "pl_file", "sh_file", "mx_file", "rt_file", "hv_file")
+PS = dict(state=None, cache={}, req=0, errs={})
+
+
+def ps_id(lid, label):
+    return f"{lid}_{label}"
+
+
+def ps_seasons(lid, back=None):
+    """[(اسم الموسم في PitchAPI, التسمية)] للمواسم السابقة لهذا الدوري، الأحدث أولاً."""
+    items = {str(l.id): l for l in (globals().get("_LEAGUE_LIST") or [])}
+    L, cur = items.get(lid), (globals().get("_LEAGUE_SEASON") or {}).get(lid)
+    if L is None or not cur:
+        return []
+    out, s = [], cur
+    for _ in range(PS_BACK if back is None else back):
+        s = _season_prev(getattr(L, "seasons", None), s)
+        lab = _season_label(s)
+        if not s or not lab:
+            break
+        out.append((s, lab))
+    return out
+
+
+def ps_due(r):
+    """المواسم المنتهية: مباراة انجلبت مرة ما تنجلب ثاني، إلا اللي فشلت بخطأ مؤقت (بعد PS_RETRY_H ساعة)."""
+    if r is None or r["status"] in (None, "pending") or not r["fetched_at"]:
+        return True
+    if r["status"] != "failed":
+        return False
+    last = _parse_ts(r["fetched_at"])
+    return last is None or (datetime.datetime.now(datetime.timezone.utc) - last).total_seconds() >= PS_RETRY_H * 3600
+
+
+def ps_call(fn, *a):
+    """call() نفسها، لكن نعدّ الأخطاء (plan / rate_limit / ...) لهذا القسم."""
+    out = _ps_orig_call(fn, *a)
+    if out[1] is not None:
+        PS["errs"][out[1]] = PS["errs"].get(out[1], 0) + 1
+    return out
+
+
+class _PSProxy:
+    """غلاف حول client.matches / client.leagues: يعدّ كل طلب فعلي لـ PitchAPI، والطلب المكرر لنفس المباراة (نفس الدالة ونفس
+    المعاملات، مثل advanced_players اللي تطلبه ثلاث خطوات) يرجع نفس الرد بدون طلب جديد. الأخطاء الثابتة (غير موجود / الاشتراك) تُحفظ
+    أيضاً؛ الانقطاع وحد الطلبات ما ينحفظ."""
+
+    def __init__(self, real):
+        self._r = real
+
+    def __getattr__(self, name):
+        fn = getattr(self._r, name)
+        if not callable(fn):
+            return fn
+
+        def w(*a, **kw):
+            key = (name, a, tuple(sorted(kw.items())))
+            if key in PS["cache"]:
+                ok_, v = PS["cache"][key]
+                if ok_:
+                    return v
+                raise v
+            PS["req"] += 1
+            try:
+                v = fn(*a, **kw)
+            except (NotFoundError, PlanUpgradeRequiredError) as e:
+                PS["cache"][key] = (False, e)
+                raise
+            PS["cache"][key] = (True, v)
+            return v
+        w.__name__ = name
+        return w
+
+
+_ps_orig_call = call
+
+
+def ps_files(P):
+    return dict(file=f"{P}.json", adv_file=f"{P}_adv.json", heat_file=f"{P}_heat.json", pl_file=f"{P}_pl.json",
+                sh_file=f"{P}_sh.json", mx_file=f"{P}_mx.json", rt_file=f"{P}_rt.json", hv_file=f"{P}_hv.json")
+
+
+def ps_restore(hub, P):
+    """يرجّع المحفوظ من الموسم إلى القاعدة المحلية. ترجع (mx, rt, hv) أو None إذا ملف موجود ما انقرى (نتخطى هذي المرة)."""
+    F, got = ps_files(P), {}
+    for k, fn in F.items():
+        d = gh_get_json(hub, "data/" + fn)
+        if d is None and _mx_status(hub, "data/" + fn) != "missing":
+            log(f"  [المواسم السابقة] تعذرت قراءة {fn}، تخطيت الموسم هذي المرة (المحفوظ ما تغيّر)")
+            return None
+        got[k] = d
+    if got["file"]:
+        restore_league(got["file"])
+    if got["adv_file"]:
+        restore_extras(P, got["adv_file"], got["heat_file"])
+    if got["pl_file"]:
+        restore_pl(P, got["pl_file"])
+    if got["sh_file"]:
+        restore_sh(P, got["sh_file"])
+    mx, rt, hv = got["mx_file"] or {}, got["rt_file"] or {}, got["hv_file"] or {}
+    return (dict(m=dict(mx.get("m") or {}), st=dict(mx.get("st") or {})), dict(k=dict(rt.get("k") or {}), m=dict(rt.get("m") or {})),
+            dict(km=dict(hv.get("km") or {}), m=dict(hv.get("m") or {}), st=dict(hv.get("st") or {})))
+
+
+def ps_base(client, P, batch):
+    """نفس جلب الموسم الحالي الأساسي (xT و xG لكل لاعب) لمباريات الدفعة."""
+    c = db()
+    for m in batch:
+        c.execute("INSERT INTO matches(league_id,match_id,date,home,away,score) VALUES(?,?,?,?,?,?) "
+                  "ON CONFLICT(league_id,match_id) DO UPDATE SET date=excluded.date, score=excluded.score",
+                  (P, str(m.id), str(getattr(m, "date", "")), m.home_team.name, m.away_team.name, f"{m.score_home}-{m.score_away}"))
+    c.commit()
+    c.close()
+    for m in batch:
+        status, rows = extract(client, m)
+        t = now()
+        c = db()
+        if rows:
+            c.execute("DELETE FROM stats WHERE league_id=? AND match_id=?", (P, str(m.id)))
+            c.executemany("INSERT OR REPLACE INTO stats VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                          [(P, str(m.id), r["pid"] or r["player"], r["pid"], r["player"], r["club"], r["pos"], r["xt"], r["xg"],
+                            r["xgf"], r["minutes"], "PitchAPI", t) for r in rows])
+        c.execute("UPDATE matches SET status=?, fetched_at=? WHERE league_id=? AND match_id=?", (status, t, P, str(m.id)))
+        c.commit()
+        c.close()
+        time.sleep(REQUEST_DELAY)
+
+
+def ps_season(client, hub, lid, api_season, label, budget, st):
+    """يجلب دفعة من مباريات موسم سابق وينشر ملفاته. ترجع عدد المباريات اللي انطلبت."""
+    P = ps_id(lid, label)
+    if st.get("plan"):
+        last = _parse_ts(st.get("t"))
+        if last and (datetime.datetime.now(datetime.timezone.utc) - last).days < PS_PLAN_RETRY_D:
+            return 0
+    if st.get("complete"):
+        return 0
+    res, err = call(lambda: client.leagues.matches(lid, season=api_season, status="played"))
+    if res is None:
+        log(f"  [المواسم السابقة] {lid} {label}: تعذر جلب قائمة المباريات ({err})")
+        st.update(t=now(), err=err, plan=err == "plan")
+        return 0
+    ms = [m for m in res.matches if m.score_home is not None and m.score_away is not None]
+    rest = ps_restore(hub, P)
+    if rest is None:
+        return 0
+    mx, rt, hv = rest
+    info = {r["match_id"]: r for r in q("SELECT match_id, status, fetched_at FROM matches WHERE league_id=?", (P,))}
+    todo = sorted([m for m in ms if ps_due(info.get(str(m.id)))], key=lambda m: (str(m.date or ""), str(m.id)))
+    batch = todo[:budget]
+    log(f"  [المواسم السابقة] {lid} {label}: {len(ms)} مباراة في PitchAPI | محفوظة {len(info)} | الحين {len(batch)} | باقي بعدها {len(todo) - len(batch)}")
+    st.update(api=api_season, id=P, n=len(ms), t=now(), err=None, plan=False)
+    r0, t0 = PS["req"], time.time()
+    if batch:
+        ps_base(client, P, batch)
+    if PS["errs"].get("rate_limit"):
+        log("  [المواسم السابقة] PitchAPI يحدّ الطلبات: نحفظ اللي وصل ونكمل في المزامنة الجاية")
+    else:
+        # كل خطوة تجلب فقط المباريات اللي ما انجلبت لها (بعد انقطاع سابق تكمل الناقص)
+        sync_extras(client, P)
+        if batch:
+            sync_home_frame(client, P)
+        sync_pstats(client, P)
+        sync_shots(client, P)
+        blocked, keys = set(), {}
+        for mid in ps_mx_todo(P, mx, hv)[:max(budget, len(batch))]:
+            if "*" in blocked or PS["errs"].get("rate_limit"):
+                break
+            if mid not in mx["m"] and mid not in mx["st"]:
+                got = mx_fetch(client, mid, ["lu", "mo", "rt"], blocked, keys)
+                e = mx["m"].setdefault(mid, {})
+                e.update({p: got[p] for p in ("lu", "mo") if p in got})
+                if not e:
+                    mx["m"].pop(mid, None)
+                    mx["st"][mid] = [1, now(), "empty"]
+                if "rt" in got:
+                    rt["m"][mid] = got["rt"]
+                for k, n in keys.items():
+                    rt["k"][k] = rt["k"].get(k, 0) + n
+                keys.clear()
+            if mid not in hv["m"] and mid not in hv["st"] and "*" not in blocked:
+                h, he = hv_fetch(client, mid, hv["km"], set())
+                if he == "rate_limit":
+                    break
+                if h and h["p"]:
+                    hv["m"][mid] = h
+                else:
+                    hv["st"][mid] = [1, now(), he or "empty"]
+    st["req"] = st.get("req", 0) + PS["req"] - r0
+    st["sec"] = round(st.get("sec", 0) + time.time() - t0)
+    done = {r["match_id"]: r for r in q("SELECT match_id, status, fetched_at FROM matches WHERE league_id=?", (P,))}
+    ids = {str(m.id) for m in batch}
+    if batch and PS["errs"].get("plan") and not any(r["status"] in ("ok", "partial") for i, r in done.items() if i in ids):
+        log(f"  [المواسم السابقة] {lid} {label}: الاشتراك في PitchAPI ما يسمح ببيانات مباريات هذا الموسم (plan) — ما نشرنا شي")
+        st.update(plan=True, err="plan")
+        return len(batch)
+    if PS["req"] == r0 and not batch:
+        return 0
+    ps_publish(hub, lid, P, label, mx, rt, hv, st)
+    left = [m for m in ms if ps_due(done.get(str(m.id)))]
+    st.update(got=len(done), ok=sum(1 for r in done.values() if r["status"] == "ok"),
+              complete=not left and not ps_mx_todo(P, mx, hv) and not PS["errs"].get("rate_limit"))
+    return len(batch)
+
+
+def ps_mx_todo(P, mx, hv):
+    """مباريات الموسم اللي ما انطلبت لها التشكيلة/التقييمات أو الشوطين أبداً (الأقدم أولاً)."""
+    rows = q("SELECT match_id i FROM matches WHERE league_id=? AND status IN ('ok','partial') ORDER BY date, match_id", (P,))
+    return [r["i"] for r in rows if (r["i"] not in mx["m"] and r["i"] not in mx["st"]) or (r["i"] not in hv["m"] and r["i"] not in hv["st"])]
+
+
+def ps_publish(hub, lid, P, label, mx, rt, hv, st):
+    lg = dict(id=P, name=f"{st.get('name') or lid} {label}", country="")
+    DQ["q"].setdefault(P, dict(_dq_qfile(lid)))          # أرقام المراكز من ملف صور الدوري نفسه (نفس معرّفات اللاعبين)
+    F, ent = ps_files(P), dict(s=label, id=P)
+    blobs = {"file": build_league_payload(lg), "adv_file": build_adv_payload(P), "heat_file": build_heat_payload(P),
+             "pl_file": build_pl_payload(P), "sh_file": build_sh_payload(P), "mx_file": mx, "rt_file": rt, "hv_file": hv}
+    for k, d in blobs.items():
+        if k == "heat_file" and not d["rows"] or k in ("mx_file", "rt_file", "hv_file") and not d["m"]:
+            continue
+        b = json.dumps(d, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        gh_put(hub, "data/" + F[k], b, f"Update {lg['name']} ({k[:-5] or 'matches'})")
+        ent[k] = F[k]
+        ent[k[:-5] + "_v" if k != "file" else "v"] = _mx_v(b)
+        ent.setdefault("size", 0)
+        ent["size"] += len(b)
+    st["files"] = ent
+    log(f"  [المواسم السابقة] {P}: نشرنا {sum(1 for k in PS_KEYS if k in ent)} ملفات ({ent.get('size', 0) / 1e6:.1f} MB)")
+
+
+def ps_manifest(state):
+    """data/index.json → seasons: {league: {cur, past: [{s, id, ملفات, matches, total, complete}]}}."""
+    out = {}
+    for lid, L in (state.get("leagues") or {}).items():
+        past = []
+        for lab, st in sorted((L.get("seasons") or {}).items(), reverse=True):
+            f = st.get("files") or {}
+            if f.get("file") and st.get("got"):
+                past.append(dict({k: v for k, v in f.items() if k != "size"}, matches=st["got"], ok=st.get("ok", 0),
+                                 total=st.get("n"), complete=bool(st.get("complete"))))
+        if past:
+            out[lid] = dict(cur=L.get("cur"), past=past)
+    return out
+
+
+def ps_state(hub):
+    if PS["state"] is None:
+        PS["state"] = gh_get_json(hub, PS_PATH) or {}
+    return PS["state"]
+
+
+def sync_past_seasons(real, hub):
+    client = type("PSClient", (), {})()
+    client.matches, client.leagues = _PSProxy(real.matches), _PSProxy(real.leagues)
+    state = ps_state(hub)
+    lgs = state.setdefault("leagues", {})
+    PS.update(cache={}, req=0, errs={})
+    names = {str(l.id): l.name for l in (globals().get("_LEAGUE_LIST") or [])}
+    budget = PS_PER_RUN
+    globals()["call"], globals()["match_due"] = ps_call, ps_due
+    try:
+        for lid in PS_ON:
+            L = lgs.setdefault(lid, {})
+            cur = _season_label((globals().get("_LEAGUE_SEASON") or {}).get(lid))
+            if cur:
+                L["cur"] = cur
+            for api_s, lab in ps_seasons(lid):
+                if budget <= 0 or PS["errs"].get("rate_limit"):
+                    break
+                st = L.setdefault("seasons", {}).setdefault(lab, {})
+                st["name"] = names.get(lid) or st.get("name")
+                budget -= ps_season(client, hub, lid, api_s, lab, budget, st)
+                PS["cache"].clear()
+    finally:
+        globals()["call"], globals()["match_due"] = _ps_orig_call, _ps_orig_match_due
+    if PS["req"] or PS["errs"]:
+        log(f"  [المواسم السابقة] الطلبات في هذي المزامنة: {PS['req']} | الأخطاء: {PS['errs'] or 'لا يوجد'}")
+    state["note"] = ("Finished past seasons from PitchAPI, fetched once per match (same file formats as the current season, "
+                     "season in the file name). n = matches in PitchAPI, got = fetched, req/sec = requests and seconds spent.")
+    old = gh_get_json(hub, PS_PATH)
+    if old != state:
+        gh_put(hub, PS_PATH, json.dumps(state, ensure_ascii=False, indent=1).encode("utf-8"), "Update past seasons")
+    idx = gh_get_json(hub, "data/index.json")
+    if idx is not None and idx.get("seasons") != ps_manifest(state):
+        gh_put(hub, "data/index.json", json.dumps(idx, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), "Update index (past seasons)")
+
+
+_ps_orig_match_due = match_due
+_orig_gh_put_ps = gh_put
+
+
+def gh_put(hub, path, content, message):
+    """data/index.json يحمل دائماً قائمة المواسم السابقة (من data/seasons.json)."""
+    if path == "data/index.json":
+        try:
+            man = ps_manifest(ps_state(hub))
+            d = json.loads(content.decode("utf-8"))
+            if man:
+                d["seasons"] = man
+            else:
+                d.pop("seasons", None)
+            content = json.dumps(d, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        except Exception as e:
+            log(f"  [المواسم السابقة] تعذر إضافة المواسم للفهرس ({type(e).__name__}: {e})")
+    return _orig_gh_put_ps(hub, path, content, message)
+
+
+_orig_run_pipeline_ps = run_pipeline
+
+
+def run_pipeline(hub, pit_key):
+    out = _orig_run_pipeline_ps(hub, pit_key)
+    try:
+        with PitchAPI(api_key=pit_key) as client:
+            sync_past_seasons(client, hub)
+    except Exception as e:      # اختيارية: ما توقف المزامنة
+        globals()["call"], globals()["match_due"] = _ps_orig_call, _ps_orig_match_due
+        log(f"  [المواسم السابقة] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
+    return out
+# ======================== نهاية إضافة المواسم السابقة ========================
+
+
+
 if __name__ == "__main__":
     main()
