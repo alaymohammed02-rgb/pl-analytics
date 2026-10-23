@@ -34,3 +34,5 @@ Setup: Node with Playwright (`NODE_PATH` pointing at its `node_modules`; `CHROME
 - `ph/ui_dlh.js` reads the measured competitions from `data/dlh.json` (the raw StatsBomb files are not in the repository).
 - External images (cdn.pitchapi.dev) may or may not load; the console-error filters ignore `ERR_TUNNEL_CONNECTION_FAILED` and `cdn.pitchapi`.
 - `stub/pitchapi.py` stands in for the `pitchapi` package, so the tests need neither the package nor a key.
+
+The workflow runs on every pull request and can also be started by hand from the Actions tab (Tests, Run workflow).
