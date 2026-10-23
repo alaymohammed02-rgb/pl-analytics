@@ -1,5 +1,5 @@
-const {chromium}=require('/opt/node-tools/node_modules/playwright');const fs=require('fs');
-const U='http://127.0.0.1:8765/index.html',DATA='/home/user/pl-analytics/data/';let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
+const {chromium}=require('playwright');const fs=require('fs');
+const U='http://127.0.0.1:8765/index.html',DATA=(process.env.PLREPO||__dirname+'/../..')+'/data/';let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
 const J=f=>JSON.parse(fs.readFileSync(DATA+f,'utf8'));
 const MX=J('l_4WFCIZ_mx.json'),RT=J('l_4WFCIZ_rt.json'),SH=J('l_4WFCIZ_sh.json'),LG=J('l_4WFCIZ.json'),PL=J('l_4WFCIZ_pl.json'),HT=J('l_4WFCIZ_heat.json'),FX=J('fixtures.json');
 const six={};SH.cols.forEach((c,i)=>six[c]=i);const pix={};PL.cols.forEach((c,i)=>pix[c]=i);
@@ -12,7 +12,7 @@ async function open(b,{vw=1280,lang='en',hash='#/round'}={}){const ctx=await b.n
 const go=async(pg,h,sel)=>{await pg.evaluate(h=>location.hash=h,h);await pg.waitForSelector(sel,{timeout:30000,state:'attached'});await pg.waitForTimeout(800)};
 const pngSize=f=>{const b=fs.readFileSync(f);return b.slice(0,8).toString('hex')==='89504e470d0a1a0a'?[b.readUInt32BE(16),b.readUInt32BE(20)]:null};
 const untranslated=sel=>{const o=[];document.querySelectorAll(sel).forEach(r=>{const w=document.createTreeWalker(r,NodeFilter.SHOW_TEXT);let n;while(n=w.nextNode()){if(n.parentNode.closest('svg,select,.mc-sh b,.hcl,a,.pp-meta,.md-tm,.mc-leg,.potr-l,.mc-cn,.mc-subs li>span:not([class]),.mc-rl li>span:not([class]),.ms-en,.ms bdi'))continue;const t=n.nodeValue.trim();if(/[A-Za-z]{3}/.test(t)&&!/[؀-ۿ]/.test(t)&&!/^(xG|xAG|xT|PitchAPI|FT)\b/.test(t))o.push(t)}});return [...new Set(o)]};
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  const mid=Object.keys(MX.m).find(k=>MX.m[k].lu&&MX.m[k].mo&&RT.m[k]),M=LG.matches.find(m=>m.i===mid),E=MX.m[mid],R=RT.m[mid];
  /* ---------------- match centre ---------------- */
  {const {ctx,pg,errs}=await open(b);await pg.waitForSelector('#home .hsec',{timeout:60000});
@@ -38,7 +38,7 @@ const untranslated=sel=>{const o=[];document.querySelectorAll(sel).forEach(r=>{c
   ok(!(await pg.$$eval('#app h3',a=>a.some(x=>x.textContent.trim()==='Other tabs'))),'the outdated "lineups not available" note is gone');
   ok(await pg.$eval('.mc-rl li.best a',a=>a.textContent)===sc.motm,'the best-rated player is starred');
   /* share */
-  const [dl]=await Promise.all([pg.waitForEvent('download',{timeout:30000}),pg.click('#mc .shr-btn')]);const f='/tmp/claude-0/-home-user/83a4d5f8-8137-5cb1-9baa-8ac55fed2a66/scratchpad/px/share_match.png';await dl.saveAs(f);
+  const [dl]=await Promise.all([pg.waitForEvent('download',{timeout:30000}),pg.click('#mc .shr-btn')]);const f=require('os').tmpdir()+'/share_match.png';await dl.saveAs(f);
   ok(JSON.stringify(pngSize(f))==='[1080,1350]'&&/\.png$/.test(dl.suggestedFilename()),'Share as image: a 1080×1350 PNG ('+dl.suggestedFilename()+')');
   /* a match without the new data: no centre sections that would claim anything */
   const old=LG.matches.find(m=>!MX.m[m.i]&&m.t==='ok'&&!RT.m[m.i]);
@@ -59,7 +59,7 @@ const untranslated=sel=>{const o=[];document.querySelectorAll(sel).forEach(r=>{c
   const hr=HT.rows.filter(r=>r.t==='p'&&r.k===pid),tot=hr.reduce((a,r)=>{for(let i=2;i<r.h.length;i+=3)a+=r.h[i];return a},0);
   if(hr.length)ok((await pg.innerText('.pp-heat')).includes(tot+' actions')&&!!(await pg.$('.pp-heat image.heat-smooth')),'season heat map = the sum of his '+hr.length+' match maps ('+tot+' actions)');
   ok(!(await pg.$$eval('#app h3',a=>a.some(x=>x.textContent.trim()==='Other sections'))),'the outdated "heatmap, radar not available" note is gone');
-  const [dl]=await Promise.all([pg.waitForEvent('download',{timeout:30000}),pg.click('#pp .shr-btn')]);const f='/tmp/claude-0/-home-user/83a4d5f8-8137-5cb1-9baa-8ac55fed2a66/scratchpad/px/share_player.png';await dl.saveAs(f);
+  const [dl]=await Promise.all([pg.waitForEvent('download',{timeout:30000}),pg.click('#pp .shr-btn')]);const f=require('os').tmpdir()+'/share_player.png';await dl.saveAs(f);
   ok(JSON.stringify(pngSize(f))==='[1080,1350]','player card shared as a 1080×1350 PNG');
   /* radar: a regular with enough minutes and a known position */
   const reg=await pg.evaluate(()=>{const a=aggPl(PLD).filter(x=>x.p&&x.p!=='GK'&&x.s.mi>=450).sort((x,y)=>y.s.mi-x.s.mi)[0];const s=D.stats.find(s=>s.player_id===a.id);return {key:s.key,club:s.club,p:a.p}});
@@ -74,20 +74,26 @@ const untranslated=sel=>{const o=[];document.querySelectorAll(sel).forEach(r=>{c
   ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await ctx.close()}
  /* ---------------- home: matchday strip and player of the round ---------------- */
  {const {ctx,pg,errs}=await open(b);await pg.waitForSelector('#potr .potr-c',{timeout:60000,state:'attached'});await pg.waitForTimeout(800);
-  const h=await pg.evaluate(()=>({first:document.querySelector('#home').firstElementChild.id,up:document.querySelectorAll('#mds .md-c.up').length,res:document.querySelectorAll('#mds a.md-c:not(.up)').length,round:HOME.c.round.length,cd:document.querySelector('#mds .hhd .md-cd').textContent,
+  const h=await pg.evaluate(()=>({first:document.querySelector('#home').firstElementChild.id,up:document.querySelectorAll('#mds .md-c.up').length,res:document.querySelectorAll('#mds a.md-c:not(.up)').length,round:HOME.c.round.length,cd:(document.querySelector('#mds .hhd .md-cd')||{}).textContent||null,head:document.querySelector('#mds .hhd h2')&&document.querySelector('#mds .hhd h2').textContent,
    order:[...document.querySelectorAll('#home .hsec .hhd h2')].map(x=>x.textContent)}));
-  const now=Date.now(),L=FX.leagues.l_4WFCIZ.map(f=>Date.parse(f.k)).filter(t=>t>now).sort((a,b)=>a-b),d0=new Date(L[0]);d0.setHours(0,0,0,0);
+  /* the rule: a match today (or one that kicked off in the last 3 h and is not finished) makes the strip "Today"; otherwise it shows the next matchday = every fixture within 4 days of the next kick-off. Both cases are valid on any date. */
+  const E=await pg.evaluate(fx=>{const now=Date.now(),dk=t=>{const d=new Date(t);return d.getFullYear()+'-'+d.getMonth()+'-'+d.getDate()};
+   const done=new Set((HOME.c.fin||[]).map(m=>m.home+'|'+m.away+'|'+String(m.date).slice(0,10)));
+   const up=fx.filter(f=>f.k&&!isNaN(Date.parse(f.k))&&Date.parse(f.k)>now-3*3600e3&&!done.has(f.h+'|'+f.a+'|'+f.d)).map(f=>Date.parse(f.k));
+   const tod=up.filter(t=>t<=now||dk(t)===dk(now)),later=up.filter(t=>t>now).sort((a,b)=>a-b);
+   if(tod.length)return {today:true,n:tod.length};
+   if(!later.length)return {today:false,n:0};const d0=new Date(later[0]);d0.setHours(0,0,0,0);return {today:false,n:later.filter(t=>t<d0.getTime()+4*864e5).length}},FX.leagues.l_4WFCIZ);
   ok(h.first==='mds','the matchday strip opens the home');
-  ok(h.up===L.filter(t=>t<d0.getTime()+4*864e5).length,'next matchday: every fixture within 4 days of the next kick-off ('+h.up+')');
+  ok(h.up===E.n&&(E.n===0||(E.today?h.head==='Today':h.head==='Next matchday')),(E.today?'today':'next matchday')+': the fixtures the rule selects are shown ('+h.up+')');
   ok(h.res===h.round,'latest results: the matches of the round shown on the home ('+h.res+')');
-  ok(/^\d+d \d+h$|^\d+h \d\dm$|^\d+:\d\d$/.test(h.cd),'live countdown to the next kick-off ('+h.cd+')');
-  await pg.waitForTimeout(1200);const cd2=await pg.$eval('#mds .md-c.up .md-cd',e=>e.textContent);ok(/\d/.test(cd2),'each fixture has its own countdown ('+cd2+')');
+  ok(E.today||E.n===0?h.cd===null:/^\d+d \d+h$|^\d+h \d\dm$|^\d+:\d\d$/.test(h.cd),(E.today?'match day: the header has no kick-off countdown':'live countdown to the next kick-off ('+h.cd+')'));
+  await pg.waitForTimeout(1200);const cd2=await pg.$$eval('#mds .md-c.up:not(.live) .md-cd',a=>a.map(e=>e.textContent));ok(cd2.every(x=>/\d/.test(x)),'each fixture that has not kicked off has its own countdown ('+cd2.length+' shown)');
   ok(h.order.indexOf('Player of the round')===h.order.indexOf('Stars of the round')-1,'Player of the round sits just before Stars of the round');
   const P=await pg.evaluate(()=>({n:document.querySelector('.potr-n').textContent,r:document.querySelector('.potr-r').textContent}));
   const round=new Set(await pg.evaluate(()=>HOME.c.round.map(m=>m.match_id)));let best=null;
   for(const m of round){for(const [p,v] of Object.entries(RT.m[m]||{})){const row=PL.rows.find(r=>r[pix.m]===m&&r[pix.i]===p);if(!row||row[pix.mi]<45)continue;if(!best||v>best.v||(v===best.v&&row[pix.mi]>best.mi))best={v,n:row[pix.n],mi:row[pix.mi]}}}
   ok(best&&P.n===best.n&&P.r===best.v.toFixed(1),'player of the round = highest rating in the round with 45+ minutes ('+P.n+' '+P.r+')');
-  const [dl]=await Promise.all([pg.waitForEvent('download',{timeout:30000}),pg.click('#potr .shr-btn')]);const f='/tmp/claude-0/-home-user/83a4d5f8-8137-5cb1-9baa-8ac55fed2a66/scratchpad/px/share_potr.png';await dl.saveAs(f);
+  const [dl]=await Promise.all([pg.waitForEvent('download',{timeout:30000}),pg.click('#potr .shr-btn')]);const f=require('os').tmpdir()+'/share_potr.png';await dl.saveAs(f);
   ok(JSON.stringify(pngSize(f))==='[1080,1350]','player of the round shared as a PNG');
   ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await ctx.close()}
  /* ---------------- a league without the new files: nothing breaks, nothing shown ---------------- */

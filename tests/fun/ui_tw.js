@@ -1,6 +1,6 @@
 /* Player twins: the pool, percentiles and similarities recomputed from the six leagues' raw per-match player files */
-const {chromium}=require('/opt/node-tools/node_modules/playwright');const fs=require('fs');
-const U='http://127.0.0.1:8765/index.html',DATA='/home/user/pl-analytics/data/';let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
+const {chromium}=require('playwright');const fs=require('fs');
+const U='http://127.0.0.1:8765/index.html',DATA=(process.env.PLREPO||__dirname+'/../..')+'/data/';let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
 const J=f=>JSON.parse(fs.readFileSync(DATA+f,'utf8'));const IDX=J('index.json');
 const KEYS=['npxg','sh','xag','kp','sca','pr','bx','ps','pc','cb','tkw','tk','ic','bl','duw','aerw'];
 const LGS=IDX.leagues.filter(l=>!/World Cup|Champions/.test(l.name));
@@ -19,7 +19,7 @@ async function open(b,{vw=1280,lang='en',league='l_0ErfuF',hash='#/twins'}={}){c
  const pg=await ctx.newPage(),errs=[];pg.on('pageerror',e=>errs.push(e.message));pg.on('console',m=>{const u=(m.location()||{}).url||'';if(m.type()==='error'&&!/favicon|ERR_TUNNEL_CONNECTION_FAILED|api.github.com|cdn.pitchapi|Failed to load resource/.test(u+m.text()))errs.push(m.text())});
  await pg.goto(U+hash);return {ctx,pg,errs}}
 const list=pg=>pg.$$eval('.tw-list button',a=>a.map(x=>({k:x.dataset.k,p:parseInt(x.querySelector('.tw-p').textContent)})));
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  {const {ctx,pg,errs}=await open(b);await pg.waitForSelector('.tw-list',{timeout:90000});
   const nav=await pg.$$eval('#nav a',a=>a.map(x=>x.getAttribute('href')));ok(nav.indexOf('#/twins')===nav.indexOf('#/compare')+1,'in Players, after Compare');
   ok(await pg.$$eval('#twl option',a=>a.length)===pool.length,`pool: ${pool.length} outfield players with 450+ minutes in ${LGS.length} domestic leagues (no Champions League, no World Cup, no goalkeepers; ${pool.filter(x=>!x.p).length} with no position in the data)`);

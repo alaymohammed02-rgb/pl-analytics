@@ -1,7 +1,7 @@
-const {chromium}=require('/opt/node-tools/node_modules/playwright');const fs=require('fs');
+const {chromium}=require('playwright');const fs=require('fs');
 let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
 const U='http://127.0.0.1:8773/index.html';
-const FPL=JSON.parse(fs.readFileSync('/home/user/pl-analytics/data/fpl.json','utf8')),HI=Object.fromEntries(FPL.hcols.map((c,i)=>[c,i]));
+const FPL=JSON.parse(fs.readFileSync((process.env.PLREPO||__dirname+'/../..')+'/data/fpl.json','utf8')),HI=Object.fromEntries(FPL.hcols.map((c,i)=>[c,i]));
 const offPts=(id,gw)=>((FPL.hist[String(id)]||[]).filter(h=>h[HI.r]===gw).reduce((s,h)=>s+h[HI.pts],0));
 const SENT={league:'l_4WFCIZ',flipy:'1',gh_repo:'x/y',fpl_myxi_cur_v1:'{"keep":1}',fpl_myxi_saved_v1:'[1,2]',fpl_ox_log_v1:'[3]',fpl_ox_cal_v1:'{"k":1.2}'};
 async function open(b,{vw=1280,lang='en',init=null}={}){const ctx=await b.newContext({viewport:{width:vw,height:900},acceptDownloads:true});
@@ -11,11 +11,12 @@ async function open(b,{vw=1280,lang='en',init=null}={}){const ctx=await b.newCon
 const lab=async(pg,tab)=>{await pg.evaluate(t=>{LAB.tab=t;location.hash='#/lab';route()},tab||'arena');await pg.waitForSelector('.labtabs',{timeout:20000});await pg.waitForTimeout(tab==='disc'?2500:500)};
 const store=pg=>pg.evaluate(()=>JSON.parse(localStorage.getItem('plx_lab_v1')||'null'));
 const noScroll=pg=>pg.evaluate(()=>document.scrollingElement.scrollWidth-innerWidth);
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  /* ---- English, desktop ---- */
  {const {ctx,pg,errs}=await open(b);
-  const nav=await pg.$$eval('#nav a',a=>a.map(x=>x.getAttribute('href'))),old=[...fs.readFileSync(__dirname+'/main_index.html','utf8').match(/PAGES=\[(.*?)\];/)[1].matchAll(/\['([a-z]+)'/g)].map(m=>'#/'+m[1]);
-  ok(JSON.stringify(nav.filter(x=>!['#/lab','#/whatif','#/ratings','#/halves','#/gems','#/reality','#/round','#/height','#/sim','#/luck','#/twins','#/cards','#/beat','#/rare','#/share','#/states','#/xi','#/thrill','#/clubtwins','#/carry','#/reportcard','#/leaguedna'].includes(x)))===JSON.stringify(old)&&nav.includes('#/whatif')&&nav.indexOf('#/lab')===nav.indexOf('#/fantasy')+1,'menu: Intelligence Lab added after Fantasy; the other '+old.length+' items unchanged and in order');
+  const nav=await pg.$$eval('#nav a',a=>a.map(x=>x.getAttribute('href'))),old=[...fs.readFileSync((process.env.PLREPO||__dirname+'/../..')+'/index.html','utf8').match(/PAGES=\[(.*?)\];/)[1].matchAll(/\['([a-z]+)'/g)].map(m=>'#/'+m[1]);
+  /* the pages built into index.html (PAGES=[...]) keep their order in the menu; pages added later by the feature files sit between them */
+  {const inNav=nav.filter(x=>old.includes(x));ok(JSON.stringify(inNav)===JSON.stringify(old)&&new Set(nav).size===nav.length&&nav.includes('#/whatif')&&nav.indexOf('#/lab')===nav.indexOf('#/fantasy')+1,'menu: Intelligence Lab right after Fantasy; the '+old.length+' built-in items all there, in order, no duplicates')}
   await pg.evaluate(()=>location.hash='#/lab');await pg.waitForSelector('.labtabs');ok(!!await pg.$('.labintro'),'first visit: a short introduction');
   await lab(pg,'arena');
   const gw=await pg.evaluate(()=>{const e=labOpen(LAB.d);return {id:e.id,dl:e.dl}});ok(gw.id===8&&gw.dl==='2026-10-23T17:30:00Z','open gameweek = the next deadline in fpl.json (GW8)');

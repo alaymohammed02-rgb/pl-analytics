@@ -1,3 +1,4 @@
+import os as _os; REPO=_os.environ.get('PLREPO') or _os.path.abspath(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)),'..','..'))
 import sys,json,collections
 sys.path.insert(0,'../fx');import run_local as RL
 G=RL.G;matches,shots,club,idx=RL.load()
@@ -5,7 +6,7 @@ WC=[l['id'] for l in idx['leagues'] if 'World Cup' in l['name']]
 matches=[m for m in matches if m['l'] not in WC];shots=[s for s in shots if s['l'] not in WC]
 M=G['_fx_matches'](matches,shots,club)
 print('matches with full shots',len(M),'of finished',sum(1 for m in matches if G['_fx_score'](m['s'])))
-D='/home/user/pl-analytics/data/'
+D=REPO+'/data/'
 # player-match rows
 PL=[];RT={}
 for lg in idx['leagues']:

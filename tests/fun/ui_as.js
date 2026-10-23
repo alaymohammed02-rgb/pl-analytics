@@ -1,6 +1,6 @@
 /* Attack share: npxG + xAG per 90 and the share of the team's chances while on the pitch, recomputed from the raw files */
-const {chromium}=require('/opt/node-tools/node_modules/playwright');const fs=require('fs');
-const U='http://127.0.0.1:8765/index.html',DATA='/home/user/pl-analytics/data/';let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
+const {chromium}=require('playwright');const fs=require('fs');
+const U='http://127.0.0.1:8765/index.html',DATA=(process.env.PLREPO||__dirname+'/../..')+'/data/';let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
 const J=f=>JSON.parse(fs.readFileSync(DATA+f,'utf8'));const IDX=J('index.json'),PL=IDX.leagues.find(l=>l.name==='Premier League');
 const P=J(PL.pl_file),ix={};P.cols.forEach((c,i)=>ix[c]=i);const F=J('fpl.json'),fc={};F.cols.forEach((c,i)=>fc[c]=i);const LG=J(PL.file);
 const TM={'Man City':'Manchester City','Man Utd':'Manchester United','Spurs':'Tottenham Hotspur',"Nott'm Forest":'Nottingham Forest','Leeds':'Leeds United','Newcastle':'Newcastle United','Bournemouth':'AFC Bournemouth','Brighton':'Brighton & Hove Albion'};
@@ -18,7 +18,7 @@ async function open(b,{vw=1280,lang='en',league='l_4WFCIZ'}={}){const ctx=await 
  const pg=await ctx.newPage(),errs=[];pg.on('pageerror',e=>errs.push(e.message));pg.on('console',m=>{const u=(m.location()||{}).url||'';if(m.type()==='error'&&!/favicon|ERR_TUNNEL_CONNECTION_FAILED|api.github.com|cdn.pitchapi|Failed to load resource/.test(u+m.text()))errs.push(m.text())});
  await pg.goto(U+'#/share');return {ctx,pg,errs}}
 const read=pg=>pg.evaluate(()=>[...document.querySelectorAll('.as-d')].map(g=>({id:+g.dataset.pid,tip:g.getAttribute('data-tip')})));
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  {const {ctx,pg,errs}=await open(b,{league:'l_0ErfuF'});await pg.waitForSelector('.as-t',{timeout:90000});
   ok(await pg.evaluate(()=>/Premier League/.test(D.name)),'opened from LaLiga: the Premier League opens (Fantasy is the Premier League)');
   const nav=await pg.evaluate(()=>{drwOpen(true);const a=[...document.querySelectorAll('#drw .drw-s[data-s="fpl"] a')].map(a=>a.getAttribute('href'));drwOpen(false);return a});ok(nav.join()==='#/fantasy,#/lab,#/beat,#/share','in Fantasy, after Beat the model');

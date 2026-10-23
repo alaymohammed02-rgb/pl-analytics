@@ -1,5 +1,5 @@
-const {chromium}=require('/opt/node-tools/node_modules/playwright');const fs=require('fs');
-const U='http://127.0.0.1:8765/index.html',DATA='/home/user/pl-analytics/data/';let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
+const {chromium}=require('playwright');const fs=require('fs');
+const U='http://127.0.0.1:8765/index.html',DATA=(process.env.PLREPO||__dirname+'/../..')+'/data/';let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
 const J=f=>JSON.parse(fs.readFileSync(DATA+f,'utf8'));
 const MX=J('l_4WFCIZ_mx.json'),RT=J('l_4WFCIZ_rt.json'),SH=J('l_4WFCIZ_sh.json'),LG=J('l_4WFCIZ.json'),PL=J('l_4WFCIZ_pl.json'),FX=J('fixtures.json'),H2=J('h2h.json'),HV=J('l_4WFCIZ_hv.json');
 const six={};SH.cols.forEach((c,i)=>six[c]=i);const pix={};PL.cols.forEach((c,i)=>pix[c]=i);
@@ -22,7 +22,7 @@ async function open(b,{vw=1280,lang='en',hash='#/round',live=LIVE,hv=null,now=nu
  await pg.goto(U+hash);return {ctx,pg,errs}}
 const go=async(pg,h,sel)=>{await pg.evaluate(h=>location.hash=h,h);await pg.waitForSelector(sel,{timeout:30000,state:'attached'});await pg.waitForTimeout(700)};
 const untranslated=sel=>{const o=[];document.querySelectorAll(sel).forEach(r=>{const w=document.createTreeWalker(r,NodeFilter.SHOW_TEXT);let n;while(n=w.nextNode()){if(n.parentNode.closest('svg,select,a,.mc-sh b,.hcl,.md-tm,.mc-leg,.mc-cn,.tr-p,.fc-n,.fc-l .mu,.rt-pl,.pv-pl,.pv-h2h span,.pv-hl,.clx-xi,.mc-subs li>span:not([class]),.pv-ev,.clx-next b'))continue;const t=n.nodeValue.trim();if(/[A-Za-z]{3}/.test(t)&&!/[؀-ۿ]/.test(t)&&!/^(xG|xAG|xT|PitchAPI|FT|GW\d*|XI)\b/.test(t))o.push(t)}});return [...new Set(o)]};
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  /* ---------------- team of the round ---------------- */
  {const {ctx,pg,errs}=await open(b);await pg.waitForSelector('#totr .tr-pitch',{timeout:60000,state:'attached'});await pg.waitForTimeout(800);
   const round=new Set(await pg.evaluate(()=>HOME.c.round.map(m=>m.match_id)));

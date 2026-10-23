@@ -1,8 +1,8 @@
 /* Very rare cases page: every case of data/rare.json (made by the engine test from the raw files) shown in its league, with its rarity */
-const {chromium}=require('/opt/node-tools/node_modules/playwright');const fs=require('fs');
+const {chromium}=require('playwright');const fs=require('fs');
 const U='http://127.0.0.1:8765/index.html';let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
-const RARE=fs.readFileSync(__dirname+'/rare.json','utf8'),X=JSON.parse(RARE);
-const IDX=JSON.parse(fs.readFileSync('/home/user/pl-analytics/data/index.json','utf8'));
+const RARE=fs.readFileSync((process.env.PLREPO||__dirname+'/../..')+'/data/rare.json','utf8'),X=JSON.parse(RARE);
+const IDX=JSON.parse(fs.readFileSync((process.env.PLREPO||__dirname+'/../..')+'/data/index.json','utf8'));
 const strip=s=>s.replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/\s+/g,' ').trim();
 async function open(b,{vw=1280,lang='en',league='l_1Isor4',flag=true}={}){const ctx=await b.newContext({viewport:{width:vw,height:900}});
  await ctx.route(/data\/index\.json/,async r=>{const res=await r.fetch();const j=await res.json();if(flag)j.rr='t1';else delete j.rr;r.fulfill({response:res,body:JSON.stringify(j)})});
@@ -10,13 +10,13 @@ async function open(b,{vw=1280,lang='en',league='l_1Isor4',flag=true}={}){const 
  await ctx.addInitScript(([l,lg])=>{if(!sessionStorage.getItem('s')){sessionStorage.setItem('s','1');localStorage.clear();localStorage.setItem('league',lg);localStorage.setItem('lang',l)}},[lang,league]);
  const pg=await ctx.newPage(),errs=[];pg.on('pageerror',e=>errs.push(e.message));pg.on('console',m=>{const u=(m.location()||{}).url||'';if(m.type()==='error'&&!/favicon|ERR_TUNNEL_CONNECTION_FAILED|api.github.com|cdn.pitchapi|Failed to load resource/.test(u+m.text()))errs.push(m.text())});
  await pg.goto(U+'#/rare');return {ctx,pg,errs}}
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  for(const lg of IDX.leagues.filter(l=>!/World Cup/.test(l.name))){const L=X.leagues[lg.id]||{rare:[],near:[]};
   const {ctx,pg,errs}=await open(b,{league:lg.id});await pg.waitForSelector('.rr-hero',{timeout:90000});
   const nav=await pg.$$eval('#nav a',a=>a.map(x=>x.getAttribute('href')));
   const got=await pg.$$eval('.rr-c',a=>a.map(c=>({k:c.dataset.k,near:c.classList.contains('near'),s:c.querySelector('.rr-s .fx-en').textContent,b:c.querySelector('.rr-b b').textContent,r:c.querySelector('.rr-r .fx-en').textContent,links:[...c.querySelectorAll('.rr-a a')].map(a=>a.getAttribute('href'))})));
   const exp=[...L.rare.map(c=>({c,near:false})),...L.near.map(c=>({c,near:true}))];
-  const teams=new Set(JSON.parse(fs.readFileSync('/home/user/pl-analytics/data/'+lg.file,'utf8')).matches.flatMap(m=>[m.h,m.a])).size,season=/Champions/.test(lg.name)?null:teams*(teams-1);
+  const teams=new Set(JSON.parse(fs.readFileSync((process.env.PLREPO||__dirname+'/../..')+'/data/'+lg.file,'utf8')).matches.flatMap(m=>[m.h,m.a])).size,season=/Champions/.test(lg.name)?null:teams*(teams-1);
   const good=got.length===exp.length&&got.every((g,i)=>{const {c,near}=exp[i],per=Math.round(c.N/c.n);return g.k===c.k&&g.near===near&&strip(g.s)===strip(c.en)&&g.b.replace(/\s/g,'')==='1/'+per
    &&g.r.includes(`Happened in ${c.n} of the ${c.N} matches`)&&g.r.includes(`about once every ${per} matches`)&&(season?g.r.includes(`season (${season} matches)`):!/season \(/.test(g.r))&&g.links[0]==='#/match/'+encodeURIComponent(c.m)});
   ok(good&&+(await pg.textContent('.rr-n'))===L.rare.length,`${lg.name}: ${L.rare.length} very rare + ${L.near.length} almost, each with its sentence, "1 / N", "k of N" and the season line (${season||'cup: none'})`);

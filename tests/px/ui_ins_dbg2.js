@@ -1,5 +1,5 @@
-const {chromium}=require('/opt/node-tools/node_modules/playwright');const fs=require('fs');
-const U='http://127.0.0.1:8765/index.html',DATA='/home/user/pl-analytics/data/';let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
+const {chromium}=require('playwright');const fs=require('fs');
+const U='http://127.0.0.1:8765/index.html',DATA=(process.env.PLREPO||__dirname+'/../..')+'/data/';let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
 const J=f=>JSON.parse(fs.readFileSync(DATA+f,'utf8'));
 const LG=J('l_4WFCIZ.json'),SH=J('l_4WFCIZ_sh.json'),FX=J('fixtures.json'),IDX=J('index.json');
 const six={};SH.cols.forEach((c,i)=>six[c]=i);const sc=s=>{const m=/^(\d+)-(\d+)$/.exec(s||'');return m?[+m[1],+m[2]]:null};
@@ -19,7 +19,7 @@ async function open(b,{vw=1280,lang='en',hash='#/overview',sched=true,live=null}
  await pg.goto(U+hash);return {ctx,pg,errs,req}}
 const go=async(pg,h,sel)=>{await pg.evaluate(h=>location.hash=h,h);await pg.waitForSelector(sel,{timeout:30000,state:'attached'});await pg.waitForTimeout(700)};
 const untranslated=sel=>{const o=[];document.querySelectorAll(sel).forEach(r=>{const w=document.createTreeWalker(r,NodeFilter.SHOW_TEXT);let n;while(n=w.nextNode()){if(n.parentNode.closest('svg,select,a,option,.mb-tm,.mb-lh b,.ins-bl,.gm-h,.ins-leg,.rc-ml,.ins-pl,.dna-d .mu,.tdna-k span:first-child,#rcmap h3'))continue;const t=n.nodeValue.trim();if(/[A-Za-z]{3}/.test(t)&&!/[؀-ۿ]/.test(t)&&!/^(xG|xAG|xT|npxG|PitchAPI|FT|PPDA|VAEP|SCA|GCA)\b/.test(t))o.push(t)}});return [...new Set(o)]};
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  /* ---------------- Hidden Gems ---------------- */
  {const {ctx,pg,errs,req}=await open(b,{hash:'#/gems'});await pg.waitForSelector('#gmout',{timeout:60000});await pg.waitForTimeout(800);
   ok(await pg.evaluate(()=>PAGES.some(p=>p[0]==='gems')&&UI_SEC.find(s=>s.k==='players').p.includes('gems')&&PAGES.some(p=>p[0]==='reality')&&UI_SEC.find(s=>s.k==='analysis').p.includes('reality')),'Hidden Gems in Players, Reality Check in Analysis');

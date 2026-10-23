@@ -1,6 +1,6 @@
 /* Likely line-ups: the guess, the back-test and the calibration table recomputed from the raw files */
 const T=require('./lib.js');const {ok,J,lg}=T;
-const COEF=JSON.parse(/XI_COEF=(\{[^}]*\})/.exec(require('fs').readFileSync('/home/user/pl-analytics/assets/likely-xi.js','utf8'))[1].replace(/b0:/,'"b0":').replace(/b:/,'"b":'));
+const COEF=JSON.parse(/XI_COEF=(\{[^}]*\})/.exec(require('fs').readFileSync((process.env.PLREPO||__dirname+'/../..')+'/assets/likely-xi.js','utf8'))[1].replace(/b0:/,'"b0":').replace(/b:/,'"b":'));
 function raw(id){const l=lg(id),L=J(l.file),X=J(l.mx_file),P=J(l.pl_file),H={},ix={};P.cols.forEach((c,k)=>ix[c]=k);const mins={},hasPl=new Set();P.rows.forEach(r=>{mins[r[ix.m]+'|'+r[ix.i]]=r[ix.mi]||0;hasPl.add(r[ix.m])});
  const ms=L.matches.filter(m=>/^\d+-\d+$/.test(m.s||'')&&m.d).sort((a,b)=>String(a.d).slice(0,10).localeCompare(String(b.d).slice(0,10))||a.i.localeCompare(b.i));
  for(const m of ms){const e=X.m[m.i],lu=e&&e.lu;if(!lu||!hasPl.has(m.i))continue;for(const [sd,t] of [['h',m.h],['a',m.a]]){const x=lu[sd];if(x&&x.xi&&x.xi.length===11)(H[t]=H[t]||[]).push({id:m.i,xi:x.xi})}}

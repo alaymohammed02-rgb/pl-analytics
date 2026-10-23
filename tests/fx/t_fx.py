@@ -1,6 +1,7 @@
+import os as _os; REPO=_os.environ.get('PLREPO') or _os.path.abspath(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)),'..','..'))
 """Facts of the week / of each team: every fact checked against the raw files, and the sync step (write, skip, index flag)."""
 import json, math, re, datetime, sys
-sys.path.insert(0, '/tmp/claude-0/-home-user/83a4d5f8-8137-5cb1-9baa-8ac55fed2a66/scratchpad/fx')
+sys.path.insert(0, REPO+'/tests/fx')
 import run_local as RL
 G = RL.G
 fails = 0
@@ -89,13 +90,13 @@ ok(puts == ['data/facts.json'] and G['LV_HAVE'].get('fx') == store['data/facts.j
 G['sync_facts'](None, now)
 ok(puts == ['data/facts.json'], 'sync: nothing written when the facts have not changed')
 # the index is published before the facts step: the wrapper announces the file already there
-exec(open('/tmp/claude-0/-home-user/83a4d5f8-8137-5cb1-9baa-8ac55fed2a66/scratchpad/fx/section.py', encoding='utf-8').read().split('_orig_gh_put_fx = gh_put')[0][:0], G)
+exec(open(REPO+'/tests/fx/section.py', encoding='utf-8').read().split('_orig_gh_put_fx = gh_put')[0][:0], G)
 G2 = dict(RL.G); G2['LV_HAVE'] = {}
 seen = []
 G2['gh_put'] = lambda hub, p, c, m: seen.append((p, dict(G2['LV_HAVE'])))
 G2['gh_get_json'] = lambda hub, p: {'h': 'abc1234567'} if p == 'data/facts.json' else None
 G2['run_pipeline'] = lambda *a: None
-exec(open('/tmp/claude-0/-home-user/83a4d5f8-8137-5cb1-9baa-8ac55fed2a66/scratchpad/fx/section.py', encoding='utf-8').read(), G2)
+exec(open(REPO+'/tests/fx/section.py', encoding='utf-8').read(), G2)
 G2['gh_put'](None, 'data/index.json', b'{}', 'x')
 ok(seen and seen[0][1].get('fx') == 'abc1234567', 'index: the existing facts file is announced with its version')
 print('all passed' if not fails else f'{fails} FAILED')

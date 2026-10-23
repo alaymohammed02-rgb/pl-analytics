@@ -1,9 +1,9 @@
-const {chromium}=require('/opt/node-tools/node_modules/playwright');const fs=require('fs');
+const {chromium}=require('playwright');const fs=require('fs');
 const URL='http://127.0.0.1:8765/index.html',SH=__dirname+'/shots/';
 let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
-const REV=JSON.parse(fs.readFileSync('/home/user/pl-analytics/data/fpl_review.json','utf8'));
+const REV=JSON.parse(fs.readFileSync((process.env.PLREPO||__dirname+'/..')+'/data/fpl_review.json','utf8'));
 (async()=>{
- const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+ const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  for(const [vw,lang] of [[1280,'en'],[390,'ar']]){
   const ctx=await b.newContext({viewport:{width:vw,height:900}});const pg=await ctx.newPage();const errs=[];
   pg.on('pageerror',e=>errs.push(e.message));pg.on('console',m=>{const u=(m.location()||{}).url||'';if(m.type()==='error'&&!/favicon|ERR_TUNNEL_CONNECTION_FAILED|api.github.com/.test(u+m.text()))errs.push(m.text())});
@@ -11,7 +11,7 @@ const REV=JSON.parse(fs.readFileSync('/home/user/pl-analytics/data/fpl_review.js
   if(lang==='ar'){await pg.click('#langbtn');await pg.waitForTimeout(500)}
   const tabs=await pg.$$eval('#fproot .ctl button',a=>a.map(x=>x.textContent));
   ok(tabs.includes(lang==='ar'?'مراجعة الموسم':'Season review'),vw+' '+lang+': current season has the Season review tab ('+tabs.length+' tabs)');
-  await pg.selectOption('select[aria-label="Season"], select[aria-label="الموسم"]','2024-25');await pg.waitForTimeout(1500);
+  await pg.selectOption('#fproot select[aria-label="Season"], #fproot select[aria-label="الموسم"]','2024-25');await pg.waitForTimeout(1500);
   const tabs2=await pg.$$eval('#fproot .ctl button',a=>a.map(x=>x.textContent));
   const tr=lang==='ar'?'مراجعة الموسم':'Season review';ok(tabs2.includes(tr),'archived season 2024-25 has the tab: '+tabs2.join(' | '));
   await pg.click(`#fproot .ctl button:text-is("${tr}")`);await pg.waitForSelector('#srout .kpi',{timeout:30000});
@@ -34,12 +34,12 @@ const REV=JSON.parse(fs.readFileSync('/home/user/pl-analytics/data/fpl_review.js
    const names=new Set(await pg.evaluate(()=>FPD.P.flatMap(p=>[p.name,p.tn,p.tf])));
    const left=await pg.evaluate(()=>{const o=[];const w=document.createTreeWalker(document.querySelector('#fpbody'),NodeFilter.SHOW_TEXT);let n;while(n=w.nextNode()){const t=n.nodeValue.replace(/[⁦-⁩]/g,'').trim();if(/[A-Za-z]{2}/.test(t)&&!/[؀-ۿ]/.test(t))o.push(t)}return [...new Set(o)]});
    const bad=left.filter(t=>!names.has(t)&&!/^(GW|xG|xA|FPL|PitchAPI|£|v\d|Model v\d)/.test(t)&&!t.split(/ → |,\s*/).every(x=>names.has(x.trim())));
-   ok(!bad.length,'Arabic: every review text is translated'+(bad.length?' — left: '+JSON.stringify(bad.slice(0,30)):''));fs.writeFileSync('ar_review_left.json',JSON.stringify(bad,null,1))}
+   ok(!bad.length,'Arabic: every review text is translated'+(bad.length?' — left: '+JSON.stringify(bad.slice(0,30)):''));fs.writeFileSync(require('os').tmpdir()+'/ar_review_left.json',JSON.stringify(bad,null,1))}
   if(vw===1280){/* the page's own code recomputes the season on this device and gets the precomputed file */
    const t0=Date.now();const got=await pg.evaluate(async()=>{const R=await srRun(FPD);return [R.fixed.reduce((a,x)=>a+x.act,0),R.ft.reduce((a,x)=>a+x.act,0),R.opt.reduce((a,x)=>a+x.pts,0),JSON.stringify(R)]});
    ok(got[0]===sum(R.fixed,'act')&&got[1]===sum(R.ft,'act')&&got[2]===sum(R.opt,'pts')&&got[3].replace(/(\d\.\d{6})\d+/g,'$1')===JSON.stringify(R).replace(/(\d\.\d{6})\d+/g,'$1'),'browser recomputation is identical to data/fpl_review.json ('+((Date.now()-t0)/1000).toFixed(0)+'s)');
    /* current season: the button runs it on the device */
-   await pg.selectOption('select[aria-label="Season"]','');await pg.waitForTimeout(1500);await pg.click('#fproot .ctl button:text-is("Season review")');await pg.waitForSelector('#srout button');
+   await pg.selectOption('#fproot select[aria-label="Season"]','');await pg.waitForTimeout(1500);await pg.click('#fproot .ctl button:text-is("Season review")');await pg.waitForSelector('#srout button');
    await pg.click('#srout button');await pg.waitForFunction(()=>document.querySelector('#srout .kpi')||/Could not/.test(document.querySelector('#srout').innerText),null,{timeout:600000});
    const cur=await pg.innerText('#srout');ok(/Actual points/.test(cur),'current season review runs on the device: '+cur.split('\n').slice(0,2).join(' | '));
    await pg.screenshot({path:SH+'review_current.png'});}

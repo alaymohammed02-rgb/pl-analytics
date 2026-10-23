@@ -1,0 +1,79 @@
+name: Tests
+on:
+  pull_request:
+  workflow_dispatch:
+concurrency:
+  group: tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+env:
+  PLAYWRIGHT_VERSION: "1.56.1"
+jobs:
+  python:
+    name: Python tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -q requests
+      - name: Run Python tests
+        run: |
+          bash tests/ci.sh cmp/t_cmp.py logo/t_logo.py theme/t_champ.py theme/t_retry.py t_resolve.py home/t_photos.py dq/t_dq.py mx/t_mx.py lv/t_lv.py fx/t_fx.py rare/t_rr.py eng/t_table.py
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-python
+          path: tests/logs
+  browser:
+    name: Browser tests (${{ matrix.shard }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: 1
+            tests: "ui/ui_ux.js ph/ui_dlh.js fun/ui_sm.js fun/ui_lk.js"
+          - shard: 2
+            tests: "lab/ui_lab.js lab/ui_lab2.js theme/ui_theme.js logo/ui_logo.js eng/ui_eng.js ui_test.js"
+          - shard: 3
+            tests: "ui_ar.js ui_season.js ui_review.js trk/ui_track.js cmp/ui_cmp.js home/ui_home.js"
+          - shard: 4
+            tests: "fpx/ui_fpx.js feat/ui_feat.js px/ui_px.js px/ui_px2.js px/ui_ins.js"
+          - shard: 5
+            tests: "rp/ui_rp.js rp/ui_ms.js ov/ui_ov.js ph/ui_ph.js fun/ui_tw.js fun/ui_pc.js"
+          - shard: 6
+            tests: "fun/ui_bm.js rare/ui_rr.js fun/ui_as.js fun/ui_tap.js nf/ui_gs.js nf/ui_xi.js nf/ui_ct.js nf/ui_cy.js nf/ui_rc.js nf/ui_ld.js nf/ui_th.js"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Playwright and Chromium
+        run: |
+          mkdir -p "$RUNNER_TEMP/pw" && cd "$RUNNER_TEMP/pw"
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@${PLAYWRIGHT_VERSION}
+          npx playwright install --with-deps chromium
+          echo "NODE_PATH=$RUNNER_TEMP/pw/node_modules" >> "$GITHUB_ENV"
+      - name: Rebuild index.html (workspace only, never committed)
+        run: |
+          pip install -q requests
+          sh tests/regen.sh
+      - name: Run browser tests
+        run: bash tests/ci.sh ${{ matrix.tests }}
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-browser-${{ matrix.shard }}
+          path: tests/logs

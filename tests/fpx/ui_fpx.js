@@ -1,15 +1,15 @@
-const {chromium}=require('/opt/node-tools/node_modules/playwright');const fs=require('fs');
+const {chromium}=require('playwright');const fs=require('fs');
 const URL='http://127.0.0.1:8765/index.html';
 let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
-const REV=JSON.parse(fs.readFileSync('/home/user/pl-analytics/data/fpl_review.json','utf8'));
-const PAT=JSON.parse(fs.readFileSync('/home/user/pl-analytics/data/fpl_patterns.json','utf8'));
-const FPL=JSON.parse(fs.readFileSync('/home/user/pl-analytics/data/fpl.json','utf8'));
+const REV=JSON.parse(fs.readFileSync((process.env.PLREPO||__dirname+'/../..')+'/data/fpl_review.json','utf8'));
+const PAT=JSON.parse(fs.readFileSync((process.env.PLREPO||__dirname+'/../..')+'/data/fpl_patterns.json','utf8'));
+const FPL=JSON.parse(fs.readFileSync((process.env.PLREPO||__dirname+'/../..')+'/data/fpl.json','utf8'));
 const sig=e=>e&&e.lo!=null&&(e.lo>0||e.hi<0),holds=(a,b)=>sig(a)&&sig(b)&&Math.sign(a.m)===Math.sign(b.m);
 async function open(b,vw,lang){const ctx=await b.newContext({viewport:{width:vw,height:900}});await ctx.addInitScript(l=>{if(!sessionStorage.getItem('s')){sessionStorage.setItem('s','1');localStorage.clear();localStorage.setItem('league','l_4WFCIZ');localStorage.setItem('lang',l)}},lang);
  const pg=await ctx.newPage(),errs=[];pg.on('pageerror',e=>errs.push(e.message));pg.on('console',m=>{const u=(m.location()||{}).url||'';if(m.type()==='error'&&!/favicon|ERR_TUNNEL_CONNECTION_FAILED|api.github.com|cdn.pitchapi/.test(u+m.text()))errs.push(m.text())});
  await pg.goto(URL+'#/fantasy');await pg.waitForSelector('#fproot .ctl button',{timeout:60000});return {ctx,pg,errs}}
 const tab=async(pg,t)=>{await pg.click(`#fproot .ctl button:text-is("${t}")`);await pg.waitForTimeout(800)};
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  /* ---- model v3 ---- */
  {const {ctx,pg,errs}=await open(b,1280,'en');
   ok(await pg.evaluate(()=>PM_VERSION==='v3'&&PM.AF[1]===1&&PM.AF[2]===1.45&&PM.AF[3]===1.58&&PM.AF[4]===2.33),'model v3: assist calibration 1 / 1.45 / 1.58 / 2.33 by position');
@@ -53,7 +53,7 @@ const tab=async(pg,t)=>{await pg.click(`#fproot .ctl button:text-is("${t}")`);aw
    ok(!left.length,'Arabic: the Patterns page is translated '+left.slice(0,4).join(' | '));
    ok(await pg.evaluate(()=>document.scrollingElement.scrollWidth<=innerWidth),'phone: no horizontal scroll');
   }
-  await pg.selectOption('select[aria-label="Season"], select[aria-label="الموسم"]','2024-25');await pg.waitForTimeout(1500);
+  await pg.selectOption('#fproot select[aria-label="Season"], #fproot select[aria-label="الموسم"]','2024-25');await pg.waitForTimeout(1500);
   ok((await pg.$$eval('#fproot .ctl button',a=>a.map(x=>x.textContent))).includes(T),'an archived season keeps the Patterns tab');
   ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await ctx.close()}
  await b.close();console.log(fails?fails+' FAILED':'all passed');process.exit(fails?1:0)})();

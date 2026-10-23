@@ -1,6 +1,6 @@
 /* Beat the model: the model's sealed pick recomputed from the raw files, scoring of finished matches from the league files */
-const {chromium}=require('/opt/node-tools/node_modules/playwright');const fs=require('fs');
-const U='http://127.0.0.1:8765/index.html',DATA='/home/user/pl-analytics/data/';let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
+const {chromium}=require('playwright');const fs=require('fs');
+const U='http://127.0.0.1:8765/index.html',DATA=(process.env.PLREPO||__dirname+'/../..')+'/data/';let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
 const J=f=>JSON.parse(fs.readFileSync(DATA+f,'utf8'));const IDX=J('index.json');
 function model(lid){const lg=IDX.leagues.find(l=>l.id===lid),L=J(lg.file),S=J(lg.sh_file),ix={};S.cols.forEach((c,i)=>ix[c]=i);
  const tx=new Map();S.rows.forEach(r=>{if(r[ix.og])return;const k=r[ix.m]+'|'+r[ix.c],x=r[ix.xg];tx.set(k,(tx.get(k)||0)+(typeof x==='number'&&isFinite(x)?x:0))});
@@ -15,7 +15,7 @@ async function open(b,{vw=1280,lang='en',league='l_4WFCIZ',hash='#/beat',seed=nu
  const pg=await ctx.newPage(),errs=[];pg.on('pageerror',e=>errs.push(e.message));pg.on('console',m=>{const u=(m.location()||{}).url||'';if(m.type()==='error'&&!/favicon|ERR_TUNNEL_CONNECTION_FAILED|api.github.com|cdn.pitchapi|Failed to load resource/.test(u+m.text()))errs.push(m.text())});
  pg.on('dialog',d=>d.accept());await pg.goto(U+hash);return {ctx,pg,errs}}
 const store=pg=>pg.evaluate(()=>JSON.parse(localStorage.getItem('plx_btm_v1')||'null'));
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  const M=model('l_4WFCIZ'),FX=J('fixtures.json').leagues.l_4WFCIZ.filter(x=>{const t=Date.parse(x.k);return t>Date.now()&&t<Date.now()+14*864e5});
  {const {ctx,pg,errs}=await open(b);await pg.waitForSelector('.bm-board',{timeout:60000});
   const nav=await pg.$$eval('#nav a',a=>a.map(x=>x.getAttribute('href')));ok(nav.indexOf('#/beat')===nav.indexOf('#/lab')+1,'in Fantasy, after the Intelligence Lab');

@@ -1,7 +1,8 @@
+import os as _os; REPO=_os.environ.get('PLREPO') or _os.path.abspath(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)),'..','..'))
 import sys,importlib.util,json,copy,os,tempfile,datetime
 from types import SimpleNamespace as N
-sys.path.insert(0,'../stub');os.environ['PITCHAPI_KEY']='SECRET'
-spec=importlib.util.spec_from_file_location("m","/home/user/pl-analytics/sync.py");m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+sys.path.insert(0,REPO+'/tests/stub');os.environ['PITCHAPI_KEY']='SECRET'
+spec=importlib.util.spec_from_file_location("m",REPO+'/sync.py');m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 fails=0
 def ok(c,msg):
     global fails;print(('ok  ' if c else 'FAIL'),msg);fails+=0 if c else 1
@@ -53,6 +54,10 @@ m.sync_live(C(),None,['L1'],T+datetime.timedelta(hours=9))
 ok(store['data/live.json']['m']=={},'matches leave the file 8 hours after kick-off')
 ok(not any('SECRET' in json.dumps(v) for v in store.values()),'the key is never written')
 # head to head
+# sync_h2h reads the real clock: the fixtures are re-dated relative to now, so the check does not depend on today's date
+_now=datetime.datetime.now(datetime.timezone.utc);isoN=lambda mins:(_now+datetime.timedelta(minutes=mins)).strftime('%Y-%m-%dT%H:%M:%SZ')
+store['data/fixtures.json']={'t':'x','leagues':{'L1':[dict(i='soon',d=isoN(50)[:10],k=isoN(50),h='A',a='B'),dict(i='later',d=isoN(300)[:10],k=isoN(300),h='C',a='D'),
+  dict(i='live',d=isoN(-40)[:10],k=isoN(-40),h='E',a='F'),dict(i='old',d=isoN(-200)[:10],k=isoN(-200),h='G',a='H')],'L9':[dict(i='other',d=isoN(10)[:10],k=isoN(10),h='X',a='Y')]}}
 calls.clear();m.sync_h2h(C(),None,['L1'])
 H=store['data/h2h.json']['m']
 ok(set(H)<= {'soon','later','live','old'} and H['soon']['hw']==2 and H['soon']['r']==[['2025-01-02','A','B',2,1]],'head to head stored once per upcoming match, finished meetings only')

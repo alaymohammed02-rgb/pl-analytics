@@ -1,7 +1,7 @@
-const {chromium}=require('/opt/node-tools/node_modules/playwright');const fs=require('fs');
+const {chromium}=require('playwright');const fs=require('fs');
 let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
-const ix=JSON.parse(fs.readFileSync('/home/user/pl-analytics/data/index.json','utf8')),pl=ix.leagues.find(l=>l.name==='Premier League');
-const L=JSON.parse(fs.readFileSync('/home/user/pl-analytics/data/'+pl.file,'utf8')),SH=JSON.parse(fs.readFileSync('/home/user/pl-analytics/data/'+pl.sh_file,'utf8'));
+const ix=JSON.parse(fs.readFileSync((process.env.PLREPO||__dirname+'/../..')+'/data/index.json','utf8')),pl=ix.leagues.find(l=>l.name==='Premier League');
+const L=JSON.parse(fs.readFileSync((process.env.PLREPO||__dirname+'/../..')+'/data/'+pl.file,'utf8')),SH=JSON.parse(fs.readFileSync((process.env.PLREPO||__dirname+'/../..')+'/data/'+pl.sh_file,'utf8'));
 /* independent numbers */
 const T={};L.matches.forEach(m=>{const [a,b]=m.s.split('-').map(Number);[[m.h,a,b],[m.a,b,a]].forEach(([t,f,g])=>{const r=T[t]||(T[t]={pts:0,gd:0,gf:0,p:0});r.p++;r.pts+=f>g?3:f===g?1:0;r.gd+=f-g;r.gf+=f})});
 const order=Object.keys(T).sort((x,y)=>T[y].pts-T[x].pts||T[y].gd-T[x].gd||T[y].gf-T[x].gf||x.localeCompare(y));
@@ -9,7 +9,7 @@ const last=L.matches.map(m=>m.d).sort().pop(),from=new Date(Date.parse(last+'T00
 const c=SH.cols,rows=SH.rows.map(r=>Object.fromEntries(c.map((k,i)=>[k,r[i]]))),W=rows.filter(s=>inW.has(s.m));
 const big=W.filter(s=>s.st!=='Penalty'&&!s.og&&typeof s.xg==='number').sort((a,b)=>b.xg-a.xg)[0];
 const dist=s=>Math.hypot(105-s.x,34-s.y),lg=W.filter(s=>s.ev==='Goal'&&!s.og&&s.st!=='Penalty').sort((a,b)=>dist(b)-dist(a))[0];
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  for(const [vw,lang] of [[1280,'en'],[390,'ar']]){const ctx=await b.newContext({viewport:{width:vw,height:900}}),pg=await ctx.newPage(),errs=[];
   pg.on('pageerror',e=>errs.push(e.message));pg.on('console',m=>{const u=(m.location()||{}).url||'';if(m.type()==='error'&&!/favicon|ERR_TUNNEL_CONNECTION_FAILED|api.github.com/.test(u+m.text()))errs.push(m.text())});
   await pg.goto('http://127.0.0.1:8765/index.html#/round');await pg.waitForSelector('#wkhl .wkc',{timeout:60000});

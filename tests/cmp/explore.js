@@ -1,11 +1,11 @@
-const {chromium}=require('/opt/node-tools/node_modules/playwright');
+const {chromium}=require('playwright');
 const U='http://127.0.0.1:8772/index.html',S=__dirname+'/shots/';
 async function open(b,{vw=1280,lang='en',league='l_4WFCIZ'}={}){const ctx=await b.newContext({viewport:{width:vw,height:900}});
  await ctx.addInitScript(([l,a])=>{localStorage.setItem('league',l);localStorage.setItem('lang',a)},[league,lang]);const pg=await ctx.newPage(),errs=[];
  pg.on('pageerror',e=>errs.push(e.message));pg.on('console',m=>{if(m.type()==='error')errs.push(m.text())});
  await pg.goto(U+'#/overview');await pg.waitForSelector('#app h2',{timeout:60000});return {ctx,pg,errs}}
 const go=async(pg,h,sel)=>{await pg.evaluate(x=>location.hash=x,h);await pg.waitForSelector(sel,{timeout:20000});await pg.waitForTimeout(700)};
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  let {ctx,pg,errs}=await open(b);
  await go(pg,'#/table','#lt .ltr[data-t]');await pg.screenshot({path:S+'pl_table.png',fullPage:true});
  console.log(await pg.$$eval('#lt .ltr[data-t]',a=>a.map(x=>x.dataset.t+':'+x.querySelectorAll('.eub').length).join(' ')));

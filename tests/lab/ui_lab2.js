@@ -1,6 +1,6 @@
-const {chromium}=require('/opt/node-tools/node_modules/playwright');const fs=require('fs');
+const {chromium}=require('playwright');const fs=require('fs');
 let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
-const U='http://127.0.0.1:8773/index.html',R='/home/user/pl-analytics/data/';
+const U='http://127.0.0.1:8773/index.html',R=(process.env.PLREPO||__dirname+'/../..')+'/data/';
 const J=f=>JSON.parse(fs.readFileSync(R+f,'utf8')),FPL=J('fpl.json'),PL=J('l_4WFCIZ.json'),SH=J('l_4WFCIZ_sh.json'),FX=J('fixtures.json');
 const sc=s=>{const m=/^(\d+)-(\d+)$/.exec(s||'');return m?[+m[1],+m[2]]:null};
 /* independent xG per team and match (own goals left out), as the site does */
@@ -17,7 +17,7 @@ async function open(b,{vw=1280,lang='en',init=null}={}){const ctx=await b.newCon
  await pg.goto(U+'#/lab');await pg.waitForSelector('.labtabs',{timeout:60000});await pg.waitForTimeout(1200);return {ctx,pg,errs}}
 const tab=async(pg,t)=>{await pg.evaluate(t=>labTab(t),t);await pg.waitForSelector('.labtabs');await pg.waitForTimeout(t==='arena'||t==='review'||t==='dna'||t==='data'?700:2200)};
 const store=pg=>pg.evaluate(()=>JSON.parse(localStorage.getItem('plx_lab_v1')||'null'));
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  {const {ctx,pg,errs}=await open(b);
   const tabs=await pg.$$eval('.labtabs button',a=>a.map(x=>x.innerText.replace(/\d+$/,'').trim()));
   ok(tabs.join('|')==='For you|Decision Arena|Review and progress|Analytical DNA|Weekly review|Hidden patterns|Case file|Discovery|Your data'&&await pg.$eval('.labtabs button.on',e=>e.innerText)==='For you','9 tabs; "For you" opens first');

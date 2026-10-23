@@ -1,5 +1,6 @@
-const {chromium}=require('/opt/node-tools/node_modules/playwright');
+const {chromium}=require('playwright');
 let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
+const FXD=JSON.parse(require('fs').readFileSync((process.env.FIXTURES_DIR||__dirname+'/../fixtures_tmp')+'/cmpweb/data/fixtures.json','utf8')).leagues.l_4WFCIZ[0].d;
 const U='http://127.0.0.1:8772/index.html',REPO='http://127.0.0.1:8775/index.html';
 async function open(b,{vw=1280,lang='en',league='l_4WFCIZ',url=U,tz='Asia/Riyadh'}={}){const ctx=await b.newContext({viewport:{width:vw,height:900},timezoneId:tz});
  await ctx.addInitScript(([l,a])=>{localStorage.setItem('league',l);localStorage.setItem('lang',a)},[league,lang]);const pg=await ctx.newPage(),errs=[];
@@ -8,7 +9,7 @@ async function open(b,{vw=1280,lang='en',league='l_4WFCIZ',url=U,tz='Asia/Riyadh
 const go=async(pg,h,sel)=>{await pg.evaluate(x=>location.hash=x,h);await pg.waitForSelector(sel,{timeout:20000});await pg.waitForTimeout(600)};
 const lg=async(pg,id)=>{await pg.selectOption('#lgpick',id);await pg.waitForFunction(x=>D.id===x,id);await pg.waitForTimeout(400)};
 const noScroll=pg=>pg.evaluate(()=>document.scrollingElement.scrollWidth-innerWidth);
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  for(const [vw,lang] of [[1280,'en'],[390,'ar']]){const {ctx,pg,errs}=await open(b,{vw,lang});const P=vw+' '+lang+': ';
   /* European places in the league table */
   await go(pg,'#/table','#lt .ltr[data-t]');
@@ -19,7 +20,7 @@ const noScroll=pg=>pg.evaluate(()=>document.scrollingElement.scrollWidth-innerWi
   ok(await noScroll(pg)<=1,P+'table: no horizontal scroll');
   /* fixtures, in the viewer's time zone */
   await go(pg,'#/matches','.fx');const fx=await pg.$$eval('.fxd',a=>{const c=t=>t.replace(/[\u2066-\u2069]/g,'').replace(/\u2011/g,'-');return a.map(d=>[c(d.querySelector('.fxdh').innerText),[...d.querySelectorAll('.fxt')].map(x=>c(x.innerText))])});
-  ok(fx.length===3&&fx[0][0]==='2026-10-24'&&fx[0][1][0]==='14:30'&&fx[2][1].includes('–'),P+'upcoming fixtures by date; 11:30 UTC shown as 14:30 in Riyadh; no time → –');
+  ok(fx.length===3&&fx[0][0]===FXD&&fx[0][1][0]==='14:30'&&fx[2][1].includes('–'),P+'upcoming fixtures by date; 11:30 UTC shown as 14:30 in Riyadh; no time → –');
   ok(await pg.$eval('#app',(e,lang)=>lang==='ar'?/المباريات القادمة/.test(e.innerText)&&/النتائج/.test(e.innerText):/Upcoming fixtures/.test(e.innerText)&&/Results/.test(e.innerText),lang),P+'fixtures above the results');
   ok(await noScroll(pg)<=1,P+'matches: no horizontal scroll');
   await go(pg,'#/club/Arsenal','.clubhd');const ar=await pg.evaluate(()=>({nx:[...document.querySelectorAll('.fxr')].length,eu:[...document.querySelectorAll('.clubeu .eub.big')].map(e=>e.innerText)}));

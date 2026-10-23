@@ -1,8 +1,8 @@
-const {chromium}=require('/opt/node-tools/node_modules/playwright');
+const {chromium}=require('playwright');
 const URL='http://127.0.0.1:8765/index.html',SH=__dirname+'/shots/';
 let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
 const known=u=>/favicon.ico|api.github.com\/repos\/127|cdn.pitchapi/.test(u||'');
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  for(const [vw,label] of [[{width:1280,height:900},'desktop'],[{width:390,height:844},'mobile']]){
   const ctx=await b.newContext({viewport:vw,locale:'ar-SA',isMobile:label==='mobile',hasTouch:label==='mobile',deviceScaleFactor:label==='mobile'?2:1});const pg=await ctx.newPage();const errs=[];
   pg.on('pageerror',e=>errs.push(e.message));pg.on('console',m=>{if(m.type()==='error'&&!known((m.location()||{}).url))errs.push(m.text())});

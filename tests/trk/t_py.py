@@ -1,6 +1,7 @@
+import os as _os; REPO=_os.environ.get('PLREPO') or _os.path.abspath(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)),'..','..'))
 import sys,importlib.util,json,copy,datetime
-sys.path.insert(0,'stub')
-spec=importlib.util.spec_from_file_location("m","/home/user/pl-analytics/sync.py");m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+sys.path.insert(0,REPO+'/tests/stub')
+spec=importlib.util.spec_from_file_location("m",REPO+'/sync.py');m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 fails=0
 def ok(c,msg):
     global fails
@@ -11,7 +12,7 @@ def put(hub,path,content,message):
     store[path]=json.loads(content.decode());puts.append((path,message))
 m._orig_gh_put_trk=put
 m.log=lambda *a:print('   log:',*a)
-raw=open('/home/user/pl-analytics/data/fpl.json','rb').read()
+raw=open(REPO+'/data/fpl.json','rb').read()
 base=json.loads(raw)
 def run(d):
     m._TRK_FPL=json.dumps(d).encode();n=len(puts);m.sync_fpl_track(None);return len(puts)-n

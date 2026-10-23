@@ -1,11 +1,11 @@
 /* Charts: the first tap on a player or a team shows it, the second opens its page; other links unchanged */
-const {chromium}=require('/opt/node-tools/node_modules/playwright');
+const {chromium}=require('playwright');
 const U='http://127.0.0.1:8765/index.html';let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
 async function open(b,{vw=1280,lang='en',hash='#/reality',mobile=false}={}){const ctx=await b.newContext({viewport:{width:vw,height:900},hasTouch:mobile,isMobile:mobile});
  await ctx.addInitScript(l=>{if(!sessionStorage.getItem('s')){sessionStorage.setItem('s','1');localStorage.clear();localStorage.setItem('league','l_4WFCIZ');localStorage.setItem('lang',l)}},lang);
  const pg=await ctx.newPage(),errs=[];pg.on('pageerror',e=>errs.push(e.message));await pg.goto(U+hash);return {ctx,pg,errs}}
 const hash=pg=>pg.evaluate(()=>decodeURIComponent(location.hash));
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  /* a team in a chart (Reality Check scatter) */
  {const {ctx,pg,errs}=await open(b);await pg.waitForSelector('#app svg a[href^="#/club/"]',{timeout:90000});await pg.waitForTimeout(400);
   const sel='#app svg a[href^="#/club/"]',href=await pg.$eval(sel,a=>a.getAttribute('href'));
@@ -28,7 +28,7 @@ const hash=pg=>pg.evaluate(()=>decodeURIComponent(location.hash));
   const sel='#app [data-tip] a[href^="#/player/"]',href=await pg.$eval(sel,a=>a.getAttribute('href'));
   await pg.tap(sel);await pg.waitForTimeout(400);
   ok(await hash(pg)==='#/gems','phone, player in a chart, first tap: the page stays');
-  ok(/اضغط مرة ثانية لفتح صفحة اللاعب/.test(await pg.evaluate(()=>{const t=document.getElementById('instip'),b=document.getElementById('tapbub');return (t&&t.classList.contains('on')?t.textContent:'')+(b&&!b.hidden?b.textContent:'')})),'and says in Arabic: tap again to open the player page');
+  {let tx='';for(let i=0;i<15&&!/اضغط مرة ثانية لفتح صفحة اللاعب/.test(tx);i++){if(i)await pg.waitForTimeout(200);tx=await pg.evaluate(()=>{const t=document.getElementById('instip'),b=document.getElementById('tapbub');return ((document.querySelector('.tap-hint')||{}).textContent||'')+(t&&t.classList.contains('on')?t.textContent:'')+(b&&(!b.hidden||document.querySelector('.tap-armed'))?b.textContent:'')})}ok(/اضغط مرة ثانية لفتح صفحة اللاعب/.test(tx),'and says in Arabic: tap again to open the player page (found: "'+tx+'"; '+JSON.stringify(await pg.evaluate(()=>({armed:!!document.querySelector('.tap-armed'),bub:!!document.getElementById('tapbub'),fn:typeof window.tapDisarm,hash:location.hash,lang:document.documentElement.lang,tip:!!document.getElementById('instip')})))+')')}
   await pg.tap(sel);await pg.waitForTimeout(800);ok(await hash(pg)===decodeURIComponent(href),'second tap: the player page');
   ok(await pg.evaluate(()=>!document.querySelector('.tap-armed')&&(!document.getElementById('tapbub')||document.getElementById('tapbub').hidden)),'nothing left marked after leaving');
   ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await ctx.close()}

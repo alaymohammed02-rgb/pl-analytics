@@ -1,0 +1,10 @@
+__pycache__/
+tests/logs/
+tests/fixtures_tmp/
+tests/fp_v2.js
+tests/fp_sr.js
+tests/cmp/pl_app.db
+tests/theme/champions_generated.json
+tests/**/shots/
+tests/**/*.png
+node_modules/

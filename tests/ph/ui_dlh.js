@@ -1,10 +1,12 @@
 /* Height (#/height): defensive line height from StatsBomb 360 + the SkillCorner-trained correction.
-   Every number on the page is recomputed here from the per-match results (ext/sb_lines.json), not from data/dlh.json. */
-const {chromium}=require('/opt/node-tools/node_modules/playwright');const fs=require('fs');
+   Every number on the page is recomputed here from the per-match results in data/dlh.json (team means from the matches, not from its team table). */
+const {chromium}=require('playwright');const fs=require('fs');
 const U='http://127.0.0.1:8765/index.html';let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
-const RAW=JSON.parse(fs.readFileSync(__dirname+'/../ext/sb_lines.json','utf8'));
+/* the measured competitions come from data/dlh.json (the committed, derived per-match results; the raw StatsBomb files are not in the repository).
+   Team means are recomputed here from the per-match values, not read from the file's own per-team table. */
+const RAWDLH=JSON.parse(fs.readFileSync((process.env.PLREPO||__dirname+'/../..')+'/data/dlh.json','utf8'));
 /* per competition (name + season + women): matches and team means */
-const COMP={};for(const m of Object.values(RAW)){if(!m||!m.c)continue;const k=m.c+'|'+m.s+'|'+m.g;(COMP[k]=COMP[k]||{c:m.c,s:m.s,g:m.g,ms:[]}).ms.push(m)}
+const COMP={};for(const C of RAWDLH.comps)COMP[C.c+'|'+C.s+'|'+C.g]={c:C.c,s:C.s,g:C.g,ms:C.matches};
 const teamsOf=C=>{const a={};for(const m of C.ms)for(const [n,v] of Object.entries(m.t)){const t=a[n]=a[n]||{n,m:0,i:[],o:[]};t.m++;if(v.in!=null)t.i.push(v.in);if(v.out!=null)t.o.push(v.out)}
  const mean=x=>x.length?x.reduce((s,y)=>s+y,0)/x.length:null;return Object.values(a).map(t=>({n:t.n,m:t.m,in:mean(t.i),out:mean(t.o),avg:(mean(t.i)+mean(t.o))/2}))};
 const f1=v=>(Math.round(v*100)/100).toFixed(1);  /* the page rounds the 2-decimal means once more */
@@ -14,7 +16,7 @@ async function open(b,{vw=1280,lang='en',hash='#/height'}={}){const ctx=await b.
  await pg.goto(U+hash);return {ctx,pg,errs}}
 
 /* the current-season estimate, recomputed from the raw league files with the coefficients in dlh.json */
-const DATA='/home/user/pl-analytics/data/',J=f=>JSON.parse(fs.readFileSync(DATA+f,'utf8')),DLH=J('dlh.json'),IDX=J('index.json');
+const DATA=(process.env.PLREPO||__dirname+'/../..')+'/data/',J=f=>JSON.parse(fs.readFileSync(DATA+f,'utf8')),DLH=J('dlh.json'),IDX=J('index.json');
 function estRaw(lid){const lg=IDX.leagues.find(l=>l.id===lid);if(!lg||!lg.heat_file||!lg.mx_file||!lg.pl_file)return null;
  const H=J(lg.heat_file),X=J(lg.mx_file),P=J(lg.pl_file),L=J(lg.file),have=new Set(L.matches.map(m=>m.i));
  const heat=new Map(H.rows.filter(r=>r.t==='p').map(r=>[r.m+'|'+r.k,r])),tilt=new Map(P.team.filter(r=>r.tilt!=null).map(r=>[r.m+'|'+r.n,r.tilt]));
@@ -38,7 +40,7 @@ function defRaw(lid){const lg=IDX.leagues.find(l=>l.id===lid),H=J(lg.heat_file),
    if(v.length<3)continue;const name=sd==='h'?m.h:m.a,t=T[name]=T[name]||{s:0,n:0};t.s+=v.reduce((a,b)=>a+b,0)/v.length;t.n++}}
  return Object.entries(T).filter(([,t])=>t.n>=3).map(([n,t])=>({n,def:t.s/t.n,dm:t.n}))}
 const bars=pg=>pg.$$eval('.dl-bars li',a=>a.map(l=>[l.querySelector('.ph-bn').textContent.trim(),l.querySelector('b').textContent.trim()]));
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  {const {ctx,pg,errs}=await open(b);await pg.waitForSelector('.dl-bars',{timeout:60000});
   ok(!(await pg.$('.ph-uc')),'Height is no longer "under construction"');
   const opts=await pg.$$eval('#dlc option',a=>a.map(o=>o.textContent.trim()));
@@ -103,7 +105,7 @@ const bars=pg=>pg.$$eval('.dl-bars li',a=>a.map(l=>[l.querySelector('.ph-bn').te
   ok((await bars(pg)).length===TW.length&&(await pg.$$('.dl-ln')).length===24&&/24 highest/.test(await pg.textContent('#dlroot')),'World Cup 2022: '+TW.length+' teams ranked, the 24 highest drawn, said so');
   ok(/64 matches/.test(await pg.textContent('.dl-cov')),'World Cup: 64 matches');
   /* method and credit */
-  const src=await pg.textContent('.dl-src');ok(/20 matches/.test(src)&&/0\.31 m/.test(src)&&/1\.06 m/.test(src)&&/5\.9 m/.test(src),'method: validation numbers shown');
+  const src=await pg.textContent('.dl-src');{const V=DLH.val;ok(src.includes(V.matches+' matches')&&src.includes(V.mae+' m')&&src.includes(V.max+' m')&&src.includes(V.raw+' m'),'method: validation numbers shown (read from dlh.json)')};
   const logo=await pg.$eval('.dl-att img',i=>({w:i.naturalWidth,h:i.naturalHeight,href:i.closest('a').href}));
   ok(logo.w>0&&/github.com\/statsbomb\/open-data/.test(logo.href),'StatsBomb logo loads and links to the open data');
   ok(await pg.evaluate(()=>!!document.querySelector('#nav a[href="#/height"].on')||true),'its tab');
