@@ -79,7 +79,7 @@ A static football analytics site on GitHub Pages. A Python sync (`sync.py`, run 
 
 ## Testing and merging
 
-- **Tests:** see `tests/README.md`. Each page has a test that recomputes its numbers independently from `data/`, and checks Arabic, a 390 px phone, leaving before the data arrives, and a failing file.
+- **Tests:** see `tests/README.md`. They run on every PR (`.github/workflows/tests.yml`); a new test must be added to a job list there. Each page has a test that recomputes its numbers independently from `data/`, and checks Arabic, a 390 px phone, leaving before the data arrives, and a failing file.
 - **Flow:** PR → merge → run the `sync.yml` workflow → compare the files on `main` (raw.githubusercontent.com) with the local copies → check that the Pages deployment succeeded. The published `github.io` site cannot be reached from the cloud sandbox.
 - **Pitfalls:**
   - `pkill -f` with a pattern that matches your own command kills your shell: use `pgrep`, then `kill`.
@@ -87,10 +87,7 @@ A static football analytics site on GitHub Pages. A Python sync (`sync.py`, run 
 
 ## Next steps (proposed to the owner, 23 Oct 2026)
 
-1. **Wire the tests to GitHub Actions on every PR** (Sonnet, medium effort).
-   - Make the paths relative.
-   - Remove date and live-value dependencies.
-   - Split the suite into parallel jobs.
+1. ~~Wire the tests to GitHub Actions on every PR~~: done (`.github/workflows/tests.yml`, PR #47; past-season and track-record tests added, Chromium cached).
 2. **A stronger match model** (Opus, high effort).
    - Use past seasons from PitchAPI as priors (now fetched by the sync: 2025-26 for six leagues, Premier League 2021-22 to 2024-25 full).
    - Note: previous-season PitchAPI priors did not improve the Fantasy model on the held-out 2025-26 (`ml/RESULTS.md`).

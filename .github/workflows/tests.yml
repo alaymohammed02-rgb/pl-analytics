@@ -16,6 +16,9 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -23,7 +26,7 @@ jobs:
         run: pip install -q requests
       - name: Run Python tests
         run: |
-          bash tests/ci.sh cmp/t_cmp.py logo/t_logo.py theme/t_champ.py theme/t_retry.py t_resolve.py home/t_photos.py dq/t_dq.py mx/t_mx.py lv/t_lv.py fx/t_fx.py rare/t_rr.py eng/t_table.py
+          bash tests/ci.sh cmp/t_cmp.py logo/t_logo.py theme/t_champ.py theme/t_retry.py t_resolve.py home/t_photos.py dq/t_dq.py mx/t_mx.py lv/t_lv.py fx/t_fx.py rare/t_rr.py eng/t_table.py ps/t_ps.py trk/t_py.py
       - name: Upload logs
         if: failure()
         uses: actions/upload-artifact@v4
@@ -38,6 +41,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - shard: 7
+            tests: "ps/ui_ps.js ps/ui_ps_crawl.js"
           - shard: 1
             tests: "ui/ui_ux.js ph/ui_dlh.js fun/ui_sm.js fun/ui_lk.js"
           - shard: 2
@@ -58,12 +63,19 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Cache Chromium
+        id: pwcache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}
       - name: Install Playwright and Chromium
         run: |
           mkdir -p "$RUNNER_TEMP/pw" && cd "$RUNNER_TEMP/pw"
           npm init -y >/dev/null
           npm install --no-audit --no-fund playwright@${PLAYWRIGHT_VERSION}
-          npx playwright install --with-deps chromium
+          # the browser comes from the cache when it has it; the system libraries are installed on every run
+          if [ "${{ steps.pwcache.outputs.cache-hit }}" = "true" ]; then npx playwright install-deps chromium; else npx playwright install --with-deps chromium; fi
           echo "NODE_PATH=$RUNNER_TEMP/pw/node_modules" >> "$GITHUB_ENV"
       - name: Rebuild index.html (workspace only, never committed)
         run: |
