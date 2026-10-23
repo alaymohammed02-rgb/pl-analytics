@@ -10,6 +10,8 @@ for n in cmpweb preweb; do rm "$FIX/$n/data"; mkdir -p "$FIX/$n/data"; for f in 
 python3 "$S/cmp/mk_fixtures.py" "$FIX"
 rm "$FIX/trkweb/data"; mkdir -p "$FIX/trkweb/data"; for f in "$R"/data/*; do ln -s "$f" "$FIX/trkweb/data/$(basename "$f")"; done
 python3 "$S/trk/mk_fixtures.py" "$FIX"
+rm "$FIX/labweb/data"; mkdir -p "$FIX/labweb/data"; for f in "$R"/data/*; do ln -s "$f" "$FIX/labweb/data/$(basename "$f")"; done
+python3 "$S/lab/mk_fixtures.py" "$FIX"
 export FIXTURES_DIR="$FIX"
 # homeweb keeps the photo entries in data/index.json (the home test checks the photo files); the other sites use the stripped index
 mkdir -p "$FIX/homeweb/data"; for f in index.html assets sw.js manifest.webmanifest data.json; do [ -e "$R/$f" ] && ln -s "$R/$f" "$FIX/homeweb/$f"; done
