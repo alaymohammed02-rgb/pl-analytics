@@ -1,0 +1,10 @@
+const {chromium}=require('/opt/node-tools/node_modules/playwright');
+(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+ const ctx=await b.newContext({viewport:{width:1280,height:900}});
+ await ctx.addInitScript(()=>{if(!sessionStorage.getItem('s')){sessionStorage.setItem('s','1');localStorage.clear();localStorage.setItem('league','l_4WFCIZ');localStorage.setItem('lang','en')}});
+ const pg=await ctx.newPage();const st=async t=>console.log(t,JSON.stringify(await pg.evaluate(()=>({hash:location.hash,id:D.id,league:document.documentElement.dataset.league,club:document.documentElement.dataset.club||'',th:getComputedStyle(document.documentElement).getPropertyValue('--th')}))));
+ await pg.goto('http://127.0.0.1:8765/index.html#/overview');await pg.waitForSelector('#mb .mb-days');await st('start overview PL');
+ await pg.selectOption('#lgpick',{value:'l_0ErfuF'}).catch(e=>console.log('no select',e.message.slice(0,80)));await pg.waitForTimeout(3000);await st('after header switch to LaLiga');
+ await pg.evaluate(()=>location.hash='#/table');await pg.waitForTimeout(1500);await st('LaLiga table');
+ await pg.evaluate(()=>location.hash='#/overview');await pg.waitForTimeout(2000);await st('overview again');
+ await ctx.close();await b.close()})();

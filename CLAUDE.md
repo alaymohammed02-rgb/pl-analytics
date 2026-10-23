@@ -1,0 +1,86 @@
+# PL Analytics: working notes
+
+A static football analytics site on GitHub Pages. A Python sync (`sync.py`, run by `.github/workflows/sync.yml` on a schedule and on demand) fetches PitchAPI and FPL data into `data/` and generates `index.html`. Feature pages are plain JavaScript files in `assets/`, loaded after the main inline script.
+
+## Rules agreed with the owner
+
+- **Talk to the owner in Arabic** (Gulf Arabic is fine). Code, commits and PR descriptions are in English.
+- **When the owner asks for a feature:** build it, test everything, merge it yourself, run the sync, then check the published files.
+- **Never claim untested success.** Report honest results, including when a model or idea does not work. Pages must say so too.
+- **Do not invent statistics or missing values.** Estimates are labelled as estimates on the page, with their tested error.
+- **Secrets:**
+  - never expose, request or change API keys or secrets without need;
+  - no secret goes in browser JavaScript;
+  - keys live in GitHub secrets (`PITCHAPI_KEY`).
+- **Leave existing features alone:**
+  - do not change login, permissions or the sync mechanism broadly;
+  - do not remove existing features;
+  - keep the site working on GitHub Pages.
+- **StatsBomb Open Data terms:**
+  - analysis only;
+  - no redistribution of raw data;
+  - no commercial use;
+  - show the StatsBomb logo where it is used.
+  - SkillCorner asks for credit.
+- **Git:**
+  - no force push;
+  - stage specific files, never `git add -A` (tests touch `data/index.json`);
+  - no model names in commits or PRs.
+
+## How a feature page works
+
+- **Registration:** add the file name to `FEATURES_JS` in `sync.py`, and **raise `FEATURES_V`** whenever an asset or `assets/fun.css` changes, because browsers cache by that version. Then rebuild `index.html` with `sh tests/regen.sh`.
+- **Page setup:** each page calls `INS.addPage(key, name, section, after)` and ends with `if(typeof D==='object'&&D&&typeof route==='function')route();`. The sections are `home`, `league`, `players`, `analysis` and `fpl`.
+- **Arabic:**
+  - `two(en, ar)` makes paired spans (`.fx-en` / `.fx-ar`);
+  - `nb(x)` wraps numbers and Latin text in Arabic sentences (`<bdi dir="ltr">`);
+  - `nm(name)` wraps names;
+  - `INS.ar({...})` adds translations for plain text nodes;
+  - write ranges in words ("من 37 إلى 38"), because RTL reverses "37–38".
+- **Async safety:** capture `D.id` before any `await`, and bail out if `root.isConnected` is false or `D.id` changed. Caches must not keep a failed result, and must be keyed by `INS.poolKey()` (data version).
+- **Cross-league data:** `assets/league-pool.js` provides:
+  - `INS.pool(need)`: the six domestic leagues;
+  - `INS.poolOne(id, need)`: one league;
+  - `INS.mm(ms, xg)`: the match model, with a leave-one-match-out option.
+
+## Data facts that matter
+
+- **Shots** (`*_sh.json`) carry goal minutes:
+  - `ev === 'Goal'`;
+  - `og` marks an own goal, which counts for the other side;
+  - stoppage time is in `ma`, so sort by `mn` then `ma`.
+  - The goal timeline adds up to the final score in every match checked.
+- **Line-ups** (`*_mx.json`): `xi` entries are `[id, name, shirt, slot, depth, lateral, captain]`.
+  - Slot 11 is the goalkeeper.
+  - Slots 30–39 are the defensive line; centre-backs are the ones with lateral between 0.15 and 0.85.
+  - A match can have a line-up but no player rows (status "partial").
+- **Player rows** (`*_pl.json`): `xag` is missing for whole matches, not per player.
+- **Heat maps** (`*_heat.json`): 16 cells along the pitch. A player's average position is the action-weighted cell centre (10+ actions).
+- **Defensive line** (`data/dlh.json`, built offline by `tools/line-height/`):
+  - StatsBomb 360 lines, corrected by a SkillCorner-trained model (0.31 m error);
+  - plus the current-season estimate formula and its validation.
+
+## Testing and merging
+
+- **Tests:** see `tests/README.md`. Each page has a test that recomputes its numbers independently from `data/`, and checks Arabic, a 390 px phone, leaving before the data arrives, and a failing file.
+- **Flow:** PR → merge → run the `sync.yml` workflow → compare the files on `main` (raw.githubusercontent.com) with the local copies → check that the Pages deployment succeeded. The published `github.io` site cannot be reached from the cloud sandbox.
+- **Pitfalls:**
+  - `pkill -f` with a pattern that matches your own command kills your shell: use `pgrep`, then `kill`.
+  - The photo CDN is unreachable in the sandbox.
+
+## Next steps (proposed to the owner, 23 Oct 2026)
+
+1. **Wire the tests to GitHub Actions on every PR** (Sonnet, medium effort).
+   - Make the paths relative.
+   - Remove date and live-value dependencies.
+   - Split the suite into parallel jobs.
+2. **A stronger match model** (Opus, high effort).
+   - Use past seasons from PitchAPI as priors (fetched by the sync; mind the PitchAPI quota).
+   - Weight recent matches more, and use a home advantage per league.
+   - Possibly add ClubElo.
+   - Measure it with the Model report card page.
+3. **A faster site and a simpler menu** (Opus, high effort).
+   - Load a page's script only when it opens (today about 1.3 MB of code loads on every visit).
+   - Group the 39 pages into about 10 hubs with tabs.
+
+The owner has not yet chosen among the free data sources offered (ClubElo, football-data.co.uk, Open-Meteo, API-Football, football-data.org). Any key goes into GitHub secrets.

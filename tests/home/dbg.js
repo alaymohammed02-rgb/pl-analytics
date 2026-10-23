@@ -1,0 +1,8 @@
+const {chromium}=require('/opt/node-tools/node_modules/playwright');
+(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+ const ctx=await b.newContext({viewport:{width:390,height:860}});await ctx.addInitScript(()=>{localStorage.clear();localStorage.setItem('league','l_4WFCIZ');localStorage.setItem('lang','en')});
+ const pg=await ctx.newPage();await pg.goto('http://127.0.0.1:8777/index.html#/overview');await pg.waitForSelector('#home .hsec');await pg.waitForTimeout(1500);
+ await pg.evaluate(()=>document.getElementById('hfpl').scrollIntoView());await pg.waitForTimeout(2500);
+ console.log(await pg.evaluate(()=>[...document.querySelectorAll('body *')].filter(e=>e.getBoundingClientRect().right>innerWidth+1&&e.offsetParent).slice(0,8).map(e=>e.tagName+'.'+e.className+'#'+e.id+' '+Math.round(e.getBoundingClientRect().right)+' '+(e.textContent||'').slice(0,30))));console.log(await pg.evaluate(()=>({sw:document.scrollingElement.scrollWidth,iw:innerWidth,bad:[...document.querySelectorAll('#home .hcard')].filter(c=>{const r=c.getBoundingClientRect();return r.left<-1||r.right>innerWidth+1}).map(c=>c.className+' '+Math.round(c.getBoundingClientRect().left)+'..'+Math.round(c.getBoundingClientRect().right)+' '+c.innerText.slice(0,40))})));
+ await pg.evaluate(()=>document.getElementById('hrk').scrollIntoView());await pg.click('#hrk .hfull summary');for(const t of [300,800,2000]){await pg.waitForTimeout(t);console.log(t,await pg.evaluate(()=>[document.querySelectorAll('#hrk .hfull tbody tr').length,HOME.c.q.filter(a=>HOME_RULES.metrics.find(m=>m.k==='sca').f(a)!=null).length]))}
+ await b.close()})();

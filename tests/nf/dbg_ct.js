@@ -1,0 +1,10 @@
+const T=require('./lib.js');
+const src=require('fs').readFileSync(__dirname+'/ui_ct.js','utf8');
+const body=src.slice(src.indexOf("const KEYS"),src.indexOf("(async()=>"));
+const {ok,J,IDX,DOM}=T;eval(body.replace(/\bconst /g,'var ').replace('var T=require','//').replace('var {ok,J,IDX,DOM}=T;',''));
+(async()=>{const b=await T.launch(),Tm=pool(),{ctx,pg}=await T.open(b,{hash:'#/clubtwins'});await pg.waitForSelector('.ct-ol',{timeout:120000});
+ const x=Tm.find(t=>t.t==='Bayern München'),y=twins(Tm,x).filter(o=>o.y.lid!==x.lid)[0].y;await pg.selectOption('#ctp',x.key);await pg.waitForTimeout(300);
+ const rows=await pg.$$eval('.ct-t tbody tr',a=>a.map(r=>[...r.querySelectorAll('.ct-p')].map(i=>i.style.getPropertyValue('--w'))));
+ console.log('pair shown',await pg.$eval('.ct-t thead',e=>e.textContent.replace(/\s+/g,' ')),'| mine',x.t,y.t);
+ KEYS.forEach((k,i)=>console.log(k.padEnd(5),'page',rows[i].join(' / '),'| mine',x.q[k]==null?'–':x.q[k].toFixed(1),'/',y.q[k]==null?'–':y.q[k].toFixed(1),'| values',x.v[k]&&x.v[k].toFixed(3),y.v[k]&&y.v[k].toFixed(3)));
+ await b.close()})();

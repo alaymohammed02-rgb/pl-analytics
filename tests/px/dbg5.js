@@ -1,0 +1,17 @@
+const {chromium}=require('/opt/node-tools/node_modules/playwright');const fs=require('fs');
+const VAR=process.argv[2];
+(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+ const ctx=await b.newContext({viewport:{width:390,height:900}});await ctx.addInitScript(()=>{if(!sessionStorage.getItem('s')){sessionStorage.setItem('s','1');localStorage.clear();localStorage.setItem('league','l_4WFCIZ');localStorage.setItem('lang','ar')}});
+ await ctx.route(/player-page\.js/,r=>{let s=fs.readFileSync('/home/user/pl-analytics/assets/player-page.js','utf8');
+  if(VAR==='noform')s=s.replace("box.innerHTML=ppHead(S)+ppForm(S)+","box.innerHTML=ppHead(S)+");
+  if(VAR==='nohead')s=s.replace("box.innerHTML=ppHead(S)+ppForm(S)+","box.innerHTML=ppForm(S)+");
+  if(VAR==='onlyhead')s=s.replace("box.innerHTML=ppHead(S)+ppForm(S)+`<div class=\"pp-two\">${ppHeat(S)}${ppRadar(S)}</div>`","box.innerHTML=ppHead(S)");
+  if(VAR==='notitle')s=s.replace(' title="${esc(tip)}">','>');
+  if(VAR==='nonote')s=s.replace("<span>Bars: xG + xAG in the match.</span>","");
+  if(VAR==='noha')s=s.replace("<span class=\"pp-ha\">${g.home?'H':'A'}</span>","");
+  if(VAR==='nobv')s=s.replace("<span class=\"pp-bv\">${x==null?'–':f2(x)}</span>","");
+  r.fulfill({body:s,contentType:'application/javascript'})});
+ const pg=await ctx.newPage();
+ await pg.goto('http://127.0.0.1:8765/index.html#/player/p_3fAmwG%7C%7CTottenham%20Hotspur');
+ const t=Date.now();const r=await Promise.race([pg.waitForTimeout(5000).then(()=>pg.evaluate(()=>'alive '+!!document.getElementById('pp'))),new Promise(r=>setTimeout(()=>r('HUNG'),15000))]);
+ console.log(VAR,r);process.exit(0)})();
