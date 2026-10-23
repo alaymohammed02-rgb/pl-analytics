@@ -20,7 +20,7 @@
   top.insertBefore(btn,top.firstChild);btn.addEventListener('click',()=>open(!document.documentElement.classList.contains('dr-open')));
   ov=document.createElement('div');ov.id='drwov';ov.hidden=true;ov.addEventListener('click',()=>open(false));
   box=document.createElement('aside');box.id='drw';box.setAttribute('role','dialog');box.setAttribute('aria-modal','true');box.setAttribute('aria-label','Menu');box.hidden=true;
-  box.addEventListener('click',e=>{if(e.target.closest('a[href^="#/"]'))open(false)});
+  box.addEventListener('click',e=>{if(e.target.closest('a[href^="#/"]')){const w=typeof lgxHold==='function'?lgxHold():0;if(w)setTimeout(()=>open(false),w);else open(false)}});   /* closes once the Liquid Glass has reached the link */
   box.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();open(false)}
    if(e.key==='Tab'){const f=[...box.querySelectorAll('a,button')];if(!f.length)return;const a=f[0],z=f[f.length-1];
     if(e.shiftKey&&document.activeElement===a){e.preventDefault();z.focus()}else if(!e.shiftKey&&document.activeElement===z){e.preventDefault();a.focus()}}});
@@ -48,7 +48,7 @@
  }
  window.drwOpen=open;
  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.documentElement.classList.contains('dr-open'))open(false)});
- window.addEventListener('hashchange',()=>open(false));
+ window.addEventListener('hashchange',()=>{if(!(typeof lgxHold==='function'&&lgxHold()))open(false)});
  build();
  if(!btn){const t=setInterval(()=>{build();if(btn)clearInterval(t)},200);setTimeout(()=>clearInterval(t),10000)}
  if(typeof AR==='object')Object.entries({"Menu":"القائمة","Close menu":"اقفل القائمة","Pages":"الصفحات"}).forEach(([k,v])=>{if(!(k in AR))AR[k]=v});
