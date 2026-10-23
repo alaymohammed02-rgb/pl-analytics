@@ -19,6 +19,7 @@ bash tests/runall.sh > all.log 2>&1       # everything (about 40 minutes)
 - Other folders hold one area of the site each. A test usually recomputes the page's numbers independently from the raw files in `data/` and compares them with what the page shows.
 - `stub/`: a fake `pitchapi` module for the Python tests of sync sections.
 - `ps/t_ps.py`: past seasons (sync section): per-run cap, one request per endpoint per match, resuming from the published files, index manifest, plan refusals (`cd tests/ps && python3 t_ps.py`).
+- `ps/ui_ps.js` and `ps/ui_ps_crawl.js`: the season selector, banner, guarded pages, Arabic and a 390 px phone, and every page opened in the first past season listed in `data/index.json`.
 
 ## Known issues to fix when wiring CI
 
