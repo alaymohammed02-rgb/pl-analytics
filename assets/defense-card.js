@@ -1,9 +1,12 @@
-/* ===== Defensive card (on the Defensive page): one player's defensive work against the players in the same role =====
-   You pick a player, the measures to show (3 to 8) and who he is compared with; the card shows each measure per 90 minutes with
-   his percentile among those players, and his heat map. "Save image" downloads the same card as a PNG.
+/* ===== Player card (Defensive, Shots and Passing pages): one player's numbers against the players in the same role =====
+   Four kinds: defending (opens on the Defensive page), attacking (Shots page), passing and creating (Passing page) and dribbling
+   and carrying; each page can show any kind. You pick a player, the measures (3 to 8) and who he is compared with; the card shows
+   each measure per 90 minutes with his percentile among those players, and his heat map. "Save image" downloads it as a PNG.
    - Numbers: PitchAPI's per-match player rows, added up as on the table below (aggPl): a measure per 90 = its total ÷ the minutes
      of the matches where PitchAPI gave it × 90. Sums (e.g. tackles + interceptions) add the per-90 figures, as the table does.
-     Aerial win % needs 5 or more aerial duels. Each bar is as long as the percentile and coloured red (0) through amber (50) to
+     Ratios use the season totals: aerial win % needs 5+ aerial duels, shots on target % and xG per shot 5+ shots, take-on
+     success % 5+ take-ons. xAG is missing for whole matches in PitchAPI's data, so its minutes are only those of the matches
+     that have it (as everywhere on the site). Each bar is as long as the percentile and coloured red (0) through amber (50) to
      green (100), so it reads before the number. "Duels won" is PitchAPI's figure as given: it is lower than aerial duels won in about
      a third of player-matches, so it does not include them, and nothing is derived from the two together. Nothing is estimated or adjusted: PitchAPI gives no possession per match, so the
      numbers are not possession-adjusted, and it gives no pressing events per player, so the heat map is every action he made
@@ -20,25 +23,41 @@
  const two=(en,ar)=>`<span class="fx-en">${en}</span><span class="fx-ar" dir="rtl">${ar}</span>`;
  const nb=x=>`<bdi dir="ltr">${x}</bdi>`;
  const ar=()=>typeof ARL==='object'&&!!ARL.on;
- const S={lg:'',pid:'',grp:'role',scope:'six',min:450,met:['da','tk','ic','duw','aerw','bc'],tok:0};
+ const S={lg:'',pid:'',grp:'role',scope:'six',min:450,fam:'def',mets:{},tok:0};
  try{const o=JSON.parse(localStorage.getItem('plx_dc_v1')||'null');if(o){['grp','scope'].forEach(k=>{if(typeof o[k]==='string')S[k]=o[k]});
-  if([270,450,900].includes(o.min))S.min=o.min;if(Array.isArray(o.met))S.met=o.met.filter(k=>typeof k==='string')}}catch(e){}
- const save=()=>{try{localStorage.setItem('plx_dc_v1',JSON.stringify({grp:S.grp,scope:S.scope,min:S.min,met:S.met}))}catch(e){}};
+  if([270,450,900].includes(o.min))S.min=o.min;if(o.mets&&typeof o.mets==='object')S.mets=o.mets}}catch(e){}
+ const save=()=>{try{localStorage.setItem('plx_dc_v1',JSON.stringify({grp:S.grp,scope:S.scope,min:S.min,mets:S.mets}))}catch(e){}};
  const sum=(a,ks)=>ks.every(k=>a.has(k))?ks.reduce((x,k)=>x+a.p90(k),0):null;
- /* key, English, Arabic, value, unit */
- const MET=[
-  ['da','Defensive actions','الأفعال الدفاعية',a=>sum(a,['tk','ic','bl','cl']),'p90'],
-  ['tk','Tackles','الافتكاكات',a=>a.p90('tk'),'p90'],
-  ['ic','Interceptions','الاعتراضات',a=>a.p90('ic'),'p90'],
-  ['ti','Tackles + interceptions','الافتكاكات + الاعتراضات',a=>sum(a,['tk','ic']),'p90'],
-  ['duw','Duels won','الالتحامات المكسوبة',a=>a.p90('duw'),'p90'],
-  ['aerw','Aerial duels won','الكرات الهوائية المكسوبة',a=>a.p90('aerw'),'p90'],
-  ['ap','Aerial duels won %','نسبة الكرات الهوائية المكسوبة',a=>(a.has('aer')&&a.has('aerw')&&a.s.aer>=5)?a.s.aerw/a.s.aer*100:null,'%'],
-  ['bl','Blocks','الصد',a=>a.p90('bl'),'p90'],
-  ['cl','Clearances','الإبعاد',a=>a.p90('cl'),'p90'],
-  ['bc','Blocks + clearances','الصد + الإبعاد',a=>sum(a,['bl','cl']),'p90']];
- const MK=new Map(MET.map(m=>[m[0],m]));
- S.met=S.met.filter(k=>MK.has(k));if(S.met.length<3)S.met=['da','tk','ic','duw','aerw','bc'];
+ const p90=k=>a=>a.p90(k),rat=(n,d,lo,x)=>a=>(a.has(n)&&a.has(d)&&a.s[d]>=lo)?a.s[n]/a.s[d]*x:null;
+ /* each kind: its name, the measures [key, English, Arabic, value, unit ('p90', '%' or 'r' = a ratio)] and the default six */
+ const FAM={
+  def:{en:'Defending',ar:'الدفاع',file:'defensive',met:[
+   ['da','Defensive actions','الأفعال الدفاعية',a=>sum(a,['tk','ic','bl','cl']),'p90'],['tk','Tackles','الافتكاكات',p90('tk'),'p90'],
+   ['ic','Interceptions','الاعتراضات',p90('ic'),'p90'],['ti','Tackles + interceptions','الافتكاكات + الاعتراضات',a=>sum(a,['tk','ic']),'p90'],
+   ['duw','Duels won','الالتحامات المكسوبة',p90('duw'),'p90'],['aerw','Aerial duels won','الكرات الهوائية المكسوبة',p90('aerw'),'p90'],
+   ['ap','Aerial duels won %','نسبة الكرات الهوائية المكسوبة',rat('aerw','aer',5,100),'%'],['bl','Blocks','الصد',p90('bl'),'p90'],
+   ['cl','Clearances','الإبعاد',p90('cl'),'p90'],['bc','Blocks + clearances','الصد + الإبعاد',a=>sum(a,['bl','cl']),'p90']],
+   dflt:['da','tk','ic','duw','aerw','bc']},
+  att:{en:'Attacking',ar:'الهجوم',file:'attacking',met:[
+   ['gl','Goals','الأهداف',p90('gl'),'p90'],['npxg','Non-penalty xG','xG بدون ركلات الجزاء',p90('npxg'),'p90'],['xg','xG','xG',p90('xg'),'p90'],
+   ['sh','Shots','التسديدات',p90('sh'),'p90'],['sot','Shots on target','التسديدات على المرمى',p90('sot'),'p90'],
+   ['sotp','Shots on target %','نسبة التسديدات على المرمى',rat('sot','sh',5,100),'%'],['xgps','xG per shot','xG لكل تسديدة',rat('xg','sh',5,1),'r'],
+   ['xag','xAG (expected assisted goals)','xAG (أهداف متوقعة من تمريراته)',p90('xag'),'p90'],['sca','Shot-creating actions','أفعال صنعت تسديدة',p90('sca'),'p90'],
+   ['gca','Goal-creating actions','أفعال صنعت هدف',p90('gca'),'p90'],['xt','xT (expected threat)','xT (التهديد المتوقع)',p90('xt'),'p90']],
+   dflt:['gl','npxg','sh','sot','xag','sca'],roles:['ST','W']},
+  mid:{en:'Passing and creating',ar:'التمرير والصناعة',file:'passing',met:[
+   ['ps','Passes','التمريرات',p90('ps'),'p90'],['pr','Progressive passes','التمريرات التقدمية',p90('pr'),'p90'],['kp','Key passes','التمريرات المفتاحية',p90('kp'),'p90'],
+   ['bx','Passes into the box','التمريرات داخل المنطقة',p90('bx'),'p90'],['tb','Through balls','التمريرات البينية',p90('tb'),'p90'],['cr','Crosses','العرضيات',p90('cr'),'p90'],
+   ['ast','Assists','التمريرات الحاسمة',p90('ast'),'p90'],['xag','xAG (expected assisted goals)','xAG (أهداف متوقعة من تمريراته)',p90('xag'),'p90'],
+   ['xgc','xG chain','سلسلة xG',p90('xgc'),'p90'],['xgb','xG buildup','بناء xG',p90('xgb'),'p90'],['sca','Shot-creating actions','أفعال صنعت تسديدة',p90('sca'),'p90']],
+   dflt:['ps','pr','kp','bx','xgb','sca'],roles:['MID']},
+  dri:{en:'Dribbling and carrying',ar:'المراوغة وحمل الكرة',file:'dribbling',met:[
+   ['tko','Take-ons attempted','محاولات المراوغة',p90('tko'),'p90'],['tkw','Take-ons won','المراوغات الناجحة',p90('tkw'),'p90'],
+   ['tsp','Take-on success %','نسبة نجاح المراوغة',rat('tkw','tko',5,100),'%'],['ca','Carries','حمل الكرة',p90('ca'),'p90'],
+   ['pc','Progressive carries','الحمل التقدمي',p90('pc'),'p90'],['cb','Carries into the box','الحمل داخل المنطقة',p90('cb'),'p90'],['xt','xT (expected threat)','xT (التهديد المتوقع)',p90('xt'),'p90']],
+   dflt:['tko','tkw','tsp','pc','cb','ca'],roles:['W','ST']}};
+ const met=()=>{const F=FAM[S.fam],ks=new Set(F.met.map(m=>m[0]));let L=(S.mets[S.fam]||[]).filter(k=>ks.has(k));if(L.length<3||L.length>8)L=F.dflt.slice();S.mets[S.fam]=L;return L};
+ const MK=f=>new Map(FAM[f].met.map(m=>[m[0],m]));
  const RK=['GK','CB','FB','MID','W','ST'];
  const ROLE={GK:['goalkeepers','حراس المرمى','Goalkeeper','حارس مرمى'],CB:['centre-backs','قلوب الدفاع','Centre-back','قلب دفاع'],FB:['full-backs','الأظهرة','Full-back','ظهير'],
   MID:['midfielders','لاعبي الوسط','Midfielder','لاعب وسط'],W:['wingers','الأجنحة','Winger','جناح'],ST:['strikers','المهاجمين','Striker','مهاجم']};
@@ -68,7 +87,7 @@
   let grp=S.grp;if(grp==='role'&&!me.role)grp='pos';
   const same=a=>grp==='role'?a.role===me.role:grp==='pos'?a.p===me.p:(a.p!=='GK'&&a.role!=='GK');
   const peers=all.filter(a=>a!==me&&!(a.id===me.id&&a.lg===me.lg)&&a.s.mi>=S.min&&same(a));
-  const rows=S.met.map(k=>{const m=MK.get(k),v=m[3](me),pv=peers.map(m[3]).filter(x=>x!=null&&isFinite(x));return {k,m,v,p:pctOf(v,pv),n:pv.length}});
+  const mk=MK(S.fam),rows=met().map(k=>{const m=mk.get(k),v=m[3](me),pv=peers.map(m[3]).filter(x=>x!=null&&isFinite(x));return {k,m,v,p:pctOf(v,pv),n:pv.length}});
   const ok=rows.filter(r=>r.p!=null);
   return {grp,peers,rows,avg:ok.length?Math.round(ok.reduce((s,r)=>s+r.p,0)/ok.length):null};
  }
@@ -79,6 +98,7 @@
  /* percentile colour: red (0) through amber (50) to green (100) */
  const pcol=p=>{const S=[[0,[214,69,65]],[50,[232,160,40]],[100,[63,163,77]]];for(let i=1;i<S.length;i++)if(p<=S[i][0]){const [a,c]=S[i-1],[b,d]=S[i],t=(p-a)/(b-a);
   return 'rgb('+c.map((v,k)=>Math.round(v+(d[k]-v)*t)).join(',')+')'}return 'rgb(63,163,77)'};
+ const fmtv=q=>q.v==null?'–':q.m[4]==='%'?Math.round(q.v)+'%':q.v.toFixed(2);
  const fit=(s,size,w)=>Math.min(size,Math.floor(w/(Math.max(4,[...String(s)].length)*.56)));
  function card(me,cmp,heat,meta){
   const A=ar(),W=1080,PX=70,PW=W-2*PX,PH=Math.round(PW*68/105),rows=cmp.rows,NR=rows.length,TH=100;
@@ -116,10 +136,10 @@
   g+=`<text x="${W-PX}" y="${pt+PH+44}" font-size="26" fill="${mu}" text-anchor="end">${x_(T('attack →','اتجاه الهجوم →'))}</text>`;
   /* the measures: one row each, the value per 90 beside its name, and a bar as long as the percentile, red (low) to green (high),
      so the colour and length say good or poor before the number is read */
-  g+=t(PX,mt-6,T('Percentile among ','المئين بين ')+meta.who,{size:26,fill:mu});
+  g+=t(PX,mt-6,T(FAM[S.fam].en,FAM[S.fam].ar)+' · '+T('percentile among ','المئين بين ')+meta.who,{size:fit(meta.who,26,PW*1.7),fill:mu});
   const BW=PW-84;
   rows.forEach((q,i)=>{const y0=mt+18+i*TH,lab=T(q.m[1],q.m[2]),pc=q.p==null?null:pcol(q.p);
-   const val=q.v==null?'–':q.m[4]==='%'?Math.round(q.v)+'%':q.v.toFixed(2),unit=q.v==null||q.m[4]==='%'?'':A?' لكل 90':' /90';
+   const val=fmtv(q),unit=q.v==null||q.m[4]!=='p90'?'':A?' لكل 90':' /90';
    g+=`<text x="${X(PX)}" y="${y0+30}" font-size="${fit(lab+val,29,BW-60)}" fill="${tx}" text-anchor="start"${A?' direction="rtl"':''}>${x_(lab)}  <tspan font-weight="800" direction="ltr" unicode-bidi="embed">${x_(val)}</tspan><tspan font-weight="400" fill="${mu}">${unit}</tspan></text>`;
    const bx=A?W-PX-BW:PX,w=q.p==null?0:Math.max(14,BW*q.p/100),fx=A?W-PX-w:PX;
    g+=`<rect x="${bx}" y="${y0+46}" width="${BW}" height="28" rx="14" fill="${ln}"/>`;
@@ -129,9 +149,10 @@
   /* what the card is and is not */
   const fy=mt+18+NR*TH+20;
   g+=t(PX,fy,T('Per 90 minutes · not possession-adjusted (PitchAPI gives no possession per match)','لكل 90 دقيقة · بدون تعديل حسب الاستحواذ (PitchAPI ما يعطي الاستحواذ لكل مباراة)'),{size:21,fill:mu});
-  g+=t(PX,fy+32,T('PitchAPI has no pressing events per player: the heat map is every action, not pressing','PitchAPI ما عنده أحداث ضغط لكل لاعب: الخريطة كل لمساته، مو ضغطه'),{size:21,fill:mu});
+  g+=t(PX,fy+32,S.fam==='def'?T('PitchAPI has no pressing events per player: the heat map is every action, not pressing','PitchAPI ما عنده أحداث ضغط لكل لاعب: الخريطة كل لمساته، مو ضغطه')
+   :T('The heat map is every action he made (PitchAPI heat counts)','الخريطة الحرارية كل لمساته (من عدّادات PitchAPI)'),{size:21,fill:mu});
   g+=t(PX,fy+72,'PL Analytics',{size:26,w:800});g+=t(W-PX,fy+72,T('Data: PitchAPI','البيانات: PitchAPI'),{size:22,fill:mu,a:'end'});
-  const aria=me.n+': '+rows.map(q=>T(q.m[1],q.m[2])+' '+(q.v==null?'–':q.m[4]==='%'?Math.round(q.v)+'%':q.v.toFixed(2))+(q.p==null?'':' ('+q.p+')')).join(', ');
+  const aria=me.n+': '+rows.map(q=>T(q.m[1],q.m[2])+' '+fmtv(q)+(q.p==null?'':' ('+q.p+')')).join(', ');
   return {svg:`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family='${FONT}' role="img" aria-label="${x_(aria)}">${g}</svg>`,W,H};
  }
  /* the player's heat map: his rows of PitchAPI's heat file added up (cells along the pitch × across it) */
@@ -144,32 +165,34 @@
   try{const img=new Image();await new Promise((ok,no)=>{img.onload=ok;img.onerror=no;img.src=url});
    const cv=document.createElement('canvas');cv.width=W;cv.height=H;cv.getContext('2d').drawImage(img,0,0,W,H);
    const blob=await new Promise(r=>cv.toBlob(r,'image/png'));if(!blob)throw new Error('png');
-   const fn='defensive-card-'+String(name).toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')+'.png';
+   const fn=FAM[S.fam].file+'-card-'+String(name).toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')+'.png';
    const file=typeof File==='function'?new File([blob],fn,{type:'image/png'}):null;
    if(file&&navigator.canShare&&navigator.canShare({files:[file]})&&matchMedia('(pointer:coarse)').matches){try{await navigator.share({files:[file],title:name});return}catch(e){if(e&&e.name==='AbortError')return}}
    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fn;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500);
   }finally{URL.revokeObjectURL(url)}}
- /* ---------- the section on the Defensive page ---------- */
- const orig=R.defense;
- R.defense=async function(el){
-  await orig.apply(this,arguments);
-  const h2=el.querySelector('h2');if(!h2||!el.isConnected||el.querySelector('#dcx'))return;
-  const sec=document.createElement('section');sec.id='dcx';sec.className='card dcx';
-  sec.innerHTML=`<h3>${two('Defensive card','بطاقة الدفاع')}</h3><p class="mu dcx-i">${two('Pick a player, the measures and who he is compared with. Per 90 minutes, with his percentile among those players.','اختر لاعب والمقاييس ومين تقارنه فيهم. الأرقام لكل 90 دقيقة، مع ترتيبه المئوي بينهم.')}</p><div class="dcx-b"><div class="empty skel">${two('Loading…','جاري التحميل…')}</div></div>`;
-  h2.after(sec);
-  draw(sec.querySelector('.dcx-b'));
- };
+ /* ---------- the section, at the top of the Defensive (defending), Shots (attacking) and Passing (passing) pages ---------- */
+ [['defense','def'],['shots','att'],['passing','mid']].forEach(([pg,fam])=>{const orig=R[pg];if(typeof orig!=='function')return;
+  R[pg]=async function(el){
+   await orig.apply(this,arguments);
+   const h2=el.querySelector('h2');if(!h2||!el.isConnected||el.querySelector('#dcx'))return;
+   S.fam=fam;const sec=document.createElement('section');sec.id='dcx';sec.className='card dcx';
+   sec.innerHTML=`<h3>${two('Player card','بطاقة اللاعب')}</h3><p class="mu dcx-i">${two('Pick a player, the kind of card, the measures and who he is compared with. Per 90 minutes, with his percentile among those players.','اختر لاعب ونوع البطاقة والمقاييس ومين تقارنه فيهم. الأرقام لكل 90 دقيقة، مع ترتيبه المئوي بينهم.')}</p><div class="dcx-b"><div class="empty skel">${two('Loading…','جاري التحميل…')}</div></div>`;
+   h2.after(sec);
+   draw(sec.querySelector('.dcx-b'));
+  }});
  async function draw(root){
-  const lg=D.id,tok=++S.tok,past=!!(typeof ALL==='object'&&ALL&&ALL.season);if(S.lg!==lg){S.lg=lg;S.pid=''}
+  const lg=D.id,tok=++S.tok,past=!!(typeof ALL==='object'&&ALL&&ALL.season);if(S.lg!==lg){S.lg=lg;S.pid='';S.user=false}
   const scope=past?'lg':S.scope;
   let P;try{P=await pool(scope,lg)}catch(e){if(!root.isConnected||D.id!==lg||tok!==S.tok)return;
    root.innerHTML=`<div class="empty">${two('Could not load the players for the comparison. Try again later.','ما قدرنا نحمّل اللاعبين للمقارنة. جرّب بعدين.')}</div>`;return}
   if(!root.isConnected||D.id!==lg||tok!==S.tok)return;
-  const lgName=(D&&D.name)||'',mine=P.all.filter(a=>a.lg===(scope==='six'?lgName:a.lg)&&a.s.mi>=S.min);
+  const lgName=(D&&D.name)||'';
   const own=scope==='six'?P.all.filter(a=>a.lg===lgName):P.all;
   const list=own.filter(a=>a.s.mi>=S.min).sort((a,b)=>a.n.localeCompare(b.n));
   if(!list.length){root.innerHTML=`<div class="empty">${two('No player has '+S.min+' minutes in this league yet.','ما فيه لاعب عنده '+nb(S.min)+' دقيقة في هذا الدوري للحين.')}</div>`+ctl(past,[]);wire(root,past,[]);return}
-  let me=list.find(a=>a.id===S.pid);if(!me){me=list.filter(a=>a.p!=='GK'&&a.role!=='GK').sort((a,b)=>b.s.mi-a.s.mi||a.n.localeCompare(b.n))[0]||list[0];S.pid=me.id}
+  /* the first player shown: the most minutes among the roles the card is about (any outfield role for defending) */
+  let me=S.user?list.find(a=>a.id===S.pid):null;if(!me){const R0=FAM[S.fam].roles,by=L=>L.sort((a,b)=>b.s.mi-a.s.mi||a.n.localeCompare(b.n))[0];
+   me=(R0&&by(list.filter(a=>R0.includes(a.role))))||by(list.filter(a=>a.p!=='GK'&&a.role!=='GK'))||list[0];S.pid=me.id}
   const cmp=compare(P.all,me);
   const who=(cmp.grp==='role'?(ar()?ROLE[me.role][1]:ROLE[me.role][0]):cmp.grp==='pos'?(ar()?(POS[me.p]||['',''])[1]:(POS[me.p]||[me.p||'players'])[0]):(ar()?'كل اللاعبين ما عدا الحراس':'all outfield players'));
   const where=scope==='six'?(ar()?'الدوريات الست':'six leagues'):(ar()?lgName:lgName);
@@ -186,22 +209,24 @@
   const sel=(id,arr,v,lab)=>`<label class="dcx-l"><span class="mu">${lab}</span><select id="${id}">${arr.map(([k,en,a])=>`<option value="${k}"${String(k)===String(v)?' selected':''}${a&&a.dis?' disabled':''}>${esc(ar()?a.t:en)}</option>`).join('')}</select></label>`;
   return `<div class="ctl dcx-ctl">
    <label class="dcx-l dcx-p"><span class="mu">${two('Player','اللاعب')}</span><input id="dcxp" list="dcxpl" autocomplete="off" value="${esc((list.find(a=>a.id===S.pid)||{}).n||'')}" placeholder="${ar()?'ابحث عن لاعب':'Search player'}"><datalist id="dcxpl">${list.map(a=>`<option value="${esc(a.n)}">${esc(a.club)}</option>`).join('')}</datalist></label>
+   ${sel('dcxt',Object.entries(FAM).map(([k,f])=>[k,f.en,{t:f.ar}]),S.fam,two('Card','البطاقة'))}
    ${sel('dcxg',[['role','Same role (from line-ups)',{t:'نفس الدور (من التشكيلات)'}],['pos','Same position',{t:'نفس المركز'}],['all','All outfield players',{t:'كل اللاعبين ما عدا الحراس'}]],S.grp,two('Compared with','المقارنة مع'))}
    ${sel('dcxs',[['six','Six leagues',{t:'الدوريات الست',dis:past}],['lg','This league',{t:'هذا الدوري'}]],past?'lg':S.scope,two('Where','وين'))}
    ${sel('dcxm',[[270,'270+ minutes',{t:'270+ دقيقة'}],[450,'450+ minutes',{t:'450+ دقيقة'}],[900,'900+ minutes',{t:'900+ دقيقة'}]],S.min,two('Minutes','الدقائق'))}</div>
    ${past?`<p class="mu dcx-i">${two('A past season is compared within its own league only.','الموسم السابق يُقارن داخل دوريه بس.')}</p>`:''}
-   <div class="dcx-mt" role="group" aria-label="${ar()?'المقاييس':'Measures'}">${MET.map(m=>`<label class="dcx-k"><input type="checkbox" value="${m[0]}"${S.met.includes(m[0])?' checked':''}>${two(esc(m[1])+(m[4]==='%'?'':' /90'),esc(m[2]))}</label>`).join('')}</div>
+   <div class="dcx-mt" role="group" aria-label="${ar()?'المقاييس':'Measures'}">${FAM[S.fam].met.map(m=>`<label class="dcx-k"><input type="checkbox" value="${m[0]}"${met().includes(m[0])?' checked':''}>${two(esc(m[1])+(m[4]==='p90'?' /90':''),esc(m[2]))}</label>`).join('')}</div>
    <p class="mu dcx-i">${two('3 to 8 measures.','من 3 إلى 8 مقاييس.')}</p>`;
  }
  function wire(root,past,list){
   const redraw=()=>{save();draw(root)};
-  const p=root.querySelector('#dcxp');if(p)p.onchange=()=>{const v=p.value.trim().toLowerCase(),a=list.find(x=>x.n.toLowerCase()===v)||list.find(x=>x.n.toLowerCase().includes(v));if(a&&a.id!==S.pid){S.pid=a.id;redraw()}};
+  const p=root.querySelector('#dcxp');if(p)p.onchange=()=>{const v=p.value.trim().toLowerCase(),a=list.find(x=>x.n.toLowerCase()===v)||list.find(x=>x.n.toLowerCase().includes(v));if(a&&a.id!==S.pid){S.pid=a.id;S.user=true;redraw()}};
+  const f=root.querySelector('#dcxt');if(f)f.onchange=()=>{if(FAM[f.value]){S.fam=f.value;redraw()}};
   const g=root.querySelector('#dcxg');if(g)g.onchange=()=>{S.grp=g.value;redraw()};
   const s=root.querySelector('#dcxs');if(s)s.onchange=()=>{if(!past){S.scope=s.value;redraw()}};
   const m=root.querySelector('#dcxm');if(m)m.onchange=()=>{S.min=+m.value;redraw()};
   const B=[...root.querySelectorAll('.dcx-mt input')],lim=()=>{const n=B.filter(b=>b.checked).length;B.forEach(b=>{b.disabled=(b.checked&&n<=3)||(!b.checked&&n>=8)})};lim();
-  B.forEach(b=>b.onchange=()=>{const on=B.filter(x=>x.checked).map(x=>x.value);if(on.length<3||on.length>8){b.checked=!b.checked;return}S.met=MET.map(m=>m[0]).filter(k=>on.includes(k));lim();redraw()});
+  B.forEach(b=>b.onchange=()=>{const on=B.filter(x=>x.checked).map(x=>x.value);if(on.length<3||on.length>8){b.checked=!b.checked;return}S.mets[S.fam]=FAM[S.fam].met.map(m=>m[0]).filter(k=>on.includes(k));lim();redraw()});
  }
- INS.ar({'Same role (from line-ups)':'نفس الدور (من التشكيلات)','Same position':'نفس المركز','All outfield players':'كل اللاعبين ما عدا الحراس','Six leagues':'الدوريات الست','This league':'هذا الدوري','270+ minutes':'270+ دقيقة','450+ minutes':'450+ دقيقة','900+ minutes':'900+ دقيقة'});
+ INS.ar({'Defending':'الدفاع','Attacking':'الهجوم','Passing and creating':'التمرير والصناعة','Dribbling and carrying':'المراوغة وحمل الكرة','Same role (from line-ups)':'نفس الدور (من التشكيلات)','Same position':'نفس المركز','All outfield players':'كل اللاعبين ما عدا الحراس','Six leagues':'الدوريات الست','This league':'هذا الدوري','270+ minutes':'270+ دقيقة','450+ minutes':'450+ دقيقة','900+ minutes':'900+ دقيقة'});
  if(typeof D==='object'&&D&&typeof route==='function')route();
 })();

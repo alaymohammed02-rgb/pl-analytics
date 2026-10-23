@@ -14,22 +14,26 @@ function league(l){const pl=J(l.pl_file),ix={};pl.cols.forEach((c,k)=>ix[c]=k);c
  for(const r of pl.rows){const mi=r[ix.mi];if(mi==null)continue;let a=P.get(r[ix.i]);
   if(!a){a={id:r[ix.i],n:r[ix.n],lg:l.name,mi:0,g:0,tot:{},min:{},clubs:{},pos:{}};P.set(a.id,a)}
   a.mi+=mi;a.g++;a.clubs[r[ix.c]]=(a.clubs[r[ix.c]]||0)+mi;if(r[ix.o])a.pos[r[ix.o]]=(a.pos[r[ix.o]]||0)+mi;
-  for(const k of ['tk','ic','bl','cl','duw','aer','aerw']){const v=r[ix[k]];if(v!=null){a.tot[k]=(a.tot[k]||0)+v;a.min[k]=(a.min[k]||0)+mi}}}
+  for(const k of ['tk','ic','bl','cl','duw','aer','aerw','gl','npxg','xg','sh','sot','xag','sca','gca','xt','ps','pr','kp','bx','tb','cr','ast','xgc','xgb','tko','tkw','ca','pc','cb']){const v=r[ix[k]];if(v!=null){a.tot[k]=(a.tot[k]||0)+v;a.min[k]=(a.min[k]||0)+mi}}}
  const mx=l.mx_file?J(l.mx_file):null,RC=new Map();
  if(mx&&mx.m)for(const v of Object.values(mx.m)){const lu=v&&v.lu;if(!lu)continue;for(const s of ['h','a']){const L=lu[s];if(L&&L.xi)for(const e of L.xi){if(!e||e[3]==null)continue;const c=RC.get(e[0])||{};const q=roleOf(e);c[q]=(c[q]||0)+1;RC.set(e[0],c)}}}
  const top=o=>Object.entries(o).sort((x,y)=>y[1]-x[1])[0];
  return [...P.values()].filter(a=>a.mi>0).map(a=>{a.club=(top(a.clubs)||[''])[0];a.p=(top(a.pos)||[null])[0];const c=RC.get(a.id);
   a.role=c?Object.entries(c).sort((x,y)=>y[1]-x[1]||RK.indexOf(x[0])-RK.indexOf(y[0]))[0][0]:null;return a})}
 const p90=(a,k)=>a.min[k]>0?a.tot[k]/a.min[k]*90:null,both=(a,ks)=>ks.every(k=>a.min[k]>0)?ks.reduce((s,k)=>s+p90(a,k),0):null;
-const MET={da:a=>both(a,['tk','ic','bl','cl']),tk:a=>p90(a,'tk'),ic:a=>p90(a,'ic'),ti:a=>both(a,['tk','ic']),duw:a=>p90(a,'duw'),aerw:a=>p90(a,'aerw'),
+const rat=(n,d,lo,x)=>a=>(a.min[n]>0&&a.min[d]>0&&a.tot[d]>=lo)?a.tot[n]/a.tot[d]*x:null,P9=k=>a=>p90(a,k);
+const MET={gl:P9('gl'),npxg:P9('npxg'),xg:P9('xg'),sh:P9('sh'),sot:P9('sot'),sotp:rat('sot','sh',5,100),xgps:rat('xg','sh',5,1),xag:P9('xag'),sca:P9('sca'),gca:P9('gca'),xt:P9('xt'),
+ ps:P9('ps'),pr:P9('pr'),kp:P9('kp'),bx:P9('bx'),tb:P9('tb'),cr:P9('cr'),ast:P9('ast'),xgc:P9('xgc'),xgb:P9('xgb'),tko:P9('tko'),tkw:P9('tkw'),tsp:rat('tkw','tko',5,100),ca:P9('ca'),pc:P9('pc'),cb:P9('cb'),da:a=>both(a,['tk','ic','bl','cl']),tk:a=>p90(a,'tk'),ic:a=>p90(a,'ic'),ti:a=>both(a,['tk','ic']),duw:a=>p90(a,'duw'),aerw:a=>p90(a,'aerw'),
  ap:a=>(a.min.aer>0&&a.min.aerw>0&&a.tot.aer>=5)?a.tot.aerw/a.tot.aer*100:null,bl:a=>p90(a,'bl'),cl:a=>p90(a,'cl'),bc:a=>both(a,['bl','cl'])};
-const NAME={da:'Defensive actions',tk:'Tackles',ic:'Interceptions',ti:'Tackles + interceptions',duw:'Duels won',aerw:'Aerial duels won',ap:'Aerial duels won %',bl:'Blocks',cl:'Clearances',bc:'Blocks + clearances'};
+const PCT=new Set(['ap','sotp','tsp']);
+const NAME={gl:'Goals',npxg:'Non-penalty xG',xg:'xG',sh:'Shots',sot:'Shots on target',sotp:'Shots on target %',xgps:'xG per shot',xag:'xAG (expected assisted goals)',sca:'Shot-creating actions',gca:'Goal-creating actions',xt:'xT (expected threat)',
+ ps:'Passes',pr:'Progressive passes',kp:'Key passes',bx:'Passes into the box',tb:'Through balls',cr:'Crosses',ast:'Assists',xgc:'xG chain',xgb:'xG buildup',tko:'Take-ons attempted',tkw:'Take-ons won',tsp:'Take-on success %',ca:'Carries',pc:'Progressive carries',cb:'Carries into the box',da:'Defensive actions',tk:'Tackles',ic:'Interceptions',ti:'Tackles + interceptions',duw:'Duels won',aerw:'Aerial duels won',ap:'Aerial duels won %',bl:'Blocks',cl:'Clearances',bc:'Blocks + clearances'};
 function expect(all,me,{grp,min,met}){let g=grp;if(g==='role'&&!me.role)g='pos';
  const peers=all.filter(a=>!(a.id===me.id&&a.lg===me.lg)&&a.mi>=min&&(g==='role'?a.role===me.role:g==='pos'?a.p===me.p:(a.p!=='GK'&&a.role!=='GK')));
  const rows=met.map(k=>{const v=MET[k](me),pv=peers.map(MET[k]).filter(x=>x!=null&&isFinite(x));let lo=0,eq=0;pv.forEach(x=>{if(x<v)lo++;else if(x===v)eq++});
   return {k,v,p:v==null||pv.length<5?null:Math.round((lo+eq/2)/pv.length*100)}});
  return {n:peers.length,rows}}
-const fmt=r=>(r.v==null?'–':r.k==='ap'?Math.round(r.v)+'%':r.v.toFixed(2))+(r.p==null?'':' ('+r.p+')');
+const fmt=r=>(r.v==null?'–':PCT.has(r.k)?Math.round(r.v)+'%':r.v.toFixed(2))+(r.p==null?'':' ('+r.p+')');
 const label=(me,rows)=>me.n+': '+rows.map(r=>NAME[r.k]+' '+fmt(r)).join(', ');
 const shown=pg=>pg.$eval('#dcx svg',s=>s.getAttribute('aria-label'));
 const waitFor=(pg,name)=>pg.waitForFunction(n=>{const s=document.querySelector('#dcx svg');return s&&s.getAttribute('aria-label').startsWith(n+':')},name,{timeout:60000});
@@ -73,11 +77,22 @@ const ALLP=SIX.flatMap(league),PLG=IDX.leagues.find(l=>l.id==='l_4WFCIZ');
  ok(n3.on.length===3&&n3.dis===3,'down to 3 measures, which can no longer be unticked ('+n3.on.join(', ')+')');
  await pg.selectOption('#dcxg','all');await waitFor(pg,saka.n);e=expect(lgP,saka,{grp:'all',min:270,met:n3.on});
  ok(await shown(pg)===label(saka,e.rows),'all outfield players: '+await shown(pg));
+ /* the other kinds of card on the same page: dribbling (ratios included) */
+ await pg.selectOption('#dcxt','dri');await waitFor(pg,saka.n);e=expect(lgP,saka,{grp:'all',min:270,met:['tko','tkw','tsp','pc','cb','ca']});
+ ok(await shown(pg)===label(saka,e.rows)&&await pg.$eval('#dcx svg',s=>s.textContent.includes('Dribbling and carrying · percentile among')),'dribbling card for '+saka.n+': '+await shown(pg));
+ await pg.selectOption('#dcxt','def');await waitFor(pg,saka.n);
  /* the saved image */
  const [dl]=await Promise.all([pg.waitForEvent('download'),pg.click('.dcx-s')]);const fs=require('fs'),p='/tmp/dc-'+process.pid+'.png';await dl.saveAs(p);const png=fs.readFileSync(p);fs.unlinkSync(p);
  const vb=await pg.$eval('#dcx svg',s=>s.getAttribute('viewBox').split(' ').map(Number));
  ok(png.slice(1,4).toString()==='PNG'&&png.readUInt32BE(16)===1080&&png.readUInt32BE(20)===vb[3]&&png.length>30000&&/^defensive-card-/.test(dl.suggestedFilename()),'Save image: a '+png.readUInt32BE(16)+' × '+png.readUInt32BE(20)+' PNG ('+Math.round(png.length/1024)+' KB), '+dl.suggestedFilename());
  ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await ctx.close();
+ /* the Shots page opens on the attacking card, the Passing page on the passing card, each with its own first player */
+ for(const [hash,fam,roles,mset] of [['#/shots','att',['ST','W'],['gl','npxg','sh','sot','xag','sca']],['#/passing','mid',['MID'],['ps','pr','kp','bx','xgb','sca']]]){
+  ({ctx,pg,errs}=await T.open(b,{vw:1280,league:'l_4WFCIZ',hash}));await pg.waitForSelector('#dcx svg',{timeout:90000});
+  const by=L=>L.sort((x,y)=>y.mi-x.mi||x.n.localeCompare(y.n))[0],first=by(mine.filter(a=>roles.includes(a.role)));
+  const ex=expect(ALLP,first,{grp:'role',min:450,met:mset});
+  ok(await pg.$eval('#dcxt',s=>s.value)===fam&&await shown(pg)===label(first,ex.rows),hash+': the '+fam+' card, '+await shown(pg));
+  ok(!errs.length,hash+': no page errors '+errs.slice(0,2).join(' ; '));await ctx.close()}
  /* Arabic, 390 px */
  ({ctx,pg,errs}=await T.open(b,{vw:390,lang:'ar',league:'l_4WFCIZ',hash:'#/defense'}));await pg.waitForSelector('#dcx svg',{timeout:90000});
  const arL=await shown(pg);
