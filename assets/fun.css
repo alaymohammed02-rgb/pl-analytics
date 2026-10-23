@@ -268,3 +268,88 @@ html[dir=rtl] .dl-bars .ph-bn bdi{text-align:right}
 .dl-att img{display:block;height:22px;width:auto}
 @media(max-width:860px){.dl-two{grid-template-columns:1fr}}
 @media(max-width:560px){.dl-t th:nth-child(1),.dl-t td:nth-child(1){display:none}.dl-ctl .seg{width:100%}.dl-ctl .seg button{flex:1;padding:6px 4px;font-size:12px}}
+/* ===== Comebacks & collapses (assets/game-states.js) ===== */
+.gs-b{font-style:normal;font-size:11px;padding:1px 7px;border-radius:999px;border:1px solid var(--ln)}
+.gs-b.up{color:var(--g);border-color:var(--g)}.gs-b.dn{color:var(--r);border-color:var(--r)}
+.gs-sq{margin-inline-start:auto;font-size:11.5px}
+.gs-fx p{margin:6px 0;line-height:1.6}
+.gs-t th,.gs-t td{white-space:nowrap}
+@media (max-width:560px){.gs-w{display:none}.gs-sq{flex-basis:100%;margin:0}}
+/* ===== Likely line-ups (assets/likely-xi.js) ===== */
+.lx .card{margin-bottom:14px}
+.lx-two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start;margin-bottom:14px}
+.lx-two .card{margin-bottom:0}
+.lx-pick .ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.lx-nx{margin:8px 0 0}
+.lx-pitch svg{width:100%;max-width:340px;display:block;margin:0 auto;direction:ltr}
+.lx-pl{fill:none;stroke:rgba(255,255,255,.5);stroke-width:1}
+.lx-d circle{stroke:var(--sf);stroke-width:2}.lx-d.a circle{fill:var(--g)}.lx-d.b circle{fill:#e9b44c}.lx-d.c circle{fill:var(--r)}
+.lx-n{font-size:8.5px;font-weight:700;fill:#06210f}.lx-t{font-size:9.5px;fill:var(--tx)}
+.lx-list{list-style:none;margin:0;padding:0;display:grid;gap:3px}
+.lx-list li{display:grid;grid-template-columns:minmax(0,1fr) 90px 3.2em;gap:8px;align-items:center;font-size:13px;padding:3px 4px;border-radius:6px}
+.lx-pn{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.lx-pn bdi{display:inline}
+.lx-bar{height:8px;border-radius:4px;background:rgba(255,255,255,.07);overflow:hidden;direction:ltr}.lx-bar i{display:block;height:100%;background:var(--g)}
+.lx-list li.b .lx-bar i{background:#e9b44c}.lx-list li.c .lx-bar i{background:var(--r)}
+.lx-list b{text-align:end;font-variant-numeric:tabular-nums}
+.lx-list+h4{margin:14px 0 4px;font-size:13.5px}
+@media (max-width:860px){.lx-two{grid-template-columns:1fr}}
+@media (max-width:560px){.lx-list li{grid-template-columns:minmax(0,1fr) 64px 3em;font-size:12.5px}}
+/* ===== Club twins (assets/club-twins.js) ===== */
+.ct .card{margin-bottom:14px}
+.ct-pick{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.ct-pick label{display:flex;gap:8px;align-items:center}.ct-pick select{max-width:100%}
+.ct-ol{list-style:none;margin:0;padding:0;display:grid;gap:3px}
+.ct-ol button{all:unset;box-sizing:border-box;width:100%;display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:8px;cursor:pointer;font-size:13.5px;min-height:34px}
+.ct-ol button:hover,.ct-ol button:focus-visible{background:rgba(255,255,255,.06)}.ct-ol button:focus-visible{outline:2px solid var(--th-hi)}
+.ct-ol li.me button{background:rgba(255,255,255,.08);box-shadow:inset 3px 0 0 var(--th-hi)}
+.ct-ol button b{margin-inline-start:auto;font-variant-numeric:tabular-nums;font-size:16px}
+.ct-ol button .mu{font-size:11.5px}
+.ct .lk-two h4{margin:12px 0 4px}
+.ct-t td.n,.ct-t th.n{position:relative;white-space:nowrap}
+.ct-p{display:block;height:4px;margin-top:3px;border-radius:2px;background:linear-gradient(90deg,var(--th-hi) var(--w),rgba(255,255,255,.08) var(--w));direction:ltr}
+.ct-p.o{background:linear-gradient(90deg,#e6e3dc var(--w),rgba(255,255,255,.08) var(--w))}
+.ct-g.close{color:var(--g)}.ct-g.far{color:var(--r)}
+@media (max-width:560px){.ct-t th,.ct-t td{padding:6px 4px;font-size:12px}.ct-t th:first-child,.ct-t td:first-child{max-width:7.5rem;white-space:normal}.ct-ol button{font-size:13px}.ct-t th bdi{display:inline-block;max-width:5rem;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}}
+/* ===== Who carries the team (assets/carry-team.js) ===== */
+.cy .card{margin-bottom:14px}
+.cy .seg{margin-bottom:10px}.cy .seg button{min-width:0;padding:6px 14px}
+.cy .seg button[aria-pressed=true]{background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,0) 55%),var(--th);color:var(--th-ink)}
+.cy-bars button{grid-template-columns:minmax(0,14rem) minmax(0,1fr) 3.4em}
+.cy-bars .lk-bn{display:flex;flex-direction:column;gap:0;white-space:normal;min-width:0}
+.cy-bars .lk-bn bdi{max-width:100%}
+.cy-bars .lk-bn small{display:block;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cy-b{background:rgba(255,255,255,.06);border-radius:4px}
+.cy-p{display:block;height:3px;margin-top:3px;border-radius:2px;background:linear-gradient(90deg,var(--th-hi) var(--w),rgba(255,255,255,.08) var(--w));direction:ltr}
+.cy-t td,.cy-t th{white-space:nowrap}.cy-t td:first-child{white-space:normal}
+@media (max-width:560px){.cy-bars button{grid-template-columns:minmax(0,8.5rem) minmax(0,1fr) 3em}.cy-t th,.cy-t td{padding:6px 4px;font-size:12.5px}}
+/* ===== Model report card (assets/report-card.js) ===== */
+.rc .card{margin-bottom:14px}
+.rc-intro p,.rc p{line-height:1.6}
+.rc-t td.n,.rc-t th.n{white-space:nowrap}
+.rc-p{display:block;height:4px;margin-top:3px;border-radius:2px;background:linear-gradient(90deg,var(--th-hi) var(--w),rgba(255,255,255,.08) var(--w));direction:ltr}
+@media (max-width:560px){.rc-t th,.rc-t td{padding:6px 4px;font-size:12.5px}}
+/* ===== League DNA (assets/league-dna.js) ===== */
+.ld .card{margin-bottom:14px}
+.ld-tr{list-style:none;margin:8px 0 10px;padding:0;display:grid;gap:6px}
+.ld-tr li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;align-items:baseline;border:1px solid var(--ln);border-radius:10px;padding:8px 12px}
+.ld-tr li b{font-size:20px;font-variant-numeric:tabular-nums}.ld-tr li .mu{grid-column:1/-1;font-size:12px}
+.ld-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.ld-c{margin-bottom:0!important}.ld-c h3{margin:0 0 8px;font-size:14px}
+.ld-ol{list-style:none;margin:0;padding:0;display:grid;gap:3px}
+.ld-ol li{display:grid;grid-template-columns:minmax(0,7.5rem) minmax(0,1fr) 3.8em;gap:8px;align-items:center;font-size:13px;padding:2px 4px;border-radius:6px}
+.ld-ol li.me{background:rgba(255,255,255,.08);box-shadow:inset 3px 0 0 var(--th-hi)}
+.ld-n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ld-n bdi{display:inline}
+.ld-b{height:8px;border-radius:4px;background:rgba(255,255,255,.07);overflow:hidden;direction:ltr}.ld-b i{display:block;height:100%;background:var(--th-hi)}
+.ld-ol li.me .ld-b i{background:#e6e3dc}
+.ld-ol b{text-align:end;font-variant-numeric:tabular-nums}
+@media (max-width:560px){.ld-grid{grid-template-columns:1fr}}
+/* ===== Thrill index (assets/thrill.js) ===== */
+.th .card{margin-bottom:14px}
+.th-ol{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.th-ol a{display:grid;grid-template-columns:3.2rem minmax(0,1fr);gap:10px;align-items:center;padding:6px 6px;border-radius:10px;border:1px solid var(--ln);color:var(--tx);text-decoration:none}
+.th-ol a:hover,.th-ol a:focus-visible{background:rgba(255,255,255,.06)}.th-ol a:focus-visible{outline:2px solid var(--th-hi)}
+.th-sc{display:flex;align-items:center;justify-content:center;height:2.6rem;border-radius:10px;background:var(--th-soft);border:1px solid var(--th-bd)}
+.th-sc b{font-size:17px;font-variant-numeric:tabular-nums}
+.th-mt{display:flex;flex-direction:column;gap:1px;min-width:0;font-size:14px}.th-mt small{font-size:11.5px;line-height:1.4}
+.th-rc p{line-height:1.7;margin:6px 0}
+@media (max-width:560px){.th-ol a{grid-template-columns:2.8rem minmax(0,1fr);gap:8px}.th-mt{font-size:13px}}
+.th .seg{margin:6px 0 10px}.th .seg button{min-width:0;padding:6px 12px}
+.th .seg button[aria-pressed=true]{background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,0) 55%),var(--th);color:var(--th-ink)}
