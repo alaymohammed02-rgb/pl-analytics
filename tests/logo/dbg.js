@@ -1,5 +1,5 @@
-const {chromium}=require('/opt/node-tools/node_modules/playwright');
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+const {chromium}=require('playwright');
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  let ctx=await b.newContext();await ctx.addInitScript(()=>{localStorage.setItem('league','l_1Isor4')});let pg=await ctx.newPage();
  await pg.goto('http://127.0.0.1:8771/index.html#/club/Bayern%20M%C3%BCnchen');await pg.waitForSelector('.clubhd',{timeout:30000});await pg.waitForTimeout(500);
  console.log(await pg.evaluate(async()=>{const c=await thCrest(logoOf('Bayern München'));return JSON.stringify({c,pal:thClubPal('Bayern München')})}));

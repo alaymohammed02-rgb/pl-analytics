@@ -1,6 +1,6 @@
-const {chromium}=require('/opt/node-tools/node_modules/playwright');
+const {chromium}=require('playwright');
 const IDS=process.argv.slice(2);
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  for(const lang of ['en','ar']){const ctx=await b.newContext({viewport:{width:1280,height:900}});
  await ctx.addInitScript(([l])=>{if(!sessionStorage.getItem('s')){sessionStorage.setItem('s','1');localStorage.clear();localStorage.setItem('league','l_4WFCIZ');localStorage.setItem('lang',l)}},[lang]);
  const pg=await ctx.newPage(),errs=[];pg.on('pageerror',e=>errs.push(e.message));

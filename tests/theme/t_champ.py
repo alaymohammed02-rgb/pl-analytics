@@ -1,10 +1,11 @@
+import os as _os; REPO=_os.environ.get('PLREPO') or _os.path.abspath(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)),'..','..'))
 import sys,importlib.util,json,copy,datetime
-sys.path.insert(0,'stub')
-spec=importlib.util.spec_from_file_location("m","/home/user/pl-analytics/sync.py");m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+sys.path.insert(0,REPO+'/tests/stub')
+spec=importlib.util.spec_from_file_location("m",REPO+'/sync.py');m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 fails=0
 def ok(c,msg):
     global fails;print(('ok  ' if c else 'FAIL'),msg);fails+=0 if c else 1
-R='/home/user/pl-analytics/data/'
+R=REPO+'/data/'
 logs=[];m.log=lambda *a:logs.append(' '.join(map(str,a)))
 # 1. champion of every archived season (known real champions)
 exp={'2022-23':'Man City','2023-24':'Man City','2024-25':'Liverpool','2025-26':'Arsenal'}

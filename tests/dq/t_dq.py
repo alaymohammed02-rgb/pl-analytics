@@ -1,7 +1,8 @@
+import os as _os; REPO=_os.environ.get('PLREPO') or _os.path.abspath(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)),'..','..'))
 import sys,importlib.util,json,copy,os,tempfile,datetime
 from types import SimpleNamespace as N
-sys.path.insert(0,'../stub');os.environ['PITCHAPI_KEY']='SECRET'
-spec=importlib.util.spec_from_file_location("m","/home/user/pl-analytics/sync.py");m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+sys.path.insert(0,REPO+'/tests/stub');os.environ['PITCHAPI_KEY']='SECRET'
+spec=importlib.util.spec_from_file_location("m",REPO+'/sync.py');m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 fails=0
 def ok(c,msg):
     global fails;print(('ok  ' if c else 'FAIL'),msg);fails+=0 if c else 1

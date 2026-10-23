@@ -1,6 +1,7 @@
+import os as _os; REPO=_os.environ.get('PLREPO') or _os.path.abspath(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)),'..','..'))
 """Very rare cases: rarity rules, cases recomputed independently from the raw files, the database path, the sync step."""
 import json, math, re, datetime, sys, sqlite3, collections
-sys.path.insert(0, '/tmp/claude-0/-home-user/83a4d5f8-8137-5cb1-9baa-8ac55fed2a66/scratchpad/rare')
+sys.path.insert(0, REPO+'/tests/rare')
 import rr_local as RL
 G = RL.G
 fails = 0
@@ -25,7 +26,7 @@ ok(all(not v['near'] or len(v['rare']) < 3 for v in out['leagues'].values()), '"
 M = {(m['l'], m['m']): m for m in matches}
 ok(all(c['d'] == str(M[(c['l'], c['m'])]['d'])[:10] for c in allc), 'each case dated by its match')
 # ---- independent recomputation from the raw files ----
-D = '/home/user/pl-analytics/data/'
+D = REPO+'/data/'
 def per_match(vals, up=True):     # {match: value} → k for a value
     L = list(vals.values())
     return lambda v: sum(1 for x in L if (x >= v - 1e-9 if up else x <= v + 1e-9))
@@ -103,5 +104,5 @@ G['LV_HAVE'].clear(); written.clear(); G['sync_rare']({}, now)
 ok(len(written) == 1 and written[0][0] == 'data/rare.json' and G['LV_HAVE'].get('rr') == json.loads(written[0][1])['h'], 'sync: data/rare.json written, its version announced for the index')
 files['data/rare.json'] = json.loads(written[0][1]); written.clear(); G['LV_HAVE'].clear(); G['sync_rare']({}, now)
 ok(not written and G['LV_HAVE'].get('rr') == files['data/rare.json']['h'], 'sync: unchanged data → nothing rewritten, same version announced')
-json.dump(out, open('/tmp/claude-0/-home-user/83a4d5f8-8137-5cb1-9baa-8ac55fed2a66/scratchpad/rare/rare.json', 'w'), ensure_ascii=False, separators=(',', ':'))
+json.dump(out, open(_os.path.join(__import__('tempfile').gettempdir(),'rare.json'), 'w'), ensure_ascii=False, separators=(',', ':'))
 print(f"{fails} FAILED" if fails else 'all passed'); sys.exit(1 if fails else 0)

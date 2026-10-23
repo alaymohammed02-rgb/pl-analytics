@@ -1,5 +1,5 @@
-const {chromium}=require('/opt/node-tools/node_modules/playwright');
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+const {chromium}=require('playwright');
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  for(const [port,touch] of [[8778,false],[8777,false],[8778,true],[8777,true]]){
   const ctx=await b.newContext(touch?{viewport:{width:390,height:860},hasTouch:true,isMobile:true,deviceScaleFactor:2}:{viewport:{width:1280,height:860}});
   await ctx.addInitScript(()=>{localStorage.clear();localStorage.setItem('league','l_4WFCIZ');localStorage.setItem('lang','en')});

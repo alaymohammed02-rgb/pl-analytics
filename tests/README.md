@@ -1,16 +1,23 @@
 # Tests
 
-Browser tests (Playwright, Chromium) and Python tests for the site, moved here from a temporary working folder so they are not lost. They are not yet wired to GitHub Actions; that is the next step (see `CLAUDE.md`).
+Browser tests (Playwright, Chromium) and Python tests for the site. They run on every pull request in GitHub Actions (`.github/workflows/tests.yml`).
 
 ## Run
 
 ```sh
-sh tests/regen.sh                         # rebuild index.html from sync.py (gen_index.py)
-JS="nf/ui_gs.js ph/ui_dlh.js" bash tests/runsome.sh   # some browser tests
-bash tests/runall.sh > all.log 2>&1       # everything (about 40 minutes)
+sh tests/regen.sh                         # rebuild index.html from sync.py (gen_index.py); index.html is not changed by it unless sync.py changed
+bash tests/ci.sh ph/ui_dlh.js nf/ui_gs.js fx/t_fx.py   # any mix of browser (.js) and Python (.py) tests
 ```
 
-`runsome.sh` / `runall.sh` serve the repository on port 8765 and the fixture sites (`base3`, `trkweb`, `lgweb`, `cmpweb`, `labweb`, `preweb`, `homeweb`) on 8767–8777, then stop them. While testing they remove the photo entries from `data/index.json` (the test machine cannot reach the photo CDN) and restore the file with `git checkout data/index.json` at the end: never commit `data/index.json` from a test run.
+Setup: Node with Playwright (`NODE_PATH` pointing at its `node_modules`; `CHROME` may point at a Chromium binary, otherwise Playwright's own is used) and Python with `requests`. `PLREPO` overrides the repository root (default: the parent of `tests/`).
+
+`ci.sh` serves the repository on port 8765 and, through `fixtures.sh`, the extra "fixture sites" some tests open on 8767–8790 (each one is a symlinked view of the repository; `lgweb` also gets generated test crests from `logo/mk.py`). It runs the tests one by one, prints `passed` / `FAILED` for each (logs in `tests/logs/`), and exits 1 if any failed. A test fails on a non-zero exit, a line starting with `FAIL`, or no `ok` line at all. While testing it removes the photo entries from `data/index.json` (the photo CDN may be unreachable) and restores the file with `git checkout data/index.json` at the end: never commit `data/index.json` from a test run.
+
+`runall.sh` / `runsome.sh` are the older local runners (they print a summary but do not set an exit code).
+
+## CI
+
+`tests.yml` runs a Python job and several browser jobs in parallel (a matrix; the test lists are in the workflow). It rebuilds `index.html` into the job's workspace only. When you add a test, add it to one of the matrix lists.
 
 ## Where things are
 
@@ -19,14 +26,9 @@ bash tests/runall.sh > all.log 2>&1       # everything (about 40 minutes)
 - Other folders hold one area of the site each. A test usually recomputes the page's numbers independently from the raw files in `data/` and compares them with what the page shows.
 - `stub/`: a fake `pitchapi` module for the Python tests of sync sections.
 
-## Known issues to fix when wiring CI
+## Notes
 
-- Paths are absolute in places:
-  - `/home/user/pl-analytics`
-  - the Playwright install `/opt/node-tools/node_modules/playwright`
-  - Chromium at `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`
-  - ten files still point to the old temporary folder (`grep -rl /tmp/claude-0 tests`)
-- `ph/ui_dlh.js` reads `ext/sb_lines.json`, which is not in the repository (StatsBomb terms: no raw-data redistribution). Rebuild it with `tools/line-height/` or switch the test to `data/dlh.json`.
-- Some older tests depend on the date or on fixed values in live data. For example, `px/ui_px.js` expects no match today, so it fails on match days and on `main` as well. Make them read the expected values from `data/`.
-- External images (cdn.pitchapi.dev) cannot be loaded on the test machine. The console-error filters ignore `ERR_TUNNEL_CONNECTION_FAILED` and `cdn.pitchapi`.
-- `ui_season.js`, `ui_test.js` and `ui_ar.js` print `ok` lines and FAIL lines but no final "all passed" line.
+- Expected values are read from `data/` at run time. A check must not hard-code a value that a sync can change, and must not assume whether a match is played today.
+- `ph/ui_dlh.js` reads the measured competitions from `data/dlh.json` (the raw StatsBomb files are not in the repository).
+- External images (cdn.pitchapi.dev) may or may not load; the console-error filters ignore `ERR_TUNNEL_CONNECTION_FAILED` and `cdn.pitchapi`.
+- `stub/pitchapi.py` stands in for the `pitchapi` package, so the tests need neither the package nor a key.

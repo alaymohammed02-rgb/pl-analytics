@@ -1,6 +1,6 @@
-const {chromium}=require('/opt/node-tools/node_modules/playwright');const fs=require('fs');
+const {chromium}=require('playwright');const fs=require('fs');
 const [,,out,vw,lang,league]=process.argv;const RARE=fs.readFileSync(__dirname+'/rare.json','utf8');
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  const ctx=await b.newContext({viewport:{width:+vw||1280,height:900}});
  await ctx.route(/data\/index\.json/,async r=>{const res=await r.fetch();const j=await res.json();j.rr='test1';r.fulfill({response:res,body:JSON.stringify(j)})});
  await ctx.route(/data\/rare\.json/,r=>r.fulfill({status:200,contentType:'application/json',body:RARE}));

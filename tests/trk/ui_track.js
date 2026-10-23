@@ -1,6 +1,6 @@
-const {chromium}=require('/opt/node-tools/node_modules/playwright');const fs=require('fs');
+const {chromium}=require('playwright');const fs=require('fs');
 let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
-const T=JSON.parse(fs.readFileSync(__dirname+'/../trkweb/data/fpl_track.json','utf8')),D=JSON.parse(fs.readFileSync('/home/user/pl-analytics/data/fpl.json','utf8'));
+const T=JSON.parse(fs.readFileSync(__dirname+'/../trkweb/data/fpl_track.json','utf8')),D=JSON.parse(fs.readFileSync((process.env.PLREPO||__dirname+'/../..')+'/data/fpl.json','utf8'));
 /* independent actual points of a record: auto-subs (FPL rules) and captain/vice, from the raw history rows */
 const hc=D.hcols,iR=hc.indexOf('r'),iP=hc.indexOf('pts'),iM=hc.indexOf('min'),ty=new Map(D.rows.map(r=>[r[0],r[D.cols.indexOf('ty')]]));
 const at=(id,g,i)=>(D.hist[String(id)]||[]).filter(h=>h[iR]===g).reduce((a,h)=>a+(h[i]||0),0);
@@ -8,7 +8,7 @@ function actual(s){const xi=s.xi.slice(),c={1:0,2:0,3:0,4:0};xi.forEach(id=>c[ty
  for(let k=0;k<xi.length;k++){const id=xi[k];if(at(id,s.gw,iM)>0)continue;const t=ty.get(id);
   for(const b of s.bench){if(used.has(b)||!(at(b,s.gw,iM)>0))continue;const bt=ty.get(b);if((t===1)!==(bt===1))continue;const cc={...c};cc[t]--;cc[bt]++;if(bt!==1&&(cc[2]<3||cc[3]<2||cc[4]<1))continue;xi[k]=b;used.add(b);c[t]--;c[bt]++;break}}
  const cap=at(s.cap,s.gw,iM)>0?s.cap:(s.vice!=null&&at(s.vice,s.gw,iM)>0?s.vice:null);return xi.reduce((a,id)=>a+at(id,s.gw,iP),0)+(cap!=null?at(cap,s.gw,iP):0)}
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  for(const [vw,lang] of [[1280,'en'],[390,'ar']]){const pg=await (await b.newContext({viewport:{width:vw,height:900}})).newPage();const errs=[];
   pg.on('pageerror',e=>errs.push(e.message));pg.on('console',m=>{const u=(m.location()||{}).url||'';if(m.type()==='error'&&!/favicon|ERR_TUNNEL_CONNECTION_FAILED|api.github.com/.test(u+m.text()))errs.push(m.text())});
   await pg.goto('http://127.0.0.1:8770/index.html#/fantasy');await pg.waitForSelector('#fproot .ctl button',{timeout:60000});
@@ -42,6 +42,6 @@ function actual(s){const xi=s.xi.slice(),c={1:0,2:0,3:0,4:0};xi.forEach(id=>c[ty
  /* the real data: the GW8 record saved by the sync is shown as open until its deadline */
  const pg=await (await b.newContext({viewport:{width:1280,height:900}})).newPage();await pg.goto('http://127.0.0.1:8765/index.html#/fantasy');await pg.waitForSelector('#fproot .ctl button',{timeout:60000});
  await pg.click('#fproot .ctl button:text-is("Track record")');await pg.waitForSelector('#fpbody > div.wrap table');const t=await pg.innerText('#fpbody > div.wrap table');
- const G8=JSON.parse(require('fs').readFileSync('/home/user/pl-analytics/data/fpl_track.json','utf8')).gws['8'];
+ const G8=JSON.parse(require('fs').readFileSync((process.env.PLREPO||__dirname+'/../..')+'/data/fpl_track.json','utf8')).gws['8'];
  ok(/GW8/.test(t)&&/open until the deadline, 2026-10-23 17:30 UTC/.test(t)&&t.includes((+G8.exp).toFixed(1)+' ('+Math.round(G8.p10)+'–'+Math.round(G8.p90)+')'),'real GW8 record shown: '+t.split('\n').slice(1,2).join(' ').slice(0,140));
  console.log(fails?fails+' FAILED':'all passed');await b.close()})().catch(e=>{console.error(e);process.exit(1)});

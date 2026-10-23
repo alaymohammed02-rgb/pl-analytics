@@ -1,7 +1,8 @@
+import os as _os; REPO=_os.environ.get('PLREPO') or _os.path.abspath(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)),'..','..'))
 """Centre-backs' average position per team per match, from PitchAPI heat maps (acting frame) and the official lineup slots."""
 import json,statistics as st,math,sys
 from collections import defaultdict
-D='/home/user/pl-analytics/data/'
+D=REPO+'/data/'
 def cb(lid):
     idx=json.load(open(D+'index.json'));lg=[l for l in idx['leagues'] if l['id']==lid][0]
     H=json.load(open(D+lg['heat_file']));X=json.load(open(D+lg['mx_file'])) if lg.get('mx_file') else json.load(open(D+lid+'_mx.json'))

@@ -1,11 +1,11 @@
 /* Charts: the first tap on a player or a team shows it, the second opens its page; other links unchanged */
-const {chromium}=require('/opt/node-tools/node_modules/playwright');
+const {chromium}=require('playwright');
 const U='http://127.0.0.1:8765/index.html';let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
 async function open(b,{vw=1280,lang='en',hash='#/reality',mobile=false}={}){const ctx=await b.newContext({viewport:{width:vw,height:900},hasTouch:mobile,isMobile:mobile});
  await ctx.addInitScript(l=>{if(!sessionStorage.getItem('s')){sessionStorage.setItem('s','1');localStorage.clear();localStorage.setItem('league','l_4WFCIZ');localStorage.setItem('lang',l)}},lang);
  const pg=await ctx.newPage(),errs=[];pg.on('pageerror',e=>errs.push(e.message));await pg.goto(U+hash);return {ctx,pg,errs}}
 const hash=pg=>pg.evaluate(()=>decodeURIComponent(location.hash));
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  /* a team in a chart (Reality Check scatter) */
  {const {ctx,pg,errs}=await open(b);await pg.waitForSelector('#app svg a[href^="#/club/"]',{timeout:90000});await pg.waitForTimeout(400);
   const sel='#app svg a[href^="#/club/"]',href=await pg.$eval(sel,a=>a.getAttribute('href'));

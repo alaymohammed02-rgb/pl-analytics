@@ -1,8 +1,8 @@
-const {chromium}=require('/opt/node-tools/node_modules/playwright');
+const {chromium}=require('playwright');
 const URL='http://127.0.0.1:8765/index.html',SH=__dirname+'/shots/';
 let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
 const known=u=>/favicon.ico|api.github.com\/repos\/127/.test(u||'');
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  for(const loc of ['en-US','ar-SA']){
   const c=await b.newContext({viewport:{width:1280,height:900},locale:loc});const pg=await c.newPage();const errs=[];
   pg.on('pageerror',e=>errs.push(e.message));pg.on('console',m=>{if(m.type()==='error'&&!known((m.location()||{}).url))errs.push(m.text())});

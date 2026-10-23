@@ -1,3 +1,4 @@
+import os as _os; REPO=_os.environ.get('PLREPO') or _os.path.abspath(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)),'..','..'))
 import json
 js=open('eng.js').read();css=open('eng.css').read().replace('\n','')
 assert '"""' not in js and '"' not in css and not js.rstrip().endswith('\\')
@@ -33,7 +34,7 @@ _AR_SEASON.update(''' + json.dumps(D,ensure_ascii=False,indent=4) + ''')
 
 INDEX = _x_eng_index(INDEX)
 # ======================== نهاية إضافة هذا الأسبوع وجدول الدوري ========================'''
-p='/home/user/pl-analytics/sync.py';t=open(p,encoding='utf-8').read()
+p=REPO+'/sync.py';t=open(p,encoding='utf-8').read()
 a=t.find('\n\n\n# ============================================================================\n# إضافة: "هذا الأسبوع"')
 if a>=0:
     b=t.index("# ======================== نهاية إضافة هذا الأسبوع وجدول الدوري ========================")+len("# ======================== نهاية إضافة هذا الأسبوع وجدول الدوري ========================")

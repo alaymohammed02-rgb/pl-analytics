@@ -1,4 +1,4 @@
-const {chromium}=require('/opt/node-tools/node_modules/playwright');
+const {chromium}=require('playwright');
 let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
 const U='http://127.0.0.1:8777/index.html',PL='l_4WFCIZ',LL='l_0ErfuF';
 const ORDER=['Discovery of the round','Stars of the round','Club power','Who is better?','Fantasy radar','Quick rankings','Stats centre'];
@@ -11,7 +11,7 @@ async function open(b,{vw=1280,lang='en',league=PL,route=null,init=null,touch=fa
 const go=async(pg,h,w=900)=>{await pg.evaluate(x=>location.hash=x,h);await pg.waitForTimeout(w)};
 const secs=pg=>pg.$$eval('#home .hsec .hhd h2',h=>h.map(x=>x.textContent));
 const fpl=async pg=>{await pg.evaluate(()=>{const f=document.getElementById('hfpl');if(f)f.scrollIntoView()});await pg.waitForTimeout(2500)};
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  /* ---- Premier League, desktop, English ---- */
  {const {ctx,pg,errs}=await open(b);await fpl(pg);
   ok((await secs(pg)).filter(x=>!['Today','Next matchday','Latest results','Player of the round','Team of the round'].includes(x)).join('|')===ORDER.join('|'),'Premier League: the 7 sections, in the requested order (plus the matchday strip and player of the round, tested in px/ui_px.js)');

@@ -1,6 +1,6 @@
 /* The overview for every league, your teams, league colours, "This round", and the weirdest facts */
-const {chromium}=require('/opt/node-tools/node_modules/playwright');const fs=require('fs');
-const U='http://127.0.0.1:8765/index.html',DATA='/home/user/pl-analytics/data/';let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
+const {chromium}=require('playwright');const fs=require('fs');
+const U='http://127.0.0.1:8765/index.html',DATA=(process.env.PLREPO||__dirname+'/../..')+'/data/';let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
 const J=f=>JSON.parse(fs.readFileSync(DATA+f,'utf8'));
 const FX=JSON.parse(fs.readFileSync(__dirname+'/../fx/facts.json','utf8')),FIX=J('fixtures.json');
 const strip=s=>s.replace(/<[^>]+>/g,'').replace(/&amp;/g,'&');
@@ -16,7 +16,7 @@ async function open(b,{vw=1280,lang='en',hash='#/overview',league='l_0ErfuF',fx=
  await pg.goto(U+hash);return {ctx,pg,errs,req}}
 const go=async(pg,h,sel)=>{await pg.evaluate(h=>location.hash=h,h);await pg.waitForSelector(sel,{timeout:30000,state:'attached'});await pg.waitForTimeout(600)};
 const th=pg=>pg.evaluate(()=>({lg:document.documentElement.dataset.league,club:document.documentElement.dataset.club||'',th:getComputedStyle(document.documentElement).getPropertyValue('--th').trim(),logo:(document.getElementById('lglogo')||{}).src||''}));
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  /* ---- colours: the reported bug, and the overview's own ---- */
  {const {ctx,pg,errs}=await open(b,{hash:'#/table'});await pg.waitForSelector('.ltr',{timeout:60000});await pg.waitForTimeout(800);
   const la=await th(pg);ok(la.lg==='laliga'&&la.th==='#ff4b44'&&!la.club,'LaLiga with Real Madrid as your team: LaLiga\'s red ('+la.th+'), not the club\'s colours');

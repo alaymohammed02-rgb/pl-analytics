@@ -1,6 +1,6 @@
 /* Player cards: rating and the six attributes recomputed from the raw files (per-match player file, ratings file) */
-const {chromium}=require('/opt/node-tools/node_modules/playwright');const fs=require('fs');
-const U='http://127.0.0.1:8765/index.html',DATA='/home/user/pl-analytics/data/';let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
+const {chromium}=require('playwright');const fs=require('fs');
+const U='http://127.0.0.1:8765/index.html',DATA=(process.env.PLREPO||__dirname+'/../..')+'/data/';let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
 const J=f=>JSON.parse(fs.readFileSync(DATA+f,'utf8'));const IDX=J('index.json');
 const ATTR=[['Shooting',['npxg','sh']],['Creating',['xag','kp','sca']],['Passing',['pr','bx','ps']],['Carrying',['pc','cb','tkw']],['Defending',['tk','ic','bl']],['Duels',['duw','aerw']]];
 const KEYS=[...new Set(ATTR.flatMap(a=>a[1]))];
@@ -21,7 +21,7 @@ async function open(b,{vw=1280,lang='en',league='l_0ErfuF',hash='#/cards',ctx0}=
 const readCard=(pg,i)=>pg.$$eval('.pc-duel .pc-card',(a,i)=>{const c=a[i];return {k:c.dataset.k,rt:c.querySelector('.pc-rt b').textContent,pos:c.querySelector('.pc-pos b').textContent,at:[...c.querySelectorAll('.pc-at li b')].map(b=>b.textContent),win:[...c.querySelectorAll('.pc-at li')].map(l=>l.className),ft:c.querySelector('.pc-ft .fx-en').textContent.replace(/\s+/g,' ').trim()}},i);
 const exp=x=>({rt:x.rt==null?'–':x.rt.toFixed(1),pos:x.p||'·',at:x.at.map(v=>v==null?'–':String(v)),ft:`${Math.round(x.mi)} min`+(x.gl!=null?` · ${x.gl} goals`:'')+(x.ast!=null?` · ${x.ast} assists`:'')});
 const same=(c,x)=>{const e=exp(x);return c.rt===e.rt&&c.pos===e.pos&&c.at.join()===e.at.join()&&c.ft===e.ft};
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  const A=cards('l_0ErfuF');
  {const {ctx,pg,errs}=await open(b);await pg.waitForSelector('.pc-res',{timeout:90000});
   const nav=await pg.$$eval('#nav a',a=>a.map(x=>x.getAttribute('href')));ok(nav.indexOf('#/cards')===nav.indexOf('#/twins')+1,'in Players, after Player twins');

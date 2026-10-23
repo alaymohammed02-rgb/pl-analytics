@@ -1,3 +1,4 @@
+import os as _os; REPO=_os.environ.get('PLREPO') or _os.path.abspath(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)),'..','..'))
 import zlib,struct,base64,json,math
 def png(w,h,px):
     raw=b''.join(b'\x00'+b''.join(bytes(px(x,y)) for x in range(w)) for y in range(h))
@@ -21,7 +22,7 @@ P={'Arsenal':crest(lambda x,y,r:H('#ef0107') if r>12 else H('#ffffff'))}
 PT={'Alverca':crest(lambda x,y,r:H('#c8102e') if r>14 else H('#0047ab')),'Casa Pia AC':crest(lambda x,y,r:H('#000000') if (x//8)%2==0 else H('#ffffff'))}
 lg=lambda c:crest(lambda x,y,r:H(c))
 files={'l_0ErfuF':dict(league=lg('#ff4b44'),teams=L),'l_1Isor4':dict(league=lg('#d10214'),teams=B),'l_0ALvwF':dict(league=lg('#0059d6'),teams=S),'l_4WFCIZ':dict(league=lg('#37003c'),teams=P),'l_4QexZg':dict(league=lg('#003893'),teams=PT)}
-ix=json.load(open('/home/user/pl-analytics/data/index.json'))
+ix=json.load(open(REPO+'/data/index.json'))
 for l in ix['leagues']:
     l.pop('logo_file',None);l.pop('logo_v',None)
     if l['id'] in files:

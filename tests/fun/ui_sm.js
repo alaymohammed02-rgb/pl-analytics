@@ -1,7 +1,7 @@
 /* Season simulator: the expected final points of every club recomputed exactly (no simulation) from the raw files and the
    model's formula, against the page's 10,000 simulations; fixtures left, locks, determinism, cups left out, phones, Arabic */
-const {chromium}=require('/opt/node-tools/node_modules/playwright');const fs=require('fs');
-const U='http://127.0.0.1:8765/index.html',DATA='/home/user/pl-analytics/data/';let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
+const {chromium}=require('playwright');const fs=require('fs');
+const U='http://127.0.0.1:8765/index.html',DATA=(process.env.PLREPO||__dirname+'/../..')+'/data/';let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
 const J=f=>JSON.parse(fs.readFileSync(DATA+f,'utf8'));const IDX=J('index.json');
 function model(lid){const lg=IDX.leagues.find(l=>l.id===lid),L=J(lg.file),S=J(lg.sh_file),ix={};S.cols.forEach((c,i)=>ix[c]=i);
  const tx=new Map();S.rows.forEach(r=>{if(r[ix.og])return;const k=r[ix.m]+'|'+r[ix.c],x=r[ix.xg];tx.set(k,(tx.get(k)||0)+(typeof x==='number'&&isFinite(x)?x:0))});
@@ -22,7 +22,7 @@ async function open(b,{vw=1280,lang='en',league='l_4WFCIZ',hash='#/sim'}={}){con
  await pg.goto(U+hash);return {ctx,pg,errs}}
 const read=pg=>pg.$$eval('.sm-t tbody tr',a=>a.map(r=>{const c=r.querySelectorAll('td');return {t:r.dataset.t,now:+c[2].textContent,mean:+c[3].querySelector('b').textContent,win:c[4].textContent,top:c[5].textContent,bot:c[6].textContent}}));
 const pv=s=>s==='>99%'?99.75:s==='<1%'?.25:parseFloat(s);
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  for(const lid of ['l_4WFCIZ','l_0ErfuF','l_3FJFUl']){const X=model(lid),nT=X.teams.length;
   const {ctx,pg,errs}=await open(b,{league:lid});await pg.waitForSelector('.sm-t',{timeout:120000});
   const nav=await pg.$$eval('#nav a',a=>a.map(x=>x.getAttribute('href')));ok(nav.indexOf('#/sim')===nav.indexOf('#/table')+1,lid+': in League, right after the table');

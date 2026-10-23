@@ -1,9 +1,9 @@
-const {chromium}=require('/opt/node-tools/node_modules/playwright');const fs=require('fs');
+const {chromium}=require('playwright');const fs=require('fs');
 const URL='http://127.0.0.1:8765/index.html',SH=__dirname+'/shots/';
 let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
-const REV=JSON.parse(fs.readFileSync('/home/user/pl-analytics/data/fpl_review.json','utf8'));
+const REV=JSON.parse(fs.readFileSync((process.env.PLREPO||__dirname+'/..')+'/data/fpl_review.json','utf8'));
 (async()=>{
- const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+ const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  for(const [vw,lang] of [[1280,'en'],[390,'ar']]){
   const ctx=await b.newContext({viewport:{width:vw,height:900}});const pg=await ctx.newPage();const errs=[];
   pg.on('pageerror',e=>errs.push(e.message));pg.on('console',m=>{const u=(m.location()||{}).url||'';if(m.type()==='error'&&!/favicon|ERR_TUNNEL_CONNECTION_FAILED|api.github.com/.test(u+m.text()))errs.push(m.text())});
