@@ -13,3 +13,10 @@ node grid.js C grid_C.jsonl '{"GA":0,"GB":1,"GS":0}' '{"AA":0.75,"AB":1,"AK":0.5
 EXPR='PM.GA=0.25;PM.GB=1;PM.GS=0;PM.AA=0.5;PM.AB=1;PM.AK=0.5' node leak_test.js 2023-24 4 5 10 20 30 38
 node final.js
 node control.js
+# experiment 2 (needs the complete line-up and heat-map files of the TRAIN seasons)
+for s in 2022-23 2023-24 2024-25 2025-26; do node build_lu.js $s lu_$s.json; done
+node fit_sb.js > sb.json
+node grid2.js S grid2_S.jsonl > grid2_S.log
+node grid2.js R grid2_R.jsonl > grid2_R.log
+EXPR='PM.RG=0.05;PM.RA=0.05;PM.RH=0.5' node leak_test.js 2023-24 4 5 10 20 30 38
+node final2.js
