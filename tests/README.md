@@ -23,6 +23,7 @@ Setup: Node with Playwright (`NODE_PATH` pointing at its `node_modules`; `CHROME
 
 - `nf/`: the seven pages of PR #44 (comebacks, likely line-ups, club twins, who carries, report card, league DNA, thrill), with a shared `nf/lib.js`.
 - `ph/ui_dlh.js` and `ph/ui_ph.js`: Height (defensive line) and Pressing.
+- `lg/ui_lg.js`: Liquid Glass on the Fantasy tabs and the menu drawer (order of travel, lens letters and Arabic words, reduced motion, a lone button, the drawer closing on arrival).
 - Other folders hold one area of the site each. A test usually recomputes the page's numbers independently from the raw files in `data/` and compares them with what the page shows.
 - `stub/`: a fake `pitchapi` module for the Python tests of sync sections.
 - `ps/t_ps.py`: past seasons (sync section): per-run cap, one request per endpoint per match, resuming from the published files, index manifest, plan refusals (`cd tests/ps && python3 t_ps.py`).

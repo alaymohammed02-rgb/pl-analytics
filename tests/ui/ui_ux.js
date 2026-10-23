@@ -21,7 +21,8 @@ const vis=pg=>pg.$$eval('#nav a',a=>a.filter(x=>x.offsetParent).map(x=>x.getAttr
   ok(await pg.evaluate(()=>['secnav','nav','secbar'].every(i=>{const e=document.getElementById(i);return !e||getComputedStyle(e).display==='none'})),'the old top section buttons, page links and bottom bar are hidden');
   await go(pg,'#/overview',600);await pg.click('#mnubtn');await pg.waitForTimeout(350);
   ok(await pg.evaluate(()=>!document.getElementById('drw').hidden&&document.documentElement.classList.contains('dr-open')&&document.getElementById('mnubtn').getAttribute('aria-expanded')==='true'&&document.activeElement.closest('#drw')!==null),'☰ opens the menu, focus moves into it');
-  await pg.click('#drw a[href="#/shots"]');await pg.waitForTimeout(700);
+  /* the menu closes once its Liquid Glass has reached the link (assets/liquid-glass.js), at most about a second later */
+  await pg.click('#drw a[href="#/shots"]');await pg.waitForFunction(()=>!document.documentElement.classList.contains('dr-open'),null,{timeout:2000}).catch(()=>{});await pg.waitForTimeout(250);
   ok(await pg.evaluate(()=>location.hash==='#/shots'&&!document.documentElement.classList.contains('dr-open')),'a link opens its page and closes the menu');
   await pg.click('#mnubtn');await pg.waitForTimeout(300);await pg.keyboard.press('Escape');await pg.waitForTimeout(350);
   ok(await pg.evaluate(()=>document.getElementById('drw').hidden&&document.activeElement===document.getElementById('mnubtn')),'Escape closes it and focus returns to ☰');

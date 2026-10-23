@@ -353,3 +353,33 @@ html[dir=rtl] .dl-bars .ph-bn bdi{text-align:right}
 @media (max-width:560px){.th-ol a{grid-template-columns:2.8rem minmax(0,1fr);gap:8px}.th-mt{font-size:13px}}
 .th .seg{margin:6px 0 10px}.th .seg button{min-width:0;padding:6px 12px}
 .th .seg button[aria-pressed=true]{background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,0) 55%),var(--th);color:var(--th-ink)}
+/* ===== Liquid Glass 2 (assets/liquid-glass.js): a glass lens over the chosen button, travelling through the ones in between ===== */
+.lgx{position:relative}
+.lgx-g{position:absolute;left:0;top:0;z-index:3;pointer-events:none;opacity:0;transition:opacity .2s;will-change:transform,width,height}
+.lgx-b{position:absolute;inset:0;border-radius:inherit;overflow:hidden;display:flex;align-items:center;justify-content:center;
+ background:linear-gradient(180deg,rgba(255,255,255,.26),rgba(255,255,255,.07) 55%,rgba(255,255,255,.14));
+ background-color:rgba(255,255,255,.10);background-color:color-mix(in srgb,var(--th,#4cc38a) 32%,transparent);
+ -webkit-backdrop-filter:blur(7px) saturate(170%);backdrop-filter:blur(7px) saturate(170%);
+ box-shadow:inset 0 0 0 1px rgba(255,255,255,.24),inset 0 1.5px 1px rgba(255,255,255,.55),inset 0 -1.5px 1px rgba(255,255,255,.18),
+  inset 0 -8px 14px rgba(255,255,255,.06),0 6px 18px rgba(0,0,0,.35)}
+.lgx-b::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+ background:radial-gradient(120% 70% at 30% 0%,rgba(255,255,255,.32),rgba(255,255,255,0) 60%)}
+.lgx-s .lgx-b{justify-content:flex-start}
+/* the lens label: magnified and heavier while moving (dynamic typography), letters arriving one by one */
+.lgx-t{flex:none;position:relative;z-index:1;color:var(--tx);white-space:pre;font-weight:700;letter-spacing:0;transform-origin:50% 50%;
+ transition:transform .24s cubic-bezier(.3,1.3,.5,1),font-weight .24s,letter-spacing .24s}
+.lgx-s .lgx-t{transform-origin:0 50%}[dir=rtl] .lgx-s .lgx-t,html[lang=ar] .lgx-s .lgx-t{transform-origin:100% 50%}
+.lgx-g.mv .lgx-t{transform:scale(1.14);font-weight:800;letter-spacing:.02em;transition:font-weight .24s,letter-spacing .24s}
+.lgx-c{display:inline-block}.lgx-sp{min-width:.3em}
+.lgx-t.pop .lgx-c{animation:lgx-pop .34s cubic-bezier(.3,1.4,.5,1) both;animation-delay:calc(var(--i) * var(--st,16ms))}.lgx-t.pop.fast .lgx-c{animation-name:lgx-pop2;animation-duration:.18s}
+@keyframes lgx-pop2{0%{opacity:.55;transform:translateY(.22em) scale(.86)}60%{opacity:1;transform:translateY(-.05em) scale(1.08)}100%{opacity:1;transform:none}}
+@keyframes lgx-pop{0%{opacity:.2;transform:translateY(.45em) scale(.7);font-weight:400}55%{opacity:1;transform:translateY(-.1em) scale(1.12);font-weight:850}100%{opacity:1;transform:none}}
+/* the chosen button keeps its place but gives its colour to the glass; the covered one lends its label to the lens */
+.lgx>[data-lgx-act]{background:var(--sf)!important;color:var(--tx)!important;border-color:var(--ln)!important}
+#drw .lgx a[data-lgx-act]{background:transparent!important;color:var(--tx)!important;box-shadow:none!important;font-weight:inherit!important}
+.lgx [data-lgx-on]{color:transparent!important;text-shadow:none!important}
+/* Dock magnification of the buttons near the glass (set while it moves, eased back afterwards) */
+.lgx [data-lgx-i]{transform-origin:50% 50%}
+.lgx-s [data-lgx-i]{transform-origin:0 50%}[dir=rtl] .lgx-s [data-lgx-i],html[lang=ar] .lgx-s [data-lgx-i]{transform-origin:100% 50%}
+.lgx:not(.lgx-mv) [data-lgx-i]{transition:scale .3s ease-out}
+@media (prefers-reduced-motion:reduce){.lgx-g,.lgx-t,.lgx [data-lgx-i]{transition:none}.lgx-t.pop .lgx-c{animation:none}}
