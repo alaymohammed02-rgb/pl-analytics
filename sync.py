@@ -11091,9 +11091,13 @@ INDEX = _x_ar_index(INDEX)
 # ============================================================================
 PS_PATH = "data/seasons.json"
 PS_LEAGUES = ["l_4WFCIZ", "l_0ErfuF", "l_1Isor4", "l_3FJFUl", "l_0ALvwF", "l_4QexZg"]   # الدوريات المحلية الست
-PS_ON = ["l_4WFCIZ"]          # الدوريات المفعّلة الحين (أول تجربة: الدوري الإنجليزي فقط، نقيس التكلفة قبل التوسع)
-PS_BACK = 1                   # كم موسم سابق لكل دوري
-PS_PER_RUN = 40               # أقصى عدد مباريات نجلبها في المزامنة الوحدة (لكل الدوريات)
+# الترتيب: (الدوري، كم موسم للخلف، النوع). "full" = كل ملفات الموسم الحالي (يظهر في اختيار الموسم بالموقع)،
+# "light" = المباريات وإحصائيات اللاعبين والتسديدات فقط (لنموذج الفانتازي، ما يظهر في اختيار الموسم).
+# أول تجربة (23 أكتوبر 2026): 40 مباراة من الدوري الإنجليزي 2025-26 كلفت 400 طلب و130 ثانية و2.0 MB، بدون أي خطأ.
+PS_JOBS = ([("l_4WFCIZ", k, "light") for k in (2, 3, 4, 5)] + [("l_4WFCIZ", 1, "full")] +
+           [(l, 1, "full") for l in PS_LEAGUES[1:]])
+PS_REQ_PER_RUN = 1200         # أقصى عدد طلبات لـ PitchAPI في المزامنة الوحدة لهذا القسم (حوالي 7 دقايق)
+PS_COST = {"full": 10, "light": 4}   # طلبات لكل مباراة (مقاسة: full = 10)
 PS_RETRY_H = 24               # مباراة فشلت بسبب انقطاع أو حد الطلبات: نعيدها بعد يوم
 PS_PLAN_RETRY_D = 7           # الاشتراك رفض الموسم: نجرب مرة ثانية بعد أسبوع
 PS_KEYS = ("file", "adv_file", "heat_file", "pl_file", "sh_file", "mx_file", "rt_file", "hv_file")
@@ -11104,14 +11108,14 @@ def ps_id(lid, label):
     return f"{lid}_{label}"
 
 
-def ps_seasons(lid, back=None):
+def ps_seasons(lid, back=1):
     """[(اسم الموسم في PitchAPI, التسمية)] للمواسم السابقة لهذا الدوري، الأحدث أولاً."""
     items = {str(l.id): l for l in (globals().get("_LEAGUE_LIST") or [])}
     L, cur = items.get(lid), (globals().get("_LEAGUE_SEASON") or {}).get(lid)
     if L is None or not cur:
         return []
     out, s = [], cur
-    for _ in range(PS_BACK if back is None else back):
+    for _ in range(back):
         s = _season_prev(getattr(L, "seasons", None), s)
         lab = _season_label(s)
         if not s or not lab:
@@ -11224,9 +11228,10 @@ def ps_base(client, P, batch):
         time.sleep(REQUEST_DELAY)
 
 
-def ps_season(client, hub, lid, api_season, label, budget, st):
-    """يجلب دفعة من مباريات موسم سابق وينشر ملفاته. ترجع عدد المباريات اللي انطلبت."""
-    P = ps_id(lid, label)
+def ps_season(client, hub, lid, api_season, label, budget, st, light=False):
+    """يجلب دفعة من مباريات موسم سابق وينشر ملفاته. budget = الطلبات المسموحة. ترجع عدد الطلبات اللي انصرفت."""
+    P, rs = ps_id(lid, label), PS["req"]
+    st["light"] = light
     if st.get("plan"):
         last = _parse_ts(st.get("t"))
         if last and (datetime.datetime.now(datetime.timezone.utc) - last).days < PS_PLAN_RETRY_D:
@@ -11245,7 +11250,7 @@ def ps_season(client, hub, lid, api_season, label, budget, st):
     mx, rt, hv = rest
     info = {r["match_id"]: r for r in q("SELECT match_id, status, fetched_at FROM matches WHERE league_id=?", (P,))}
     todo = sorted([m for m in ms if ps_due(info.get(str(m.id)))], key=lambda m: (str(m.date or ""), str(m.id)))
-    batch = todo[:budget]
+    batch = todo[:max(1, budget // PS_COST["light" if light else "full"])]
     log(f"  [المواسم السابقة] {lid} {label}: {len(ms)} مباراة في PitchAPI | محفوظة {len(info)} | الحين {len(batch)} | باقي بعدها {len(todo) - len(batch)}")
     st.update(api=api_season, id=P, n=len(ms), t=now(), err=None, plan=False)
     r0, t0 = PS["req"], time.time()
@@ -11253,6 +11258,9 @@ def ps_season(client, hub, lid, api_season, label, budget, st):
         ps_base(client, P, batch)
     if PS["errs"].get("rate_limit"):
         log("  [المواسم السابقة] PitchAPI يحدّ الطلبات: نحفظ اللي وصل ونكمل في المزامنة الجاية")
+    elif light:
+        sync_pstats(client, P)
+        sync_shots(client, P)
     else:
         # كل خطوة تجلب فقط المباريات اللي ما انجلبت لها (بعد انقطاع سابق تكمل الناقص)
         sync_extras(client, P)
@@ -11261,7 +11269,7 @@ def ps_season(client, hub, lid, api_season, label, budget, st):
         sync_pstats(client, P)
         sync_shots(client, P)
         blocked, keys = set(), {}
-        for mid in ps_mx_todo(P, mx, hv)[:max(budget, len(batch))]:
+        for mid in ps_mx_todo(P, mx, hv)[:max(len(batch), budget // PS_COST["full"])]:
             if "*" in blocked or PS["errs"].get("rate_limit"):
                 break
             if mid not in mx["m"] and mid not in mx["st"]:
@@ -11291,14 +11299,14 @@ def ps_season(client, hub, lid, api_season, label, budget, st):
     if batch and PS["errs"].get("plan") and not any(r["status"] in ("ok", "partial") for i, r in done.items() if i in ids):
         log(f"  [المواسم السابقة] {lid} {label}: الاشتراك في PitchAPI ما يسمح ببيانات مباريات هذا الموسم (plan) — ما نشرنا شي")
         st.update(plan=True, err="plan")
-        return len(batch)
+        return PS["req"] - rs
     if PS["req"] == r0 and not batch:
-        return 0
+        return PS["req"] - rs
     ps_publish(hub, lid, P, label, mx, rt, hv, st)
     left = [m for m in ms if ps_due(done.get(str(m.id)))]
     st.update(got=len(done), ok=sum(1 for r in done.values() if r["status"] == "ok"),
-              complete=not left and not ps_mx_todo(P, mx, hv) and not PS["errs"].get("rate_limit"))
-    return len(batch)
+              complete=not left and (light or not ps_mx_todo(P, mx, hv)) and not PS["errs"].get("rate_limit"))
+    return PS["req"] - rs
 
 
 def ps_mx_todo(P, mx, hv):
@@ -11314,6 +11322,8 @@ def ps_publish(hub, lid, P, label, mx, rt, hv, st):
     blobs = {"file": build_league_payload(lg), "adv_file": build_adv_payload(P), "heat_file": build_heat_payload(P),
              "pl_file": build_pl_payload(P), "sh_file": build_sh_payload(P), "mx_file": mx, "rt_file": rt, "hv_file": hv}
     for k, d in blobs.items():
+        if st.get("light") and k not in ("file", "pl_file", "sh_file"):
+            continue
         if k == "heat_file" and not d["rows"] or k in ("mx_file", "rt_file", "hv_file") and not d["m"]:
             continue
         b = json.dumps(d, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
@@ -11333,7 +11343,7 @@ def ps_manifest(state):
         past = []
         for lab, st in sorted((L.get("seasons") or {}).items(), reverse=True):
             f = st.get("files") or {}
-            if f.get("file") and st.get("got"):
+            if f.get("file") and st.get("got") and not st.get("light"):
                 past.append(dict({k: v for k, v in f.items() if k != "size"}, matches=st["got"], ok=st.get("ok", 0),
                                  total=st.get("n"), complete=bool(st.get("complete"))))
         if past:
@@ -11354,21 +11364,28 @@ def sync_past_seasons(real, hub):
     lgs = state.setdefault("leagues", {})
     PS.update(cache={}, req=0, errs={})
     names = {str(l.id): l.name for l in (globals().get("_LEAGUE_LIST") or [])}
-    budget = PS_PER_RUN
+    budget = PS_REQ_PER_RUN
+    items = {str(l.id): l for l in (globals().get("_LEAGUE_LIST") or [])}
     globals()["call"], globals()["match_due"] = ps_call, ps_due
     try:
-        for lid in PS_ON:
+        for lid in dict.fromkeys(j[0] for j in PS_JOBS):
             L = lgs.setdefault(lid, {})
             cur = _season_label((globals().get("_LEAGUE_SEASON") or {}).get(lid))
             if cur:
                 L["cur"] = cur
-            for api_s, lab in ps_seasons(lid):
-                if budget <= 0 or PS["errs"].get("rate_limit"):
-                    break
-                st = L.setdefault("seasons", {}).setdefault(lab, {})
-                st["name"] = names.get(lid) or st.get("name")
-                budget -= ps_season(client, hub, lid, api_s, lab, budget, st)
-                PS["cache"].clear()
+            if lid in items:
+                L["api_seasons"] = [str(x) for x in (getattr(items[lid], "seasons", None) or [])]
+        for lid, back, kind in PS_JOBS:
+            if budget <= 0 or PS["errs"].get("rate_limit"):
+                break
+            ss = ps_seasons(lid, back)
+            if len(ss) < back:
+                continue                      # PitchAPI ما عنده موسم بهذا البعد لهذا الدوري
+            api_s, lab = ss[back - 1]
+            st = lgs[lid].setdefault("seasons", {}).setdefault(lab, {})
+            st["name"] = names.get(lid) or st.get("name")
+            budget -= ps_season(client, hub, lid, api_s, lab, budget, st, light=kind == "light")
+            PS["cache"].clear()
     finally:
         globals()["call"], globals()["match_due"] = _ps_orig_call, _ps_orig_match_due
     if PS["req"] or PS["errs"]:

@@ -57,7 +57,7 @@ class C:
 ok(m.ps_seasons('l_4WFCIZ')==[('2025/2026','2025-26')],'the previous season: the one before the current season in the league\'s list, named like the site (2025-26)')
 ok(m.ps_seasons('l_4WFCIZ',back=2)==[('2025/2026','2025-26'),('2024/2025','2024-25')] and m.ps_seasons('nope')==[],'further back on request; unknown league: none')
 
-m.PS_ON=['l_4WFCIZ'];m.PS_PER_RUN=40
+m.PS_JOBS=[('l_4WFCIZ',1,'full')];m.PS_REQ_PER_RUN=400
 call0,due0=m.call,m.match_due
 calls.clear();m.sync_past_seasons(C(),None)
 ok(m.call is call0 and m.match_due is due0,'call() and match_due() are restored after the section')
@@ -108,7 +108,7 @@ m.gh_put(None,'data/index.json',json.dumps({'leagues':[],'generated':'h'}).encod
 ok(store['data/index.json'].get('seasons',{}).get('l_4WFCIZ'),'every index.json write carries the seasons list')
 
 # the plan refuses the season list: nothing published, retried after a week
-m.PS_ON=['l_0ErfuF'];LISTPLAN.add(('l_0ErfuF','2025/2026'));fresh_db();calls.clear();m.PS['state']=None
+m.PS_JOBS=[('l_0ErfuF',1,'full')];LISTPLAN.add(('l_0ErfuF','2025/2026'));fresh_db();calls.clear();m.PS['state']=None
 m.sync_past_seasons(C(),None)
 s2=store['data/seasons.json']['leagues']['l_0ErfuF']['seasons']['2025-26']
 ok(s2['plan'] and not any(p.startswith('data/l_0ErfuF_2025-26') for p in store),'plan refusal of the match list: state says so, no files')
@@ -120,4 +120,13 @@ PLAN.update('fuF-m%03d'%i for i in range(100));fresh_db();calls.clear();m.PS['st
 s2=store['data/seasons.json']['leagues']['l_0ErfuF']['seasons']['2025-26']
 ok(s2['plan'] and not any(p.startswith('data/l_0ErfuF_2025-26') for p in store),'plan refusal of the match data: nothing published')
 ok(any('plan' in l for l in logs),'the log says the plan refused')
+# a light season (two back): matches, players and shots only, for the Fantasy model; not listed in the season selector
+m.PS_JOBS=[('l_4WFCIZ',2,'light')];PLAN.clear();fresh_db();calls.clear();m.PS['state']=None;m.sync_past_seasons(C(),None)
+P2='l_4WFCIZ_2024-25';s3=store['data/seasons.json']['leagues']['l_4WFCIZ']['seasons']['2024-25']
+eps=sorted({c[0] for c in calls if c[0]!='list'})
+ok(eps==['advanced','advanced_players','players','shots'],'light season: four endpoints a match (%s)'%eps)
+ok(s3['light'] and s3['got']==100 and s3['complete'] and s3['req']<=401,'light season: 100 matches within the request budget (%d requests)'%s3['req'])
+ok(all('data/%s%s.json'%(P2,x) in store for x in ('','_pl','_sh')) and not any('data/%s%s.json'%(P2,x) in store for x in ('_adv','_heat','_mx','_rt','_hv')),'light season: league, players and shots files only')
+ok([p['s'] for p in store['data/index.json']['seasons']['l_4WFCIZ']['past']]==['2025-26'],'light seasons are not offered in the season selector')
+ok(store['data/seasons.json']['leagues']['l_4WFCIZ']['api_seasons']==['2026/2027','2025/2026','2024/2025'],'the seasons PitchAPI lists for the league are recorded')
 print('all passed' if not fails else '%d FAILED'%fails)
