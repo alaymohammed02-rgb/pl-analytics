@@ -4,6 +4,8 @@ const U='http://127.0.0.1:8777/index.html',PL='l_4WFCIZ',LL='l_0ErfuF';
 const ORDER=['Discovery of the round','Stars of the round','Club power','Who is better?','Fantasy radar','Quick rankings','Stats centre'];
 async function open(b,{vw=1280,lang='en',league=PL,route=null,init=null,touch=false}={}){const ctx=await b.newContext(touch?{viewport:{width:vw,height:860},hasTouch:true,isMobile:true}:{viewport:{width:vw,height:860}});
  await ctx.addInitScript(([a,lg])=>{if(!sessionStorage.getItem('seeded')){sessionStorage.setItem('seeded','1');localStorage.clear();localStorage.setItem('league',lg);localStorage.setItem('lang',a);localStorage.setItem('gh_repo','x/y');localStorage.setItem('flipy','1')}},[lang,league]);
+ /* photos come from a CDN: answer with a 1x1 image so the test does not depend on the network (a failed image removes itself from the page) */
+ await ctx.route(/cdn\.pitchapi\.dev/,r=>r.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==','base64')}));
  if(init)await ctx.addInitScript(init);
  const pg=await ctx.newPage(),errs=[];if(route)await route(pg);
  pg.on('pageerror',e=>errs.push(e.stack.split('\n').slice(0,3).join(' / ')));pg.on('console',m=>{const u=(m.location()||{}).url||'';if(m.type()==='error'&&!/favicon|ERR_TUNNEL_CONNECTION_FAILED|api.github.com|missing.png/.test(u+m.text()))errs.push(m.text())});
@@ -135,7 +137,7 @@ const fpl=async pg=>{await pg.evaluate(()=>{const f=document.getElementById('hfp
   ok((await secs(pg)).filter(x=>!['اليوم','الجولة القادمة','آخر النتائج','لاعب الجولة','تشكيلة الجولة'].includes(x)).join('|')==='اكتشاف الجولة|نجوم الجولة|قوة الأندية|من الأفضل؟|رادار الفانتازي|ترتيبات سريعة|مركز الإحصائيات','Arabic: the 7 section titles');
   await pg.evaluate(()=>document.querySelectorAll('#home details').forEach(d=>d.open=true));await pg.waitForTimeout(500);
   const left=await pg.evaluate(()=>{const names=new Set();HOME.c.ag.forEach(a=>{names.add(a.n);names.add(a.club)});const o=[];const w=document.createTreeWalker(document.getElementById('home'),NodeFilter.SHOW_TEXT);let n;
-   while(n=w.nextNode()){if(n.parentNode.closest('select,table,.hfpl ol,.hav,.potr-n,.potr-m a,.potr-l,.hcl'))continue;const t=n.nodeValue.trim();if(/[A-Za-z]{2}/.test(t)&&!names.has(t)&&!/^(Premier League ·|[A-Z]{2}|xG|npxG|xAG)$/.test(t)&&!/[؀-ۿ]/.test(t))o.push(t)}return o});
+   while(n=w.nextNode()){if(n.parentNode.closest('select,table,.hfpl ol,.hav,.potr-n,.potr-m a,.potr-l,.hcl,a[href^="#/player/"]'))continue;const t=n.nodeValue.trim();if(/[A-Za-z]{2}/.test(t)&&!names.has(t)&&!/^(Premier League ·|[A-Z]{2}|xG|npxG|xAG)$/.test(t)&&!/^[^\u0600-\u06FF]+\s[\u2066]?\d+-\d+[\u2069]?\s[^\u0600-\u06FF]+$/.test(t)&&!/[؀-ۿ]/.test(t))o.push(t)}return o});
   ok(!left.length,'Arabic: every home sentence is translated (names and abbreviations aside) '+left.slice(0,5).join(' | '));
   ok(await pg.evaluate(()=>document.documentElement.dir==='rtl'&&document.scrollingElement.scrollWidth<=innerWidth),'Arabic phone: right to left, no horizontal scroll');
   ok(await pg.evaluate(()=>[...document.querySelectorAll('#home .hcard')].every(c=>{const r=c.getBoundingClientRect();return r.left>=-1&&r.right<=innerWidth+1})),'Arabic phone: every card fits the screen');
