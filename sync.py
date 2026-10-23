@@ -8228,9 +8228,11 @@ function hAvatar(id,name,club,big){
  return `<span class="hav${big?' big':''}" style="${clubVars(club)}" aria-hidden="true"><b>${esc(hIni(name))}</b>${u?`<img class="hph" src="${esc(u)}" alt="" loading="lazy" decoding="async" onerror="this.remove()">`:''}${lg?`<img class="hcr" src="${lg}" alt="">`:''}</span>`;
 }
 const hCrest=c=>{const s=logoOf(c);return s?`<img class="clogo" src="${s}" alt="" aria-hidden="true" loading="lazy">`:clubDot(c)};
-/* the overview and the home ask for the shots file at the same moment; loadSh caches only once the file has arrived,
-   so both downloaded it: calls made while it is on its way now share the one download (per league) */
-{const _ls=loadSh;let pend=null;loadSh=function(){if(SHD)return Promise.resolve(SHD);if(!pend||pend.id!==D.id){const p=_ls();p.id=D.id;pend=p;p.then(()=>{if(pend===p)pend=null},()=>{if(pend===p)pend=null})}return pend}}
+/* the overview, the home and the feature pages ask for the same file at the same moment; loadSh, loadPl and loadAdv cache only once
+   the file has arrived, so each caller downloaded it: calls made while it is on its way now share the one download (per league).
+   A failed download is not kept. */
+const once=(f,got)=>{let pend=null;return function(){const v=got();if(v)return Promise.resolve(v);if(!pend||pend.id!==D.id){const p=f();p.id=D.id;pend=p;p.then(()=>{if(pend===p)pend=null},()=>{if(pend===p)pend=null})}return pend}};
+loadSh=once(loadSh,()=>SHD);loadPl=once(loadPl,()=>PLD);loadAdv=once(loadAdv,()=>ADV);
 async function homePhotos(){const m=lgMeta();if(!m.photo_file)return null;try{const r=await fetch('data/'+m.photo_file+'?v='+encodeURIComponent(m.photo_v||''));return r.ok?await r.json():null}catch(e){return null}}
 
 /* ---------- everything the cards need, computed once per league and data version ---------- */
