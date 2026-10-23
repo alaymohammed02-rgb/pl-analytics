@@ -8984,11 +8984,11 @@ INDEX = _x_fpx_index(INDEX)
 # الكود في ملفات مستقلة في المستودع: assets/*.js و assets/features.css و manifest.webmanifest و sw.js و assets/icons/.
 # هذا القسم يضيف روابطها للصفحة فقط (بعد السكربت الرئيسي، فتلقى R و PAGES جاهزة). غيّر FEATURES_V لما تتغير الملفات.
 # ============================================================================
-FEATURES_V = "23"
+FEATURES_V = "24"
 FEATURES_JS = ("pla-data", "share-card", "threat-map", "match-whatif", "player-page", "match-centre", "home-extra", "team-round",
                "preview", "club-extra", "rankings-extra", "fantasy-extra", "insights-core", "hidden-gems", "player-dna", "team-dna",
                "reality-check", "matches-board", "match-replay", "match-story", "overview", "press-height",
-               "season-sim", "luck-table", "player-twin", "player-cards", "beat-model", "rare-cases", "attack-share", "drawer", "tap-twice", "line-height", "league-pool", "game-states", "likely-xi", "club-twins", "carry-team", "report-card", "league-dna", "thrill")
+               "season-sim", "luck-table", "player-twin", "player-cards", "beat-model", "rare-cases", "attack-share", "drawer", "tap-twice", "line-height", "league-pool", "game-states", "likely-xi", "club-twins", "carry-team", "report-card", "league-dna", "thrill", "seasons")
 
 
 def _x_feat_index(html):
@@ -11097,7 +11097,7 @@ PS_LEAGUES = ["l_4WFCIZ", "l_0ErfuF", "l_1Isor4", "l_3FJFUl", "l_0ALvwF", "l_4Qe
 PS_JOBS = ([("l_4WFCIZ", k, "light") for k in (2, 3, 4, 5)] + [("l_4WFCIZ", 1, "full")] +
            [(l, 1, "full") for l in PS_LEAGUES[1:]])
 PS_REQ_PER_RUN = 1200         # أقصى عدد طلبات لـ PitchAPI في المزامنة الوحدة لهذا القسم (حوالي 7 دقايق)
-PS_COST = {"full": 10, "light": 4}   # طلبات لكل مباراة (مقاسة: full = 10)
+PS_COST = {"full": 10, "light": 5}   # طلبات لكل مباراة (مقاسة: full = 10، light = 5)
 PS_RETRY_H = 24               # مباراة فشلت بسبب انقطاع أو حد الطلبات: نعيدها بعد يوم
 PS_PLAN_RETRY_D = 7           # الاشتراك رفض الموسم: نجرب مرة ثانية بعد أسبوع
 PS_KEYS = ("file", "adv_file", "heat_file", "pl_file", "sh_file", "mx_file", "rt_file", "hv_file")
@@ -11432,6 +11432,56 @@ def run_pipeline(hub, pit_key):
         globals()["call"], globals()["match_due"] = _ps_orig_call, _ps_orig_match_due
         log(f"  [المواسم السابقة] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
     return out
+# ---------------- الواجهة: اختيار الموسم (الحالي أو موسم سابق) بجنب اختيار الدوري ----------------
+# هنا فقط اللي لازم يشتغل قبل أول تحميل للبيانات (psView يبني نسخة الفهرس للموسم المختار)، وحارس الصفحات في route.
+# القائمة والشريط وحارس الصفحات في assets/seasons.js.
+_X_PSJS = r"""/* ===== Seasons: the index seen for the season chosen on this device (assets/seasons.js has the selector) =====
+   A past season keeps the league ids and swaps each league's data files for that season's files, so every page reads it as usual.
+   It applies only when the league kept on this device has that season; otherwise the current season is shown.
+   The index entries that describe only the current season (fixtures, head-to-head, schedule, rare cases, Fantasy) are left out. */
+let ALL0=null;
+function psSaved(){for(const st of [()=>localStorage,()=>sessionStorage])try{const v=st().getItem('season');if(v!=null)return v}catch(e){}
+ try{const m=/^pla-season:(.+)$/.exec(window.name||'');if(m)return m[1]}catch(e){}return ''}
+/* files that only describe the current season (today's matches, coming fixtures, live scores, season facts, rare cases):
+   in a past season they answer "not found", so the widgets that use them stay out instead of mixing in this season */
+function psCurOnly(){if(window.__psF)return;const f0=window.fetch;window.__psF=1;
+ window.fetch=function(u){const s=String(u&&u.url||u);if(/(^|\/)data\/(live|fixtures|schedule|facts|rare|fpl|fpl_track)\.json/.test(s))return Promise.resolve(new Response('{}',{status:404}));return f0.apply(this,arguments)}}
+function psView(x){
+ ALL0=x;const s=psSaved();if(!s||!x||!x.seasons||!x.leagues)return x;
+ let lid=null;for(const st of [()=>localStorage,()=>sessionStorage])try{lid=st().getItem('league');if(lid)break}catch(e){}
+ const has=l=>((x.seasons[l.id]||{}).past||[]).find(p=>p.s===s),ls=x.leagues.filter(has);
+ if(!ls.length||(lid&&x.leagues.some(l=>l.id===lid)&&!ls.some(l=>l.id===lid)))return x;
+ psCurOnly();
+ const v=Object.assign({},x);['fx','h2h','sch','rr','fpl'].forEach(k=>delete v[k]);
+ return Object.assign(v,{generated:String(x.generated||'')+'|'+s,season:s,leagues:ls.map(l=>{const p=has(l),o={};
+  Object.keys(l).forEach(k=>{if(!/_(file|v)$/.test(k)||/^(logo|photo)_/.test(k))o[k]=l[k]});
+  Object.keys(p).forEach(k=>{if(/_(file|v)$/.test(k)||k==='file')o[k]=p[k]});
+  return Object.assign(o,{matches:p.matches,ok:p.ok,season:s,past:true})})});
+}
+"""
+# #app select: a match selector with long names (Shots, Passing) was wider than a 390 px phone in every season
+_X_PSCSS = ("#psbar{padding:0 12px 6px}.psb{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;"
+            "border-radius:12px;border:1px solid var(--gold-bd,rgba(226,189,90,.5));background:rgba(226,189,90,.12);font-size:13px}"
+            ".psb button{min-height:32px}#app select{max-width:100%}#sspick{min-height:32px;padding:4px 8px;max-width:150px}@media(max-width:560px){#sspick{max-width:118px}#lgpick{max-width:150px}}")
+
+
+def _x_ps_index(html):
+    def sub(h, old, new, n=1):
+        if h.count(old) != n:
+            log(f"  تنبيه (المواسم): ما لقيت نقطة التعديل بدقة، تخطيتها: {old[:60]}")
+            return h
+        return h.replace(old, new)
+    h = html
+    h = sub(h, "let ALL=null,D=null,AGGC=null;", "let ALL=null,D=null,AGGC=null;\n" + _X_PSJS)
+    h = sub(h, "ALL=await r.json();", "ALL=psView(await r.json());", 2)
+    h = sub(h, "const el=$('#app');el.innerHTML='<div class=\"empty\">Loading…</div>';",
+            "const el=$('#app');el.innerHTML='<div class=\"empty\">Loading…</div>';\n if(typeof psGuard==='function'&&psGuard(pg,el))return;")
+    h = sub(h, "</div><nav id=\"nav\">", "</div><div id=\"psbar\" hidden></div><nav id=\"nav\">")
+    h = sub(h, "</style>", _X_PSCSS + "</style>")
+    return h
+
+
+INDEX = _x_ps_index(INDEX)
 # ======================== نهاية إضافة المواسم السابقة ========================
 
 
