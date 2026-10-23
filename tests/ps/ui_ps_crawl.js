@@ -2,10 +2,12 @@
    in English and Arabic, on a 390 px phone (no horizontal scroll). Guarded pages show the plain "not available" card. */
 const T=require('../nf/lib.js');const {ok,J,IDX}=T;
 (async()=>{
- const S=IDX.seasons||{},lid=Object.keys(S).find(l=>(S[l].past||[]).length),P=S[lid].past[0],L=J(P.file);
+ /* PS_LEAGUE / PS_SEASON pick another past season (default: the first one listed) */
+ const S=IDX.seasons||{},lid=process.env.PS_LEAGUE||Object.keys(S).find(l=>(S[l].past||[]).length),P=S[lid].past.find(p=>!process.env.PS_SEASON||p.s===process.env.PS_SEASON),L=J(P.file);
+ console.log('   season',lid,P.s);
  const m=L.matches.find(x=>x.t==='ok'),st=L.stats.find(x=>x.m===m.i&&x.i);
  const b=await T.launch();
- for(const [lang,vw] of [['en',1280],['ar',390]]){
+ for(const [lang,vw] of (process.env.PS_QUICK?[['en',1280]]:[['en',1280],['ar',390]])){
   const {ctx,pg,errs}=await T.open(b,{league:lid,hash:'#/overview',lang,vw,init:{season:P.s}});
   await pg.waitForSelector('#psbar .psb',{timeout:60000});
   const keys=await pg.evaluate(()=>PAGES.map(p=>p[0]));

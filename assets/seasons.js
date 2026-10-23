@@ -58,7 +58,7 @@
   if(!cur){bar.hidden=true;bar.innerHTML='';return}
   const p=(e.past||[]).find(x=>x.s===cur)||{};
   bar.hidden=false;
-  bar.innerHTML=`<div class="psb"><span>${two(`Showing the finished season <b>${nb(esc(cur))}</b> of <bdi>${esc(D.name)}</bdi>`,`تعرض الموسم المنتهي <b>${nb(esc(cur))}</b> من <bdi>${esc(D.name)}</bdi>`)}${p.complete?'':` <span class="mu">${two(`(${nb(p.matches)} of ${nb(p.total||'?')} matches fetched so far)`,`(انجلبت ${nb(p.matches)} من ${nb(p.total||'?')} مباراة لين الحين)`)}</span>`}</span>`+
+  bar.innerHTML=`<div class="psb"><span>${two(`Showing the finished season <b>${nb(esc(cur))}</b> of <bdi>${esc(D.name)}</bdi>`,`تعرض الموسم المنتهي <b>${nb(esc(cur))}</b> من <bdi>${esc(D.name)}</bdi>`)}${p.complete?'':` <span class="mu">${p.total&&p.matches>=p.total?two('(all matches are in; some analytics such as heat maps and line-ups are still being fetched)','(كل المباريات موجودة، وبعض التحليلات مثل خرائط الحرارة والتشكيلات لسا تنجلب)'):two(`(${nb(p.matches)} of ${nb(p.total||'?')} matches fetched so far)`,`(انجلبت ${nb(p.matches)} من ${nb(p.total||'?')} مباراة لين الحين)`)}</span>`}</span>`+
    `<button class="s" id="psback">${two('Back to the current season','رجوع للموسم الحالي')}</button></div>`;
   bar.querySelector('#psback').onclick=()=>go('',D.id);
  }
