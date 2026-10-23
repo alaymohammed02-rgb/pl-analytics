@@ -2339,7 +2339,7 @@ R.defense=async function(el){
  if(!P||!P.rows.length){noData(el,'No player data for this league yet. It appears after the next synchronization.');return}
  try{A=await loadAdv()}catch(e){A=null}
  const AG=aggPl(P),TC=teamCtx(P,A),teams=[...new Set(AG.map(a=>a.club))].sort();
- el.innerHTML+=`<div class="card mu" style="font-size:13px"><b>What this shows:</b> every defensive count PitchAPI reports per player. It reports duels <i>won</i> only (not duels lost), so total duels and duel win % are not available; aerial win % uses aerials won ÷ aerials contested. "Ground duels won" = duels won − aerial duels won (derived). Pressing is reported per <b>team</b> only (table below), not per player; "Opp-half %" is where the player's on-ball actions happen (from heatmaps), a position indicator, not a pressing stat.</div>
+ el.innerHTML+=`<div class="card mu" style="font-size:13px"><b>What this shows:</b> every defensive count PitchAPI reports per player. It reports duels <i>won</i> only (not duels lost), so total duels and duel win % are not available; aerial win % uses aerials won ÷ aerials contested. "Duels won" is PitchAPI's figure as given: it does not include aerial duels (it is lower than aerials won in about a third of matches), so no ground-duel figure is derived from the two. Pressing is reported per <b>team</b> only (table below), not per player; "Opp-half %" is where the player's on-ball actions happen (from heatmaps), a position indicator, not a pressing stat.</div>
  <div class="ctl"><input id="dq" placeholder="Search player"><select id="dt">${opts([['','All teams'],...teams.map(t=>[t,t])],'')}</select><select id="dp">${opts([['','All positions'],['GK','GK'],['DF','DF'],['MF','MF'],['FW','FW']],'')}</select>
  <select id="ds">${opts([['da','Sort: defensive actions'],['tk','Tackles'],['ic','Interceptions'],['bl','Blocks'],['cl','Clearances'],['duw','Duels won'],['aerw','Aerials won'],['ap','Aerial win %'],['op','Opp-half %']],'da')}</select>
  <label class="mu" style="align-self:center"><input type="checkbox" id="d9" checked style="min-height:0"> per 90</label><input id="dm" type="number" value="270" style="width:130px" placeholder="Min minutes"></div><div id="dout"></div>
@@ -2351,14 +2351,13 @@ R.defense=async function(el){
   const v=(a,k)=>p90?a.p90(k):(a.has(k)?a.s[k]:null);
   const sum=(a,ks)=>ks.every(k=>a.has(k))?ks.reduce((x,k)=>x+v(a,k),0):null;
   const C={tk:a=>v(a,'tk'),ic:a=>v(a,'ic'),bl:a=>v(a,'bl'),cl:a=>v(a,'cl'),duw:a=>v(a,'duw'),aerw:a=>v(a,'aerw'),aer:a=>v(a,'aer'),
-   gd:a=>(a.has('duw')&&a.has('aerw'))?v(a,'duw')-v(a,'aerw'):null,
    ap:a=>(a.has('aer')&&a.has('aerw')&&a.s.aer>0)?a.s.aerw/a.s.aer*100:null,
    da:a=>sum(a,['tk','ic','bl','cl']),op:a=>a.s.act>0?a.s.aco/a.s.act*100:null};
   const rows=AG.filter(a=>a.s.mi>=mn&&(!q||a.n.toLowerCase().includes(q))&&(!t||a.club===t)&&(!ps||a.p===ps))
    .sort((x,y)=>(C[sk](y)??-1e18)-(C[sk](x)??-1e18)).slice(0,150),d=p90?2:0;
   $('#dout').innerHTML=`<div class="mu" style="margin-bottom:6px">${rows.length} players${rows.length===150?' (top 150)':''} · ${p90?'per 90 minutes':'season totals'}</div>`+
-   tbl([['#',1],['Player'],['Club'],['Pos'],['Min',1],['Tackles',1],['Interc.',1],['Blocks',1],['Clear.',1],['Duels won',1],['Ground won',1],['Aerials won',1],['Aerials',1],['Aerial %',1],['Def. actions',1],['Opp-half %',1]],
-    rows.map((a,i)=>[i+1,esc(a.n),esc(a.club),a.p||'N/A',Math.round(a.s.mi),cellN(C.tk(a),d),cellN(C.ic(a),d),cellN(C.bl(a),d),cellN(C.cl(a),d),cellN(C.duw(a),d),cellN(C.gd(a),d),cellN(C.aerw(a),d),cellN(C.aer(a),d),cellN(C.ap(a),0),cellN(C.da(a),d),cellN(C.op(a),0)]))};
+   tbl([['#',1],['Player'],['Club'],['Pos'],['Min',1],['Tackles',1],['Interc.',1],['Blocks',1],['Clear.',1],['Duels won',1],['Aerials won',1],['Aerials',1],['Aerial %',1],['Def. actions',1],['Opp-half %',1]],
+    rows.map((a,i)=>[i+1,esc(a.n),esc(a.club),a.p||'N/A',Math.round(a.s.mi),cellN(C.tk(a),d),cellN(C.ic(a),d),cellN(C.bl(a),d),cellN(C.cl(a),d),cellN(C.duw(a),d),cellN(C.aerw(a),d),cellN(C.aer(a),d),cellN(C.ap(a),0),cellN(C.da(a),d),cellN(C.op(a),0)]))};
  ['dq','dm'].forEach(i=>$('#'+i).oninput=draw);['dt','dp','ds','d9'].forEach(i=>$('#'+i).onchange=draw);
  draw();
 };
@@ -2378,7 +2377,6 @@ const MET=[
  ['tkr','Take-on success %','pas',a=>a.s.tko>0&&a.has('tkw')?a.s.tkw/a.s.tko*100:null],
  ['tk','Tackles /90','def',p90m('tk')],['ic','Interceptions /90','def',p90m('ic')],['bl','Blocks /90','def',p90m('bl')],['cl','Clearances /90','def',p90m('cl')],['duw','Duels won /90','def',p90m('duw')],['aerw','Aerials won /90','def',p90m('aerw')],
  ['ap','Aerial win %','def',a=>a.s.aer>0&&a.has('aerw')?a.s.aerw/a.s.aer*100:null],
- ['gdw','Ground duels won /90','def',a=>(a.has('duw')&&a.has('aerw'))?a.p90('duw')-a.p90('aerw'):null],
  ['opp','Actions in opponent half %','pos',a=>a.s.act>0?a.s.aco/a.s.act*100:null],
  ['t_ppda','Team PPDA','tm',(a,T)=>(T[a.club]||{}).ppda??null],['t_hto','Team high turnovers /match','tm',(a,T)=>(T[a.club]||{}).hto??null],['t_cpr','Team counterpress regains /match','tm',(a,T)=>(T[a.club]||{}).cpr??null]];
 let LK=null;
@@ -2602,7 +2600,6 @@ function clPlReg(){
  add('aer','Aerial duels','Duels',AP+'defending.aerials','count','ctx',c('aer'));
  add('aerw','Aerial duels won','Duels',AP+'defending.aerials_won','count','higher',c('aerw'));
  add('ap','Aerial win %','Duels','calculated: aerials won ÷ aerials','pct','higher',a=>(a.has('aer')&&a.has('aerw')&&a.s.aer>0)?a.s.aerw/a.s.aer*100:null,1);
- add('gdw','Ground duels won','Duels','calculated: duels won − aerials won (assumes duels_won includes aerials; not stated in the provider docs)','count','higher',(a,per)=>(a.has('duw')&&a.has('aerw'))?(per==='p90'?a.p90('duw')-a.p90('aerw'):a.s.duw-a.s.aerw):null,1);
  add('opp','Actions in opponent half %','Positioning','heatmaps: player cells with x ≥ half ÷ all cells','pct','ctx',a=>a.s.act>0?a.s.aco/a.s.act*100:null,1);
  add('xgf','xG faced','Goalkeeping','players → xG faced (goalkeeper rows only)','count','ctx',(a,per)=>{const o=clXgf().get(a.id);if(!o||!o.n)return null;return per==='p90'?(o.mi>0?o.s/o.mi*90:null):o.s});
  return CLC.rp=L;
@@ -10933,7 +10930,7 @@ _AR_DICT.update({
     "P(# goals) with the opponent's expected xG, calibrated by league goals ÷ xG (#, from # matches). Saves, goals-conceded deductions and defensive-contribution points are expectations of stepwise rules under Poisson counts. A double gameweek adds both fixtures": "احتمال (# أهداف) حسب xG المتوقع للخصم، معايَر بنسبة أهداف الدوري ÷ xG (#، من # مباراة). التصديات وخصم الأهداف المستقبلة ونقاط المساهمة الدفاعية توقعات لقواعد متدرجة بتوزيع بواسون. الجولة المزدوجة تجمع المباراتين",
     "On target is PitchAPI's flag (also true for blocked shots heading on target). Conversion divides goals by all shots, blocked ones included. Goals − xG uses only shots that have an xG. Average distance is computed here from the shot coordinates. # own goal(s) excluded. Left/right: the team's left flank is at the top": "\"على المرمى\" حسب علامة PitchAPI (تشمل التسديدات المصدودة المتجهة للمرمى). التحويل = الأهداف ÷ كل التسديدات بما فيها المصدودة. الأهداف − xG تستخدم فقط التسديدات اللي لها xG. متوسط المسافة محسوب هنا من إحداثيات التسديد. استُبعد # هدف عكسي. يسار/يمين: الجهة اليسرى للفريق في الأعلى",
     "Node position = average origin of that player's completed passes in the window (not their average position). Left/right: the team's left flank is at the top when it attacks to the right (untick \"Flip left/right\" if a player you know looks mirrored). Node size = passes played. Line width is proportional to the passes between the two players (thickest drawn: #)": "موقع اللاعب = متوسط مكان تمريراته الناجحة في النافذة (وليس متوسط مركزه). يسار/يمين: الجهة اليسرى للفريق في الأعلى لما يهاجم لليمين (ألغِ \"اقلب يسار/يمين\" إذا ظهر لاعب تعرفه معكوساً). حجم الدائرة = عدد التمريرات. سُمك الخط حسب عدد التمريرات بين اللاعبين (الأسمك: #)",
-    "aerial win % uses aerials won ÷ aerials contested. \"Ground duels won\" = duels won − aerial duels won (derived). Pressing is reported per": "نسبة الفوز الهوائي = الهوائية المكسوبة ÷ الهوائية. \"الالتحامات الأرضية المكسوبة\" = الالتحامات المكسوبة − الهوائية المكسوبة (مشتقة). الضغط يُرسل لكل",
+    "aerial win % uses aerials won ÷ aerials contested. \"Duels won\" is PitchAPI's figure as given: it does not include aerial duels (it is lower than aerials won in about a third of matches), so no ground-duel figure is derived from the two. Pressing is reported per": "نسبة الفوز الهوائي = الهوائية المكسوبة ÷ الهوائية. \"الالتحامات المكسوبة\" رقم PitchAPI كما هو: ما يشمل الالتحامات الهوائية (أقل من الهوائية المكسوبة في ثلث المباريات تقريباً)، فما نشتق منهم رقم للالتحامات الأرضية. الضغط يُرسل لكل",
     "# of # cells active. Attacking frame (acting_ltr): cell # = own goal line, cell # = opponent's, so this team attacks to the right": "# من # خلية فيها نشاط. إطار الهجوم (acting_ltr): الخلية # = خط مرمى الفريق، والخلية # = مرمى الخصم، فهذا الفريق يهاجم لليمين",
     "empty cells had no recorded action. Raw match totals, not per#, so a substitute looks thinner because of minutes. Left/right: the team's left flank is at the top when it attacks to the right": "الخلايا الفارغة بدون أي فعل مسجل. مجاميع خام للمباراة وليست لكل #، فالبديل يبدو أخف بسبب دقائقه. يسار/يمين: الجهة اليسرى للفريق في الأعلى لما يهاجم لليمين",
     "PitchAPI does not document which touchline is y=#, so untick \"Flip left/right\" if a player you know looks mirrored": "PitchAPI لا يوضح أي خط تماس هو y=#، فألغِ \"اقلب يسار/يمين\" إذا ظهر لاعب تعرفه معكوساً",

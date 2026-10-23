@@ -43,6 +43,8 @@ const ALLP=SIX.flatMap(league),PLG=IDX.leagues.find(l=>l.id==='l_4WFCIZ');
  let {ctx,pg,errs}=await T.open(b,{vw:1280,league:'l_4WFCIZ',hash:'#/defense'});
  await pg.waitForSelector('#dcx svg',{timeout:90000});
  ok(await pg.evaluate(()=>{const s=document.querySelector('#dcx');return s.previousElementSibling&&s.previousElementSibling.tagName==='H2'&&!!document.querySelector('#dout')}),'the card sits at the top of the Defensive page, and the table is still there');
+ ok(await pg.evaluate(()=>{const h=[...document.querySelectorAll('#dout th')].map(t=>t.textContent);return h.includes('Duels won')&&!h.some(t=>/Ground/.test(t))&&/does not include aerial duels/.test(document.querySelector('#app').textContent)}),
+  'the table no longer derives "ground duels won" (duels won does not include aerials in PitchAPI\'s data), and says why');
  /* the default player: the outfield player of the league with the most minutes (450+) */
  const mine=ALLP.filter(a=>a.lg===PLG.name&&a.mi>=450),def=mine.filter(a=>a.p!=='GK'&&a.role!=='GK').sort((x,y)=>y.mi-x.mi||x.n.localeCompare(y.n))[0];
  let e=expect(ALLP,def,{grp:'role',min:450,met:['da','tk','ic','duw','aerw','bc']});
