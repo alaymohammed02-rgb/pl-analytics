@@ -131,4 +131,19 @@ ok(s3['got']==100 and s3['complete'],'light season: the next run completes it')
 ok(all('data/%s%s.json'%(P2,x) in store for x in ('','_pl','_sh')) and not any('data/%s%s.json'%(P2,x) in store for x in ('_adv','_heat','_mx','_rt','_hv')),'light season: league, players and shots files only')
 ok([p['s'] for p in store['data/index.json']['seasons']['l_4WFCIZ']['past']]==['2025-26'],'light seasons are not offered in the season selector')
 ok(store['data/seasons.json']['leagues']['l_4WFCIZ']['api_seasons']==['2026/2027','2025/2026','2024/2025'],'the seasons PitchAPI lists for the league are recorded')
+# the light season becomes full: only the missing parts are fetched, within the request budget, and it joins the season selector
+m.PS_JOBS=[('l_4WFCIZ',2,'full')];before=copy.deepcopy(store['data/%s.json'%P2]);runs=[]
+for k in range(6):
+    fresh_db();calls.clear();m.PS['state']=None;m.sync_past_seasons(C(),None)
+    s4=store['data/seasons.json']['leagues']['l_4WFCIZ']['seasons']['2024-25'];runs.append((m.PS['req'],sorted({c[0] for c in calls if c[0]!='list'})))
+    if s4.get('complete'):break
+ok(not s4['light'] and s4['complete'] and len(runs)==3,'light to full: completes in %d runs (%s)'%(len(runs),[r[0] for r in runs]))
+ok(all(r[0]<=401 for r in runs),'light to full: every run within the request budget of 400')
+ok(not any('shots' in r[1] for r in runs),'light to full: shots are not fetched again')
+ok(store['data/%s.json'%P2]['matches']==before['matches'],'light to full: the match list is unchanged')
+ok(all('data/%s%s.json'%(P2,x) in store for x in ('_adv','_mx','_rt','_hv')) and len(store['data/%s_mx.json'%P2]['m'])==100 and len(store['data/%s_hv.json'%P2]['m'])==100
+   and len(store['data/%s_adv.json'%P2]['ex'])==100,'light to full: advanced, line-ups, ratings and halves for all 100 matches')
+ok([p['s'] for p in store['data/index.json']['seasons']['l_4WFCIZ']['past']]==['2025-26','2024-25'],'light to full: now offered in the season selector')
+fresh_db();calls.clear();m.PS['state']=None;m.sync_past_seasons(C(),None)
+ok(calls==[],'light to full, complete: no request at all')
 print('all passed' if not fails else '%d FAILED'%fails)

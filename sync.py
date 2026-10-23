@@ -1576,7 +1576,7 @@ def _x_heat(res, frame="acting_ltr"):
 
 
 # ---------------- المزامنة الإضافية (تشتغل بعد المزامنة الأصلية لكل دوري) ----------------
-def sync_extras(client, league_id, on_progress=None):
+def sync_extras(client, league_id, on_progress=None, limit=None):
     api_m = client.matches
     has_heat = hasattr(api_m, "heatmaps")
     if not has_heat:
@@ -1585,6 +1585,8 @@ def sync_extras(client, league_id, on_progress=None):
              "LEFT JOIN extras e ON e.league_id=m.league_id AND e.match_id=m.match_id "
              "WHERE m.league_id=?", (league_id,))
     todo = [r for r in rows if match_due(r)]
+    if limit is not None:
+        todo = todo[:limit]          # المواسم السابقة: ضمن حد الطلبات لكل مزامنة
     n_ok = sum(1 for r in rows if r["status"] == "ok")
     log(f"  [إضافي: PPDA/شبكة/حرارة] مكتملة سابقاً: {n_ok} | المطلوب الآن: {len(todo)}")
     hard = lambda e: e and e not in ("not_found", "plan")
@@ -11094,8 +11096,9 @@ PS_LEAGUES = ["l_4WFCIZ", "l_0ErfuF", "l_1Isor4", "l_3FJFUl", "l_0ALvwF", "l_4Qe
 # الترتيب: (الدوري، كم موسم للخلف، النوع). "full" = كل ملفات الموسم الحالي (يظهر في اختيار الموسم بالموقع)،
 # "light" = المباريات وإحصائيات اللاعبين والتسديدات فقط (لنموذج الفانتازي، ما يظهر في اختيار الموسم).
 # أول تجربة (23 أكتوبر 2026): 40 مباراة من الدوري الإنجليزي 2025-26 كلفت 400 طلب و130 ثانية و2.0 MB، بدون أي خطأ.
-PS_JOBS = ([("l_4WFCIZ", k, "light") for k in (2, 3, 4, 5)] + [("l_4WFCIZ", 1, "full")] +
-           [(l, 1, "full") for l in PS_LEAGUES[1:]])
+# مواسم الإنجليزي من 2024-25 إلى 2021-22 انجلبت "light" أولاً ثم صارت "full": المزامنة تكمل لها الناقص فقط
+# (الإحصائيات المتقدمة والحرارة والتشكيلات والتقييمات والشوطين) بدون ما تعيد المباريات.
+PS_JOBS = [("l_4WFCIZ", k, "full") for k in (1, 2, 3, 4, 5)] + [(l, 1, "full") for l in PS_LEAGUES[1:]]
 PS_REQ_PER_RUN = 1200         # أقصى عدد طلبات لـ PitchAPI في المزامنة الوحدة لهذا القسم (حوالي 7 دقايق)
 PS_COST = {"full": 10, "light": 5}   # طلبات لكل مباراة (مقاسة: full = 10، light = 5)
 PS_RETRY_H = 24               # مباراة فشلت بسبب انقطاع أو حد الطلبات: نعيدها بعد يوم
@@ -11231,6 +11234,8 @@ def ps_base(client, P, batch):
 def ps_season(client, hub, lid, api_season, label, budget, st, light=False):
     """يجلب دفعة من مباريات موسم سابق وينشر ملفاته. budget = الطلبات المسموحة. ترجع عدد الطلبات اللي انصرفت."""
     P, rs = ps_id(lid, label), PS["req"]
+    if st.get("light") and not light:
+        st.pop("complete", None)      # موسم خفيف صار كامل: نكمل له الملفات الناقصة
     st["light"] = light
     if st.get("plan"):
         last = _parse_ts(st.get("t"))
@@ -11262,14 +11267,16 @@ def ps_season(client, hub, lid, api_season, label, budget, st, light=False):
         sync_pstats(client, P)
         sync_shots(client, P)
     else:
-        # كل خطوة تجلب فقط المباريات اللي ما انجلبت لها (بعد انقطاع سابق تكمل الناقص)
-        sync_extras(client, P)
-        if batch:
+        # كل خطوة تجلب فقط المباريات اللي ما انجلبت لها (بعد انقطاع سابق أو موسم خفيف صار كامل تكمل الناقص)
+        cap = max(len(batch), budget // PS_COST["full"])
+        r1 = PS["req"]
+        sync_extras(client, P, limit=cap)
+        if batch or PS["req"] > r1:
             sync_home_frame(client, P)
         sync_pstats(client, P)
         sync_shots(client, P)
         blocked, keys = set(), {}
-        for mid in ps_mx_todo(P, mx, hv)[:max(len(batch), budget // PS_COST["full"])]:
+        for mid in ps_mx_todo(P, mx, hv)[:cap]:
             if "*" in blocked or PS["errs"].get("rate_limit"):
                 break
             if mid not in mx["m"] and mid not in mx["st"]:
@@ -11305,7 +11312,7 @@ def ps_season(client, hub, lid, api_season, label, budget, st, light=False):
     ps_publish(hub, lid, P, label, mx, rt, hv, st)
     left = [m for m in ms if ps_due(done.get(str(m.id)))]
     st.update(got=len(done), ok=sum(1 for r in done.values() if r["status"] == "ok"),
-              complete=not left and (light or not ps_mx_todo(P, mx, hv)) and not PS["errs"].get("rate_limit"))
+              complete=not left and (light or not ps_mx_todo(P, mx, hv) and not ps_extras_todo(P)) and not PS["errs"].get("rate_limit"))
     return PS["req"] - rs
 
 
@@ -11313,6 +11320,12 @@ def ps_mx_todo(P, mx, hv):
     """مباريات الموسم اللي ما انطلبت لها التشكيلة/التقييمات أو الشوطين أبداً (الأقدم أولاً)."""
     rows = q("SELECT match_id i FROM matches WHERE league_id=? AND status IN ('ok','partial') ORDER BY date, match_id", (P,))
     return [r["i"] for r in rows if (r["i"] not in mx["m"] and r["i"] not in mx["st"]) or (r["i"] not in hv["m"] and r["i"] not in hv["st"])]
+
+
+def ps_extras_todo(P):
+    """مباريات الموسم اللي ما انطلبت لها الإحصائيات المتقدمة والحرارة أبداً (مثل موسم خفيف صار كامل)."""
+    return q("SELECT COUNT(*) n FROM matches m LEFT JOIN extras e ON e.league_id=m.league_id AND e.match_id=m.match_id "
+             "WHERE m.league_id=? AND m.status IN ('ok','partial') AND e.match_id IS NULL", (P,))[0]["n"]
 
 
 def ps_publish(hub, lid, P, label, mx, rt, hv, st):
