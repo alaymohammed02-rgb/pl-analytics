@@ -50,6 +50,11 @@ const ALLP=SIX.flatMap(league),PLG=IDX.leagues.find(l=>l.id==='l_4WFCIZ');
  ok(await pg.$eval('#dcx svg',(s,n)=>s.textContent.includes(n+' wingers in six leagues, 450+ minutes'),e.n),'he is compared with the '+e.n+' wingers of the six leagues with 450+ minutes');
  const avg=Math.round(e.rows.filter(r=>r.p!=null).reduce((s,r)=>s+r.p,0)/e.rows.filter(r=>r.p!=null).length);
  ok(await pg.$eval('#dcx svg',(s,a)=>[...s.querySelectorAll('text')].some(t=>t.textContent===String(a)),avg),'the ring shows the average of the percentiles ('+avg+')');
+ /* the bars: as long as the percentile, coloured red (0) → amber (50) → green (100); the value per 90 beside the name */
+ const pcol=p=>{const S=[[0,[214,69,65]],[50,[232,160,40]],[100,[63,163,77]]];for(let i=1;i<S.length;i++)if(p<=S[i][0]){const [a,c]=S[i-1],[b,d]=S[i],t=(p-a)/(b-a);return 'rgb('+c.map((v,k)=>Math.round(v+(d[k]-v)*t)).join(',')+')'}};
+ const bars=await pg.$$eval('#dcx .dc-on',a=>a.map(r=>({w:+r.getAttribute('width'),f:r.getAttribute('fill'),t:r.previousElementSibling.previousElementSibling.textContent,tw:+r.previousElementSibling.getAttribute('width')})));
+ ok(bars.length===e.rows.length&&bars.every((x,i)=>x.f===pcol(e.rows[i].p)&&Math.abs(x.w-Math.max(14,x.tw*e.rows[i].p/100))<.2&&x.t.includes(NAME[e.rows[i].k]+'  '+e.rows[i].v.toFixed(2)+' /90')),
+  'each bar: length = percentile, colour from red to green ('+bars.map(x=>x.f).join(' ')+'), "value /90" beside the name');
  /* the heat map: his cells, no average-position dot */
  const H=J(PLG.heat_file),G={};H.rows.filter(r=>r.t==='p'&&r.k===saka.id).forEach(r=>{for(let i=0;i+2<r.h.length;i+=3){const k=r.h[i]+','+r.h[i+1];G[k]=(G[k]||0)+r.h[i+2]}});
  const hv=await pg.$$eval('#dcx .dc-hc',a=>a.map(r=>+r.dataset.v).sort((x,y)=>x-y)),ev=Object.values(G).filter(v=>v>0).sort((x,y)=>x-y);

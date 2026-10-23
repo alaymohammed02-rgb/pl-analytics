@@ -3,7 +3,8 @@
    his percentile among those players, and his heat map. "Save image" downloads the same card as a PNG.
    - Numbers: PitchAPI's per-match player rows, added up as on the table below (aggPl): a measure per 90 = its total ÷ the minutes
      of the matches where PitchAPI gave it × 90. Sums (e.g. tackles + interceptions) add the per-90 figures, as the table does.
-     Aerial win % needs 5 or more aerial duels. "Duels won" is PitchAPI's figure as given: it is lower than aerial duels won in about
+     Aerial win % needs 5 or more aerial duels. Each bar is as long as the percentile and coloured red (0) through amber (50) to
+     green (100), so it reads before the number. "Duels won" is PitchAPI's figure as given: it is lower than aerial duels won in about
      a third of player-matches, so it does not include them, and nothing is derived from the two together. Nothing is estimated or adjusted: PitchAPI gives no possession per match, so the
      numbers are not possession-adjusted, and it gives no pressing events per player, so the heat map is every action he made
      (PitchAPI's heat map counts), not a pressing map.
@@ -75,9 +76,12 @@
  const FONT='system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Arabic",Tahoma,sans-serif';
  const css=(k,d)=>{try{return getComputedStyle(document.documentElement).getPropertyValue(k).trim()||d}catch(e){return d}};
  const x_=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
+ /* percentile colour: red (0) through amber (50) to green (100) */
+ const pcol=p=>{const S=[[0,[214,69,65]],[50,[232,160,40]],[100,[63,163,77]]];for(let i=1;i<S.length;i++)if(p<=S[i][0]){const [a,c]=S[i-1],[b,d]=S[i],t=(p-a)/(b-a);
+  return 'rgb('+c.map((v,k)=>Math.round(v+(d[k]-v)*t)).join(',')+')'}return 'rgb(63,163,77)'};
  const fit=(s,size,w)=>Math.min(size,Math.floor(w/(Math.max(4,[...String(s)].length)*.56)));
  function card(me,cmp,heat,meta){
-  const A=ar(),W=1080,PX=70,PW=W-2*PX,PH=Math.round(PW*68/105),rows=cmp.rows,NR=Math.ceil(rows.length/2),TH=128;
+  const A=ar(),W=1080,PX=70,PW=W-2*PX,PH=Math.round(PW*68/105),rows=cmp.rows,NR=rows.length,TH=100;
   const top=290,pt=top+22,mt=pt+PH+96,H=mt+NR*TH+176;
   const bg=css('--sf','#152130'),bg2=css('--bg','#0d1520'),tx=css('--tx','#e8eef5'),mu=css('--mu','#8fa3b8'),th=css('--th','#4cc38a'),ln=css('--ln','rgba(255,255,255,.12)');
   /* mirrored for Arabic: x positions flip; text set right to left anchors 'start' on its right already, numbers (left to right) swap */
@@ -92,7 +96,7 @@
   g+=t(nx,206,[T(...(me.role?[ROLE[me.role][2],ROLE[me.role][3]]:[me.p||'',me.p||''])),Math.round(me.s.mi)+T(' min',' دقيقة'),me.games+T(' matches',' مباراة')].join(' · '),{size:27,fill:mu});
   const gx=X(W-PX-82),gy=140,r=66,c=2*Math.PI*r,av=cmp.avg;
   g+=`<circle cx="${gx}" cy="${gy}" r="${r}" fill="none" stroke="${ln}" stroke-width="16"/>`;
-  if(av!=null)g+=`<circle cx="${gx}" cy="${gy}" r="${r}" fill="none" stroke="${th}" stroke-width="16" stroke-linecap="round" stroke-dasharray="${(c*av/100).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 ${gx} ${gy})"/>`;
+  if(av!=null)g+=`<circle cx="${gx}" cy="${gy}" r="${r}" fill="none" stroke="${pcol(av)}" stroke-width="16" stroke-linecap="round" stroke-dasharray="${(c*av/100).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 ${gx} ${gy})"/>`;
   g+=`<text x="${gx}" y="${gy+16}" font-size="50" font-weight="800" fill="${tx}" text-anchor="middle">${av==null?'–':av}</text>`;
   g+=`<text x="${gx}" y="${gy+r+40}" font-size="22" fill="${mu}" text-anchor="middle"${A?' direction="rtl"':''}>${x_(T('average percentile','متوسط المئين'))}</text>`;
   /* the heat map: every action he made, on a pitch attacking to the right (the cells are PitchAPI's 16 × 12 grid) */
@@ -110,19 +114,20 @@
    <rect x="${PX}" y="${py(34-20.16)}" width="${16.5*s}" height="${40.32*s}"/><rect x="${PX}" y="${py(34-9.16)}" width="${5.5*s}" height="${18.32*s}"/>
    <rect x="${px(105-16.5)}" y="${py(34-20.16)}" width="${16.5*s}" height="${40.32*s}"/><rect x="${px(105-5.5)}" y="${py(34-9.16)}" width="${5.5*s}" height="${18.32*s}"/></g>`;
   g+=`<text x="${W-PX}" y="${pt+PH+44}" font-size="26" fill="${mu}" text-anchor="end">${x_(T('attack →','اتجاه الهجوم →'))}</text>`;
-  /* the measures: two columns of tiles, each a value per 90 and a ten-step bar for the percentile */
+  /* the measures: one row each, the value per 90 beside its name, and a bar as long as the percentile, red (low) to green (high),
+     so the colour and length say good or poor before the number is read */
   g+=t(PX,mt-6,T('Percentile among ','المئين بين ')+meta.who,{size:26,fill:mu});
-  const TW=(PW-40)/2;
-  rows.forEach((q,i)=>{const col=i%2,row=Math.floor(i/2),x0=PX+col*(TW+40),y0=mt+18+row*TH;
-   const lab=T(q.m[1],q.m[2]),val=q.v==null?'–':q.m[4]==='%'?Math.round(q.v)+'%':q.v.toFixed(2);
-   g+=t(x0,y0+30,lab,{size:fit(lab,27,TW-150),fill:mu});
-   g+=`<text x="${X(x0+TW)}" y="${y0+34}" font-size="38" font-weight="800" fill="${tx}" text-anchor="${anc('end')}">${x_(val)}</text>`;
-   const sw=(TW-96)/10;
-   for(let k=0;k<10;k++){const on=q.p!=null&&q.p>=k*10+5,bx=A?W-(x0+k*sw)-(sw-6):x0+k*sw;
-    g+=`<rect${on?' class="dc-on"':''} x="${bx.toFixed(1)}" y="${y0+56}" width="${(sw-6).toFixed(1)}" height="30" rx="6" fill="${on?th:ln}"${on?` fill-opacity="${(.45+.55*(k+1)/10).toFixed(2)}"`:''}/>`}
-   g+=`<text x="${X(x0+TW)}" y="${y0+82}" font-size="30" font-weight="800" fill="${q.p==null?mu:tx}" text-anchor="${anc('end')}">${q.p==null?'–':q.p}</text>`});
+  const BW=PW-84;
+  rows.forEach((q,i)=>{const y0=mt+18+i*TH,lab=T(q.m[1],q.m[2]),pc=q.p==null?null:pcol(q.p);
+   const val=q.v==null?'–':q.m[4]==='%'?Math.round(q.v)+'%':q.v.toFixed(2),unit=q.v==null||q.m[4]==='%'?'':A?' لكل 90':' /90';
+   g+=`<text x="${X(PX)}" y="${y0+30}" font-size="${fit(lab+val,29,BW-60)}" fill="${tx}" text-anchor="start"${A?' direction="rtl"':''}>${x_(lab)}  <tspan font-weight="800" direction="ltr" unicode-bidi="embed">${x_(val)}</tspan><tspan font-weight="400" fill="${mu}">${unit}</tspan></text>`;
+   const bx=A?W-PX-BW:PX,w=q.p==null?0:Math.max(14,BW*q.p/100),fx=A?W-PX-w:PX;
+   g+=`<rect x="${bx}" y="${y0+46}" width="${BW}" height="28" rx="14" fill="${ln}"/>`;
+   if(pc)g+=`<rect class="dc-on" x="${fx.toFixed(1)}" y="${y0+46}" width="${w.toFixed(1)}" height="28" rx="14" fill="${pc}"/>`;
+   const cx=X(W-PX-30);
+   g+=`<circle cx="${cx}" cy="${y0+60}" r="30" fill="${pc||ln}"/><text x="${cx}" y="${y0+70}" font-size="27" font-weight="800" fill="#fff" text-anchor="middle">${q.p==null?'–':q.p}</text>`});
   /* what the card is and is not */
-  const fy=mt+18+NR*TH+28;
+  const fy=mt+18+NR*TH+20;
   g+=t(PX,fy,T('Per 90 minutes · not possession-adjusted (PitchAPI gives no possession per match)','لكل 90 دقيقة · بدون تعديل حسب الاستحواذ (PitchAPI ما يعطي الاستحواذ لكل مباراة)'),{size:21,fill:mu});
   g+=t(PX,fy+32,T('PitchAPI has no pressing events per player: the heat map is every action, not pressing','PitchAPI ما عنده أحداث ضغط لكل لاعب: الخريطة كل لمساته، مو ضغطه'),{size:21,fill:mu});
   g+=t(PX,fy+72,'PL Analytics',{size:26,w:800});g+=t(W-PX,fy+72,T('Data: PitchAPI','البيانات: PitchAPI'),{size:22,fill:mu,a:'end'});
