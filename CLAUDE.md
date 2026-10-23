@@ -40,7 +40,7 @@ A static football analytics site on GitHub Pages. A Python sync (`sync.py`, run 
 - **Async safety:** capture `D.id` before any `await`, and bail out if `root.isConnected` is false or `D.id` changed. Caches must not keep a failed result, and must be keyed by `INS.poolKey()` (data version).
 - **Liquid Glass** (`assets/liquid-glass.js`, styles at the end of `assets/fun.css`): a glass lens on the chosen button of the Fantasy tabs and the menu drawer.
   - A new choice sends it through every button in between, in DOM (reading) order, with lens magnification, Dock-style growth of nearby buttons, letters arriving one by one (Arabic word by word, so letters stay joined) and a heavier label while moving.
-  - The buttons are untouched: the glass is `aria-hidden` with pointer events off; classes `lgx-act` (chosen) and `lgx-on` (covered, text hidden) mark them. A group with one button gets no glass; reduced motion jumps.
+  - The buttons are untouched: the glass is `aria-hidden` with pointer events off; the attributes `data-lgx-act` (chosen) and `data-lgx-on` (covered, text hidden) mark them, never classes (tests compare `className`). A group with one button gets no glass; reduced motion jumps.
   - The drawer closes once the glass arrives (`lgxHold()` in `assets/drawer.js`); the page itself opens at once.
   - More groups: add `{sel, items, on}` to `G`. Test: `tests/lg/ui_lg.js`.
 - **Cross-league data:** `assets/league-pool.js` provides:

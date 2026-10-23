@@ -8,7 +8,8 @@
    - Dynamic typography: while moving, the lens label is heavier and a little wider; it settles when the glass stops.
    A group with fewer than two buttons keeps its normal style (the glass needs somewhere to go). With "reduce motion" the
    glass moves at once and nothing animates. The buttons are not changed (their text, order and clicks stay as they are):
-   an aria-hidden glass with pointer-events off is added on top, and classes mark the chosen button and the one covered. */
+   an aria-hidden glass with pointer-events off is added on top, and data attributes (not classes, so className stays as the
+   page set it) mark the chosen button (data-lgx-act) and the one covered (data-lgx-on). */
 (function(){
  if(!document.body||typeof MutationObserver==='undefined')return;
  const RM=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -26,7 +27,7 @@
   const b=g.box.getBoundingClientRect(),r=e.getBoundingClientRect();
   return {x:r.left-b.left-g.box.clientLeft+g.box.scrollLeft,y:r.top-b.top-g.box.clientTop+g.box.scrollTop,w:e.offsetWidth,h:e.offsetHeight}}
  function off(g){stop(g);if(g.el)g.el.remove();g.el=null;
-  if(g.box){g.box.classList.remove('lgx','lgx-mv','lgx-s');g.items(g.box).forEach(e=>{e.classList.remove('lgx-on','lgx-act','lgx-i');e.style.scale=''})}}
+  if(g.box){g.box.classList.remove('lgx','lgx-mv','lgx-s');g.items(g.box).forEach(e=>{['data-lgx-on','data-lgx-act','data-lgx-i'].forEach(a=>e.removeAttribute(a));e.style.scale=''})}}
  /* the box, its items and the glass; a rebuilt box gets a new glass */
  function ensure(g){
   const box=document.querySelector(g.sel);
@@ -41,7 +42,7 @@
    g.el=el;g.b=el.firstChild;g.t=g.b.firstChild;g.cov=null;
    if(window.ResizeObserver){if(g.ro)g.ro.disconnect();g.ro=new ResizeObserver(()=>{if(!g.anim&&g.box===box)rest(g)});g.ro.observe(box);L.forEach(e=>g.ro.observe(e))}
   }
-  L.forEach(e=>e.classList.add('lgx-i'));
+  L.forEach(e=>e.setAttribute('data-lgx-i',''));
   return L;
  }
  function look(g,e){const c=getComputedStyle(e),t=g.t.style;g.el.style.borderRadius=c.borderRadius;
@@ -61,7 +62,7 @@
  function widths(g,P){const m=document.createElement('span');m.style.cssText='position:absolute;visibility:hidden;white-space:pre;font-weight:800;letter-spacing:.02em';
   const c=g.t.style;m.style.fontSize=c.fontSize;m.style.fontFamily=c.fontFamily;g.b.appendChild(m);
   const W=P.map(e=>{m.textContent=(e.innerText||e.textContent||'').trim();return m.offsetWidth});m.remove();return W}
- function cover(g,e){if(g.cov===e)return;if(g.cov)g.cov.classList.remove('lgx-on');g.cov=e;if(e){e.classList.add('lgx-on');e.style.scale=''}}
+ function cover(g,e){if(g.cov===e)return;if(g.cov)g.cov.removeAttribute('data-lgx-on');g.cov=e;if(e){e.setAttribute('data-lgx-on','');e.style.scale=''}}
  function unmag(g){if(!g.box)return;g.box.classList.remove('lgx-mv');g.items(g.box).forEach(e=>{e.style.scale=''})}
  /* stop any movement of the group's glass (its page went away, or a new move starts) */
  function stop(g){if(g.anim){g.anim.cancel();g.anim=null}if(g.ta){g.ta.cancel();g.ta=null}cancelAnimationFrame(g.raf)}
@@ -69,7 +70,7 @@
  function rest(g){const L=ensure(g);if(!L)return;const a=L.find(g.on);if(!a){g.el.style.opacity='0';cover(g,null);return}
   stop(g);
   const r=rect(g,a);look(g,a);box(g,r);g.el.style.opacity='1';g.el.classList.remove('mv');unmag(g);
-  L.forEach(e=>e.classList.toggle('lgx-act',e===a));lens(g,a,1,false);cover(g,a);g.k=key(a)}
+  L.forEach(e=>e.toggleAttribute('data-lgx-act',e===a));lens(g,a,1,false);cover(g,a);g.k=key(a)}
  /* the glass travels from item a to item b through every item in between, at an even speed along the path */
  function travel(g,L,a,b){
   stop(g);
@@ -78,7 +79,7 @@
   for(let i=1;i<R.length;i++){const p=c(R[i-1]),q=c(R[i]);D.push(D[i-1]+Math.hypot(q[0]-p[0],q[1]-p[1]))}
   const tot=D[D.length-1];if(!tot){rest(g);return}
   const dur=Math.min(g.max,Math.max(320,240+(R.length-1)*85));
-  L.forEach(e=>e.classList.toggle('lgx-act',e===L[b]));look(g,L[b]);g.el.style.opacity='1';
+  L.forEach(e=>e.toggleAttribute('data-lgx-act',e===L[b]));look(g,L[b]);g.el.style.opacity='1';
   box(g,R[R.length-1]);g.el.classList.add('mv');g.box.classList.add('lgx-mv');
   g.anim=g.el.animate(R.map((r,i)=>({transform:`translate(${r.x}px,${r.y}px)`,width:r.w+'px',height:r.h+'px',offset:D[i]/tot})),
    {duration:dur,easing:'cubic-bezier(.42,0,.2,1)'});

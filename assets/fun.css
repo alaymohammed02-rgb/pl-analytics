@@ -375,11 +375,11 @@ html[dir=rtl] .dl-bars .ph-bn bdi{text-align:right}
 @keyframes lgx-pop2{0%{opacity:.55;transform:translateY(.22em) scale(.86)}60%{opacity:1;transform:translateY(-.05em) scale(1.08)}100%{opacity:1;transform:none}}
 @keyframes lgx-pop{0%{opacity:.2;transform:translateY(.45em) scale(.7);font-weight:400}55%{opacity:1;transform:translateY(-.1em) scale(1.12);font-weight:850}100%{opacity:1;transform:none}}
 /* the chosen button keeps its place but gives its colour to the glass; the covered one lends its label to the lens */
-.lgx>.lgx-act{background:var(--sf)!important;color:var(--tx)!important;border-color:var(--ln)!important}
-#drw .lgx a.lgx-act{background:transparent!important;color:var(--tx)!important;box-shadow:none!important;font-weight:inherit!important}
-.lgx .lgx-on{color:transparent!important;text-shadow:none!important}
+.lgx>[data-lgx-act]{background:var(--sf)!important;color:var(--tx)!important;border-color:var(--ln)!important}
+#drw .lgx a[data-lgx-act]{background:transparent!important;color:var(--tx)!important;box-shadow:none!important;font-weight:inherit!important}
+.lgx [data-lgx-on]{color:transparent!important;text-shadow:none!important}
 /* Dock magnification of the buttons near the glass (set while it moves, eased back afterwards) */
-.lgx .lgx-i{transform-origin:50% 50%}
-.lgx-s .lgx-i{transform-origin:0 50%}[dir=rtl] .lgx-s .lgx-i,html[lang=ar] .lgx-s .lgx-i{transform-origin:100% 50%}
-.lgx:not(.lgx-mv) .lgx-i{transition:scale .3s ease-out}
-@media (prefers-reduced-motion:reduce){.lgx-g,.lgx-t,.lgx .lgx-i{transition:none}.lgx-t.pop .lgx-c{animation:none}}
+.lgx [data-lgx-i]{transform-origin:50% 50%}
+.lgx-s [data-lgx-i]{transform-origin:0 50%}[dir=rtl] .lgx-s [data-lgx-i],html[lang=ar] .lgx-s [data-lgx-i]{transform-origin:100% 50%}
+.lgx:not(.lgx-mv) [data-lgx-i]{transition:scale .3s ease-out}
+@media (prefers-reduced-motion:reduce){.lgx-g,.lgx-t,.lgx [data-lgx-i]{transition:none}.lgx-t.pop .lgx-c{animation:none}}

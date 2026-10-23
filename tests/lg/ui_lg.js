@@ -5,10 +5,10 @@
 const T=require('../nf/lib.js');const {ok}=T;
 const near=(a,b)=>Math.abs(a-b)<=1.5;
 const glassOn=sel=>{const c=document.querySelector(sel),g=c&&c.querySelector('.lgx-g');if(!g)return null;
- const L=[...c.querySelectorAll('.lgx-i')],a=L.find(e=>e.classList.contains('lgx-act'));
+ const L=[...c.querySelectorAll('[data-lgx-i]')],a=L.find(e=>e.hasAttribute('data-lgx-act'));
  const gb=g.getBoundingClientRect(),ab=a&&a.getBoundingClientRect();
  return {g:[gb.left,gb.top,gb.width,gb.height],a:ab&&[ab.left,ab.top,ab.width,ab.height],lens:g.querySelector('.lgx-t').dataset.s,
-  label:a&&a.innerText.trim(),cov:(c.querySelector('.lgx-on')||{}).innerText,op:getComputedStyle(g).opacity,
+  label:a&&a.innerText.trim(),cov:(c.querySelector('[data-lgx-on]')||{}).innerText,op:getComputedStyle(g).opacity,
   hidden:a&&getComputedStyle(a).color,scaled:L.filter(e=>e.style.scale).length,n:L.length}};
 /* the labels the lens shows while the glass moves, in order of appearance */
 const watch=({sel,ms})=>new Promise(r=>{const o=[],sp=[];const t0=performance.now();const f=()=>{const t=document.querySelector(sel+' .lgx-t');
@@ -21,6 +21,7 @@ const watch=({sel,ms})=>new Promise(r=>{const o=[],sp=[];const t0=performance.no
  await pg.waitForSelector(FS+' .lgx-g',{timeout:60000});await pg.waitForTimeout(600);
  let s=await pg.evaluate(glassOn,FS);
  ok(s&&s.n>=10&&s.a&&s.g.every((v,i)=>near(v,s.a[i]))&&s.op==='1','at rest the glass covers the chosen tab exactly ('+(s&&s.label)+', '+(s&&s.n)+' tabs)');
+ ok(await pg.$$eval(FS+' > button',a=>a.every(b=>b.className===''||b.className==='s')),'the tabs keep exactly the class the page gave them (state is in data attributes)');
  ok(s.lens===s.label&&s.cov===s.label&&/rgba\(0, 0, 0, 0\)|transparent/.test(s.hidden),'the lens shows the chosen label and the tab underneath lends it (its own text is hidden)');
  const labels=await pg.$$eval(FS+' > button',a=>a.map(x=>x.innerText.trim()));
  const from=labels.indexOf(s.label),to=labels.length-1;
@@ -43,7 +44,7 @@ const watch=({sel,ms})=>new Promise(r=>{const o=[],sp=[];const t0=performance.no
  ok(T.noscroll?await T.noscroll(pg):true,'390 px: no horizontal scroll');
  /* a lone button: no glass */
  const lone=await pg.evaluate(async FS=>{const c=document.querySelector(FS);[...c.querySelectorAll('button')].slice(1).forEach(x=>x.remove());
-  await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));return {g:!!c.querySelector('.lgx-g'),cls:c.classList.contains('lgx'),act:c.querySelectorAll('.lgx-act,.lgx-on').length}},FS);
+  await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));return {g:!!c.querySelector('.lgx-g'),cls:c.classList.contains('lgx'),act:c.querySelectorAll('[data-lgx-act],[data-lgx-on],[data-lgx-i]').length}},FS);
  ok(!lone.g&&!lone.cls&&!lone.act,'a group left with one button gets no glass and keeps its normal style');
  ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await ctx.close();
  /* ---------- Arabic: words, not letters ---------- */
