@@ -30,7 +30,6 @@
  }
  function go(s,lid){store(s,lid);location.reload()}
  INS.seasonGo=go;
- function label(e,s){const p=(e&&e.past||[]).find(x=>x.s===s);return p?s+(p.complete?'':' · '+p.matches+'/'+(p.total||'?')):s}
  /* the selector: current season first, then the past seasons the sync has for this league */
  function picker(){
   const lg=document.getElementById('lg');if(!lg||!D)return;
@@ -45,7 +44,7 @@
   }
   if(!lg.querySelector('#sspick')){
    const sel=document.createElement('select');sel.id='sspick';sel.setAttribute('aria-label','Season');sel.title='Season';
-   sel.innerHTML=`<option value="">${esc((e.cur?e.cur+' · ':'')+'current season')}</option>`+(e.past||[]).map(p=>`<option value="${esc(p.s)}">${esc(label(e,p.s))}</option>`).join('');
+   sel.innerHTML=`<option value="">${esc((e.cur?e.cur+' · ':'')+'current season')}</option>`+(e.past||[]).map(p=>`<option value="${esc(p.s)}">${esc(p.s)}</option>`).join('');
    sel.value=cur;sel.onchange=()=>go(sel.value,D.id);
    lg.appendChild(document.createTextNode(' '));lg.appendChild(sel);
   }
@@ -59,7 +58,7 @@
   if(!cur){bar.hidden=true;bar.innerHTML='';return}
   const p=(e.past||[]).find(x=>x.s===cur)||{};
   bar.hidden=false;
-  bar.innerHTML=`<div class="psb"><span>${two(`Showing the finished season <b>${nb(esc(cur))}</b> of ${esc(D.name)}`,`تعرض الموسم المنتهي <b>${nb(esc(cur))}</b> من ${esc(D.name)}`)}${p.complete?'':` <span class="mu">${two(`(${nb(p.matches)} of ${nb(p.total||'?')} matches fetched so far)`,`(انجلبت ${nb(p.matches)} من ${nb(p.total||'?')} مباراة لين الحين)`)}</span>`}</span>`+
+  bar.innerHTML=`<div class="psb"><span>${two(`Showing the finished season <b>${nb(esc(cur))}</b> of <bdi>${esc(D.name)}</bdi>`,`تعرض الموسم المنتهي <b>${nb(esc(cur))}</b> من <bdi>${esc(D.name)}</bdi>`)}${p.complete?'':` <span class="mu">${two(`(${nb(p.matches)} of ${nb(p.total||'?')} matches fetched so far)`,`(انجلبت ${nb(p.matches)} من ${nb(p.total||'?')} مباراة لين الحين)`)}</span>`}</span>`+
    `<button class="s" id="psback">${two('Back to the current season','رجوع للموسم الحالي')}</button></div>`;
   bar.querySelector('#psback').onclick=()=>go('',D.id);
  }
