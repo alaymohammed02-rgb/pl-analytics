@@ -17,7 +17,7 @@ Setup: Node with Playwright (`NODE_PATH` pointing at its `node_modules`; `CHROME
 
 ## CI
 
-`tests.yml` runs a Python job and several browser jobs in parallel (a matrix; the test lists are in the workflow). It rebuilds `index.html` into the job's workspace only. When you add a test, add it to one of the matrix lists.
+`tests.yml` runs a Python job and several browser jobs in parallel (a matrix; the test lists are in the workflow). It rebuilds `index.html` into the job's workspace only. When you add a test, add it to one of the matrix lists. Chromium is cached between runs (keyed by the Playwright version). Debugging copies (`*_dbg*.js`, `*_old.js`, `*_main.js`) are not part of the suite.
 
 ## Where things are
 
@@ -27,6 +27,7 @@ Setup: Node with Playwright (`NODE_PATH` pointing at its `node_modules`; `CHROME
 - `stub/`: a fake `pitchapi` module for the Python tests of sync sections.
 - `ps/t_ps.py`: past seasons (sync section): per-run cap, one request per endpoint per match, resuming from the published files, index manifest, plan refusals (`cd tests/ps && python3 t_ps.py`).
 - `ps/ui_ps.js` and `ps/ui_ps_crawl.js`: the season selector, banner, guarded pages, Arabic and a 390 px phone, and every page opened in the first past season listed in `data/index.json`.
+- `trk/t_py.py`: the track record (sync section): the prediction saved before the deadline, unchanged data, an update before the deadline, locked after it, and a new season. It takes the live `data/fpl.json` and moves the next deadline to two days from now, so it does not depend on the date or on which gameweek is next.
 
 ## Notes
 
