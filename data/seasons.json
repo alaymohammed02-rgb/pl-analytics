@@ -96,24 +96,24 @@
      "api": "2022/2023",
      "id": "l_4WFCIZ_2022-23",
      "n": 380,
-     "t": "2026-10-23 05:39:45",
+     "t": "2026-10-23 05:47:14",
      "err": null,
      "plan": false,
-     "req": 365,
-     "sec": 96,
+     "req": 1565,
+     "sec": 404,
      "files": {
       "s": "2022-23",
       "id": "l_4WFCIZ_2022-23",
       "file": "l_4WFCIZ_2022-23.json",
-      "v": "9f59b2a66f",
-      "size": 1159394,
+      "v": "0e5814e6b0",
+      "size": 4973842,
       "pl_file": "l_4WFCIZ_2022-23_pl.json",
-      "pl_v": "74b1d86c4f",
+      "pl_v": "ae444876ef",
       "sh_file": "l_4WFCIZ_2022-23_sh.json",
-      "sh_v": "14ed22c19f"
+      "sh_v": "8ff2eb7c1c"
      },
-     "got": 73,
-     "ok": 73,
+     "got": 313,
+     "ok": 313,
      "complete": false
     }
    },
