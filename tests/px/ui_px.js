@@ -3,9 +3,14 @@ const U='http://127.0.0.1:8765/index.html',DATA=(process.env.PLREPO||__dirname+'
 const J=f=>JSON.parse(fs.readFileSync(DATA+f,'utf8'));
 const MX=J('l_4WFCIZ_mx.json'),RT=J('l_4WFCIZ_rt.json'),SH=J('l_4WFCIZ_sh.json'),LG=J('l_4WFCIZ.json'),PL=J('l_4WFCIZ_pl.json'),HT=J('l_4WFCIZ_heat.json'),FX=J('fixtures.json');
 const six={};SH.cols.forEach((c,i)=>six[c]=i);const pix={};PL.cols.forEach((c,i)=>pix[c]=i);
-async function open(b,{vw=1280,lang='en',hash='#/round'}={}){const ctx=await b.newContext({viewport:{width:vw,height:900},acceptDownloads:true});
+/* A clock for the home strip checks: now, moved forward to the first moment with no kick-off in the last 3 hours and none later
+   the same day (the strip then shows the next matchday), so the checks hold on a match day too. */
+const NOW0=(()=>{let t=Date.now();const ks=FX.leagues.l_4WFCIZ.map(f=>Date.parse(f.k)).filter(x=>!isNaN(x));
+ for(let i=0;i<60;i++){const e=new Date(t);e.setHours(23,59,59,999);if(!ks.some(k=>k>t-3*3600e3&&k<=e.getTime()))return t;t=e.getTime()+1}return t})();
+async function open(b,{vw=1280,lang='en',hash='#/round',now=NOW0}={}){const ctx=await b.newContext({viewport:{width:vw,height:900},acceptDownloads:true});
  /* the matches board and Player DNA (tested in px/ui_ins.js) replace the one-league strip and the radar card; without them those are drawn, as tested here */
  await ctx.route(/assets\/(matches-board|player-dna)\.js/,r=>r.fulfill({body:'',contentType:'application/javascript'}));
+ if(now)await ctx.addInitScript(t=>{const D0=Date,off=t-D0.now();class FD extends D0{constructor(...a){a.length?super(...a):super(D0.now()+off)}static now(){return D0.now()+off}};window.Date=FD},now);
  await ctx.addInitScript(([l])=>{if(!sessionStorage.getItem('s')){sessionStorage.setItem('s','1');localStorage.clear();localStorage.setItem('league','l_4WFCIZ');localStorage.setItem('lang',l)}},[lang]);
  const pg=await ctx.newPage(),errs=[];pg.on('pageerror',e=>errs.push(e.message));pg.on('console',m=>{const u=(m.location()||{}).url||'';if(m.type()==='error'&&!/favicon|ERR_TUNNEL_CONNECTION_FAILED|api.github.com|cdn.pitchapi|Failed to load resource/.test(u+m.text()))errs.push(m.text())});
  await pg.goto(U+hash);return {ctx,pg,errs}}

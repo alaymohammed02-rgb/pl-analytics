@@ -4,12 +4,16 @@ const J=f=>JSON.parse(fs.readFileSync(DATA+f,'utf8'));
 const MX=J('l_4WFCIZ_mx.json'),RT=J('l_4WFCIZ_rt.json'),SH=J('l_4WFCIZ_sh.json'),LG=J('l_4WFCIZ.json'),PL=J('l_4WFCIZ_pl.json'),FX=J('fixtures.json'),H2=J('h2h.json'),HV=J('l_4WFCIZ_hv.json');
 const six={};SH.cols.forEach((c,i)=>six[c]=i);const pix={};PL.cols.forEach((c,i)=>pix[c]=i);
 const sc=s=>{const m=/^(\d+)-(\d+)$/.exec(s||'');return m?[+m[1],+m[2]]:null};
-const NEXT=FX.leagues.l_4WFCIZ.filter(f=>Date.parse(f.k)>Date.now()).sort((a,b)=>Date.parse(a.k)-Date.parse(b.k));
+/* A clock for the home strip checks: now, moved forward to the first moment with no kick-off in the last 3 hours and none later
+   the same day (the strip then shows the next matchday), so the checks hold on a match day too. */
+const NOW0=(()=>{let t=Date.now();const ks=FX.leagues.l_4WFCIZ.map(f=>Date.parse(f.k)).filter(x=>!isNaN(x));
+ for(let i=0;i<60;i++){const e=new Date(t);e.setHours(23,59,59,999);if(!ks.some(k=>k>t-3*3600e3&&k<=e.getTime()))return t;t=e.getTime()+1}return t})();
+const NEXT=FX.leagues.l_4WFCIZ.filter(f=>Date.parse(f.k)>NOW0).sort((a,b)=>Date.parse(a.k)-Date.parse(b.k));
 const F0=NEXT[0],F1=NEXT[1];
 /* a played match's lineup, reused as an "official lineup" for the next fixture in a fake data/live.json */
 const anyLu=Object.values(MX.m).find(e=>e.lu&&e.lu.h&&e.lu.a).lu;
 const LIVE={t:'2026-10-22 18:00:00',m:{[F0.i]:{l:'l_4WFCIZ',k:F0.k,h:F0.h,a:F0.a,st:'notstarted',lu:anyLu,lut:'x'},[F1.i]:{l:'l_4WFCIZ',k:F1.k,h:F1.h,a:F1.a,pred:1,st:'notstarted'}}};
-async function open(b,{vw=1280,lang='en',hash='#/round',live=LIVE,hv=null,now=null}={}){const ctx=await b.newContext({viewport:{width:vw,height:900},acceptDownloads:true});
+async function open(b,{vw=1280,lang='en',hash='#/round',live=LIVE,hv=null,now=NOW0}={}){const ctx=await b.newContext({viewport:{width:vw,height:900},acceptDownloads:true});
  await ctx.addInitScript(([l])=>{if(!sessionStorage.getItem('s')){sessionStorage.setItem('s','1');localStorage.clear();localStorage.setItem('league','l_4WFCIZ');localStorage.setItem('lang',l)}},[lang]);
  if(now)await ctx.addInitScript(t=>{const D0=Date,off=t-D0.now();class FD extends D0{constructor(...a){a.length?super(...a):super(D0.now()+off)}static now(){return D0.now()+off}};window.Date=FD},now);
  if(live)await ctx.route(/data\/live\.json/,r=>r.fulfill({json:live}));
