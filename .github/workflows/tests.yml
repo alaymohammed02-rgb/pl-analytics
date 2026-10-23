@@ -43,11 +43,11 @@ jobs:
           - shard: 2
             tests: "lab/ui_lab.js lab/ui_lab2.js theme/ui_theme.js logo/ui_logo.js eng/ui_eng.js ui_test.js"
           - shard: 3
-            tests: "ui_ar.js ui_season.js ui_review.js trk/ui_track.js cmp/ui_cmp.js home/ui_home.js"
+            tests: "ui_ar.js ui_season.js ui_review.js trk/ui_track.js cmp/ui_cmp.js"
           - shard: 4
             tests: "fpx/ui_fpx.js feat/ui_feat.js px/ui_px.js px/ui_px2.js px/ui_ins.js"
           - shard: 5
-            tests: "rp/ui_rp.js rp/ui_ms.js ov/ui_ov.js ph/ui_ph.js fun/ui_tw.js fun/ui_pc.js"
+            tests: "rp/ui_rp.js rp/ui_ms.js ov/ui_ov.js ph/ui_ph.js fun/ui_tw.js fun/ui_pc.js home/ui_home.js"
           - shard: 6
             tests: "fun/ui_bm.js rare/ui_rr.js fun/ui_as.js fun/ui_tap.js nf/ui_gs.js nf/ui_xi.js nf/ui_ct.js nf/ui_cy.js nf/ui_rc.js nf/ui_ld.js nf/ui_th.js"
     steps:
