@@ -1,4 +1,4 @@
-const {chromium}=require('/opt/node-tools/node_modules/playwright');const fs=require('fs');
+const {chromium}=require('playwright');const fs=require('fs');
 let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
 const U='http://127.0.0.1:8773/index.html';
 const SEC={home:['overview','data','settings'],league:['round','rare','table','sim','luck','states','xi','thrill','matches','teams','whatif'],players:['players','compare','twins','cards','rankings','ratings','gems','looklike'],analysis:['tactical','shots','reality','passing','ppda','height','defense','heatmaps','halves','clubtwins','carry','reportcard','leaguedna'],fpl:['fantasy','lab','beat','share']};
@@ -9,7 +9,7 @@ async function open(b,{vw=1280,lang='en',init=null,league='l_4WFCIZ'}={}){const 
  await pg.goto(U+'#/overview');await pg.waitForSelector('#app h2',{timeout:60000});await pg.waitForTimeout(900);return {ctx,pg,errs}}
 const go=async(pg,h,w=900)=>{await pg.evaluate(x=>location.hash=x,h);await pg.waitForTimeout(w)};
 const vis=pg=>pg.$$eval('#nav a',a=>a.filter(x=>x.offsetParent).map(x=>x.getAttribute('href').slice(2)));
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  /* ---- sections ---- */
  {const {ctx,pg,errs}=await open(b);
   const all=await pg.$$eval('#nav a',a=>a.map(x=>x.getAttribute('href').slice(2)));ok(all.length===39&&Object.values(SEC).flat().every(k=>all.includes(k)),'all 39 menu links (Comebacks & collapses, Likely line-ups, Thrill index, Club twins, Who carries the team, Model report card and League DNA added; Attack share, Very rare cases, Match What-If, Ratings, Halves, Hidden Gems, Reality Check, This round, Height, Season simulator, Luck table, Player twins, Player cards and Beat the model added) stay in the menu; each belongs to one of 5 sections');

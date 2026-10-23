@@ -1,6 +1,6 @@
 /* Match story: each sentence's facts recomputed from the raw files (league file, shot file, ratings file) for every match */
-const {chromium}=require('/opt/node-tools/node_modules/playwright');const fs=require('fs');
-const U='http://127.0.0.1:8765/index.html',DATA='/home/user/pl-analytics/data/';let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
+const {chromium}=require('playwright');const fs=require('fs');
+const U='http://127.0.0.1:8765/index.html',DATA=(process.env.PLREPO||__dirname+'/../..')+'/data/';let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
 const J=f=>JSON.parse(fs.readFileSync(DATA+f,'utf8'));
 function expect(lid){
  const S=J(lid+'_sh.json'),ix={};S.cols.forEach((c,i)=>ix[c]=i);const L=J(lid+'.json'),RT=J(lid+'_rt.json');
@@ -31,7 +31,7 @@ async function open(b,{vw=1280,lang='en',hash,league='l_4WFCIZ'}={}){const ctx=a
  const pg=await ctx.newPage(),errs=[];pg.on('pageerror',e=>errs.push(e.message));pg.on('console',m=>{const u=(m.location()||{}).url||'';if(m.type()==='error'&&!/favicon|ERR_TUNNEL_CONNECTION_FAILED|api.github.com|cdn.pitchapi|Failed to load resource/.test(u+m.text()))errs.push(m.text())});
  await pg.goto(U+hash);return {ctx,pg,errs}}
 const seek=(pg,t)=>pg.evaluate(t=>{const s=document.querySelector('#rpsk');s.value=t;s.dispatchEvent(new Event('input',{bubbles:true}));s.dispatchEvent(new Event('change',{bubbles:true}))},t);
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  /* ---- every Premier League match whose shot file has all its goals ---- */
  {const X=expect('l_4WFCIZ');const {ctx,pg,errs}=await open(b,{hash:'#/overview'});await pg.waitForSelector('#mb .mb-days',{timeout:60000});
   let good=0;const bad=[];

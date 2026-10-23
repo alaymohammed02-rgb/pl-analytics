@@ -1,5 +1,5 @@
-const {chromium}=require('/opt/node-tools/node_modules/playwright');
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+const {chromium}=require('playwright');
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  const ctx=await b.newContext({viewport:{width:1280,height:900}});
  await ctx.addInitScript(()=>{if(!sessionStorage.getItem('s')){sessionStorage.setItem('s','1');localStorage.clear();localStorage.setItem('league','l_4WFCIZ');localStorage.setItem('lang','en')}});
  const pg=await ctx.newPage();const st=async t=>console.log(t,JSON.stringify(await pg.evaluate(()=>({hash:location.hash,id:D.id,league:document.documentElement.dataset.league,club:document.documentElement.dataset.club||'',th:getComputedStyle(document.documentElement).getPropertyValue('--th')}))));

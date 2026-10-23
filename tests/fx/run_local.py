@@ -1,6 +1,7 @@
+import os as _os; REPO=_os.environ.get('PLREPO') or _os.path.abspath(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)),'..','..'))
 """Runs the facts engine on the local data files (the same shapes the sync's database holds)."""
 import json, datetime, sys, re
-D='/home/user/pl-analytics/data/'
+D=REPO+'/data/'
 def load():
     idx=json.load(open(D+'index.json'));matches=[];shots=[];club={}
     for lg in idx['leagues']:
@@ -14,7 +15,7 @@ def load():
                 o=dict(zip(c,r));o['l']=l;shots.append(o)
     return matches,shots,club,idx
 G={'datetime':datetime,'json':json,'q':None,'log':print,'gh_get_json':None,'gh_put':lambda *a:None,'run_pipeline':lambda *a:None,'LV_HAVE':{}}
-exec(open('/tmp/claude-0/-home-user/83a4d5f8-8137-5cb1-9baa-8ac55fed2a66/scratchpad/fx/section.py',encoding='utf-8').read(),G)
+exec(open(REPO+'/tests/fx/section.py',encoding='utf-8').read(),G)
 if __name__=='__main__':
     matches,shots,club,idx=load()
     now=datetime.datetime(2026,10,22,12,tzinfo=datetime.timezone.utc)
@@ -24,4 +25,4 @@ if __name__=='__main__':
     for f in out['week']:print(' -',f['k'],f['l'],'p=%.4f'%f['p'],strip(f['en']),'|',f['er']);print('   ',strip(f['ar']))
     for key in list(out['teams'])[:0]+[k for k in out['teams'] if k.split('|')[1] in ('Real Madrid','Chelsea','Barcelona')]:
         print('TEAM',key);[print('   ',f['k'],'p=%.4f'%f['p'],strip(f['en']),'|',f['er']) for f in out['teams'][key]]
-    json.dump(out,open('/tmp/claude-0/-home-user/83a4d5f8-8137-5cb1-9baa-8ac55fed2a66/scratchpad/fx/facts.json','w'),ensure_ascii=False,separators=(',',':'))
+    json.dump(out,open(_os.path.join(__import__('tempfile').gettempdir(),'facts.json'),'w'),ensure_ascii=False,separators=(',',':'))

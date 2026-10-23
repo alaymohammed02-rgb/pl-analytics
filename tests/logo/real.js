@@ -1,5 +1,5 @@
-const {chromium}=require('/opt/node-tools/node_modules/playwright');
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});const out=[];
+const {chromium}=require('playwright');
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});const out=[];
  for(const [k,id,h,w,lang] of [['pl_table','l_4WFCIZ','#/table',1280,'en'],['laliga_table','l_0ErfuF','#/table',1280,'en'],['realmadrid','l_0ErfuF','#/club/Real%20Madrid',1280,'en'],['barca','l_0ErfuF','#/club/Barcelona',1280,'en'],['bayern','l_1Isor4','#/club/Bayern%20M%C3%BCnchen',1280,'en'],['dortmund','l_1Isor4','#/club/Borussia%20Dortmund',1280,'en'],['juve','l_0ALvwF','#/club/Juventus',1280,'en'],['inter','l_0ALvwF','#/club/Inter',1280,'en'],['benfica','l_4QexZg','#/club/Benfica',1280,'en'],['porto','l_4QexZg','#/club/FC%20Porto',1280,'en'],['ucl_teams','l_0bfbkO','#/teams',1280,'en'],['ar_phone','l_0ErfuF','#/table',390,'ar']]){
   const ctx=await b.newContext({viewport:{width:w,height:760}});await ctx.addInitScript(([i,l])=>{localStorage.setItem('league',i);localStorage.setItem('lang',l)},[id,lang]);const pg=await ctx.newPage();const errs=[];pg.on('pageerror',e=>errs.push(e.message));
   await pg.goto('http://127.0.0.1:8765/index.html'+h);await pg.waitForSelector('#app h2',{timeout:60000});await pg.waitForTimeout(2500);

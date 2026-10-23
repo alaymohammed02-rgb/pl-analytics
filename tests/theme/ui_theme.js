@@ -1,4 +1,4 @@
-const {chromium}=require('/opt/node-tools/node_modules/playwright');
+const {chromium}=require('playwright');
 let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
 const NEW='http://127.0.0.1:8765/index.html',OLD='http://127.0.0.1:8767/index.html';
 const LG={pl:'l_4WFCIZ',laliga:'l_0ErfuF',bund:'l_1Isor4',l1:'l_3FJFUl',seriea:'l_0ALvwF',pt:'l_4QexZg',ucl:'l_0bfbkO',wc:'l_1XLtP0'};
@@ -8,7 +8,7 @@ async function open(b,url,{vw=1280,lang='en',league='l_4WFCIZ',rm=false}={}){con
  const pg=await ctx.newPage(),errs=[];pg.on('pageerror',e=>errs.push(e.message));pg.on('console',m=>{const u=(m.location()||{}).url||'';if(m.type()==='error'&&!/favicon|ERR_TUNNEL_CONNECTION_FAILED|api.github.com/.test(u+m.text()))errs.push(m.text())});
  await pg.goto(url+'#/table');await pg.waitForSelector('#app h2',{timeout:60000});return {ctx,pg,errs}}   /* a league page: the overview has its own colour */
 const go=async(pg,h,sel)=>{await pg.evaluate(x=>location.hash=x,h);await pg.waitForSelector(sel,{timeout:60000});await pg.waitForTimeout(400)};
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  /* 1. one theme per league, from the configuration; leagues without a checked identity keep the base theme */
  const want={pl:'#c414dc',bund:'#d10214',laliga:'#ff4b44',seriea:'#0061ea',ucl:'#445dcd',l1:'#4cc38a',pt:'#4cc38a',wc:'#4cc38a'},seen={};
  {const {ctx,pg,errs}=await open(b,NEW);

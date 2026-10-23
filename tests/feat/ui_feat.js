@@ -1,11 +1,11 @@
-const {chromium}=require('/opt/node-tools/node_modules/playwright');const fs=require('fs');
+const {chromium}=require('playwright');const fs=require('fs');
 const U='http://127.0.0.1:8765/index.html';let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
-const SH=JSON.parse(fs.readFileSync('/home/user/pl-analytics/data/l_4WFCIZ_sh.json','utf8')),six={};SH.cols.forEach((c,i)=>six[c]=i);
+const SH=JSON.parse(fs.readFileSync((process.env.PLREPO||__dirname+'/../..')+'/data/l_4WFCIZ_sh.json','utf8')),six={};SH.cols.forEach((c,i)=>six[c]=i);
 async function open(b,{vw=1280,lang='en',league='l_4WFCIZ',hash='#/heatmaps'}={}){const ctx=await b.newContext({viewport:{width:vw,height:900}});
  await ctx.addInitScript(([l,lg])=>{if(!sessionStorage.getItem('s')){sessionStorage.setItem('s','1');localStorage.clear();localStorage.setItem('league',lg);localStorage.setItem('lang',l)}},[lang,league]);
  const pg=await ctx.newPage(),errs=[];pg.on('pageerror',e=>errs.push(e.message));pg.on('console',m=>{const u=(m.location()||{}).url||'';if(m.type()==='error'&&!/favicon|ERR_TUNNEL_CONNECTION_FAILED|api.github.com|cdn.pitchapi/.test(u+m.text()))errs.push(m.text())});
  await pg.goto(U+hash);await pg.waitForTimeout(3500);return {ctx,pg,errs}}
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  /* ---- Heat Map: unchanged by default, threat layer on demand ---- */
  {const {ctx,pg,errs}=await open(b);await pg.waitForSelector('#hout svg',{timeout:30000});
   ok(await pg.evaluate(()=>/Heatmaps/.test(document.querySelector('#app h2').textContent)&&location.hash==='#/heatmaps'),'Heat Map keeps its name and place');

@@ -1,4 +1,4 @@
-const {chromium}=require('/opt/node-tools/node_modules/playwright');
+const {chromium}=require('playwright');
 let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
 const U='http://127.0.0.1:8771/index.html';
 async function open(b,{vw=1280,lang='en',league='l_0ErfuF'}={}){const ctx=await b.newContext({viewport:{width:vw,height:900}});
@@ -7,7 +7,7 @@ async function open(b,{vw=1280,lang='en',league='l_0ErfuF'}={}){const ctx=await 
  await pg.goto(U+'#/overview');await pg.waitForSelector('#app h2',{timeout:60000});return {ctx,pg,errs}}
 const go=async(pg,h,sel)=>{await pg.evaluate(x=>location.hash=x,h);try{await pg.waitForSelector(sel,{timeout:20000})}catch(e){console.log('STALL at',h,'waiting',sel,'| hash',await pg.evaluate(()=>location.hash),'| app',(await pg.innerText('#app')).slice(0,80).replace(/\n/g,' '));throw e}await pg.waitForTimeout(500)};
 const vars=pg=>pg.evaluate(()=>{const s=getComputedStyle(document.documentElement);return {th:s.getPropertyValue('--th').trim(),bg:s.getPropertyValue('--bg').trim(),ink:s.getPropertyValue('--th-ink').trim()}});
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  for(const [vw,lang] of [[1280,'en'],[390,'ar']]){const {ctx,pg,errs}=await open(b,{vw,lang});
   /* league logo in the header: start side (left in English, right in Arabic) */
   await pg.waitForFunction(()=>{const i=document.getElementById('lglogo');return i&&!i.hidden&&i.complete&&i.naturalWidth>0},null,{timeout:20000});

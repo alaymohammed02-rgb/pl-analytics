@@ -102,7 +102,7 @@
    if(e.dataset.s!==s){e.dataset.s=s;e.textContent=s}})}
  }
  if(typeof AR==='object')Object.entries({
-  "Player of the round":"لاعب الجولة","Key passes":"تمريرات مفتاحية","Highest PitchAPI rating in the round":"أعلى تقييم PitchAPI في الجولة",
+  "Player of the round":"لاعب الجولة","Key passes":"تمريرات مفتاحية","Highest PitchAPI rating in the round":"أعلى تقييم PitchAPI في الجولة","PitchAPI match rating":"تقييم PitchAPI للمباراة",
   "# of # matches rated":"# من # مباريات فيها تقييم","minutes":"دقيقة","min":"د",
   "Today":"اليوم","Next matchday":"الجولة القادمة","kick-off in":"تنطلق بعد","Latest results":"آخر النتائج","FT":"نهاية المباراة","Kicked off":"انطلقت","now":"الحين","Live":"مباشر","Official lineups are out":"نزلت التشكيلات الرسمية"
  }).forEach(([k,v])=>{if(!(k in AR))AR[k]=v});

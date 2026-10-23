@@ -1,7 +1,8 @@
+import os as _os; REPO=_os.environ.get('PLREPO') or _os.path.abspath(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)),'..'))
 import sys,importlib.util,itertools
 from types import SimpleNamespace as N
-sys.path.insert(0,'stub')
-spec=importlib.util.spec_from_file_location("m","/home/user/pl-analytics/sync.py");m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+sys.path.insert(0,REPO+'/tests/stub')
+spec=importlib.util.spec_from_file_location("m",REPO+'/sync.py');m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 logs=[];m.log=lambda *a:logs.append(' '.join(map(str,a)))
 fails=0
 def ok(c,msg):

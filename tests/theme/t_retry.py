@@ -1,6 +1,7 @@
+import os as _os; REPO=_os.environ.get('PLREPO') or _os.path.abspath(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)),'..','..'))
 import sys,importlib.util,json,copy,datetime
-sys.path.insert(0,'stub')
-spec=importlib.util.spec_from_file_location("m","/home/user/pl-analytics/sync.py");m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+sys.path.insert(0,REPO+'/tests/stub')
+spec=importlib.util.spec_from_file_location("m",REPO+'/sync.py');m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 m.log=lambda *a:None
 man={'seasons':[dict(season=s,file=f'fpl_{s}.json',av=m.FPL_ARCHIVE_VER,rows=1,reproduced=100.0) for s in ['2022-23','2023-24','2024-25','2025-26']]}
 store={'data/fpl_archive.json':man};puts=[];tries=[]

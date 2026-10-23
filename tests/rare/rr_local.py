@@ -1,12 +1,13 @@
+import os as _os; REPO=_os.environ.get('PLREPO') or _os.path.abspath(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)),'..','..'))
 """Runs the rare-cases engine on the local data files (the same shapes the sync's database holds)."""
 import json, datetime, sys, re
-sys.path.insert(0,'/tmp/claude-0/-home-user/83a4d5f8-8137-5cb1-9baa-8ac55fed2a66/scratchpad/fx')
+sys.path.insert(0,REPO+'/tests/fx')
 import importlib.util as _iu
-_sp=_iu.spec_from_file_location("fx_local","/tmp/claude-0/-home-user/83a4d5f8-8137-5cb1-9baa-8ac55fed2a66/scratchpad/fx/run_local.py");FX=_iu.module_from_spec(_sp);_sp.loader.exec_module(FX)
+_sp=_iu.spec_from_file_location("fx_local",REPO+'/tests/fx/run_local.py');FX=_iu.module_from_spec(_sp);_sp.loader.exec_module(FX)
 G=FX.G
-_S=open('/home/user/pl-analytics/sync.py',encoding='utf-8').read();_a=_S.index('RR_PATH = ');_b=_S.index('# ======================== نهاية إضافة الحالات النادرة')
+_S=open(REPO+'/sync.py',encoding='utf-8').read();_a=_S.index('RR_PATH = ');_b=_S.index('# ======================== نهاية إضافة الحالات النادرة')
 exec(_S[_a:_b],G)   # the section as it is in sync.py
-D='/home/user/pl-analytics/data/'
+D=REPO+'/data/'
 def load():
     matches,shots,club,idx=FX.load();plrows=[];ratings={};rnames={};names={}
     for lg in idx['leagues']:
@@ -31,4 +32,4 @@ if __name__=='__main__':
     for l,v in out['leagues'].items():
         print('==',names[l],len(v['rare']),'rare',len(v['near']),'near')
         for c in v['rare']+v['near']:print('  ',c['tier'],c['k'],'%d/%d'%(c['n'],c['N']),c['d'],strip(c['en']));print('      ',strip(c['ar']))
-    json.dump(out,open('/tmp/claude-0/-home-user/83a4d5f8-8137-5cb1-9baa-8ac55fed2a66/scratchpad/rare/rare.json','w'),ensure_ascii=False,separators=(',',':'))
+    json.dump(out,open(_os.path.join(__import__('tempfile').gettempdir(),'rare.json'),'w'),ensure_ascii=False,separators=(',',':'))

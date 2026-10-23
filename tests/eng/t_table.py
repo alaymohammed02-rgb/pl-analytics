@@ -1,7 +1,8 @@
+import os as _os; REPO=_os.environ.get('PLREPO') or _os.path.abspath(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)),'..','..'))
 # independent check of the Premier League table: the same results from FPL's own fixtures (data/fpl.json)
 import json
-ix=json.load(open('/home/user/pl-analytics/data/index.json'));pl=[l for l in ix['leagues'] if l['name']=='Premier League'][0]
-L=json.load(open('/home/user/pl-analytics/data/'+pl['file']));F=json.load(open('/home/user/pl-analytics/data/fpl.json'))
+ix=json.load(open(REPO+'/data/index.json'));pl=[l for l in ix['leagues'] if l['name']=='Premier League'][0]
+L=json.load(open(REPO+'/data/'+pl['file']));F=json.load(open(REPO+'/data/fpl.json'))
 tn={t['id']:t['n'] for t in F['teams']}
 def tab(res):
     T={}
@@ -23,3 +24,4 @@ for t,v in B.items():
     if k is None:bad.append('no match for '+t);continue
     if A[k]!=v:bad.append(f'{t}: PitchAPI {A[k]} vs FPL {v}')
 print('teams',len(A),len(B),'| mismatches:',bad or 'none')
+print(('ok  ' if not bad and len(A)==len(B) else 'FAIL'),'Premier League table: PitchAPI results equal FPL fixtures for every team (%d teams)'%len(A),bad or '')

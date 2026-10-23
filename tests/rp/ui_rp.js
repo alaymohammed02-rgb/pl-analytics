@@ -1,6 +1,6 @@
 /* Match replay: every number on screen checked against the raw files (shot file, momentum file, league file) */
-const {chromium}=require('/opt/node-tools/node_modules/playwright');const fs=require('fs');
-const U='http://127.0.0.1:8765/index.html',DATA='/home/user/pl-analytics/data/';let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
+const {chromium}=require('playwright');const fs=require('fs');
+const U='http://127.0.0.1:8765/index.html',DATA=(process.env.PLREPO||__dirname+'/../..')+'/data/';let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
 const J=f=>JSON.parse(fs.readFileSync(DATA+f,'utf8'));
 /* expected match, straight from the files: shots with a side by club name, own goals for the other side */
 function expect(lid,mid){
@@ -25,7 +25,7 @@ async function open(b,{vw=1280,lang='en',hash,league='l_4WFCIZ',routes=[],reduce
 const txt=(pg,s)=>pg.$eval(s,e=>e.textContent.replace(/[⁦-⁩]/g,'').trim());
 const seek=(pg,t)=>pg.evaluate(t=>{const s=document.querySelector('#rpsk');s.value=t;s.dispatchEvent(new Event('input',{bubbles:true}));s.dispatchEvent(new Event('change',{bubbles:true}))},t);
 const untranslated=sel=>{const o=[];document.querySelectorAll(sel).forEach(r=>{const w=document.createTreeWalker(r,NodeFilter.SHOW_TEXT);let n;while(n=w.nextNode()){if(n.parentNode.closest('svg,select,option,a,.rp-n,.rp-sph,.ms-en,.ms bdi'))continue;const t=n.nodeValue.trim();if(/[A-Za-z]{3}/.test(t)&&!/[؀-ۿ]/.test(t)&&!/^(xG|PitchAPI|FT|HT)\b/.test(t))o.push(t)}});return [...new Set(o)]};
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  ok(A.named&&B.named&&A.goals.length===A.off[0]+A.off[1]&&B.goals.length===B.off[0]+B.off[1],`test matches: ${A.m.h} ${A.m.s} ${A.m.a} (goals at ${A.labels.join(', ')}), ${B.m.h} ${B.m.s} ${B.m.a} (an own goal)`);
  /* ---- the way in, spoiler-free start ---- */
  {const {ctx,pg,errs}=await open(b,{hash:'#/match/'+A.m.i});await pg.waitForSelector('#mc .rp-go',{timeout:60000});

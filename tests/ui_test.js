@@ -1,9 +1,9 @@
-const {chromium}=require('/opt/node-tools/node_modules/playwright');
+const {chromium}=require('playwright');
 const URL='http://127.0.0.1:8765/index.html',SH=__dirname+'/shots/';
 let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
 const num=s=>parseFloat(String(s).replace(/[^0-9.\-+]/g,''));
 (async()=>{
- const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'}).catch(()=>chromium.launch());
+ const b=await chromium.launch({executablePath:process.env.CHROME||undefined}).catch(()=>chromium.launch());
  const ctx=await b.newContext({viewport:{width:1280,height:900}});const pg=await ctx.newPage();const errs=[];
  pg.on('pageerror',e=>errs.push('pageerror: '+e.message));pg.on('console',m=>{const u=(m.location()||{}).url||'';if(m.type()==='error'&&!/favicon.ico|api.github.com\/repos\/127|cdn.pitchapi/.test(u))errs.push('console: '+m.text()+' @ '+u)});
  await pg.goto(URL+'#/fantasy');

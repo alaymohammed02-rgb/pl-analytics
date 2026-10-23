@@ -1,8 +1,8 @@
-const {chromium}=require('/opt/node-tools/node_modules/playwright');const fs=require('fs');
+const {chromium}=require('playwright');const fs=require('fs');
 const VAR=process.argv[2];
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  const ctx=await b.newContext({viewport:{width:390,height:900}});await ctx.addInitScript(()=>{if(!sessionStorage.getItem('s')){sessionStorage.setItem('s','1');localStorage.clear();localStorage.setItem('league','l_4WFCIZ');localStorage.setItem('lang','ar')}});
- await ctx.route(/player-page\.js/,r=>{let s=fs.readFileSync('/home/user/pl-analytics/assets/player-page.js','utf8');
+ await ctx.route(/player-page\.js/,r=>{let s=fs.readFileSync((process.env.PLREPO||__dirname+'/../..')+'/assets/player-page.js','utf8');
   if(VAR==='noform')s=s.replace("box.innerHTML=ppHead(S)+ppForm(S)+","box.innerHTML=ppHead(S)+");
   if(VAR==='nohead')s=s.replace("box.innerHTML=ppHead(S)+ppForm(S)+","box.innerHTML=ppForm(S)+");
   if(VAR==='onlyhead')s=s.replace("box.innerHTML=ppHead(S)+ppForm(S)+`<div class=\"pp-two\">${ppHeat(S)}${ppRadar(S)}</div>`","box.innerHTML=ppHead(S)");

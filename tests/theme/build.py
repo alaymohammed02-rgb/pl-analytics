@@ -1,3 +1,4 @@
+import os as _os; REPO=_os.environ.get('PLREPO') or _os.path.abspath(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)),'..','..'))
 import json
 js=open('theme.js').read();css=open('theme.css').read().replace('\n','')
 assert '"""' not in js and '"' not in css.replace('content:""','') and not js.rstrip().endswith('\\')
@@ -227,7 +228,7 @@ _AR_SEASON.update(''' + json.dumps(D,ensure_ascii=False,indent=4) + ''')
 
 INDEX = _x_theme_index(INDEX)
 # ======================== نهاية إضافة هوية الألوان ========================'''
-p='/home/user/pl-analytics/sync.py';t=open(p,encoding='utf-8').read()
+p=REPO+'/sync.py';t=open(p,encoding='utf-8').read()
 start='\n\n\n# ============================================================================\n# إضافة: هوية الألوان'
 endm="# ======================== نهاية إضافة هوية الألوان ========================"
 a=t.find(start)

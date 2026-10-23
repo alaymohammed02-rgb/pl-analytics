@@ -1,4 +1,4 @@
-const {chromium}=require('/opt/node-tools/node_modules/playwright');
+const {chromium}=require('playwright');
 let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
 const U='http://127.0.0.1:8772/index.html',REPO='http://127.0.0.1:8774/index.html';
 async function open(b,{vw=1280,lang='en',league='l_4WFCIZ',url=U,tz='Asia/Riyadh'}={}){const ctx=await b.newContext({viewport:{width:vw,height:900},timezoneId:tz});
@@ -8,7 +8,7 @@ async function open(b,{vw=1280,lang='en',league='l_4WFCIZ',url=U,tz='Asia/Riyadh
 const go=async(pg,h,sel)=>{await pg.evaluate(x=>location.hash=x,h);await pg.waitForSelector(sel,{timeout:20000});await pg.waitForTimeout(600)};
 const lg=async(pg,id)=>{await pg.selectOption('#lgpick',id);await pg.waitForFunction(x=>D.id===x,id);await pg.waitForTimeout(400)};
 const noScroll=pg=>pg.evaluate(()=>document.scrollingElement.scrollWidth-innerWidth);
-(async()=>{const b=await chromium.launch({executablePath:'/opt/pw-browsers/chromium-1194/chrome-linux/chrome'});
+(async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  for(const [vw,lang] of [[1280,'en'],[390,'ar']]){const {ctx,pg,errs}=await open(b,{vw,lang});const P=vw+' '+lang+': ';
   /* European places in the league table */
   await go(pg,'#/table','#lt .ltr[data-t]');
