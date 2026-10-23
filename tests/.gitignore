@@ -1,0 +1,5 @@
+# test byproducts (tests/regen.sh, tests/runsome.sh, Python tests)
+fp_sr.js
+fp_v2.js
+*.log
+__pycache__/
