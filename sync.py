@@ -11097,7 +11097,7 @@ PS_LEAGUES = ["l_4WFCIZ", "l_0ErfuF", "l_1Isor4", "l_3FJFUl", "l_0ALvwF", "l_4Qe
 PS_JOBS = ([("l_4WFCIZ", k, "light") for k in (2, 3, 4, 5)] + [("l_4WFCIZ", 1, "full")] +
            [(l, 1, "full") for l in PS_LEAGUES[1:]])
 PS_REQ_PER_RUN = 1200         # أقصى عدد طلبات لـ PitchAPI في المزامنة الوحدة لهذا القسم (حوالي 7 دقايق)
-PS_COST = {"full": 10, "light": 4}   # طلبات لكل مباراة (مقاسة: full = 10)
+PS_COST = {"full": 10, "light": 5}   # طلبات لكل مباراة (مقاسة: full = 10، light = 5)
 PS_RETRY_H = 24               # مباراة فشلت بسبب انقطاع أو حد الطلبات: نعيدها بعد يوم
 PS_PLAN_RETRY_D = 7           # الاشتراك رفض الموسم: نجرب مرة ثانية بعد أسبوع
 PS_KEYS = ("file", "adv_file", "heat_file", "pl_file", "sh_file", "mx_file", "rt_file", "hv_file")

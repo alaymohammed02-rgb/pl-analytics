@@ -125,7 +125,9 @@ m.PS_JOBS=[('l_4WFCIZ',2,'light')];PLAN.clear();fresh_db();calls.clear();m.PS['s
 P2='l_4WFCIZ_2024-25';s3=store['data/seasons.json']['leagues']['l_4WFCIZ']['seasons']['2024-25']
 eps=sorted({c[0] for c in calls if c[0]!='list'})
 ok(eps==['advanced','advanced_players','players','shots'],'light season: four endpoints a match (%s)'%eps)
-ok(s3['light'] and s3['got']==100 and s3['complete'] and s3['req']<=401,'light season: 100 matches within the request budget (%d requests)'%s3['req'])
+ok(s3['light'] and s3['got']==400//m.PS_COST['light'] and not s3['complete'] and s3['req']<=401,'light season: %d matches within the request budget of 400 (%d requests)'%(s3['got'],s3['req']))
+fresh_db();m.PS['state']=None;m.sync_past_seasons(C(),None);s3=store['data/seasons.json']['leagues']['l_4WFCIZ']['seasons']['2024-25']
+ok(s3['got']==100 and s3['complete'],'light season: the next run completes it')
 ok(all('data/%s%s.json'%(P2,x) in store for x in ('','_pl','_sh')) and not any('data/%s%s.json'%(P2,x) in store for x in ('_adv','_heat','_mx','_rt','_hv')),'light season: league, players and shots files only')
 ok([p['s'] for p in store['data/index.json']['seasons']['l_4WFCIZ']['past']]==['2025-26'],'light seasons are not offered in the season selector')
 ok(store['data/seasons.json']['leagues']['l_4WFCIZ']['api_seasons']==['2026/2027','2025/2026','2024/2025'],'the seasons PitchAPI lists for the league are recorded')
