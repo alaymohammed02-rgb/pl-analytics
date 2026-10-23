@@ -145,7 +145,7 @@ const untranslated=sel=>{const o=[];document.querySelectorAll(sel).forEach(r=>{c
   await go(pg,'#/reality','#rcout .ins-bars');await go(pg,'#/club/Arsenal','.tdna .dna-g');
   const h=await pg.evaluate(()=>{const a=aggPl(PLD).filter(x=>x.p==='MF'&&x.s.mi>=450)[0];const s=D.stats.find(z=>z.player_id===a.id);return '#/player/'+encodeURIComponent(s.key+'||'+s.club)});await go(pg,h,'.dna');
   const cnt=f=>req.filter(u=>u.includes('/data/'+f)).length;
-  ok(cnt('l_4WFCIZ_pl.json')===1&&cnt('l_4WFCIZ_sh.json')===1&&cnt('l_4WFCIZ_adv.json')<=1,'player, shot and advanced files each downloaded once across the four features (pl '+cnt('l_4WFCIZ_pl.json')+', sh '+cnt('l_4WFCIZ_sh.json')+')');
+  ok(cnt('l_4WFCIZ_pl.json')===1&&cnt('l_4WFCIZ_sh.json')===1&&cnt('l_4WFCIZ_adv.json')<=1,'player, shot and advanced files each downloaded once across the four features (pl '+cnt('l_4WFCIZ_pl.json')+', sh '+cnt('l_4WFCIZ_sh.json')+')'+(cnt('l_4WFCIZ_pl.json')>1?' '+req.filter(u=>u.includes('/data/l_4WFCIZ_pl.json')).join(' ; '):''));
   ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await ctx.close()}
  /* ---------------- phone + Arabic ---------------- */
  for(const lang of ['ar','en']){const {ctx,pg,errs}=await open(b,{vw:390,lang});await pg.waitForSelector('#mb .mb-days',{timeout:60000});await pg.waitForTimeout(600);
