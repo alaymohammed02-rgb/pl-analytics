@@ -38,11 +38,14 @@ A static football analytics site on GitHub Pages. A Python sync (`sync.py`, run 
   - `INS.ar({...})` adds translations for plain text nodes;
   - write ranges in words ("من 37 إلى 38"), because RTL reverses "37–38".
 - **Async safety:** capture `D.id` before any `await`, and bail out if `root.isConnected` is false or `D.id` changed. Caches must not keep a failed result, and must be keyed by `INS.poolKey()` (data version).
-- **Liquid Glass** (`assets/liquid-glass.js`, styles at the end of `assets/fun.css`): a glass lens on the chosen button of the Fantasy tabs and the menu drawer.
-  - A new choice sends it through every button in between, in DOM (reading) order, with lens magnification, Dock-style growth of nearby buttons, letters arriving one by one (Arabic word by word, so letters stay joined) and a heavier label while moving.
-  - The buttons are untouched: the glass is `aria-hidden` with pointer events off; the attributes `data-lgx-act` (chosen) and `data-lgx-on` (covered, text hidden) mark them, never classes (tests compare `className`). A group with one button gets no glass; reduced motion jumps.
-  - The drawer closes once the glass arrives (`lgxHold()` in `assets/drawer.js`); the page itself opens at once.
-  - More groups: add `{sel, items, on}` to `G`. Test: `tests/lg/ui_lg.js`.
+- **Liquid Glass** (`assets/liquid-glass.js`, styles at the end of `assets/fun.css`): a true lens on the chosen button of the Fantasy tabs and the menu drawer.
+  - The lens shows what is really under it: a copy of the group (button backgrounds, every letter, or every word in Arabic so letters stay joined, and the drawer's section titles and icons), each piece placed where the browser drew the real one (a `Range` per letter). The copy is drawn on the colour behind the group, so the real labels never show twice. It is rebuilt when the buttons, their text, the theme (`html` style/class), the language or the fonts change; colours are read with the buttons' own transitions off.
+  - Pieces are `<i>` with the text in `data-c` and shown by `::before`, so `textContent`/`innerText` of the page are unchanged.
+  - The glass is a spring (no fixed animation): a new choice sends it straight to the new button in any direction (about 0.35 s, small overshoot), stretching along its way; a new choice while it moves bends the path. The lens strength and the letter weight (a stroke, so nothing reflows) follow its speed; each letter is moved out by `1+A(1-d²)²` and scaled by the local stretch on each axis, so rim letters are squeezed, never overlap. Nearby buttons grow a little (Dock), the new label's letters land one by one.
+  - Fantasy tabs only (`drag:true`): press the chosen tab to lift the glass, drag it (mouse or finger; `touch-action:none` on the chosen tab only) and let go to choose the tab under it; the browser's click after a drag is swallowed. A mouse over another tab makes the glass lean 5 px towards it.
+  - The buttons are untouched: the glass is `aria-hidden` with pointer events off; the attribute `data-lgx-act` marks the chosen one, never a class (tests compare `className`). A group with one button gets no glass; reduced motion jumps, without lens, lift or drag.
+  - The drawer closes once the glass arrives (`lgxHold()` in `assets/drawer.js`, from the spring's predicted arrival); the page itself opens at once.
+  - More groups: add `{sel, items, on}` (and `deco`, `drag`) to `G`. Test: `tests/lg/ui_lg.js`.
 - **Cross-league data:** `assets/league-pool.js` provides:
   - `INS.pool(need)`: the six domestic leagues;
   - `INS.poolOne(id, need)`: one league;

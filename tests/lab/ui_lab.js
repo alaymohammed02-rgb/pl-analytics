@@ -19,11 +19,12 @@ const noScroll=pg=>pg.evaluate(()=>document.scrollingElement.scrollWidth-innerWi
   {const inNav=nav.filter(x=>old.includes(x));ok(JSON.stringify(inNav)===JSON.stringify(old)&&new Set(nav).size===nav.length&&nav.includes('#/whatif')&&nav.indexOf('#/lab')===nav.indexOf('#/fantasy')+1,'menu: Intelligence Lab right after Fantasy; the '+old.length+' built-in items all there, in order, no duplicates')}
   await pg.evaluate(()=>location.hash='#/lab');await pg.waitForSelector('.labtabs');ok(!!await pg.$('.labintro'),'first visit: a short introduction');
   await lab(pg,'arena');
-  const gw=await pg.evaluate(()=>{const e=labOpen(LAB.d);return {id:e.id,dl:e.dl}});ok(gw.id===8&&gw.dl==='2026-10-23T17:30:00Z','open gameweek = the next deadline in fpl.json (GW8)');
-  const opts=await pg.$$eval('#labpl option',a=>a.map(o=>[o.value,+o.dataset.id]));ok(opts.length>300,'player list: '+opts.length+' players with a GW8 fixture');
+  const gw=await pg.evaluate(()=>{const e=labOpen(LAB.d);return {id:e.id,dl:e.dl}});/* worked out here from fpl.json and the clock, so the check holds in any week */
+  const nx=FPL.events.filter(e=>Date.parse(e.dl)>Date.now()).sort((a,c)=>a.id-c.id)[0];ok(nx&&gw.id===nx.id&&gw.dl===nx.dl,'open gameweek = the next deadline in fpl.json (GW'+(nx&&nx.id)+', '+(nx&&nx.dl)+')');
+  const opts=await pg.$$eval('#labpl option',a=>a.map(o=>[o.value,+o.dataset.id]));ok(opts.length>300,'player list: '+opts.length+' players with a GW'+gw.id+' fixture');
   await pg.fill('#labp1',opts[0][0]);await pg.fill('#labpts','6.5');await pg.fill('#labwhypts','  strong xG <b>x</b> ');await pg.click('.labforms .card:nth-child(1) button');await pg.waitForTimeout(400);
   let S=await store(pg),r=S&&S.recs[0];
-  ok(r&&r.type==='pts'&&r.gw===8&&r.p[0]===opts[0][1]&&r.pred===6.5&&r.dl===gw.dl&&Date.parse(r.at)<Date.parse(r.dl)&&r.s[0].tm&&'form' in r.s[0]&&r.mv==='v3'&&r.why==='strong xG <b>x</b>','saved with gameweek, deadline, time, model version and what was known about the player');
+  ok(r&&r.type==='pts'&&r.gw===gw.id&&r.p[0]===opts[0][1]&&r.pred===6.5&&r.dl===gw.dl&&Date.parse(r.at)<Date.parse(r.dl)&&r.s[0].tm&&'form' in r.s[0]&&r.mv==='v3'&&r.why==='strong xG <b>x</b>','saved with gameweek, deadline, time, model version and what was known about the player');
   ok(await pg.$eval('#app',e=>!e.innerHTML.includes('<b>x</b>')),'the reason is shown as text, never as HTML');
   ok(/hidden/.test(await pg.$eval('#app table',e=>e.innerText)),'the model\'s figure stays hidden before the deadline');
   await pg.fill('#labp1',opts[0][0]);await pg.fill('#labpts','3');await pg.click('.labforms .card:nth-child(1) button');await pg.waitForTimeout(300);
