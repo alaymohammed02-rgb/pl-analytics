@@ -66,6 +66,7 @@ A static football analytics site on GitHub Pages. A Python sync (`sync.py`, run 
   - Full seasons cost 10 requests a match and about 49 KB; light seasons (matches, player rows, shots) cost 5 and about 16 KB.
   - PitchAPI lists 2021-22 to 2026-27 for all six leagues; the plan allows past seasons (measured 23 Oct 2026).
   - `data/index.json → seasons` lists the full past seasons per league (light ones are left out). Light seasons have team ids, not names, in `c`; the names are in the `team` rows.
+  - Premier League 2021-22 to 2024-25 were fetched light, then switched to full (PR #52, 23 Oct 2026): the sync adds only the missing parts (advanced stats, heat maps, line-ups, ratings, halves), about 120 matches a run, before the other leagues' 2025-26. Until then the banner says the extras are still being added.
 - **Season selector** (`assets/seasons.js` + `psView` inline): a past season keeps the league id and swaps the league's files.
   - A switch reloads the page.
   - Pages that need this season's Fantasy data, fixtures or live data are listed in `NOT` and say "not available for a past season".
@@ -86,7 +87,7 @@ A static football analytics site on GitHub Pages. A Python sync (`sync.py`, run 
    - Remove date and live-value dependencies.
    - Split the suite into parallel jobs.
 2. **A stronger match model** (Opus, high effort).
-   - Use past seasons from PitchAPI as priors (now fetched by the sync: 2025-26 for six leagues, Premier League 2021-22 to 2024-25 light).
+   - Use past seasons from PitchAPI as priors (now fetched by the sync: 2025-26 for six leagues, Premier League 2021-22 to 2024-25 full).
    - Note: previous-season PitchAPI priors did not improve the Fantasy model on the held-out 2025-26 (`ml/RESULTS.md`).
    - Weight recent matches more, and use a home advantage per league.
    - Possibly add ClubElo.

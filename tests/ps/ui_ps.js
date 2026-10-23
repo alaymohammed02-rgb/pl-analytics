@@ -58,6 +58,16 @@ const T=require('../nf/lib.js');const {ok,J,IDX}=T;
   await Promise.all([pg.waitForNavigation(),pg.selectOption('#lgpick',other.id)]);
   await pg.waitForFunction(()=>typeof D==='object'&&D&&D.matches);
   const o=await pg.evaluate(()=>({id:D.id,s:ALL.season||''}));ok(o.id===other.id&&!o.s,'a league without '+P.s+' opens in its current season');await ctx.close()}
+ /* a season with every match fetched but line-ups, heat maps and advanced stats still being added says so, not "380 of 380 so far" */
+ const P3=Object.values(S).flatMap(e=>(e.past||[]).map(p=>[e,p])).find(([e,p])=>!p.complete&&p.total&&p.matches>=p.total);
+ const lid3=P3&&Object.keys(S).find(l=>S[l]===P3[0]);
+ if(P3){({ctx,pg,errs}=await T.open(b,{league:lid3,hash:'#/table',init:{season:P3[1].s}}));
+  await pg.waitForSelector('#psbar .psb',{timeout:60000});
+  const t3=await pg.$eval('#psbar',e=>e.innerText);
+  ok(new RegExp('all '+P3[1].total+' matches fetched; line-ups, heat maps and advanced stats are still being added').test(t3)&&!/so far/.test(t3),'all matches fetched, extras still coming: the banner says so ('+P3[1].s+')');
+  await pg.evaluate(()=>arToggle());const a3=await pg.$eval('#psbar',e=>e.innerText);
+  ok(/انجلبت كل المباريات/.test(a3)&&/لسا تنضاف/.test(a3),'and in Arabic');await ctx.close()}
+ else console.log('skip: no past season with every match fetched and its extras still being added');
  /* leaving before the data arrives, and a failing season file */
  ({ctx,pg,errs}=await T.open(b,{league:lid,hash:'#/table',init:{season:P.s}}));
  await ctx.route('**/data/'+P.file+'*',r=>r.fulfill({status:500,body:'x'}));
