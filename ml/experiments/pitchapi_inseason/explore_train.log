@@ -1,0 +1,61 @@
+rows 15276
+
+== target G base FPL xg
+ ty2 n=5233 FPL only: w=[0.672] mse=0.04057
+   +pa_xg   c=1.0471 alone mse=0.04046 | with FPL w=[0.176 0.588] mse=0.04045 gain=0.30%
+   +pa_sot  c=0.1694 alone mse=0.04033 | with FPL w=[0.193 0.63 ] mse=0.04029 gain=0.69%
+   +pa_bx   c=0.0761 alone mse=0.04113 | with FPL w=[0.536 0.223] mse=0.04044 gain=0.31%
+   +pa_sh   c=0.0938 alone mse=0.04017 | with FPL w=[0.044 0.829] mse=0.04017 gain=0.98%
+   +pa_xt   c=0.5896 alone mse=0.04043 | with FPL w=[0.327 0.537] mse=0.04027 gain=0.73%
+   all: w=[ 0.133 -0.219 -0.194 -0.149  0.933  0.395] gain=1.12%
+ ty3 n=7010 FPL only: w=[0.97] mse=0.13081
+   +pa_xg   c=1.0127 alone mse=0.12975 | with FPL w=[0.056 1.006] mse=0.12974 gain=0.82%
+   +pa_sot  c=0.1611 alone mse=0.13080 | with FPL w=[0.498 0.57 ] mse=0.12998 gain=0.64%
+   +pa_bx   c=0.1205 alone mse=0.13563 | with FPL w=[0.8   0.221] mse=0.13049 gain=0.25%
+   +pa_sh   c=0.1064 alone mse=0.13103 | with FPL w=[0.534 0.534] mse=0.13015 gain=0.50%
+   +pa_xt   c=1.7339 alone mse=0.13595 | with FPL w=[0.854 0.15 ] mse=0.13068 gain=0.10%
+   all: w=[ 0.065  0.751  0.641  0.173 -0.32  -0.232] gain=1.06%
+ ty4 n=1884 FPL only: w=[0.888] mse=0.28485
+   +pa_xg   c=1.0153 alone mse=0.27885 | with FPL w=[-0.537  1.526] mse=0.27789 gain=2.44%
+   +pa_sot  c=0.2478 alone mse=0.28315 | with FPL w=[0.351 0.614] mse=0.28202 gain=1.00%
+   +pa_bx   c=0.5725 alone mse=0.31041 | with FPL w=[0.812 0.092] mse=0.28453 gain=0.11%
+   +pa_sh   c=0.1625 alone mse=0.28298 | with FPL w=[0.327 0.647] mse=0.28210 gain=0.97%
+   +pa_xt   c=9.2482 alone mse=0.32658 | with FPL w=[0.877 0.013] mse=0.28484 gain=0.00%
+   all: w=[-0.552  1.34   0.424  0.026 -0.141 -0.096] gain=2.63%
+ ty0 n=15179 FPL only: w=[0.984] mse=0.11080
+   +pa_xg   c=1.0181 alone mse=0.10929 | with FPL w=[-0.16   1.246] mse=0.10926 gain=1.39%
+   +pa_sot  c=0.1826 alone mse=0.11132 | with FPL w=[0.578 0.513] mse=0.11010 gain=0.63%
+   +pa_bx   c=0.1451 alone mse=0.12229 | with FPL w=[0.946 0.06 ] mse=0.11077 gain=0.03%
+   +pa_sh   c=0.1172 alone mse=0.11160 | with FPL w=[0.621 0.469] mse=0.11028 gain=0.47%
+   +pa_xt   c=1.6849 alone mse=0.12379 | with FPL w=[ 1.013 -0.049] mse=0.11078 gain=0.02%
+   all: w=[-0.145  0.958  0.503  0.155 -0.016 -0.399] gain=1.91%
+
+== target A base FPL xa
+ ty2 n=5233 FPL only: w=[1.072] mse=0.06035
+   +pa_xag  c=1.0777 alone mse=0.05994 | with FPL w=[0.295 0.839] mse=0.05988 gain=0.77%
+   +pa_kp   c=0.1142 alone mse=0.05960 | with FPL w=[0.103 1.103] mse=0.05959 gain=1.25%
+   +pa_sca  c=0.0415 alone mse=0.05961 | with FPL w=[0.089 1.219] mse=0.05961 gain=1.23%
+   +pa_gca  c=0.4411 alone mse=0.06079 | with FPL w=[0.72  0.416] mse=0.06014 gain=0.34%
+   +pa_xt   c=0.6816 alone mse=0.06069 | with FPL w=[0.712 0.495] mse=0.06019 gain=0.27%
+   all: w=[-0.023  0.223  0.317  1.025  0.032 -0.334] gain=1.44%
+ ty3 n=7010 FPL only: w=[1.247] mse=0.13490
+   +pa_xag  c=0.9614 alone mse=0.13333 | with FPL w=[0.297 1.077] mse=0.13318 gain=1.27%
+   +pa_kp   c=0.1037 alone mse=0.13337 | with FPL w=[0.336 1.079] mse=0.13317 gain=1.28%
+   +pa_sca  c=0.0413 alone mse=0.13355 | with FPL w=[0.388 1.047] mse=0.13326 gain=1.22%
+   +pa_gca  c=0.3794 alone mse=0.13473 | with FPL w=[0.63  0.721] mse=0.13364 gain=0.93%
+   +pa_xt   c=1.3082 alone mse=0.13306 | with FPL w=[0.291 1.123] mse=0.13290 gain=1.48%
+   all: w=[ 0.046  0.348  0.292 -0.021  0.125  0.655] gain=1.76%
+ ty4 n=1884 FPL only: w=[1.847] mse=0.12821
+   +pa_xag  c=0.7993 alone mse=0.12653 | with FPL w=[0.397 1.688] mse=0.12642 gain=1.40%
+   +pa_kp   c=0.0905 alone mse=0.12580 | with FPL w=[0.016 2.203] mse=0.12580 gain=1.88%
+   +pa_sca  c=0.0339 alone mse=0.12669 | with FPL w=[0.385 1.788] mse=0.12660 gain=1.26%
+   +pa_gca  c=0.2594 alone mse=0.12852 | with FPL w=[1.041 0.983] mse=0.12727 gain=0.74%
+   +pa_xt   c=1.8422 alone mse=0.13046 | with FPL w=[1.402 0.481] mse=0.12787 gain=0.27%
+   all: w=[-0.043  0.54   2.457 -0.71  -0.135  0.082] gain=1.99%
+ ty0 n=15179 FPL only: w=[1.282] mse=0.09986
+   +pa_xag  c=0.9683 alone mse=0.09858 | with FPL w=[0.254 1.164] mse=0.09851 gain=1.35%
+   +pa_kp   c=0.1045 alone mse=0.09842 | with FPL w=[0.228 1.251] mse=0.09836 gain=1.50%
+   +pa_sca  c=0.0403 alone mse=0.09859 | with FPL w=[0.298 1.222] mse=0.09848 gain=1.37%
+   +pa_gca  c=0.3737 alone mse=0.09969 | with FPL w=[0.647 0.759] mse=0.09889 gain=0.96%
+   +pa_xt   c=1.0665 alone mse=0.10082 | with FPL w=[0.883 0.506] mse=0.09953 gain=0.32%
+   all: w=[ 0.094  0.536  0.374  0.481  0.209 -0.206] gain=1.74%

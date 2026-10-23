@@ -143,3 +143,41 @@ Verdict: the gain on TRAIN and validation is small (0.1–0.8% MAE) and does not
 equal, the early rounds are worse, and only 11 of 35 gameweeks improve. **The production model stays v3**; nothing on the site changed.
 A likely reason is that v3's recency-weighted rates catch up within a few gameweeks, so last season only helps the first rounds, and it
 helps less when many players change role or club.
+
+## In-season PitchAPI evidence, 23 October 2026: not adopted
+
+Question: does PitchAPI data from EARLIER ROUNDS OF THE SAME SEASON improve the production model v3? (The previous test used only the previous season.) Folder: `experiments/pitchapi_inseason/` (`reproduce.sh` recomputes everything from `data/`). Protocol as above: TRAIN 2022-23 + 2023-24, validation 2024-25 once, test 2025-26 once; a change counts only if it beats v3 on both TRAIN seasons in MAE and RMSE, and also on the test. **2025-26 has now served as the test three times** (v3 final test, the PitchAPI previous-season priors, and this); it is a weaker check than before.
+
+Data link: each PitchAPI match is mapped to its FPL fixture (380 of 380 in every season); players are linked with the site's `fpLink` name rule within the clubs they played for (96-98% of FPL players with minutes get PitchAPI rows; a PitchAPI player linked to two FPL players is dropped). Only rows of rounds before the predicted round are used. Truncation leak test (data cut after round k, 2023-24, k = 4, 5, 10, 20, 30, 38): 2431 predictions identical for each experiment; a deliberately leaky copy (rounds <= r) is caught (about 250 different predictions per round). A first run of the test for experiment 2 failed because of a bug in the test itself (the cut run lacked the heat-map file); it was fixed and the test repeated.
+
+### Experiment 1: PitchAPI player stats as extra evidence for the goal and assist rates
+
+PitchAPI xG (or shots on target) and xAG (or key passes) of earlier rounds, scaled to FPL units with factors fitted on TRAIN by position, enter the xG/xA rate as extra evidence (`GA/GB/GS`, `AA/AB/AK`; all 0 = v3). A TRAIN-only look first (`explore_train.log`) showed small gains (about 1-2% of the squared error of a player's next-round goals or assists). Grid on TRAIN: goals 24 settings, assists 36, then the combination; chosen `GA=.25, GB=1, AA=.5, AB=1, AK=.5`.
+
+| rounds 4+ | v3 MAE / RMSE | with PitchAPI in-season | rounds 4-10 MAE | gameweeks better |
+|---|---|---|---|---|
+| 2022-23 (train) | 1.7075 / 2.5962 | 1.7057 / 2.5959 | 1.6933 → 1.6933 | 16 of 34 |
+| 2023-24 (train) | 1.6759 / 2.6154 | 1.6661 / 2.6145 | 1.6625 → 1.6487 | 35 of 35 |
+| 2024-25 (validation) | 1.6162 / 2.4937 | 1.6104 / 2.4931 | 1.5869 → 1.5790 | 34 of 35 |
+| **2025-26 (test)** | **1.7382 / 2.6332** | 1.7329 / **2.6343** | 1.6835 → 1.6805 | 32 of 35 |
+
+MAE improves in every season (0.1-0.6%), but on the test **RMSE is worse** (2.6332 → 2.6343), so by the rule fixed beforehand the change is **not adopted**. Bias moves from -0.10 to -0.12 on the test. A control run after the decision, with FPL's own xG/xA counted twice instead of PitchAPI's (same weights), gives 1.7059 / 1.6732 / 1.6153 / 1.7383 (MAE, 2022-23 to 2025-26): PitchAPI's numbers do carry some information (the control is clearly worse on the two seasons where it matters), but only enough to move MAE slightly and not the squared error. The defensive-contribution rate could not be tested: FPL has no such column before 2025-26.
+
+### Experiment 2: line-ups and heat maps of earlier rounds
+
+Line-ups (`_mx`) and heat maps (`_heat`) are complete for all four seasons (380 of 380 matches; 253 / 188 / 73 / 29 player-matches per season where FPL has minutes but PitchAPI does not list the player, counted as "came on").
+- **Squad state** (not in the squad / unused substitute / came on / started in his last match) as a logit shift of P(play), fitted on TRAIN (`sb.json`: -0.38 / +0.63 / -0.22 / +0.27). Every variant is worse than v3 on both TRAIN seasons in MAE (e.g. 1.7200 vs 1.7075 and 1.6886 vs 1.6759), because v3's recency-weighted P(play) already holds this information and the shift over-corrects. Decided before the run: the variant that includes "not in the squad" could not ship anyway, since on the live site FPL's own injury flag carries it; it was run for information only and is also worse. Not adopted, not evaluated on validation or test.
+- **Role change** (a player's recent action-weighted average position from the heat maps against his season average, in cells; goal and assist rates multiplied by exp(RG or RA x change)). Grid of 15 settings on TRAIN; only 4 beat v3 on both seasons in MAE and RMSE and the best gain is 0.016%: `RG=.05, RA=.05, RH=.5`. Evaluated once afterwards:
+
+| rounds 4+ | v3 MAE / RMSE | with role change | gameweeks better |
+|---|---|---|---|
+| 2022-23 (train) | 1.7075 / 2.5962 | 1.7073 / 2.5962 | 19 of 34 |
+| 2023-24 (train) | 1.6759 / 2.6154 | 1.6754 / 2.6150 | 23 of 35 |
+| 2024-25 (validation) | 1.6162 / 2.4937 | 1.6163 / 2.4938 | 15 of 35 |
+| **2025-26 (test)** | **1.7382 / 2.6332** | 1.7380 / 2.6331 | 21 of 35 |
+
+The test gain is 0.00012 MAE with a standard error of 0.00015 across gameweeks, and the validation season is slightly worse: this is noise, not an improvement. The letter of the rule (better on both TRAIN seasons and on the test) is met by a margin of 0.0002 points, but a change that is not distinguishable from zero, was not better on validation, and would need a new heat-map data file on the site is not worth shipping. **Not adopted.**
+
+### Verdict
+
+**The production model stays v3; the site did not change.** Both experiments were run to the end and reported. In-season PitchAPI player stats are a real but tiny signal: MAE -0.1% to -0.6% on every season, RMSE not better on the test. Line-up state and heat-map position add nothing that v3's recency-weighted rates do not already have. The remaining error of v3 (about 1.7 points per player-gameweek) is mostly the randomness of goals, assists and bonus points, not missing information of this kind.
