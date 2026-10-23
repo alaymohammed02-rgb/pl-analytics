@@ -11420,24 +11420,32 @@ def run_pipeline(hub, pit_key):
 # القائمة والشريط وحارس الصفحات في assets/seasons.js.
 _X_PSJS = r"""/* ===== Seasons: the index seen for the season chosen on this device (assets/seasons.js has the selector) =====
    A past season keeps the league ids and swaps each league's data files for that season's files, so every page reads it as usual.
-   It applies only when the league kept on this device has that season; otherwise the current season is shown. */
+   It applies only when the league kept on this device has that season; otherwise the current season is shown.
+   The index entries that describe only the current season (fixtures, head-to-head, schedule, rare cases, Fantasy) are left out. */
 let ALL0=null;
 function psSaved(){for(const st of [()=>localStorage,()=>sessionStorage])try{const v=st().getItem('season');if(v!=null)return v}catch(e){}
  try{const m=/^pla-season:(.+)$/.exec(window.name||'');if(m)return m[1]}catch(e){}return ''}
+/* files that only describe the current season (today's matches, coming fixtures, live scores, season facts, rare cases):
+   in a past season they answer "not found", so the widgets that use them stay out instead of mixing in this season */
+function psCurOnly(){if(window.__psF)return;const f0=window.fetch;window.__psF=1;
+ window.fetch=function(u){const s=String(u&&u.url||u);if(/(^|\/)data\/(live|fixtures|schedule|facts|rare|fpl|fpl_track)\.json/.test(s))return Promise.resolve(new Response('{}',{status:404}));return f0.apply(this,arguments)}}
 function psView(x){
  ALL0=x;const s=psSaved();if(!s||!x||!x.seasons||!x.leagues)return x;
  let lid=null;for(const st of [()=>localStorage,()=>sessionStorage])try{lid=st().getItem('league');if(lid)break}catch(e){}
  const has=l=>((x.seasons[l.id]||{}).past||[]).find(p=>p.s===s),ls=x.leagues.filter(has);
  if(!ls.length||(lid&&x.leagues.some(l=>l.id===lid)&&!ls.some(l=>l.id===lid)))return x;
- return Object.assign({},x,{generated:String(x.generated||'')+'|'+s,season:s,leagues:ls.map(l=>{const p=has(l),o={};
+ psCurOnly();
+ const v=Object.assign({},x);['fx','h2h','sch','rr','fpl'].forEach(k=>delete v[k]);
+ return Object.assign(v,{generated:String(x.generated||'')+'|'+s,season:s,leagues:ls.map(l=>{const p=has(l),o={};
   Object.keys(l).forEach(k=>{if(!/_(file|v)$/.test(k)||/^(logo|photo)_/.test(k))o[k]=l[k]});
   Object.keys(p).forEach(k=>{if(/_(file|v)$/.test(k)||k==='file')o[k]=p[k]});
   return Object.assign(o,{matches:p.matches,ok:p.ok,season:s,past:true})})});
 }
 """
+# #app select: a match selector with long names (Shots, Passing) was wider than a 390 px phone in every season
 _X_PSCSS = ("#psbar{padding:0 12px 6px}.psb{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;"
             "border-radius:12px;border:1px solid var(--gold-bd,rgba(226,189,90,.5));background:rgba(226,189,90,.12);font-size:13px}"
-            ".psb button{min-height:32px}#sspick{min-height:32px;padding:4px 8px;max-width:150px}@media(max-width:560px){#sspick{max-width:118px}#lgpick{max-width:150px}}")
+            ".psb button{min-height:32px}#app select{max-width:100%}#sspick{min-height:32px;padding:4px 8px;max-width:150px}@media(max-width:560px){#sspick{max-width:118px}#lgpick{max-width:150px}}")
 
 
 def _x_ps_index(html):

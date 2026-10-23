@@ -39,6 +39,10 @@
   if(!e||!(e.past||[]).length){if(bar){bar.hidden=true;bar.innerHTML=''}return}
   // the base header ends with " · current season": in a past season that text would be wrong, so it is replaced by the selector
   [...lg.childNodes].forEach(n=>{if(n.nodeType===3&&/current season|الموسم الحالي/.test(n.textContent))n.remove()});
+  // a past season may exist for one league only: the league selector still lists every league
+  if(cur&&!document.getElementById('lgpick')&&(base().leagues||[]).length>1){
+   lg.innerHTML='<select id="lgpick" style="min-height:32px;padding:4px 8px;max-width:200px"></select>';
+  }
   if(!lg.querySelector('#sspick')){
    const sel=document.createElement('select');sel.id='sspick';sel.setAttribute('aria-label','Season');sel.title='Season';
    sel.innerHTML=`<option value="">${esc((e.cur?e.cur+' · ':'')+'current season')}</option>`+(e.past||[]).map(p=>`<option value="${esc(p.s)}">${esc(label(e,p.s))}</option>`).join('');
