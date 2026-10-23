@@ -24,3 +24,4 @@ for t,v in B.items():
     if k is None:bad.append('no match for '+t);continue
     if A[k]!=v:bad.append(f'{t}: PitchAPI {A[k]} vs FPL {v}')
 print('teams',len(A),len(B),'| mismatches:',bad or 'none')
+print(('ok  ' if not bad and len(A)==len(B) else 'FAIL'),'Premier League table: PitchAPI results equal FPL fixtures for every team (%d teams)'%len(A),bad or '')

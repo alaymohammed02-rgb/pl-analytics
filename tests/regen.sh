@@ -7,7 +7,7 @@ python3 gen_index.py "$R/sync.py" "$R/index.html" | tail -1
 python3 - <<'PY'
 import os,sys,importlib.util
 R=os.environ['R']
-sys.path.insert(0,REPO+'/tests/stub')
+sys.path.insert(0,R+'/tests/stub')
 spec=importlib.util.spec_from_file_location("m",R+"/sync.py");m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 h=open(R+'/index.html',encoding='utf-8').read()
 s=h.index(m._X_FPJS[:80]);e=h.index('/* ===== Fantasy seasons:')
