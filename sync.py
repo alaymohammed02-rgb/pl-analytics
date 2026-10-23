@@ -1824,7 +1824,7 @@ def build_pl_payload(L):
         heat[(r["m"], r["k"])] = (tot, opp)
     cols = ["m", "i", "n", "t", "c", "o", "mi"] + _PL_COLS + ["act", "aco"]
     rows = []
-    for r in q("SELECT p.match_id m, p.player_id i, p.player n, p.team_id t, COALESCE(a.team, p.team_id) c, "
+    for r in q("SELECT p.match_id m, p.player_id i, p.player n, p.team_id t, COALESCE(a.team, (SELECT d.team FROM team_def d WHERE d.league_id=p.league_id AND d.match_id=p.match_id AND d.team_id=p.team_id), p.team_id) c, "
                "(SELECT s.pos FROM stats s WHERE s.league_id=p.league_id AND s.match_id=p.match_id "
                "AND s.player_id=p.player_id) o, p.minutes mi, " + ",".join("p." + c for c in _PL_COLS) +
                " FROM pl_adv p LEFT JOIN team_adv a ON a.league_id=p.league_id AND a.match_id=p.match_id "
@@ -1926,7 +1926,7 @@ def build_sh_payload(L):
     cols = ["m", "s"] + _SH_COLS + ["c"]
     rows = []
     for r in q("SELECT p.match_id m, p.shot_id s, " + ",".join("p." + c for c in _SH_COLS) +
-               ", COALESCE(a.team, p.tid) c FROM shot_rows p "
+               ", COALESCE(a.team, (SELECT d.team FROM team_def d WHERE d.league_id=p.league_id AND d.match_id=p.match_id AND d.team_id=p.tid), p.tid) c FROM shot_rows p "
                "LEFT JOIN team_adv a ON a.league_id=p.league_id AND a.match_id=p.match_id AND a.team_id=p.tid "
                "WHERE p.league_id=? ORDER BY p.match_id, p.shot_id", (L,)):
         rows.append([round(r[k], 3) if isinstance(r[k], float) else r[k] for k in cols])

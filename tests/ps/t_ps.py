@@ -146,4 +146,14 @@ ok(all('data/%s%s.json'%(P2,x) in store for x in ('_adv','_mx','_rt','_hv')) and
 ok([p['s'] for p in store['data/index.json']['seasons']['l_4WFCIZ']['past']]==['2025-26','2024-25'],'light to full: now offered in the season selector')
 fresh_db();calls.clear();m.PS['state']=None;m.sync_past_seasons(C(),None)
 ok(calls==[],'light to full, complete: no request at all')
+# club names: a light season has no advanced team rows, so the player and shot files take the name from the team rows
+fresh_db();c=m.db();P3='L_light'
+c.execute(m._TD_SQL,(P3,'mm','t1','Leeds United','home')+(None,)*len(m._TD_COLS))
+c.execute(m._PL_SQL,(P3,'mm','p1','A Player','t1',90.0)+(None,)*len(m._PL_COLS))
+sh=dict(pd='FirstHalf',pid='p1',pn='A Player',tid='t1',xg=0.3,ev='Goal',mn=10)
+c.execute(m._SH_SQL,(P3,'mm','s1')+tuple(sh.get(k) for k in m._SH_COLS));c.commit();c.close()
+plp,shp=m.build_pl_payload(P3),m.build_sh_payload(P3)
+ok(plp['rows'][0][plp['cols'].index('c')]=='Leeds United' and shp['rows'][0][shp['cols'].index('c')]=='Leeds United','without advanced team rows, the club name comes from the team rows (not the team id)')
+c=m.db();c.execute("DELETE FROM team_def");c.commit();c.close()
+ok(m.build_sh_payload(P3)['rows'][0][-1]=='t1','with no name anywhere the team id stays (nothing invented)')
 print('all passed' if not fails else '%d FAILED'%fails)
