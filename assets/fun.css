@@ -382,3 +382,11 @@ html[dir=rtl] .dl-bars .ph-bn bdi{text-align:right}
 .lgx [data-lgx-i]{transform-origin:50% 50%}
 #drw .lgx [data-lgx-i]{transform-origin:0 50%}[dir=rtl] #drw .lgx [data-lgx-i],html[lang=ar] #drw .lgx [data-lgx-i]{transform-origin:100% 50%}
 @media (prefers-reduced-motion:reduce){.lgx-b{transition:none}.lgx-wt>i.pop{animation:none}}
+/* ===== Defensive card (assets/defense-card.js) ===== */
+.dcx h3{margin:0 0 4px}.dcx-i{font-size:13px;margin:4px 0 8px}
+.dcx-ctl{align-items:flex-end}.dcx-l{display:flex;flex-direction:column;gap:3px;font-size:12px;min-width:0}.dcx-p{flex:1 1 220px}.dcx-p input{width:100%;box-sizing:border-box}
+.dcx-mt{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 0}
+.dcx-k{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--ln);border-radius:999px;font-size:13px;cursor:pointer;background:var(--bg)}
+.dcx-k input{min-height:0;margin:0}.dcx-k:has(input:checked){border-color:var(--th);background:color-mix(in srgb,var(--th) 18%,var(--bg))}.dcx-k:has(input:disabled){opacity:.55;cursor:default}
+.dcx-c{margin-top:10px}.dcx-c svg{display:block;width:100%;max-width:760px;height:auto;margin:0 auto;border-radius:14px}
+.dcx-a{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:center;margin-top:10px;font-size:13px}
