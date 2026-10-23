@@ -1,9 +1,9 @@
 /* ===== Liquid Glass 2: a glass lens over the chosen button that travels through the buttons in between =====
-   Groups: the Fantasy tabs (#fproot > .ctl) and the menu drawer (#drw .drw-n). A new choice sends the glass along the
-   buttons in reading order (row by row, as a finger would run along them), not straight across. On its way:
+   Groups: the Fantasy tabs (#fproot > .ctl) and the menu drawer (#drw .drw-n). A new choice sends the glass straight to it,
+   in any direction, cutting across the buttons that lie on its way (at most 0.7 s). On its way:
    - Magnification: the label under the glass is drawn larger inside it (a lens), and the buttons near the glass grow a
      little, less with distance (like the macOS Dock).
-   - Per-character animation: the lens label is rebuilt for every button it passes, its letters arriving one after another
+   - Per-character animation: the lens label is rebuilt for every button it crosses, its letters arriving one after another
      in the direction of travel. Arabic goes word by word, because splitting Arabic letters would break their joining.
    - Dynamic typography: while moving, the lens label is heavier and a little wider; it settles when the glass stops.
    A group with fewer than two buttons keeps its normal style (the glass needs somewhere to go). With "reduce motion" the
@@ -17,7 +17,7 @@
  const ex=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
  const key=e=>e.getAttribute('href')||(e.dataset.cap?'cap':'')||e.getAttribute('onclick')||e.textContent;
  const G=[
-  {id:'fp',sel:'#fproot > .ctl',items:c=>[...c.children].filter(e=>e.tagName==='BUTTON'),on:e=>!e.classList.contains('s'),max:1150,rebuild:true},
+  {id:'fp',sel:'#fproot > .ctl',items:c=>[...c.children].filter(e=>e.tagName==='BUTTON'),on:e=>!e.classList.contains('s'),max:700,rebuild:true},
   {id:'drw',sel:'#drw .drw-n',items:c=>[...c.querySelectorAll('a[href^="#/"]')],on:e=>e.classList.contains('on'),max:600,rebuild:false,start:true}
  ].map(g=>Object.assign(g,{box:null,el:null,b:null,t:null,k:null,anim:null,raf:0,ro:null,end:0,path:null,cov:null}));
 
@@ -71,37 +71,50 @@
   stop(g);
   const r=rect(g,a);look(g,a);box(g,r);g.el.style.opacity='1';g.el.classList.remove('mv');unmag(g);
   L.forEach(e=>e.toggleAttribute('data-lgx-act',e===a));lens(g,a,1,false);cover(g,a);g.k=key(a)}
- /* the glass travels from item a to item b through every item in between, at an even speed along the path */
+ /* the glass goes straight from item a to item b, in any direction, cutting across the items on its way (those are the ones
+    it magnifies and spells out); a little longer in the direction it moves half-way, as a liquid drop would be */
  function travel(g,L,a,b){
   stop(g);
-  const st=a<b?1:-1,P=[];for(let i=a;i!==b+st;i+=st)P.push(L[i]);
-  const R=P.map(e=>rect(g,e)),c=r=>[r.x+r.w/2,r.y+r.h/2],D=[0];
-  for(let i=1;i<R.length;i++){const p=c(R[i-1]),q=c(R[i]);D.push(D[i-1]+Math.hypot(q[0]-p[0],q[1]-p[1]))}
-  const tot=D[D.length-1];if(!tot){rest(g);return}
-  const dur=Math.min(g.max,Math.max(320,240+(R.length-1)*85));
+  const A=rect(g,L[a]),B=rect(g,L[b]),c=r=>[r.x+r.w/2,r.y+r.h/2],ca=c(A),cb=c(B),dx=cb[0]-ca[0],dy=cb[1]-ca[1],dist=Math.hypot(dx,dy);
+  if(!dist){rest(g);return}
+  /* the items the straight line crosses, in order, with the part of the way (0 to 1) spent over each */
+  const all=L.map(e=>[e,rect(g,e)]),C=[],n=Math.max(2,Math.ceil(dist/3));
+  for(let k=0;k<=n;k++){const t=k/n,x=ca[0]+dx*t,y=ca[1]+dy*t,h=all.find(([e,r])=>x>=r.x&&x<=r.x+r.w&&y>=r.y&&y<=r.y+r.h);
+   if(!h)continue;const last=C[C.length-1];if(last&&last.e===h[0])last.t1=t;else C.push({e:h[0],t0:t,t1:t})}
+  if(!C.length||C[0].e!==L[a])C.unshift({e:L[a],t0:0,t1:0});if(C[C.length-1].e!==L[b])C.push({e:L[b],t0:1,t1:1});
+  C[0].t0=0;C[C.length-1].t1=1;
+  const dur=Math.min(g.max,Math.max(260,220+dist*.75));
+  /* half-way: the glass is the average of the two sizes, stretched up to 14% along the way it moves, centre on the line */
+  const sx=1+.14*Math.abs(dx)/dist,sy=1+.14*Math.abs(dy)/dist,mw=(A.w+B.w)/2*sx,mh=(A.h+B.h)/2*sy,mc=[(ca[0]+cb[0])/2,(ca[1]+cb[1])/2];
+  const W=t=>t<=.5?A.w+(mw-A.w)*t*2:mw+(B.w-mw)*(t-.5)*2;
   L.forEach(e=>e.toggleAttribute('data-lgx-act',e===L[b]));look(g,L[b]);g.el.style.opacity='1';
-  box(g,R[R.length-1]);g.el.classList.add('mv');g.box.classList.add('lgx-mv');
-  g.anim=g.el.animate(R.map((r,i)=>({transform:`translate(${r.x}px,${r.y}px)`,width:r.w+'px',height:r.h+'px',offset:D[i]/tot})),
-   {duration:dur,easing:'cubic-bezier(.42,0,.2,1)'});
-  g.end=performance.now()+dur;g.path={P,R,dir:st,j:-1,k:0,A:L.map(e=>[e,rect(g,e)])};
-  /* magnification of the lens label: up to 1.14× over each button, never wider than the glass is there; at the half-way
-     points the label changes, so the scale fits both; normal size at both ends. Same timing as the glass, so in step. */
-  if(g.t.animate){const TW=widths(g,P),fit=(w,i)=>(w-8)/((TW[i]||1)*1.12),K=[];
-   R.forEach((r,i)=>{if(i){const m=(R[i-1].w+r.w)/2;K.push({transform:`scale(${Math.max(.5,Math.min(1.14,fit(m,i-1),fit(m,i))).toFixed(3)})`,offset:(D[i-1]+D[i])/2/tot})}
-    K.push({transform:`scale(${i&&i<R.length-1?Math.max(.5,Math.min(1.14,fit(r.w,i))).toFixed(3):1})`,offset:D[i]/tot})});
-   if(g.ta)g.ta.cancel();g.ta=g.t.animate(K,{duration:dur,easing:'cubic-bezier(.42,0,.2,1)'})}
-  lens(g,P[0],st,false);cover(g,P[0]);g.path.j=0;
-  /* where the glass is, read from what is drawn (its animated width and position); the button under it is looked for only
-     ahead of the current one, so the lens never goes back */
+  box(g,B);g.el.classList.add('mv');g.box.classList.add('lgx-mv');
+  const ease='cubic-bezier(.35,0,.15,1)';
+  g.anim=g.el.animate([{transform:`translate(${A.x}px,${A.y}px)`,width:A.w+'px',height:A.h+'px'},
+   {transform:`translate(${mc[0]-mw/2}px,${mc[1]-mh/2}px)`,width:mw+'px',height:mh+'px',offset:.5},
+   {transform:`translate(${B.x}px,${B.y}px)`,width:B.w+'px',height:B.h+'px'}],{duration:dur,easing:ease});
+  g.end=performance.now()+dur;
+  /* letters arrive in the direction of travel (in a right-to-left page, words run the other way) */
+  const rtl=getComputedStyle(g.box).direction==='rtl',st=Math.abs(dx)>4?(rtl?-Math.sign(dx):Math.sign(dx)):1;
+  g.path={C,ca,dx,dy,dist,j:0,t:0,A:all};
+  /* magnification of the lens label: up to 1.14× over each crossed item, never wider than the glass is there; where the label
+     changes the scale fits both; normal size at both ends. Same timing as the glass, so in step. */
+  if(g.t.animate){const TW=widths(g,C.map(x=>x.e)),fit=(t,i)=>Math.min(1.14,(W(t)-8)/((TW[i]||1)*1.12)),K=[{transform:'scale(1)',offset:0}];
+   C.forEach((x,i)=>{if(i){const tb=x.t0;K.push({transform:`scale(${Math.max(.5,Math.min(fit(tb,i-1),fit(tb,i))).toFixed(3)})`,offset:tb})}
+    if(i&&i<C.length-1){const tm=(x.t0+x.t1)/2;if(tm>K[K.length-1].offset)K.push({transform:`scale(${Math.max(.5,fit(tm,i)).toFixed(3)})`,offset:tm})}});
+   K.push({transform:'scale(1)',offset:1});
+   K.forEach((k,i)=>{if(i&&k.offset<K[i-1].offset)k.offset=K[i-1].offset});
+   if(g.ta)g.ta.cancel();g.ta=g.t.animate(K,{duration:dur,easing:ease})}
+  lens(g,C[0].e,st,false);cover(g,C[0].e);
+  /* where the glass is, read from what is drawn: how far along the line its centre is (never back), and over which item */
   const f=()=>{if(!g.anim||!g.box)return;
-   const W=g.el.offsetWidth,H=g.el.offsetHeight,m=new DOMMatrixReadOnly(getComputedStyle(g.el).transform),cx=m.m41+W/2,cy=m.m42+H/2;
-   /* its centre moves along the line joining the buttons' centres: find its segment (from the current one on) and how far along */
-   let kb=g.path.k,ub=0,bd=1e9;for(let k=g.path.k;k<Math.min(R.length-1,g.path.k+6);k++){const a=c(R[k]),z=c(R[k+1]),vx=z[0]-a[0],vy=z[1]-a[1],L2=vx*vx+vy*vy||1;
-    const u=Math.max(0,Math.min(1,((cx-a[0])*vx+(cy-a[1])*vy)/L2)),d=Math.hypot(a[0]+vx*u-cx,a[1]+vy*u-cy);if(d<bd-.5){bd=d;kb=k;ub=u}}
-   g.path.k=kb;const j=Math.max(g.path.j,ub<.5?kb:kb+1);
-   if(j!==g.path.j){g.path.j=j;lens(g,P[j],st,true);cover(g,P[j])}
-   const rad=H*2.6;
-   g.path.A.forEach(([e,r])=>{if(e===g.cov)return;const d=Math.hypot(r.x+r.w/2-cx,r.y+r.h/2-cy),s=1+MAG*Math.max(0,1-d/rad);e.style.scale=s>1.001?s.toFixed(3):''});
+   const w=g.el.offsetWidth,h=g.el.offsetHeight,m=new DOMMatrixReadOnly(getComputedStyle(g.el).transform),cx=m.m41+w/2,cy=m.m42+h/2;
+   const P=g.path,t=Math.max(P.t,Math.min(1,((cx-ca[0])*dx+(cy-ca[1])*dy)/(dist*dist)));P.t=t;
+   let j=P.j;while(j<C.length-1&&C[j+1].t0<=t)j++;
+   if(j!==P.j){P.j=j;lens(g,C[j].e,st,true)}
+   cover(g,t<=C[j].t1+.02?C[j].e:null);
+   const rad=h*2.6;
+   P.A.forEach(([e,r])=>{if(e===g.cov)return;const d=Math.hypot(r.x+r.w/2-cx,r.y+r.h/2-cy),s=1+MAG*Math.max(0,1-d/rad);e.style.scale=s>1.001?s.toFixed(3):''});
    g.raf=requestAnimationFrame(f)};
   g.raf=requestAnimationFrame(f);
   /* on arrival: measured again (a label may have been translated on the way), the letters of the label land, the glass wobbles */
