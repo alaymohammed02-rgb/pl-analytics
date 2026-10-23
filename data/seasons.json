@@ -1,0 +1,45 @@
+{
+ "leagues": {
+  "l_4WFCIZ": {
+   "cur": "2026-27",
+   "seasons": {
+    "2025-26": {
+     "name": "Premier League",
+     "api": "2025/2026",
+     "id": "l_4WFCIZ_2025-26",
+     "n": 380,
+     "t": "2026-10-23 05:01:26",
+     "err": null,
+     "plan": false,
+     "req": 400,
+     "sec": 130,
+     "files": {
+      "s": "2025-26",
+      "id": "l_4WFCIZ_2025-26",
+      "file": "l_4WFCIZ_2025-26.json",
+      "v": "bdcc8052b5",
+      "size": 1975525,
+      "adv_file": "l_4WFCIZ_2025-26_adv.json",
+      "adv_v": "9521e4e725",
+      "heat_file": "l_4WFCIZ_2025-26_heat.json",
+      "heat_v": "1d5572270c",
+      "pl_file": "l_4WFCIZ_2025-26_pl.json",
+      "pl_v": "a2999cb840",
+      "sh_file": "l_4WFCIZ_2025-26_sh.json",
+      "sh_v": "822eb6e9ab",
+      "mx_file": "l_4WFCIZ_2025-26_mx.json",
+      "mx_v": "32d20e0979",
+      "rt_file": "l_4WFCIZ_2025-26_rt.json",
+      "rt_v": "a1dfa3aa07",
+      "hv_file": "l_4WFCIZ_2025-26_hv.json",
+      "hv_v": "4fcefdb9cb"
+     },
+     "got": 40,
+     "ok": 40,
+     "complete": false
+    }
+   }
+  }
+ },
+ "note": "Finished past seasons from PitchAPI, fetched once per match (same file formats as the current season, season in the file name). n = matches in PitchAPI, got = fetched, req/sec = requests and seconds spent."
+}
