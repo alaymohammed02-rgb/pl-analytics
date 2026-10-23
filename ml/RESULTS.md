@@ -105,3 +105,41 @@ Checks (`season_review/check.js`, all four seasons): legal squads and XIs, club 
 prices, auto-subs, captaincy and every gameweek's points recomputed from the raw rows; the hindsight XI is legal and never below the
 model's XI; truncation leak test (data cut after gameweek k gives identical decisions up to k). The page recomputes a season in
 the browser in about 3 s and gets the same file.
+
+## Previous-season priors from PitchAPI (23 October 2026): not adopted
+
+Question: do PitchAPI's numbers for the previous Premier League season add information to the production model v3, above all early in the
+season? The sync now fetches the Premier League seasons 2021-22 to 2024-25 from PitchAPI as "light" seasons: matches, player rows and
+shots only, 1520 matches, all `ok`, 5 requests a match. Folder: `experiments/pitchapi_priors/` (`reproduce.sh` recomputes everything from
+`data/`).
+
+What was tried: the earlier `priors` mechanism, ported onto v3 (`model_pa.js`, edits marked `[s3]`; all new parameters 0 = v3 exactly).
+- The previous season's PitchAPI xG and xAG per player enter as extra evidence for the xG/xA rates (`PW`). They are scaled to FPL's xG/xA
+  with factors fitted on TRAIN 2023-24 only, from the same season in both sources: FPL xG = 0.99 × PitchAPI xG, FPL xA = 0.95 × PitchAPI xAG.
+  Goals agree (1008 vs 1009).
+- Playing-time pattern as pseudo-matches that fade during the season (`PK`, `PKD`).
+- Team attack/defence ratios from the shots (`TR`), with promoted sides at the relegated sides' average (`TRP`).
+
+Players are linked to FPL by the site's own name rule (`fpNz`: full name or web name, else surname and initial, one match only). Of the
+FPL players with minutes in the previous season, 91% get a PitchAPI prior (2023-24: 382 of 420; 2024-25: 380 of 423). All 20 clubs link
+within a season (after mapping "Sheffield Utd").
+
+Protocol (`ml/README.md`): TRAIN 2022-23 + 2023-24. 2022-23 now has a previous season too (PitchAPI 2021-22; the FPL archive has none).
+The grid had 66 settings. The rule, fixed before the grid: a setting counts only if it beats v3 on both TRAIN seasons in both MAE and
+RMSE; the largest mean gain wins. Chosen: `PW=1, TR=0.5, PK=0, TRP=0`. Validation 2024-25 and test 2025-26 were each evaluated once,
+after that choice.
+
+| rounds 4+ | v3 MAE / RMSE | with PitchAPI priors | rounds 4-10 MAE | gameweeks better |
+|---|---|---|---|---|
+| 2022-23 (train) | 1.7075 / 2.5962 | 1.7057 / 2.5957 | 1.6933 → 1.6883 | 20 of 34 |
+| 2023-24 (train) | 1.6759 / 2.6154 | 1.6627 / 2.6144 | 1.6625 → 1.6422 | 32 of 35 |
+| 2024-25 (validation) | 1.6162 / 2.4937 | 1.6140 / 2.4901 | 1.5869 → 1.5788 | 21 of 35 |
+| **2025-26 (test)** | **1.7382 / 2.6332** | 1.7409 / 2.6328 | 1.6835 → 1.6902 | **11 of 35** |
+
+For comparison, the same prior built from the FPL archive on 2023-24 gives 1.6653 / 2.6143 (PitchAPI: 1.6627 / 2.6144). So PitchAPI's
+previous season carries about the same information as FPL's own.
+
+Verdict: the gain on TRAIN and validation is small (0.1–0.8% MAE) and does not hold on the unseen season. There, MAE is worse, RMSE is
+equal, the early rounds are worse, and only 11 of 35 gameweeks improve. **The production model stays v3**; nothing on the site changed.
+A likely reason is that v3's recency-weighted rates catch up within a few gameweeks, so last season only helps the first rounds, and it
+helps less when many players change role or club.

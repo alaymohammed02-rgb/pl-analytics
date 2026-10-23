@@ -60,6 +60,17 @@ A static football analytics site on GitHub Pages. A Python sync (`sync.py`, run 
   - StatsBomb 360 lines, corrected by a SkillCorner-trained model (0.31 m error);
   - plus the current-season estimate formula and its validation.
 
+- **Past seasons** (`data/seasons.json`, sync section "المواسم السابقة"):
+  - Finished seasons from PitchAPI under `<league>_<season>` (e.g. `data/l_4WFCIZ_2025-26_sh.json`), same formats as the current files.
+  - Each match is fetched once; at most 1200 PitchAPI requests per sync run (`PS_REQ_PER_RUN`); jobs in `PS_JOBS`.
+  - Full seasons cost 10 requests a match and about 49 KB; light seasons (matches, player rows, shots) cost 5 and about 16 KB.
+  - PitchAPI lists 2021-22 to 2026-27 for all six leagues; the plan allows past seasons (measured 23 Oct 2026).
+  - `data/index.json → seasons` lists the full past seasons per league (light ones are left out). Light seasons have team ids, not names, in `c`; the names are in the `team` rows.
+- **Season selector** (`assets/seasons.js` + `psView` inline): a past season keeps the league id and swaps the league's files.
+  - A switch reloads the page.
+  - Pages that need this season's Fantasy data, fixtures or live data are listed in `NOT` and say "not available for a past season".
+  - Files that describe only the current season are answered "not found" in a past season (`psCurOnly`).
+
 ## Testing and merging
 
 - **Tests:** see `tests/README.md`. Each page has a test that recomputes its numbers independently from `data/`, and checks Arabic, a 390 px phone, leaving before the data arrives, and a failing file.
@@ -75,7 +86,8 @@ A static football analytics site on GitHub Pages. A Python sync (`sync.py`, run 
    - Remove date and live-value dependencies.
    - Split the suite into parallel jobs.
 2. **A stronger match model** (Opus, high effort).
-   - Use past seasons from PitchAPI as priors (fetched by the sync; mind the PitchAPI quota).
+   - Use past seasons from PitchAPI as priors (now fetched by the sync: 2025-26 for six leagues, Premier League 2021-22 to 2024-25 light).
+   - Note: previous-season PitchAPI priors did not improve the Fantasy model on the held-out 2025-26 (`ml/RESULTS.md`).
    - Weight recent matches more, and use a home advantage per league.
    - Possibly add ClubElo.
    - Measure it with the Model report card page.
