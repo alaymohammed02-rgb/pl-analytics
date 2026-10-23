@@ -1,146 +1,215 @@
-/* ===== Liquid Glass 2: a glass lens over the chosen button that travels through the buttons in between =====
-   Groups: the Fantasy tabs (#fproot > .ctl) and the menu drawer (#drw .drw-n). A new choice sends the glass straight to it,
-   in any direction, cutting across the buttons that lie on its way (at most 0.7 s). On its way:
-   - Magnification: the label under the glass is drawn larger inside it (a lens), and the buttons near the glass grow a
-     little, less with distance (like the macOS Dock).
-   - Per-character animation: the lens label is rebuilt for every button it crosses, its letters arriving one after another
-     in the direction of travel. Arabic goes word by word, because splitting Arabic letters would break their joining.
-   - Dynamic typography: while moving, the lens label is heavier and a little wider; it settles when the glass stops.
-   A group with fewer than two buttons keeps its normal style (the glass needs somewhere to go). With "reduce motion" the
-   glass moves at once and nothing animates. The buttons are not changed (their text, order and clicks stay as they are):
-   an aria-hidden glass with pointer-events off is added on top, and data attributes (not classes, so className stays as the
-   page set it) mark the chosen button (data-lgx-act) and the one covered (data-lgx-on). */
+/* ===== Liquid Glass 3: a true lens over the chosen button =====
+   Groups: the Fantasy tabs (#fproot > .ctl) and the menu drawer (#drw .drw-n).
+   - A true lens: the glass shows exactly what lies under it (the buttons, half of one and half of the next when it sits
+     between them, the section titles of the drawer), drawn from a copy of the group lined up with the page. Nothing in the
+     copy is made up: every letter is placed where the browser drew the real one, in its font and colour.
+   - Per-character magnification: while the glass moves, or while it is pressed, each letter under it is enlarged and pushed
+     out from the centre (most in the middle, none at the rim, so the edge of the lens meets the page without a seam).
+     Arabic is handled word by word, because splitting Arabic letters would break their joining.
+   - Dynamic typography: the faster the glass goes, the stronger the lens and the heavier the letters; at rest both are off.
+   - Physics: the glass is a spring. A new choice sends it straight to the new button in any direction, cutting across the
+     buttons on the line, with a small overshoot; it stretches along the way it moves and squashes on arrival, and the letters
+     of the new button land one after another. A choice made while it is still moving bends its path instead of restarting.
+     Buttons near it grow a little (macOS Dock).
+   - Play (Fantasy tabs): press the chosen tab and the glass lifts; drag it anywhere over the tabs and let go to choose the tab
+     under it. With a mouse, the glass leans a little towards the tab you point at.
+   A group with fewer than two buttons keeps its normal style. With "reduce motion" the glass moves at once, without lens
+   or springs. The buttons are not changed (their text, order and clicks stay as they are): an aria-hidden glass with
+   pointer-events off is added on top, and a data attribute (not a class, so className stays as the page set it) marks the
+   chosen button (data-lgx-act). */
 (function(){
  if(!document.body||typeof MutationObserver==='undefined')return;
  const RM=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
- const ARS=/[\u0600-\u06FF]/,MAG=.08;
- const ex=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]);
+ const ARS=/[\u0600-\u06FF]/,MAG=.08,AMAX=.36,LIFT=[1.1,1.2],MOVE={k:420,z:.72},DRAG={k:900,z:.85};
  const key=e=>e.getAttribute('href')||(e.dataset.cap?'cap':'')||e.getAttribute('onclick')||e.textContent;
  const G=[
-  {id:'fp',sel:'#fproot > .ctl',items:c=>[...c.children].filter(e=>e.tagName==='BUTTON'),on:e=>!e.classList.contains('s'),max:700,rebuild:true},
-  {id:'drw',sel:'#drw .drw-n',items:c=>[...c.querySelectorAll('a[href^="#/"]')],on:e=>e.classList.contains('on'),max:600,rebuild:false,start:true}
- ].map(g=>Object.assign(g,{box:null,el:null,b:null,t:null,k:null,anim:null,raf:0,ro:null,end:0,path:null,cov:null}));
+  {id:'fp',sel:'#fproot > .ctl',items:c=>[...c.children].filter(e=>e.tagName==='BUTTON'),on:e=>!e.classList.contains('s'),rebuild:true,drag:true},
+  {id:'drw',sel:'#drw .drw-n',items:c=>[...c.querySelectorAll('a[href^="#/"]')],on:e=>e.classList.contains('on'),rebuild:false,deco:c=>[...c.querySelectorAll('.drw-s h3')]}
+ ].map(g=>Object.assign(g,{box:null,el:null,wb:null,wt:null,L:[],R:[],S:[],P:[],k:null,s:null,T:null,A:0,raf:0,last:0,ro:null,
+  end:0,sig:'',dirty:true,mv:false,arr:false,d0:0,dir:[1,0],pd:null,lean:[0,0],hv:null,sup:0}));
 
  /* position of an item inside the group's box (layout only: the Dock scaling does not move it) */
  function rect(g,e){let x=0,y=0,n=e;while(n&&n!==g.box){x+=n.offsetLeft;y+=n.offsetTop;n=n.offsetParent}
   if(n)return {x,y,w:e.offsetWidth,h:e.offsetHeight};
   const b=g.box.getBoundingClientRect(),r=e.getBoundingClientRect();
   return {x:r.left-b.left-g.box.clientLeft+g.box.scrollLeft,y:r.top-b.top-g.box.clientTop+g.box.scrollTop,w:e.offsetWidth,h:e.offsetHeight}}
- function off(g){stop(g);if(g.el)g.el.remove();g.el=null;
-  if(g.box){g.box.classList.remove('lgx','lgx-mv','lgx-s');g.items(g.box).forEach(e=>{['data-lgx-on','data-lgx-act','data-lgx-i'].forEach(a=>e.removeAttribute(a));e.style.scale=''})}}
- /* the box, its items and the glass; a rebuilt box gets a new glass */
+ /* the colour behind the group: the lens is painted on it, so the real labels under the glass do not show through twice */
+ function under(n){for(;n&&n.nodeType===1;n=n.parentElement){const c=getComputedStyle(n).backgroundColor,m=c.match(/[\d.]+/g);if(m&&(m.length<4||+m[3]>0))return c}return ''}
+ function stop(g){cancelAnimationFrame(g.raf);g.raf=0}
+ function off(g){stop(g);if(g.el)g.el.remove();g.el=null;g.P=[];g.L=[];
+  if(g.box){g.box.classList.remove('lgx','lgx-mv','lgx-d');g.items(g.box).forEach(e=>{['data-lgx-act','data-lgx-i'].forEach(a=>e.removeAttribute(a));e.style.scale=''})}}
+ const sigOf=(g,L)=>L.map(e=>e.textContent).join('\u0001')+'|'+g.box.clientWidth;
+ /* the box, its items and the glass; a rebuilt box gets a new glass (the spring keeps its state, so a move goes on) */
  function ensure(g){
   const box=document.querySelector(g.sel);
-  if(box!==g.box){if(g.ro)g.ro.disconnect();g.ro=null;stop(g);g.box=box;g.el=null}
+  if(box!==g.box){if(g.ro)g.ro.disconnect();g.ro=null;stop(g);g.box=box;g.el=null;g.dirty=true}
   if(!box)return null;
   const L=g.items(box);
   if(L.length<2){off(g);return null}
   if(!g.el||g.el.parentNode!==box){
-   box.classList.add('lgx');box.classList.toggle('lgx-s',!!g.start);
+   box.classList.add('lgx');box.classList.toggle('lgx-d',!!g.drag);
    const el=document.createElement('div');el.className='lgx-g';el.setAttribute('aria-hidden','true');
-   el.innerHTML='<div class="lgx-b"><span class="lgx-t"></span></div>';box.appendChild(el);
-   g.el=el;g.b=el.firstChild;g.t=g.b.firstChild;g.cov=null;
-   if(window.ResizeObserver){if(g.ro)g.ro.disconnect();g.ro=new ResizeObserver(()=>{if(!g.anim&&g.box===box)rest(g)});g.ro.observe(box);L.forEach(e=>g.ro.observe(e))}
+   el.innerHTML='<div class="lgx-b"><div class="lgx-w lgx-wb"></div><div class="lgx-tn"></div><div class="lgx-w lgx-wt"></div></div>';
+   box.appendChild(el);g.el=el;const b=el.firstChild;g.wb=b.children[0];g.wt=b.children[2];g.dirty=true;g.P=[];
+   const c=under(box);if(c)el.style.setProperty('--lgx-base',c);
+   if(window.ResizeObserver){if(g.ro)g.ro.disconnect();g.ro=new ResizeObserver(()=>{if(g.box!==box)return;g.dirty=true;if(!g.raf)rest(g)});g.ro.observe(box);L.forEach(e=>g.ro.observe(e))}
   }
+  if(L.length!==g.L.length||L.some((e,i)=>e!==g.L[i]))g.dirty=true;
   L.forEach(e=>e.setAttribute('data-lgx-i',''));
+  g.L=L;g.R=L.map(e=>rect(g,e));
   return L;
  }
- function look(g,e){const c=getComputedStyle(e),t=g.t.style;g.el.style.borderRadius=c.borderRadius;
-  t.fontSize=c.fontSize;t.fontFamily=c.fontFamily;t.lineHeight=c.lineHeight;t.paddingInlineStart=c.paddingInlineStart;t.paddingInlineEnd=c.paddingInlineEnd}
- function box(g,r){const s=g.el.style;s.width=r.w+'px';s.height=r.h+'px';s.transform=`translate(${r.x}px,${r.y}px)`}
- /* the label inside the lens, one span per letter (per word in Arabic), numbered in the direction of travel */
- function lens(g,e,dir,pop){
-  const s=(e.innerText||e.textContent||'').trim();
-  if(g.t.dataset.s===s&&!pop)return;g.t.dataset.s=s;
-  const P=ARS.test(s)?s.split(/(\s+)/).filter(Boolean):Array.from(s),n=P.length;
-  g.t.innerHTML=P.map((p,i)=>/^\s+$/.test(p)?'<span class="lgx-c lgx-sp">&nbsp;</span>':`<span class="lgx-c" style="--i:${dir<0?n-1-i:i}">${ex(p)}</span>`).join('');
-  /* while moving the glass stays on a button for less than a tenth of a second: the letters arrive fast enough to be read */
-  const fast=!!g.anim;g.t.style.setProperty('--st',(fast?Math.min(8,50/n):Math.min(18,220/n)).toFixed(1)+'ms');
-  g.t.classList.remove('pop','fast');if(pop&&!RM()){void g.t.offsetWidth;g.t.classList.add('pop');if(fast)g.t.classList.add('fast')}
+ /* the copy of the group drawn inside the lens: each button's background, and each letter (each word in Arabic) and icon
+    exactly where the browser drew it, with the same font and colour */
+ function build(g,L){
+  /* the colours are read as they end up, not half-way through the buttons' own colour transitions */
+  const box=g.box;L.forEach(e=>{e.style.scale='';e.style.transition='none'});g.S=[];g.R=L.map(e=>rect(g,e));
+  const B=box.getBoundingClientRect(),ox=B.left+box.clientLeft-box.scrollLeft,oy=B.top+box.clientTop-box.scrollTop;
+  const P=[],fb=document.createDocumentFragment(),ft=document.createDocumentFragment(),R=document.createRange(),cs=new Map();
+  const font=n=>{let c=cs.get(n);if(c==null){const k=getComputedStyle(n);
+   c=`font:${k.fontStyle} ${k.fontWeight} ${k.fontSize}/1 ${k.fontFamily};letter-spacing:${k.letterSpacing};text-transform:${k.textTransform};color:${k.color};`;cs.set(n,c)}return c};
+  const add=(f,x,y,w,h,css,it,O,pill)=>{const el=document.createElement('i');el.style.cssText=`left:${x}px;top:${y}px;width:${w}px;height:${h}px;`+css;
+   f.appendChild(el);P.push({el,x,y,w,h,it,O,pill,on:0});return el};
+  const texts=(root,it,O)=>{const tw=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let n;
+   while((n=tw.nextNode())){const s=n.data;if(!s.trim()||!n.parentElement)continue;
+    const re=ARS.test(s)?/\S+/g:/\S/gu;let m;
+    while((m=re.exec(s))){R.setStart(n,m.index);R.setEnd(n,m.index+m[0].length);const r=R.getBoundingClientRect();if(!r.width||!r.height)continue;
+     add(ft,r.left-ox,r.top-oy,r.width,r.height,font(n.parentElement)+`line-height:${r.height}px`,it,O,false).dataset.c=m[0]}}};
+  L.forEach((e,i)=>{const r=g.R[i],c=getComputedStyle(e),to=c.transformOrigin.split(' ').map(parseFloat),O=[r.x+(to[0]||0),r.y+(to[1]||0)];
+   add(fb,r.x,r.y,r.w,r.h,`background-color:${c.backgroundColor};background-image:${c.backgroundImage};border-top:${c.borderTop};border-right:${c.borderRight};border-bottom:${c.borderBottom};border-left:${c.borderLeft};border-radius:${c.borderRadius};box-shadow:${c.boxShadow}`,i,O,true);
+   texts(e,i,O)});
+  (g.deco?g.deco(box):[]).forEach(d=>{texts(d,-1,null);
+   d.querySelectorAll('svg').forEach(v=>{const r=v.getBoundingClientRect();if(!r.width)return;
+    const el=add(ft,r.left-ox,r.top-oy,r.width,r.height,`color:${getComputedStyle(v).color}`,-1,null,false),k=v.cloneNode(true);k.style.cssText='display:block;width:100%;height:100%';el.appendChild(k)})});
+  L.forEach(e=>{e.style.transition=''});
+  g.wb.replaceChildren(fb);g.wt.replaceChildren(ft);g.P=P;g.dirty=false;g.sig=sigOf(g,L);
  }
- /* width of each label as the lens draws it while moving (heavier, wider spaced), without padding */
- function widths(g,P){const m=document.createElement('span');m.style.cssText='position:absolute;visibility:hidden;white-space:pre;font-weight:800;letter-spacing:.02em';
-  const c=g.t.style;m.style.fontSize=c.fontSize;m.style.fontFamily=c.fontFamily;g.b.appendChild(m);
-  const W=P.map(e=>{m.textContent=(e.innerText||e.textContent||'').trim();return m.offsetWidth});m.remove();return W}
- function cover(g,e){if(g.cov===e)return;if(g.cov)g.cov.removeAttribute('data-lgx-on');g.cov=e;if(e){e.setAttribute('data-lgx-on','');e.style.scale=''}}
- function unmag(g){if(!g.box)return;g.box.classList.remove('lgx-mv');g.items(g.box).forEach(e=>{e.style.scale=''})}
- /* stop any movement of the group's glass (its page went away, or a new move starts) */
- function stop(g){if(g.anim){g.anim.cancel();g.anim=null}if(g.ta){g.ta.cancel();g.ta=null}cancelAnimationFrame(g.raf)}
- /* the glass at rest on the chosen item */
- function rest(g){const L=ensure(g);if(!L)return;const a=L.find(g.on);if(!a){g.el.style.opacity='0';cover(g,null);return}
-  stop(g);
-  const r=rect(g,a);look(g,a);box(g,r);g.el.style.opacity='1';g.el.classList.remove('mv');unmag(g);
-  L.forEach(e=>e.toggleAttribute('data-lgx-act',e===a));lens(g,a,1,false);cover(g,a);g.k=key(a)}
- /* the glass goes straight from item a to item b, in any direction, cutting across the items on its way (those are the ones
-    it magnifies and spells out); a little longer in the direction it moves half-way, as a liquid drop would be */
- function travel(g,L,a,b){
-  stop(g);
-  const A=rect(g,L[a]),B=rect(g,L[b]),c=r=>[r.x+r.w/2,r.y+r.h/2],ca=c(A),cb=c(B),dx=cb[0]-ca[0],dy=cb[1]-ca[1],dist=Math.hypot(dx,dy);
-  if(!dist){rest(g);return}
-  /* the items the straight line crosses, in order, with the part of the way (0 to 1) spent over each */
-  const all=L.map(e=>[e,rect(g,e)]),C=[],n=Math.max(2,Math.ceil(dist/3));
-  for(let k=0;k<=n;k++){const t=k/n,x=ca[0]+dx*t,y=ca[1]+dy*t,h=all.find(([e,r])=>x>=r.x&&x<=r.x+r.w&&y>=r.y&&y<=r.y+r.h);
-   if(!h)continue;const last=C[C.length-1];if(last&&last.e===h[0])last.t1=t;else C.push({e:h[0],t0:t,t1:t})}
-  if(!C.length||C[0].e!==L[a])C.unshift({e:L[a],t0:0,t1:0});if(C[C.length-1].e!==L[b])C.push({e:L[b],t0:1,t1:1});
-  C[0].t0=0;C[C.length-1].t1=1;
-  const dur=Math.min(g.max,Math.max(260,220+dist*.75));
-  /* half-way: the glass is the average of the two sizes, stretched up to 14% along the way it moves, centre on the line */
-  const sx=1+.14*Math.abs(dx)/dist,sy=1+.14*Math.abs(dy)/dist,mw=(A.w+B.w)/2*sx,mh=(A.h+B.h)/2*sy,mc=[(ca[0]+cb[0])/2,(ca[1]+cb[1])/2];
-  const W=t=>t<=.5?A.w+(mw-A.w)*t*2:mw+(B.w-mw)*(t-.5)*2;
-  L.forEach(e=>e.toggleAttribute('data-lgx-act',e===L[b]));look(g,L[b]);g.el.style.opacity='1';
-  box(g,B);g.el.classList.add('mv');g.box.classList.add('lgx-mv');
-  const ease='cubic-bezier(.35,0,.15,1)';
-  g.anim=g.el.animate([{transform:`translate(${A.x}px,${A.y}px)`,width:A.w+'px',height:A.h+'px'},
-   {transform:`translate(${mc[0]-mw/2}px,${mc[1]-mh/2}px)`,width:mw+'px',height:mh+'px',offset:.5},
-   {transform:`translate(${B.x}px,${B.y}px)`,width:B.w+'px',height:B.h+'px'}],{duration:dur,easing:ease});
-  g.end=performance.now()+dur;
-  /* letters arrive in the direction of travel (in a right-to-left page, words run the other way) */
-  const rtl=getComputedStyle(g.box).direction==='rtl',st=Math.abs(dx)>4?(rtl?-Math.sign(dx):Math.sign(dx)):1;
-  g.path={C,ca,dx,dy,dist,j:0,t:0,A:all};
-  /* magnification of the lens label: up to 1.14× over each crossed item, never wider than the glass is there; where the label
-     changes the scale fits both; normal size at both ends. Same timing as the glass, so in step. */
-  if(g.t.animate){const TW=widths(g,C.map(x=>x.e)),fit=(t,i)=>Math.min(1.14,(W(t)-8)/((TW[i]||1)*1.12)),K=[{transform:'scale(1)',offset:0}];
-   C.forEach((x,i)=>{if(i){const tb=x.t0;K.push({transform:`scale(${Math.max(.5,Math.min(fit(tb,i-1),fit(tb,i))).toFixed(3)})`,offset:tb})}
-    if(i&&i<C.length-1){const tm=(x.t0+x.t1)/2;if(tm>K[K.length-1].offset)K.push({transform:`scale(${Math.max(.5,fit(tm,i)).toFixed(3)})`,offset:tm})}});
-   K.push({transform:'scale(1)',offset:1});
-   K.forEach((k,i)=>{if(i&&k.offset<K[i-1].offset)k.offset=K[i-1].offset});
-   if(g.ta)g.ta.cancel();g.ta=g.t.animate(K,{duration:dur,easing:ease})}
-  lens(g,C[0].e,st,false);cover(g,C[0].e);
-  /* where the glass is, read from what is drawn: how far along the line its centre is (never back), and over which item */
-  const f=()=>{if(!g.anim||!g.box)return;
-   const w=g.el.offsetWidth,h=g.el.offsetHeight,m=new DOMMatrixReadOnly(getComputedStyle(g.el).transform),cx=m.m41+w/2,cy=m.m42+h/2;
-   const P=g.path,t=Math.max(P.t,Math.min(1,((cx-ca[0])*dx+(cy-ca[1])*dy)/(dist*dist)));P.t=t;
-   let j=P.j;while(j<C.length-1&&C[j+1].t0<=t)j++;
-   if(j!==P.j){P.j=j;lens(g,C[j].e,st,true)}
-   cover(g,t<=C[j].t1+.02?C[j].e:null);
-   const rad=h*2.6;
-   P.A.forEach(([e,r])=>{if(e===g.cov)return;const d=Math.hypot(r.x+r.w/2-cx,r.y+r.h/2-cy),s=1+MAG*Math.max(0,1-d/rad);e.style.scale=s>1.001?s.toFixed(3):''});
-   g.raf=requestAnimationFrame(f)};
-  g.raf=requestAnimationFrame(f);
-  /* on arrival: measured again (a label may have been translated on the way), the letters of the label land, the glass wobbles */
-  const an=g.anim;an.onfinish=()=>{if(g.anim!==an||!g.el||!g.box)return;g.anim=null;rest(g);lens(g,L[b],st,true);
-   if(g.b.animate)g.b.animate([{transform:'scale(1.07,.9)'},{transform:'scale(.97,1.04)',offset:.55},{transform:'none'}],{duration:340,easing:'ease-out'})};
-  g.k=key(L[b]);
+ /* where the spring is pulled to: the chosen button, or the pointer while dragging; bigger while pressed; leaning towards
+    the button the mouse points at */
+ function goal(g){const pd=g.pd,T=pd&&pd.drag?{x:pd.x,y:pd.y,w:pd.w,h:pd.h}:Object.assign({},g.T);
+  if(pd){T.w*=LIFT[0];T.h*=LIFT[1]}T.x+=g.lean[0];T.y+=g.lean[1];return T}
+ function step(s,T,dt,p){const c=2*p.z*Math.sqrt(p.k);
+  for(const [q,v] of [['x','vx'],['y','vy'],['w','vw'],['h','vh']]){s[v]+=(p.k*(T[q]-s[q])-c*s[v])*dt;s[q]+=s[v]*dt}}
+ const close=(s,T)=>Math.abs(T.x-s.x)<.6&&Math.abs(T.y-s.y)<.6&&Math.abs(T.w-s.w)<.6&&Math.abs(T.h-s.h)<.6&&Math.hypot(s.vx,s.vy)<25&&Math.abs(s.vw)+Math.abs(s.vh)<25;
+ /* how long the spring takes to arrive from where it is now (the drawer waits for it before closing) */
+ function sim(g){const s=Object.assign({},g.s),T=goal(g);let t=0;while(t<2&&!close(s,T)){for(let i=0;i<4;i++)step(s,T,1/240,MOVE);t+=1/60}return t*1000}
+ /* draw the glass where the spring is: stretched along the way it moves, the copy shifted to line up with the page, every
+    piece under the glass pushed through the lens, and the Dock growth of the buttons nearby */
+ function render(g){const s=g.s,el=g.el;if(!el||!s)return;
+  const ax=Math.abs(s.vx),ay=Math.abs(s.vy);
+  const w=Math.max(4,s.w*(1+Math.min(.2,ax/4500)-Math.min(.07,ay/9000))),h=Math.max(4,s.h*(1+Math.min(.2,ay/4500)-Math.min(.07,ax/9000)));
+  const gx=s.x-w/2,gy=s.y-h/2,st=el.style;
+  st.transform=`translate(${gx.toFixed(2)}px,${gy.toFixed(2)}px)`;st.width=w.toFixed(2)+'px';st.height=h.toFixed(2)+'px';
+  const wt=`translate(${(-gx).toFixed(2)}px,${(-gy).toFixed(2)}px)`;g.wb.style.transform=wt;g.wt.style.transform=wt;
+  const A=g.A;g.wt.style.setProperty('--wt',Math.min(.7,A*1.8).toFixed(2)+'px');
+  const kd=Math.min(1,A/.18),rad=s.h*2.6,S=g.S;
+  g.R.forEach((r,i)=>{const inside=s.x>=r.x&&s.x<=r.x+r.w&&s.y>=r.y&&s.y<=r.y+r.h;
+   let v=inside||kd<.01?1:1+MAG*kd*Math.max(0,1-Math.hypot(r.x+r.w/2-s.x,r.y+r.h/2-s.y)/rad);if(v<1.001)v=1;
+   if(v!==S[i]){S[i]=v;g.L[i].style.scale=v>1?v.toFixed(3):''}});
+  const hw=w/2,hh=h/2,cx=s.x,cy=s.y,x0=gx-2,x1=gx+w+2,y0=gy-2,y1=gy+h+2;
+  /* the lens: a point at (normalised) distance d from the centre moves out by m = 1+A(1-d²)²; a letter there is scaled by the
+     local stretch of that map along each axis (m - 4A(1-d²)u², u its normalised offset on that axis), so near the rim letters
+     are squeezed across the rim (as in a real lens) and never overlap */
+  let kx=1,ky=1;const M=(px,py)=>{const u=(px-cx)/hw,v=(py-cy)/hh,r=u*u+v*v;if(r>=1){kx=ky=1;return 1}const q=1-r,m=1+A*q*q;
+   kx=m-4*A*q*u*u;ky=m-4*A*q*v*v;return m};
+  for(const p of g.P){const sc=p.it>=0?S[p.it]||1:1;let l=p.x,t=p.y,r=p.x+p.w,b=p.y+p.h;
+   if(sc!==1){const O=p.O;l=O[0]+(l-O[0])*sc;r=O[0]+(r-O[0])*sc;t=O[1]+(t-O[1])*sc;b=O[1]+(b-O[1])*sc}
+   if(r<x0||l>x1||b<y0||t>y1||(A<.002&&sc===1)){if(p.on){p.el.style.translate='';p.el.style.scale='';p.on=0}continue}
+   let tx,ty,sx,sy;
+   if(p.pill){const my=Math.max(t,Math.min(b,cy)),mx=Math.max(l,Math.min(r,cx)),
+     L2=cx+(l-cx)*M(l,my),R2=cx+(r-cx)*M(r,my),T2=cy+(t-cy)*M(mx,t),B2=cy+(b-cy)*M(mx,b);
+    tx=(L2+R2)/2-(p.x+p.w/2);ty=(T2+B2)/2-(p.y+p.h/2);sx=(R2-L2)/p.w;sy=(B2-T2)/p.h}
+   else{const qx=(l+r)/2,qy=(t+b)/2,m=M(qx,qy);tx=cx+(qx-cx)*m-(p.x+p.w/2);ty=cy+(qy-cy)*m-(p.y+p.h/2);sx=sc*kx;sy=sc*ky}
+   p.el.style.translate=`${tx.toFixed(2)}px ${ty.toFixed(2)}px`;p.el.style.scale=`${sx.toFixed(4)} ${sy.toFixed(4)}`;p.on=1}
  }
- /* a new choice in a group: travel from the previous one when it is still there, otherwise rest on the new one */
+ /* the letters of the new button land one after another, from the side the glass came from */
+ function pop(g){const i=g.L.findIndex(e=>e.hasAttribute('data-lgx-act'));if(i<0)return;
+  const Q=g.P.filter(p=>p.it===i&&!p.pill).sort((a,b)=>(a.x*g.dir[0]+a.y*g.dir[1])-(b.x*g.dir[0]+b.y*g.dir[1])),stg=Math.min(18,220/Math.max(1,Q.length));
+  Q.forEach(p=>p.el.classList.remove('pop'));if(Q.length)void Q[0].el.offsetWidth;
+  Q.forEach((p,k)=>{p.el.style.setProperty('--i',k);p.el.style.setProperty('--st',stg.toFixed(1)+'ms');p.el.classList.add('pop')})}
+ function settle(g){const T=goal(g);Object.assign(g.s,{x:T.x,y:T.y,w:T.w,h:T.h,vx:0,vy:0,vw:0,vh:0});g.A=0;
+  if(g.dirty&&g.L.length)build(g,g.L);
+  if(g.mv){g.mv=false;g.el.classList.remove('mv');g.box.classList.remove('lgx-mv');if(g.arr){g.arr=false;pop(g)}}
+  render(g)}
+ function loop(g){if(g.raf||!g.el)return;g.last=0;
+  const f=ts=>{g.raf=0;if(!g.box||!g.el||!g.box.isConnected||!g.s)return;
+   const dt=g.last?Math.min(.05,(ts-g.last)/1000):1/60;g.last=ts;
+   const T=goal(g),p=g.pd&&g.pd.drag?DRAG:MOVE,n=Math.max(1,Math.ceil(dt*240));for(let i=0;i<n;i++)step(g.s,T,dt/n,p);
+   const sp=Math.hypot(g.s.vx,g.s.vy),At=g.pd?AMAX:Math.min(AMAX,sp/1800*AMAX);g.A+=(At-g.A)*(1-Math.exp(-dt*(At>g.A?26:20)));
+   if(g.arr&&g.A<.1&&Math.hypot(T.x-g.s.x,T.y-g.s.y)<Math.max(6,g.d0*.12)){g.arr=false;pop(g)}
+   if(!g.pd&&close(g.s,T)&&g.A<.012){settle(g);return}
+   render(g);g.raf=requestAnimationFrame(f)};
+  g.raf=requestAnimationFrame(f)}
+ const kick=g=>{if(g.el&&g.s&&!RM())loop(g)};
+ /* the glass at rest on the chosen item, at once */
+ function rest(g){const L=ensure(g);if(!L)return;const a=L.find(g.on);if(!a){g.el.style.opacity='0';return}
+  stop(g);if(!a.hasAttribute('data-lgx-act')||L.some(e=>e!==a&&e.hasAttribute('data-lgx-act'))){L.forEach(e=>e.toggleAttribute('data-lgx-act',e===a));g.dirty=true}
+  if(g.dirty||!g.P.length)build(g,L);
+  const r=g.R[L.indexOf(a)];g.T={x:r.x+r.w/2,y:r.y+r.h/2,w:r.w,h:r.h};g.s={x:g.T.x,y:g.T.y,w:r.w,h:r.h,vx:0,vy:0,vw:0,vh:0};
+  g.A=0;g.lean=[0,0];g.pd=null;g.el.style.borderRadius=getComputedStyle(a).borderRadius;g.el.style.opacity='1';
+  g.mv=false;g.arr=false;g.el.classList.remove('mv','up','drag');g.box.classList.remove('lgx-mv');render(g);g.k=key(a)}
+ /* a new choice in a group: the spring takes the glass from wherever it is (moving or not) to the new item */
  function update(g,animate){
-  const L=ensure(g);if(!L)return;const b=L.findIndex(g.on);if(b<0){rest(g);return}
-  const a=g.k!=null&&g.k!==key(L[b])?L.findIndex(e=>key(e)===g.k):-1;
-  if(animate&&a>=0&&!RM()&&g.el.animate)travel(g,L,a,b);else rest(g);
- }
+  const L=ensure(g);if(!L)return;const b=L.find(g.on);if(!b){rest(g);return}
+  const k=key(b),moved=g.k!=null&&k!==g.k,busy=g.mv||!!g.pd||g.A>.012||!!(g.s&&g.T&&!close(g.s,goal(g)));
+  if(!animate||RM()||!g.s||!(moved||busy)){rest(g);return}
+  /* a new choice, or the same one in a rebuilt box while the glass is still on its way: draw the copy again and go on */
+  if(moved||L.some(e=>(e===b)!==e.hasAttribute('data-lgx-act'))){L.forEach(e=>e.toggleAttribute('data-lgx-act',e===b));g.dirty=true}
+  if(g.dirty)build(g,L);
+  const r=g.R[L.indexOf(b)],s=g.s;g.T={x:r.x+r.w/2,y:r.y+r.h/2,w:r.w,h:r.h};g.k=k;
+  g.el.style.borderRadius=getComputedStyle(b).borderRadius;g.el.style.opacity='1';
+  if(moved){g.lean=[0,0];g.hv=null;const dx=g.T.x-s.x,dy=g.T.y-s.y,d=Math.hypot(dx,dy)||1;g.dir=[dx/d,dy/d];g.d0=d;g.mv=true;g.arr=true;g.end=performance.now()+sim(g)}
+  if(g.mv){g.el.classList.add('mv');g.box.classList.add('lgx-mv')}
+  if(g.pd)g.el.classList.add('up');
+  render(g);kick(g)}
  function tick(){G.forEach(g=>{const bx=document.querySelector(g.sel);
-  if(!bx){if(g.box){stop(g);if(g.ro)g.ro.disconnect();g.ro=null;g.box=null;g.el=null}return}
+  if(!bx){if(g.box){stop(g);if(g.ro)g.ro.disconnect();g.ro=null;g.box=null;g.el=null;g.mv=false;g.pd=null;g.L=[]}return}
   if(bx!==g.box||!g.el||g.el.parentNode!==bx){update(g,g.rebuild&&g.k!=null);return}
-  const a=g.items(bx).find(g.on);if(a?key(a)!==g.k:g.k!=null)update(g,true)})}
- /* runs before the next paint, so a rebuilt tab bar never shows without its glass */
- new MutationObserver(ms=>{if(ms.every(m=>m.target.closest&&m.target.closest('.lgx-g')))return;tick()}).observe(document.body,{childList:true,subtree:true});
+  const L=g.items(bx),a=L.find(g.on);if(a?key(a)!==g.k:g.k!=null){update(g,true);return}
+  if(!g.raf&&L.length>1&&sigOf(g,L)!==g.sig){g.dirty=true;rest(g)}})}
+ /* runs before the next paint, so a rebuilt tab bar never shows without its glass; text changes (a language switch) too */
+ new MutationObserver(ms=>{if(ms.every(m=>{const t=m.target.nodeType===1?m.target:m.target.parentElement;return t&&t.closest&&t.closest('.lgx-g')}))return;tick()})
+  .observe(document.body,{childList:true,subtree:true,characterData:true});
+ /* colours, language or fonts that change under the copy: draw it again */
+ const redo=()=>G.forEach(g=>{g.dirty=true;if(g.box&&!g.raf)rest(g)});
+ new MutationObserver(redo).observe(document.documentElement,{attributes:true,attributeFilter:['class','style','data-theme','lang','dir']});
+ if(document.fonts){document.fonts.ready.then(redo);if(document.fonts.addEventListener)document.fonts.addEventListener('loadingdone',redo)}
+ try{matchMedia('(prefers-color-scheme: dark)').addEventListener('change',redo)}catch(e){}
  /* the drawer: the chosen link moves at once, the glass travels to it, and the drawer closes when it has arrived
     (the page itself opens straight away behind it) */
  document.addEventListener('click',e=>{const a=e.target.closest&&e.target.closest('#drw a[href^="#/"]');if(!a||a.classList.contains('on'))return;
   const g=G[1],L=ensure(g);if(!L)return;
   L.forEach(x=>{const on=x===a;x.classList.toggle('on',on);if(on)x.setAttribute('aria-current','page');else x.removeAttribute('aria-current')});
   update(g,true)},true);
- window.lgxHold=()=>{const g=G[1];return g.anim?Math.max(0,g.end-performance.now())+120:0};
+ /* ---- play: press, drag and let go (groups with drag), and the lean towards the pointed tab ---- */
+ const inBox=(g,cx,cy)=>{const b=g.box.getBoundingClientRect();return [cx-b.left-g.box.clientLeft+g.box.scrollLeft,cy-b.top-g.box.clientTop+g.box.scrollTop]};
+ const nearest=(g,x,y)=>{let bi=0,bd=1/0;g.R.forEach((r,i)=>{const d=Math.hypot(Math.max(r.x-x,0,x-r.x-r.w),Math.max(r.y-y,0,y-r.y-r.h));if(d<bd){bd=d;bi=i}});return bi};
+ function aim(g,cx,cy){let [x,y]=inBox(g,cx,cy);const C=g.R.map(r=>[r.x+r.w/2,r.y+r.h/2]);
+  x=Math.max(Math.min(...C.map(c=>c[0]))-12,Math.min(Math.max(...C.map(c=>c[0]))+12,x));y=Math.max(Math.min(...C.map(c=>c[1]))-8,Math.min(Math.max(...C.map(c=>c[1]))+8,y));
+  const r=g.R[nearest(g,x,y)];Object.assign(g.pd,{x,y,w:r.w,h:r.h})}
+ const own=e=>{const it=e.target&&e.target.closest&&e.target.closest('[data-lgx-i]');if(!it)return null;const g=G.find(g=>g.drag&&g.box&&g.el&&g.box.contains(it));return g?[g,it]:null};
+ document.addEventListener('pointerdown',e=>{if(e.button!==0||RM())return;const h=own(e);if(!h)return;const [g,it]=h;
+  if(!it.hasAttribute('data-lgx-act')||!g.s)return;
+  g.pd={id:e.pointerId,x0:e.clientX,y0:e.clientY,drag:false,x:0,y:0,w:0,h:0};g.el.classList.add('up');kick(g)},true);
+ document.addEventListener('pointermove',e=>{G.forEach(g=>{const pd=g.pd;
+  if(pd&&pd.id===e.pointerId){if(!g.box||!g.box.isConnected){g.pd=null;return}
+   if(!pd.drag&&Math.hypot(e.clientX-pd.x0,e.clientY-pd.y0)>6){pd.drag=true;g.el.classList.add('drag')}
+   if(pd.drag){aim(g,e.clientX,e.clientY);kick(g)}return}
+  if(!g.drag||g.pd||e.pointerType!=='mouse'||!g.box||!g.el||!g.T||RM())return;
+  const it=e.target&&e.target.closest&&e.target.closest('[data-lgx-i]'),t=it&&g.box.contains(it)&&!it.hasAttribute('data-lgx-act')?it:null;
+  if(t===g.hv)return;g.hv=t;
+  if(t){const r=g.R[g.L.indexOf(t)];if(!r)return;const dx=r.x+r.w/2-g.T.x,dy=r.y+r.h/2-g.T.y,d=Math.hypot(dx,dy)||1;g.lean=[dx/d*5,dy/d*5]}else g.lean=[0,0];
+  kick(g)})},{passive:true});
+ const up=(e,cancel)=>G.forEach(g=>{const pd=g.pd;if(!pd||pd.id!==e.pointerId)return;g.pd=null;if(g.el)g.el.classList.remove('up','drag');
+  if(pd.drag&&!cancel&&g.box&&g.box.isConnected){const it=g.L[nearest(g,g.s.x,g.s.y)];
+   if(it&&!it.hasAttribute('data-lgx-act'))it.click();
+   /* the browser's own click that follows the drag is not a choice */
+   g.sup=1;setTimeout(()=>{g.sup=0},60)}
+  kick(g)});
+ document.addEventListener('pointerup',e=>up(e,false),true);
+ document.addEventListener('pointercancel',e=>up(e,true),true);
+ window.addEventListener('click',e=>{if(G.some(g=>g.sup)){G.forEach(g=>{g.sup=0});e.preventDefault();e.stopImmediatePropagation()}},true);
+ window.lgxHold=()=>{const g=G[1];return g.mv?Math.max(0,g.end-performance.now())+120:0};
  window.LGX={groups:G,tick};
  tick();
 })();
