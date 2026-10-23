@@ -2,7 +2,7 @@
 const {chromium}=require('playwright');const fs=require('fs');
 const U='http://127.0.0.1:8765/index.html',DATA=(process.env.PLREPO||__dirname+'/../..')+'/data/';let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
 const J=f=>JSON.parse(fs.readFileSync(DATA+f,'utf8'));
-const FX=JSON.parse(fs.readFileSync(__dirname+'/../fx/facts.json','utf8')),FIX=J('fixtures.json');
+const FX=J('facts.json'),FIX=J('fixtures.json');
 const strip=s=>s.replace(/<[^>]+>/g,'').replace(/&amp;/g,'&');
 const dk=t=>new Date(t).toISOString().slice(0,10);
 const SCHED=(()=>{const d={};for(const [lid,rows] of Object.entries(FIX.leagues))rows.forEach(f=>{const k=f.k?dk(Date.parse(f.k)):f.d;(d[k]=d[k]||[]).push([lid,f.i,f.k,f.h,f.a,null,null,'notstarted'])});return {t:'x',full:'x',L:{},C:{},d}})();

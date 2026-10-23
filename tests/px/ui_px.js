@@ -74,14 +74,20 @@ const untranslated=sel=>{const o=[];document.querySelectorAll(sel).forEach(r=>{c
   ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await ctx.close()}
  /* ---------------- home: matchday strip and player of the round ---------------- */
  {const {ctx,pg,errs}=await open(b);await pg.waitForSelector('#potr .potr-c',{timeout:60000,state:'attached'});await pg.waitForTimeout(800);
-  const h=await pg.evaluate(()=>({first:document.querySelector('#home').firstElementChild.id,up:document.querySelectorAll('#mds .md-c.up').length,res:document.querySelectorAll('#mds a.md-c:not(.up)').length,round:HOME.c.round.length,cd:document.querySelector('#mds .hhd .md-cd').textContent,
+  const h=await pg.evaluate(()=>({first:document.querySelector('#home').firstElementChild.id,up:document.querySelectorAll('#mds .md-c.up').length,res:document.querySelectorAll('#mds a.md-c:not(.up)').length,round:HOME.c.round.length,cd:(document.querySelector('#mds .hhd .md-cd')||{}).textContent||null,head:document.querySelector('#mds .hhd h2')&&document.querySelector('#mds .hhd h2').textContent,
    order:[...document.querySelectorAll('#home .hsec .hhd h2')].map(x=>x.textContent)}));
-  const now=Date.now(),L=FX.leagues.l_4WFCIZ.map(f=>Date.parse(f.k)).filter(t=>t>now).sort((a,b)=>a-b),d0=new Date(L[0]);d0.setHours(0,0,0,0);
+  /* the rule: a match today (or one that kicked off in the last 3 h and is not finished) makes the strip "Today"; otherwise it shows the next matchday = every fixture within 4 days of the next kick-off. Both cases are valid on any date. */
+  const E=await pg.evaluate(fx=>{const now=Date.now(),dk=t=>{const d=new Date(t);return d.getFullYear()+'-'+d.getMonth()+'-'+d.getDate()};
+   const done=new Set((HOME.c.fin||[]).map(m=>m.home+'|'+m.away+'|'+String(m.date).slice(0,10)));
+   const up=fx.filter(f=>f.k&&!isNaN(Date.parse(f.k))&&Date.parse(f.k)>now-3*3600e3&&!done.has(f.h+'|'+f.a+'|'+f.d)).map(f=>Date.parse(f.k));
+   const tod=up.filter(t=>t<=now||dk(t)===dk(now)),later=up.filter(t=>t>now).sort((a,b)=>a-b);
+   if(tod.length)return {today:true,n:tod.length};
+   if(!later.length)return {today:false,n:0};const d0=new Date(later[0]);d0.setHours(0,0,0,0);return {today:false,n:later.filter(t=>t<d0.getTime()+4*864e5).length}},FX.leagues.l_4WFCIZ);
   ok(h.first==='mds','the matchday strip opens the home');
-  ok(h.up===L.filter(t=>t<d0.getTime()+4*864e5).length,'next matchday: every fixture within 4 days of the next kick-off ('+h.up+')');
+  ok(h.up===E.n&&(E.n===0||(E.today?h.head==='Today':h.head==='Next matchday')),(E.today?'today':'next matchday')+': the fixtures the rule selects are shown ('+h.up+')');
   ok(h.res===h.round,'latest results: the matches of the round shown on the home ('+h.res+')');
-  ok(/^\d+d \d+h$|^\d+h \d\dm$|^\d+:\d\d$/.test(h.cd),'live countdown to the next kick-off ('+h.cd+')');
-  await pg.waitForTimeout(1200);const cd2=await pg.$eval('#mds .md-c.up .md-cd',e=>e.textContent);ok(/\d/.test(cd2),'each fixture has its own countdown ('+cd2+')');
+  ok(E.today||E.n===0?h.cd===null:/^\d+d \d+h$|^\d+h \d\dm$|^\d+:\d\d$/.test(h.cd),(E.today?'match day: the header has no kick-off countdown':'live countdown to the next kick-off ('+h.cd+')'));
+  await pg.waitForTimeout(1200);const cd2=await pg.$$eval('#mds .md-c.up:not(.live) .md-cd',a=>a.map(e=>e.textContent));ok(cd2.every(x=>/\d/.test(x)),'each fixture that has not kicked off has its own countdown ('+cd2.length+' shown)');
   ok(h.order.indexOf('Player of the round')===h.order.indexOf('Stars of the round')-1,'Player of the round sits just before Stars of the round');
   const P=await pg.evaluate(()=>({n:document.querySelector('.potr-n').textContent,r:document.querySelector('.potr-r').textContent}));
   const round=new Set(await pg.evaluate(()=>HOME.c.round.map(m=>m.match_id)));let best=null;

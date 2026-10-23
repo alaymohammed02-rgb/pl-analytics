@@ -9,6 +9,7 @@ cd "$S"
 PIDS=""
 cleanup(){ kill $PIDS 2>/dev/null; git -C "$R" checkout data/index.json 2>/dev/null; }
 trap cleanup EXIT
+PRISTINE_INDEX="$(mktemp)"; cp "$R/data/index.json" "$PRISTINE_INDEX"; export PRISTINE_INDEX
 # the photo CDN may be unreachable: hide the photo entry from the index while testing (restored on exit, never committed)
 python3 - <<PY
 import json;p='$R/data/index.json';d=json.load(open(p))

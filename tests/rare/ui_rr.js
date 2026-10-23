@@ -1,7 +1,7 @@
 /* Very rare cases page: every case of data/rare.json (made by the engine test from the raw files) shown in its league, with its rarity */
 const {chromium}=require('playwright');const fs=require('fs');
 const U='http://127.0.0.1:8765/index.html';let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
-const RARE=fs.readFileSync(__dirname+'/rare.json','utf8'),X=JSON.parse(RARE);
+const RARE=fs.readFileSync((process.env.PLREPO||__dirname+'/../..')+'/data/rare.json','utf8'),X=JSON.parse(RARE);
 const IDX=JSON.parse(fs.readFileSync((process.env.PLREPO||__dirname+'/../..')+'/data/index.json','utf8'));
 const strip=s=>s.replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/\s+/g,' ').trim();
 async function open(b,{vw=1280,lang='en',league='l_1Isor4',flag=true}={}){const ctx=await b.newContext({viewport:{width:vw,height:900}});

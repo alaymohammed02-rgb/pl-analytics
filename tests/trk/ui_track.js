@@ -1,6 +1,6 @@
 const {chromium}=require('playwright');const fs=require('fs');
 let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
-const T=JSON.parse(fs.readFileSync(__dirname+'/../trkweb/data/fpl_track.json','utf8')),D=JSON.parse(fs.readFileSync((process.env.PLREPO||__dirname+'/../..')+'/data/fpl.json','utf8'));
+const T=JSON.parse(fs.readFileSync((process.env.FIXTURES_DIR||__dirname+'/../fixtures_tmp')+'/trkweb/data/fpl_track.json','utf8')),D=JSON.parse(fs.readFileSync((process.env.PLREPO||__dirname+'/../..')+'/data/fpl.json','utf8'));
 /* independent actual points of a record: auto-subs (FPL rules) and captain/vice, from the raw history rows */
 const hc=D.hcols,iR=hc.indexOf('r'),iP=hc.indexOf('pts'),iM=hc.indexOf('min'),ty=new Map(D.rows.map(r=>[r[0],r[D.cols.indexOf('ty')]]));
 const at=(id,g,i)=>(D.hist[String(id)]||[]).filter(h=>h[iR]===g).reduce((a,h)=>a+(h[i]||0),0);
@@ -39,9 +39,10 @@ function actual(s){const xi=s.xi.slice(),c={1:0,2:0,3:0,4:0};xi.forEach(id=>c[ty
   await pg.selectOption('#fproot select[aria-label]','');await pg.waitForTimeout(1200);
   await pg.click(`#fproot .ctl button:text-is("${lab}")`);await pg.waitForSelector('#fpbody table');await pg.screenshot({path:__dirname+'/track_'+vw+'_'+lang+'.png',fullPage:true});
   ok(!errs.length,vw+' '+lang+': no page errors '+errs.slice(0,3).join(' | '))}
- /* the real data: the GW8 record saved by the sync is shown as open until its deadline */
+ /* the real data: the record the sync saved is shown; open until its deadline when the deadline has not passed, whichever gameweek that is */
  const pg=await (await b.newContext({viewport:{width:1280,height:900}})).newPage();await pg.goto('http://127.0.0.1:8765/index.html#/fantasy');await pg.waitForSelector('#fproot .ctl button',{timeout:60000});
  await pg.click('#fproot .ctl button:text-is("Track record")');await pg.waitForSelector('#fpbody > div.wrap table');const t=await pg.innerText('#fpbody > div.wrap table');
- const G8=JSON.parse(require('fs').readFileSync((process.env.PLREPO||__dirname+'/../..')+'/data/fpl_track.json','utf8')).gws['8'];
- ok(/GW8/.test(t)&&/open until the deadline, 2026-10-23 17:30 UTC/.test(t)&&t.includes((+G8.exp).toFixed(1)+' ('+Math.round(G8.p10)+'–'+Math.round(G8.p90)+')'),'real GW8 record shown: '+t.split('\n').slice(1,2).join(' ').slice(0,140));
+ const RT=JSON.parse(fs.readFileSync((process.env.PLREPO||__dirname+'/../..')+'/data/fpl_track.json','utf8')).gws,last=RT[Object.keys(RT).map(Number).sort((a,c)=>a-c).pop()];
+ const open=Date.parse(last.dl)>Date.now(),hh=s=>String(s).slice(0,16).replace('T',' ')+' UTC';
+ ok(new RegExp('GW'+last.gw).test(t)&&(open?t.includes('open until the deadline, '+hh(last.dl))&&t.includes((+last.exp).toFixed(1)+' ('+Math.round(last.p10)+'–'+Math.round(last.p90)+')'):!/open until the deadline/.test(t)||Object.values(RT).some(r=>Date.parse(r.dl)>Date.now())),'real GW'+last.gw+' record shown'+(open?' as open until its deadline':' after its deadline')+': '+t.split('\n').slice(1,2).join(' ').slice(0,140));
  console.log(fails?fails+' FAILED':'all passed');await b.close()})().catch(e=>{console.error(e);process.exit(1)});

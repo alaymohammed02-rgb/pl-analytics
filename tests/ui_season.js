@@ -6,7 +6,7 @@ const known=u=>/favicon.ico|api.github.com\/repos\/127/.test(u||'');
  for(const loc of ['en-US','ar-SA']){
   const c=await b.newContext({viewport:{width:1280,height:900},locale:loc});const pg=await c.newPage();const errs=[];
   pg.on('pageerror',e=>errs.push(e.message));pg.on('console',m=>{if(m.type()==='error'&&!known((m.location()||{}).url))errs.push(m.text())});
-  await pg.goto(URL+'#/fantasy');await pg.waitForFunction(()=>document.querySelector('#oxout')&&/3-|4-|5-/.test(document.querySelector('#oxout').innerText),null,{timeout:60000});
+  await pg.goto(URL+'#/fantasy');await pg.waitForFunction(()=>document.querySelector('#oxout')&&/3-|4-|5-/.test(document.querySelector('#oxout').innerText),null,{timeout:60000});const nTabs=await pg.evaluate(()=>document.querySelectorAll('#fproot > .ctl button').length);
   const opts=await pg.$$eval('#fproot select[aria-label], #fproot select',a=>a.length?[...a[0].options].map(o=>o.value+':'+o.textContent):[]);console.log('  '+loc+' season options:',opts.join(' | '));
   ok(opts.some(o=>o.startsWith('2023-24:')),loc+': season picker lists archived seasons');
   await pg.selectOption('#fproot .ctl select >> nth=0','2023-24');
@@ -20,6 +20,6 @@ const known=u=>/favicon.ico|api.github.com\/repos\/127/.test(u||'');
   const k=await pg.$$eval('#btout .kpi',a=>a.map(x=>x.innerText.replace(/\n/g,' ')));console.log('  backtest KPIs:',k.join(' || '));ok(k.length>=4,loc+': backtest replays the whole archived season');
   if(loc==='ar-SA')await pg.screenshot({path:SH+'season_ar.png'});
   await pg.selectOption('#fproot .ctl select >> nth=0','');
-  await pg.waitForFunction(()=>FPD&&!FPD.archive&&document.querySelector('#fproot > .ctl')&&document.querySelectorAll('#fproot > .ctl button').length===16,null,{timeout:60000});ok(true,loc+': back to the current season: all 16 tabs again');
+  await pg.waitForFunction(n=>FPD&&!FPD.archive&&document.querySelector('#fproot > .ctl')&&document.querySelectorAll('#fproot > .ctl button').length===n,nTabs,{timeout:60000});ok(nTabs>=16,loc+': back to the current season: all '+nTabs+' tabs again');
   ok(errs.length===0,loc+': no page errors '+errs.slice(0,3).join(' | '));await c.close()}
  console.log(fails?fails+' FAILED':'ALL PASSED');await b.close()})().catch(e=>{console.log('CRASH',e.message);process.exit(1)});

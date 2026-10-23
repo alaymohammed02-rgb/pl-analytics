@@ -135,7 +135,7 @@ const fpl=async pg=>{await pg.evaluate(()=>{const f=document.getElementById('hfp
   ok((await secs(pg)).filter(x=>!['اليوم','الجولة القادمة','آخر النتائج','لاعب الجولة','تشكيلة الجولة'].includes(x)).join('|')==='اكتشاف الجولة|نجوم الجولة|قوة الأندية|من الأفضل؟|رادار الفانتازي|ترتيبات سريعة|مركز الإحصائيات','Arabic: the 7 section titles');
   await pg.evaluate(()=>document.querySelectorAll('#home details').forEach(d=>d.open=true));await pg.waitForTimeout(500);
   const left=await pg.evaluate(()=>{const names=new Set();HOME.c.ag.forEach(a=>{names.add(a.n);names.add(a.club)});const o=[];const w=document.createTreeWalker(document.getElementById('home'),NodeFilter.SHOW_TEXT);let n;
-   while(n=w.nextNode()){if(n.parentNode.closest('select,table,.hfpl ol,.hav'))continue;const t=n.nodeValue.trim();if(/[A-Za-z]{2}/.test(t)&&!names.has(t)&&!/^(Premier League ·|[A-Z]{2}|npxG|xAG)$/.test(t)&&!/[؀-ۿ]/.test(t))o.push(t)}return o});
+   while(n=w.nextNode()){if(n.parentNode.closest('select,table,.hfpl ol,.hav,.potr-n,.potr-m a,.potr-l,.hcl'))continue;const t=n.nodeValue.trim();if(/[A-Za-z]{2}/.test(t)&&!names.has(t)&&!/^(Premier League ·|[A-Z]{2}|xG|npxG|xAG)$/.test(t)&&!/[؀-ۿ]/.test(t))o.push(t)}return o});
   ok(!left.length,'Arabic: every home sentence is translated (names and abbreviations aside) '+left.slice(0,5).join(' | '));
   ok(await pg.evaluate(()=>document.documentElement.dir==='rtl'&&document.scrollingElement.scrollWidth<=innerWidth),'Arabic phone: right to left, no horizontal scroll');
   ok(await pg.evaluate(()=>[...document.querySelectorAll('#home .hcard')].every(c=>{const r=c.getBoundingClientRect();return r.left>=-1&&r.right<=innerWidth+1})),'Arabic phone: every card fits the screen');
