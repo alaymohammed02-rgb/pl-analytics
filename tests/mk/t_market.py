@@ -87,6 +87,11 @@ ok(len(d2) == 1 and d2[0]['m'] == 'b1', 'two 1-0 results on one day: the team na
 r3 = mk_rows(csv([dict(Div='E0', Date='05/09/2026', HomeTeam='Nobody', AwayTeam='Else', FTHG='1', FTAG='0', B365H='2', B365D='3', B365A='4')]))
 d3, u3 = mk_match(r3, [A, B])
 ok(not d3 and len(u3) == 1, 'two 1-0 results on one day and names that fit neither: not matched, counted')
+# the real case seen on the first sync: one 2-2 on the day in PitchAPI (Santa Clara v Nacional), the odds row is another 2-2 (Benfica v Academico Viseu)
+C = dict(m='c1', d='2026-08-10', h='Santa Clara', a='Nacional', s='2-2')
+r4 = mk_rows(csv([dict(Div='E0', Date='10/08/2026', HomeTeam='Benfica', AwayTeam='Academico Viseu', FTHG='2', FTAG='2', B365H='2', B365D='3', B365A='4')]))
+d4, u4 = mk_match(r4, [C])
+ok(not d4 and len(u4) == 1, 'one match on the day with the same score but other teams: not matched (no other game\'s odds)')
 # a coming match: by date and both names
 fut = [dict(m='f1', d='2026-11-07', h='Manchester City', a='Arsenal', s=None), dict(m='f2', d='2026-11-07', h='Manchester United', a='Chelsea', s=None)]
 rf = mk_rows(csv([dict(Div='E0', Date='07/11/2026', HomeTeam='Man City', AwayTeam='Arsenal', B365H='1.5', B365D='4.5', B365A='6')]))

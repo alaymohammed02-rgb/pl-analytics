@@ -11641,8 +11641,10 @@ def mk_match(rows, matches):
         pick = None
         if hg is not None:
             sc = [m for m in cand if mk_score(m.get("s")) == (hg, ag)]
+            # the same score on the same day is not enough: at least one team name has to agree,
+            # otherwise a match missing from PitchAPI could take another game's odds
             if len(sc) == 1:
-                pick = sc[0]
+                pick = sc[0] if (mk_same(sc[0]["h"], h, False) or mk_same(sc[0]["a"], a, False)) else None
             elif len(sc) > 1:
                 pick = mk_one(sc, lambda st: (lambda m: mk_same(m["h"], h, st) and mk_same(m["a"], a, st))) or \
                     mk_one(sc, lambda st: (lambda m: mk_same(m["h"], h, st) or mk_same(m["a"], a, st)))
