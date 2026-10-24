@@ -390,3 +390,5 @@ html[dir=rtl] .dl-bars .ph-bn bdi{text-align:right}
 .dcx-k input{min-height:0;margin:0}.dcx-k:has(input:checked){border-color:var(--th);background:color-mix(in srgb,var(--th) 18%,var(--bg))}.dcx-k:has(input:disabled){opacity:.55;cursor:default}
 .dcx-c{margin-top:10px}.dcx-c svg{display:block;width:100%;max-width:760px;height:auto;margin:0 auto;border-radius:14px}
 .dcx-a{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:center;margin-top:10px;font-size:13px}
+/* ===== Match pressing card (assets/press-card.js) ===== */
+.pcx-b .dcx-c svg{max-width:1100px}

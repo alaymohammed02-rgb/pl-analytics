@@ -160,16 +160,18 @@
   const G=Array.from({length:16},()=>new Array(12).fill(0));let n=0,max=0;
   H.rows.forEach(r=>{if(r.t!=='p'||r.k!==id||!Array.isArray(r.h))return;n++;for(let i=0;i+2<r.h.length;i+=3){const x=r.h[i],w=r.h[i+1];if(x>=0&&x<16&&w>=0&&w<12)G[x][w]+=r.h[i+2]}});
   G.forEach(c=>c.forEach(v=>{if(v>max)max=v}));return n?{G,max,n}:null}
- async function savePng(svg,W,H,name){
+ async function savePng(svg,W,H,name,prefix){
   const url=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml'}));
   try{const img=new Image();await new Promise((ok,no)=>{img.onload=ok;img.onerror=no;img.src=url});
    const cv=document.createElement('canvas');cv.width=W;cv.height=H;cv.getContext('2d').drawImage(img,0,0,W,H);
    const blob=await new Promise(r=>cv.toBlob(r,'image/png'));if(!blob)throw new Error('png');
-   const fn=FAM[S.fam].file+'-card-'+String(name).toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')+'.png';
+   const fn=(prefix||FAM[S.fam].file)+'-card-'+String(name).toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')+'.png';
    const file=typeof File==='function'?new File([blob],fn,{type:'image/png'}):null;
    if(file&&navigator.canShare&&navigator.canShare({files:[file]})&&matchMedia('(pointer:coarse)').matches){try{await navigator.share({files:[file],title:name});return}catch(e){if(e&&e.name==='AbortError')return}}
    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fn;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500);
   }finally{URL.revokeObjectURL(url)}}
+ /* the helpers the other cards (press-card.js) use: percentile colour, text fitting, XML escaping, the page's colours, saving as a PNG */
+ INS.cardKit={pcol,fit,x_,css,savePng,FONT};
  /* ---------- the section, at the top of the Defensive (defending), Shots (attacking) and Passing (passing) pages ---------- */
  [['defense','def'],['shots','att'],['passing','mid']].forEach(([pg,fam])=>{const orig=R[pg];if(typeof orig!=='function')return;
   R[pg]=async function(el){
