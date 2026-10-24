@@ -128,11 +128,11 @@ M = PUT.get('data/market.json')
 ok(M and set(M['leagues']) == {'l_4WFCIZ'} and M['leagues']['l_4WFCIZ']['n'] == 5 and M['leagues']['l_4WFCIZ']['fin'] == 5 and M['leagues']['l_4WFCIZ']['season'] == '2627' and M['h'], 'sync_market writes data/market.json: the one league whose file answered, 5 matched finished matches, season 2627, a hash')
 ok(any('no such file' in l for l in LOG), 'a league whose file fails is logged, and the others are untouched')
 n = len(PUT); G['sync_market'](None, now); ok(M is not None and PUT['data/market.json'] is M, 'unchanged odds: the file is not written again (same hash)')
-G['mk_get'] = lambda url, tries=3: (_ for _ in ()).throw(RuntimeError('network down'))
+G['mk_get'] = lambda url, tries=3, timeout=40: (_ for _ in ()).throw(RuntimeError('network down'))
 before = json.dumps(STORE['data/market.json'], sort_keys=True); G['sync_market'](None, now)
 ok(json.dumps(STORE['data/market.json'], sort_keys=True) == before, 'every request failing: the previous file stays exactly as it was')
 # the Elo step: one snapshot a day, history kept
-G['mk_get'] = lambda url, tries=3: elo_txt
+G['mk_get'] = lambda url, tries=3, timeout=40: elo_txt
 G['sync_elo'](None, now); E1 = PUT['data/elo.json']
 ok(E1['t'] == '2026-10-24' and E1['r']['l_4WFCIZ']['Manchester City'] == 2050.4 and list(E1['hist']) == ['2026-10-24'] and 'l_4WFCIZ' in E1['unmatched'], 'sync_elo writes today\'s ratings, the history and the clubs without a match')
 PUT.clear(); G['sync_elo'](None, now); ok('data/elo.json' not in PUT, 'a second run the same day writes nothing')
@@ -141,17 +141,22 @@ ok(sorted(E2['hist']) == ['2026-10-24', '2026-10-25'], 'the next day adds a snap
 # ClubElo answered HTTP 502 for today's file in the first real runs: today's, then the two days before, then https
 seen = []
 PUT.clear(); STORE.pop('data/elo.json', None)
-def only_old(url, tries=3):
+def only_old(url, tries=3, timeout=40):
     seen.append(url)
-    if not url.endswith('2026-10-22'):
+    if not url.endswith('2026-10-23'):
         raise RuntimeError('HTTP 502')
     return elo_txt
 G['mk_get'] = only_old
 G['sync_elo'](None, now); E4 = PUT['data/elo.json']
-ok(E4['t'] == '2026-10-24' and E4['asof'] == '2026-10-22' and list(E4['hist']) == ['2026-10-22'], 'today and yesterday fail: the file of two days before is used and kept under its own day')
+ok(E4['t'] == '2026-10-24' and E4['asof'] == '2026-10-23' and list(E4['hist']) == ['2026-10-23'], 'today\'s file fails (http and https): yesterday\'s is used and kept under its own day')
 ok(seen[:2] == ['%s/2026-10-24' % G['MK_ELO'], G['MK_ELO'].replace('http://', 'https://') + '/2026-10-24'], 'it tries http and https for a day before going back a day')
+# no Elo file yet: only one 30-minute window in every 3 hours tries the download (ClubElo was down in the first runs)
+seen.clear(); PUT.clear(); STORE.pop('data/elo.json', None); G['mk_get'] = lambda url, tries=3, timeout=40: (seen.append(url), elo_txt)[1]
+G['sync_elo'](None, datetime.datetime(2026, 10, 24, 13, 10, tzinfo=datetime.timezone.utc)); ok(not seen and 'data/elo.json' not in PUT, 'no file yet, 13:10: no download is tried (not in the window)')
+G['sync_elo'](None, datetime.datetime(2026, 10, 24, 12, 45, tzinfo=datetime.timezone.utc)); ok(not seen, 'no file yet, 12:45: not in the window either')
+G['sync_elo'](None, datetime.datetime(2026, 10, 24, 12, 10, tzinfo=datetime.timezone.utc)); ok(seen and 'data/elo.json' in PUT, 'no file yet, 12:10: the download is tried and the file written')
 # an error in either step never stops the pipeline
-G['mk_get'] = lambda url, tries=3: (_ for _ in ()).throw(RuntimeError('boom'))
+G['mk_get'] = lambda url, tries=3, timeout=40: (_ for _ in ()).throw(RuntimeError('boom'))
 G['sync_elo'] = lambda hub, now=None: (_ for _ in ()).throw(RuntimeError('boom'))
 ok(G['run_pipeline'](None, 'k') is True and any('خطأ' in l for l in LOG), 'run_pipeline: an error in the optional steps is logged and the sync goes on')
 print('all passed' if not fails else '%d FAILED' % fails); sys.exit(1 if fails else 0)

@@ -11728,11 +11728,11 @@ def mk_elo_match(rows, country, teams):
     return got, un
 
 
-def mk_get(url, tries=3):
+def mk_get(url, tries=3, timeout=40):
     last = None
     for k in range(tries):
         try:
-            r = requests.get(url, timeout=40, headers={"User-Agent": "pl-analytics-sync (github pages project)"})
+            r = requests.get(url, timeout=timeout, headers={"User-Agent": "pl-analytics-sync (github pages project)"})
             if r.status_code == 200 and r.text.strip():
                 return r.text
             last = f"HTTP {r.status_code}"
@@ -11783,14 +11783,14 @@ def sync_market(hub, now=None):
 
 
 def mk_elo_fetch(now):
-    """ClubElo's day file: today's first, then the two days before (the first sync runs got HTTP 502 for today's), http then https.
-    Returns (the day the file is for, its text)."""
+    """ClubElo's day file: today's, then yesterday's (the first sync runs got HTTP 502 for http and a connect timeout for https, so each try is
+    short: at most about a minute lost to a down server). Returns (the day the file is for, its text)."""
     last = None
-    for back in (0, 1, 2):
+    for back in (0, 1):
         d = (now - datetime.timedelta(days=back)).strftime("%Y-%m-%d")
         for base in dict.fromkeys([MK_ELO, MK_ELO.replace("http://", "https://")]):
             try:
-                return d, mk_get(f"{base}/{d}", tries=2)
+                return d, mk_get(f"{base}/{d}", tries=1, timeout=15)
             except Exception as e:
                 last = e
     raise last
@@ -11802,6 +11802,8 @@ def sync_elo(hub, now=None):
     old = gh_get_json(hub, ELO_PATH) or {}
     if old.get("t") == day:
         return
+    if not old and not (now.hour % 3 == 0 and now.minute < 30):
+        return        # no file yet (the server was down in the first runs): try in one 30-minute window every 3 hours, not in every run
     asof, txt = mk_elo_fetch(now)
     rows = mk_elo_rows(txt)
     if not rows:
