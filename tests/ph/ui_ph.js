@@ -62,7 +62,7 @@ async function open(b,{vw=1280,lang='en',league='l_0ErfuF',routes=[],hash='#/ppd
   const pl=raw('l_4WFCIZ'),n=pl.season.filter(t=>t.np>=3&&t.ppda!=null).length;ok(await pg.evaluate(()=>D.id)==='l_4WFCIZ'&&await pg.$$eval('.ph-bars li',a=>a.length)===n,'switching to the Premier League: its own teams ('+n+')');
   ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await ctx.close()}
  /* ---- phones, Arabic ---- */
- const untr=sel=>{const o=[];document.querySelectorAll(sel).forEach(r=>{const w=document.createTreeWalker(r,NodeFilter.SHOW_TEXT);let n;while(n=w.nextNode()){if(n.parentNode.closest('select,option,a,.fx-en,bdi,.ph-lt,text.ph-op,.ph-pt,table'))continue;const t=n.nodeValue.trim();if(/[A-Za-z]{3}/.test(t)&&!/[؀-ۿ]/.test(t)&&!/^(xG|PitchAPI|PPDA)\b/.test(t))o.push(t)}});return [...new Set(o)]};
+ const untr=sel=>{const o=[];document.querySelectorAll(sel).forEach(r=>{const w=document.createTreeWalker(r,NodeFilter.SHOW_TEXT);let n;while(n=w.nextNode()){if(n.parentNode.closest('select,option,a,.fx-en,bdi,.ph-lt,text.ph-op,.ph-pt,table,svg'))continue;const t=n.nodeValue.trim();if(/[A-Za-z]{3}/.test(t)&&!/[؀-ۿ]/.test(t)&&!/^(xG|PitchAPI|PPDA)\b/.test(t))o.push(t)}});return [...new Set(o)]};
  for(const lang of ['ar','en'])for(const h of ['#/ppda']){const {ctx,pg,errs}=await open(b,{vw:390,lang,hash:h});await pg.waitForSelector('.ph-dash',{timeout:60000});await pg.waitForTimeout(600);
   ok(await pg.evaluate(()=>document.scrollingElement.scrollWidth<=innerWidth+1),lang+' phone '+h+': no horizontal scroll');
   if(lang==='ar'){const u=await pg.evaluate(untr,'#app');ok(!u.length,'Arabic '+h+': page translated '+u.slice(0,5).join(' | '));

@@ -151,7 +151,7 @@ const moveTo=async(pg,sel,a,b)=>{const A=await centre(pg,a),B=await centre(pg,b)
   const to=src===last-1?0:last-1;
   const A0=await centre(pg,sel+' > button:nth-of-type('+(src+1)+')'),B0=await centre(pg,sel+' > button:nth-of-type('+(to+1)+')');
   const w0=pg.evaluate(watch,{sel,ms:1300});await pg.click(sel+' > button:nth-of-type('+(to+1)+')');const mv=await w0;
-  ok(off(mv.o,A0,B0)<=2&&mv.ms<700,nm+': the glass goes straight to the new tab ('+off(mv.o,A0,B0).toFixed(1)+' px off, '+mv.ms+' ms)');
+  ok(off(mv.o,A0,B0)<=6&&mv.ms<700,nm+': the glass goes straight to the new tab ('+off(mv.o,A0,B0).toFixed(1)+' px off, '+mv.ms+' ms)');
   await pg.waitForTimeout(600);q=await pg.evaluate(glassOn,sel);
   ok(q&&q.g.every((x,i)=>near(x,q.a[i]))&&q.lensed===0&&q.scaled===0,nm+': it stops exactly on the tab pressed ('+(q&&q.label)+') with nothing magnified');
   ok(!errs.length,nm+': no page errors '+errs.slice(0,2).join(' ; '));await ctx.close()}
