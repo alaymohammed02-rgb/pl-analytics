@@ -404,3 +404,4 @@ html[dir=rtl] .dl-bars .ph-bn bdi{text-align:right}
 /* Stat stability (assets/stat-stability.js): on a phone the table keeps the stat and its two numbers */
 @media(max-width:600px){.st-t th:nth-child(n+4),.st-t td:nth-child(n+4){display:none}.st-t td:first-child{white-space:normal}}
 @media(max-width:600px){.ku-t th:nth-child(2),.ku-t td:nth-child(2),.ku-t th:nth-child(3),.ku-t td:nth-child(3),.ku-b th:nth-child(2),.ku-b td:nth-child(2),.ku-b th:nth-child(3),.ku-b td:nth-child(3),.ku-b th:nth-child(4),.ku-b td:nth-child(4){display:none}.ku-t td:first-child,.ku-b td{white-space:normal}}
+@media(max-width:600px){.gk-t th:nth-child(2),.gk-t td:nth-child(2),.gk-t th:nth-child(3),.gk-t td:nth-child(3),.gk-t th:nth-child(5),.gk-t td:nth-child(5),.gk-t th:nth-child(6),.gk-t td:nth-child(6),.gk-t th:nth-child(8),.gk-t td:nth-child(8){display:none}.gk-t td:first-child,.gk-t td.mu{white-space:normal}}
