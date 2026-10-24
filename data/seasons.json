@@ -321,25 +321,25 @@
      "api": "2024/2025",
      "id": "l_1Isor4_2024-25",
      "n": 306,
-     "t": "2026-10-24 10:42:55",
+     "t": "2026-10-24 10:56:38",
      "err": null,
      "plan": false,
-     "req": 495,
-     "sec": 130,
+     "req": 1530,
+     "sec": 440,
      "files": {
       "s": "2024-25",
       "id": "l_1Isor4_2024-25",
       "file": "l_1Isor4_2024-25.json",
-      "v": "e116333c49",
-      "size": 1664050,
+      "v": "10fd7e3ed0",
+      "size": 5035721,
       "pl_file": "l_1Isor4_2024-25_pl.json",
-      "pl_v": "15d2c7a006",
+      "pl_v": "15cd3b0c68",
       "sh_file": "l_1Isor4_2024-25_sh.json",
-      "sh_v": "699e4dbb1c"
+      "sh_v": "f806e4e48c"
      },
-     "got": 99,
-     "ok": 95,
-     "complete": false
+     "got": 306,
+     "ok": 288,
+     "complete": true
     }
    }
   },
@@ -448,24 +448,24 @@
      "api": "2024/2025",
      "id": "l_3FJFUl_2024-25",
      "n": 306,
-     "t": "2026-10-24 10:45:13",
+     "t": "2026-10-24 11:02:01",
      "err": null,
      "plan": false,
-     "req": 5,
-     "sec": 1,
+     "req": 165,
+     "sec": 49,
      "files": {
       "s": "2024-25",
       "id": "l_3FJFUl_2024-25",
       "file": "l_3FJFUl_2024-25.json",
-      "v": "4e010bdb69",
-      "size": 15892,
+      "v": "4960229434",
+      "size": 539609,
       "pl_file": "l_3FJFUl_2024-25_pl.json",
-      "pl_v": "c6a9262f02",
+      "pl_v": "5a12a25c29",
       "sh_file": "l_3FJFUl_2024-25_sh.json",
-      "sh_v": "107c0180e3"
+      "sh_v": "cf9c29ac43"
      },
-     "got": 1,
-     "ok": 1,
+     "got": 33,
+     "ok": 33,
      "complete": false
     }
    }
@@ -516,6 +516,32 @@
      "got": 380,
      "ok": 380,
      "complete": true
+    },
+    "2024-25": {
+     "name": "Serie A",
+     "light": true,
+     "api": "2024/2025",
+     "id": "l_0ALvwF_2024-25",
+     "n": 380,
+     "t": "2026-10-24 11:02:58",
+     "err": null,
+     "plan": false,
+     "req": 5,
+     "sec": 2,
+     "files": {
+      "s": "2024-25",
+      "id": "l_0ALvwF_2024-25",
+      "file": "l_0ALvwF_2024-25.json",
+      "v": "d1890c0dc2",
+      "size": 18719,
+      "pl_file": "l_0ALvwF_2024-25_pl.json",
+      "pl_v": "a22c49cf0e",
+      "sh_file": "l_0ALvwF_2024-25_sh.json",
+      "sh_v": "b23a56421f"
+     },
+     "got": 1,
+     "ok": 1,
+     "complete": false
     }
    }
   },
