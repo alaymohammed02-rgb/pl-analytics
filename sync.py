@@ -8985,11 +8985,11 @@ INDEX = _x_fpx_index(INDEX)
 # الكود في ملفات مستقلة في المستودع: assets/*.js و assets/features.css و manifest.webmanifest و sw.js و assets/icons/.
 # هذا القسم يضيف روابطها للصفحة فقط (بعد السكربت الرئيسي، فتلقى R و PAGES جاهزة). غيّر FEATURES_V لما تتغير الملفات.
 # ============================================================================
-FEATURES_V = "29"
+FEATURES_V = "31"
 FEATURES_JS = ("pla-data", "share-card", "threat-map", "match-whatif", "player-page", "match-centre", "home-extra", "team-round",
                "preview", "club-extra", "rankings-extra", "fantasy-extra", "insights-core", "hidden-gems", "player-dna", "team-dna",
                "reality-check", "matches-board", "match-replay", "match-story", "overview", "press-height",
-               "season-sim", "luck-table", "player-twin", "player-cards", "beat-model", "rare-cases", "attack-share", "drawer", "tap-twice", "line-height", "league-pool", "game-states", "likely-xi", "club-twins", "carry-team", "report-card", "league-dna", "thrill", "defense-card", "seasons", "liquid-glass")
+               "season-sim", "luck-table", "player-twin", "player-cards", "beat-model", "rare-cases", "attack-share", "drawer", "tap-twice", "line-height", "league-pool", "game-states", "likely-xi", "club-twins", "carry-team", "report-card", "league-dna", "thrill", "defense-card", "press-card", "sb-press", "seasons", "liquid-glass")
 
 
 def _x_feat_index(html):
@@ -11496,6 +11496,293 @@ def _x_ps_index(html):
 INDEX = _x_ps_index(INDEX)
 # ======================== نهاية إضافة المواسم السابقة ========================
 
+
+
+# ===== MARKET START =====
+# ---------------- Free sources: bookmakers' odds (football-data.co.uk) and ClubElo ratings → data/market.json, data/elo.json ----------------
+# Odds: one CSV per league and season (https://www.football-data.co.uk/mmz4281/<season code>/<division>.csv) and fixtures.csv (the coming
+# matches). The probabilities are the odds' implied probabilities with the bookmakers' margin removed (each 1/odd divided by their sum);
+# the closing average (AvgC*) when the file has it, otherwise the opening average (Avg*), otherwise Bet365's. Nothing is estimated.
+# Matching to PitchAPI's matches: by date (±1 day) and final score for finished matches (and the team names to choose among matches with
+# the same score), by date and team names for coming ones. A match that cannot be matched with confidence is left out and counted.
+# ClubElo: one request (http://api.clubelo.com/<date>) for the day's ratings of every club, kept for the clubs of the six leagues; a
+# snapshot is added to the history once a day (the ratings at the time of each match are what a fair test of Elo needs).
+# Both are optional: an error leaves the files as they were and never stops the sync.
+MK_PATH = "data/market.json"
+ELO_PATH = "data/elo.json"
+MK_LEAGUES = {"l_4WFCIZ": ("E0", "ENG"), "l_0ErfuF": ("SP1", "ESP"), "l_1Isor4": ("D1", "GER"),
+              "l_3FJFUl": ("F1", "FRA"), "l_0ALvwF": ("I1", "ITA"), "l_4QexZg": ("P1", "POR")}
+MK_FD = os.environ.get("MK_FD_BASE", "https://www.football-data.co.uk")
+MK_ELO = os.environ.get("MK_ELO_BASE", "http://api.clubelo.com")
+MK_ODDS = (("AvgCH", "AvgCD", "AvgCA"), ("AvgH", "AvgD", "AvgA"), ("B365CH", "B365CD", "B365CA"), ("B365H", "B365D", "B365A"))
+MK_ALIAS = {   # names the two sources spell differently (key: normalised, value: normalised PitchAPI-style name)
+    "man city": "manchester city", "man united": "manchester united", "man utd": "manchester united", "nottm forest": "nottingham forest",
+    "forest": "nottingham forest", "spurs": "tottenham hotspur", "tottenham": "tottenham hotspur", "wolves": "wolverhampton wanderers",
+    "newcastle": "newcastle united", "west ham": "west ham united", "brighton": "brighton and hove albion", "leeds": "leeds united",
+    "leicester": "leicester city", "norwich": "norwich city", "ipswich": "ipswich town", "hull": "hull city", "coventry": "coventry city",
+    "sheffield weds": "sheffield wednesday", "sheffield utd": "sheffield united", "ath madrid": "atletico madrid", "atletico": "atletico madrid",
+    "ath bilbao": "athletic club", "athletic": "athletic club", "sociedad": "real sociedad", "vallecano": "rayo vallecano", "betis": "real betis",
+    "espanol": "espanyol", "celta": "celta vigo", "alaves": "deportivo alaves", "mallorca": "real mallorca", "oviedo": "real oviedo",
+    "mgladbach": "borussia monchengladbach", "gladbach": "borussia monchengladbach", "ein frankfurt": "eintracht frankfurt", "frankfurt": "eintracht frankfurt",
+    "dortmund": "borussia dortmund", "leverkusen": "bayer leverkusen", "bayern munich": "bayern munchen", "bayern": "bayern munchen", "fc koln": "koln",
+    "cologne": "koln", "hamburg": "hamburger sv", "stuttgart": "vfb stuttgart", "freiburg": "sc freiburg", "wolfsburg": "vfl wolfsburg",
+    "heidenheim": "1 fc heidenheim", "union berlin": "1 fc union berlin", "st pauli": "fc st pauli", "mainz": "1 fsv mainz 05", "augsburg": "fc augsburg",
+    "paris sg": "paris saint germain", "psg": "paris saint germain", "marseille": "olympique marseille", "lyon": "olympique lyonnais",
+    "st etienne": "saint etienne", "monaco": "as monaco", "nice": "ogc nice", "lille": "losc lille", "rennes": "stade rennais",
+    "milan": "ac milan", "verona": "hellas verona", "roma": "as roma", "sporting": "sporting cp", "sp lisbon": "sporting cp",
+    "sp braga": "braga", "guimaraes": "vitoria guimaraes", "setubal": "vitoria setubal", "porto": "fc porto",
+    "la coruna": "deportivo a coruna", "dep la coruna": "deportivo a coruna", "deportivo": "deportivo a coruna", "santander": "racing santander",
+    "athletic bilbao": "athletic club", "koeln": "koln", "bremen": "werder bremen", "werder": "werder bremen", "estrela": "estrela da amadora",
+    "inter milan": "inter",
+}
+
+
+def mk_norm(s):
+    import unicodedata
+    s = unicodedata.normalize("NFKD", str(s or "")).encode("ascii", "ignore").decode().lower()
+    s = re.sub(r"[^a-z0-9 ]+", " ", s.replace("&", " and ").replace("'", ""))
+    s = re.sub(r"\b(fc|afc|cf|sc|ac|ss|us|as|sv|vfl|vfb|tsg|rb|1|04|05|96|98|1899|ud|cd|rc|ca)\b", " ", s) if len(s.split()) > 1 else s
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def mk_name(s):
+    n = mk_norm(s)
+    return mk_norm(MK_ALIAS.get(n, n))
+
+
+def mk_same(a, b, strict=False):
+    """The two names are the same club: equal once normalised and aliased or, unless strict, one is a whole-word part of the other
+    ("Estrela" in "Estrela da Amadora"). Callers try strict first, so "Paris FC" is never taken for "Paris Saint-Germain"."""
+    x, y = mk_name(a), mk_name(b)
+    if not x or not y:
+        return False
+    if x == y:
+        return True
+    if strict:
+        return False
+    tx, ty = set(x.split()), set(y.split())
+    return bool(tx) and bool(ty) and (tx <= ty or ty <= tx) and len(x) >= 4 and len(y) >= 4
+
+
+def mk_one(items, test):
+    """The single item passing test(strict) - strict names first, then loose - or None when there are none or several."""
+    for strict in (True, False):
+        hit = [i for i in items if test(strict)(i)]
+        if len(hit) == 1:
+            return hit[0]
+        if len(hit) > 1:
+            return None
+    return None
+
+
+def mk_csv(text):
+    import csv, io
+    rd = csv.DictReader(io.StringIO(text.lstrip("﻿")))
+    return [{(k or "").strip(): (v or "").strip() for k, v in r.items()} for r in rd if r]
+
+
+def mk_date(s):
+    for f in ("%d/%m/%Y", "%d/%m/%y", "%Y-%m-%d"):
+        try:
+            return datetime.datetime.strptime(s, f).date()
+        except ValueError:
+            pass
+    return None
+
+
+def mk_probs(r):
+    """Implied probabilities (home, draw, away) with the margin removed, and which odds they came from; None without three odds above 1."""
+    for cols in MK_ODDS:
+        try:
+            o = [float(r[c]) for c in cols]
+        except (KeyError, ValueError):
+            continue
+        if all(x > 1.0 for x in o):
+            inv = [1.0 / x for x in o]
+            t = sum(inv)
+            return [round(x / t, 4) for x in inv], cols[0][:-1], round(t - 1, 4)
+    return None
+
+
+def mk_rows(text):
+    """The rows of a football-data CSV that have a date, two teams and odds: (date, home, away, hg or None, ag or None, probs, source, margin)."""
+    out = []
+    for r in mk_csv(text):
+        d = mk_date(r.get("Date", ""))
+        h, a = r.get("HomeTeam", ""), r.get("AwayTeam", "")
+        pr = mk_probs(r)
+        if not (d and h and a and pr):
+            continue
+        hg = ag = None
+        if r.get("FTHG", "") != "" and r.get("FTAG", "") != "":
+            try:
+                hg, ag = int(r["FTHG"]), int(r["FTAG"])
+            except ValueError:
+                pass
+        out.append((d, h, a, hg, ag, pr[0], pr[1], pr[2], r.get("Div", "")))
+    return out
+
+
+def mk_score(s):
+    m = re.match(r"^\s*(\d+)\s*[-–:]\s*(\d+)\s*$", str(s or ""))
+    return (int(m.group(1)), int(m.group(2))) if m else None
+
+
+def mk_match(rows, matches):
+    """Match odds rows to PitchAPI's matches of one league (dicts with m, d, h, a, s). Returns (matched dicts, unmatched rows)."""
+    by_day = {}
+    for m in matches:
+        d = mk_date(str(m.get("d") or "")[:10])
+        if d:
+            by_day.setdefault(d, []).append(m)
+    done, un, used = [], [], set()
+    for (d, h, a, hg, ag, pr, src, mg, dv) in rows:
+        cand = [m for k in (0, -1, 1) for m in by_day.get(d + datetime.timedelta(days=k), []) if m["m"] not in used]
+        pick = None
+        if hg is not None:
+            sc = [m for m in cand if mk_score(m.get("s")) == (hg, ag)]
+            if len(sc) == 1:
+                pick = sc[0]
+            elif len(sc) > 1:
+                pick = mk_one(sc, lambda st: (lambda m: mk_same(m["h"], h, st) and mk_same(m["a"], a, st))) or \
+                    mk_one(sc, lambda st: (lambda m: mk_same(m["h"], h, st) or mk_same(m["a"], a, st)))
+        else:
+            pick = mk_one(cand, lambda st: (lambda m: mk_same(m["h"], h, st) and mk_same(m["a"], a, st)))
+        if pick is None:
+            un.append((d, h, a))
+            continue
+        used.add(pick["m"])
+        done.append({"m": pick["m"], "d": str(pick.get("d") or "")[:10], "h": pick["h"], "a": pick["a"], "p": pr, "src": src, "mg": mg,
+                     "fin": hg is not None, "fh": h, "fa": a})
+    return done, un
+
+
+def mk_season_code(dates):
+    ds = sorted(d for d in dates if d)
+    if not ds:
+        return None
+    y = ds[-1].year if ds[-1].month >= 7 else ds[-1].year - 1
+    return f"{y % 100:02d}{(y + 1) % 100:02d}"
+
+
+def mk_elo_rows(text):
+    """ClubElo's day file: (club, country, level, elo)."""
+    out = []
+    for r in mk_csv(text):
+        try:
+            out.append((r["Club"], r["Country"], int(r["Level"]), float(r["Elo"])))
+        except (KeyError, ValueError):
+            pass
+    return out
+
+
+def mk_elo_match(rows, country, teams):
+    """The clubs of one league: each PitchAPI team name → its Elo (the top-level clubs of that country only, one club per name)."""
+    pool = [(c, e) for c, co, lv, e in rows if co == country and lv == 1]
+    got, un = {}, []
+    for t in sorted(teams):
+        hit = mk_one(pool, lambda st: (lambda ce: mk_same(ce[0], t, st)))
+        if hit:
+            got[t] = round(hit[1], 1)
+        else:
+            un.append(t)
+    return got, un
+
+
+def mk_get(url, tries=3):
+    last = None
+    for k in range(tries):
+        try:
+            r = requests.get(url, timeout=40, headers={"User-Agent": "pl-analytics-sync (github pages project)"})
+            if r.status_code == 200 and r.text.strip():
+                return r.text
+            last = f"HTTP {r.status_code}"
+        except Exception as e:
+            last = f"{type(e).__name__}: {e}"
+        time.sleep(2 * (k + 1))
+    raise RuntimeError(f"{url}: {last}")
+
+
+def sync_market(hub, now=None):
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    old = gh_get_json(hub, MK_PATH) or {}
+    out = {"t": now.strftime("%Y-%m-%d %H:%M:%S"), "source": "football-data.co.uk", "leagues": {}}
+    fixtures_txt = None
+    try:
+        fixtures_txt = mk_get(f"{MK_FD}/fixtures.csv")
+    except Exception as e:
+        log(f"  [السوق] fixtures.csv: {e}")
+    for lid, (div, _) in MK_LEAGUES.items():
+        ms = [dict(m=r["m"], d=r["d"], h=r["h"], a=r["a"], s=r["s"]) for r in q(
+            "SELECT match_id m, date d, home h, away a, score s FROM matches WHERE league_id=?", (lid,))]
+        code = mk_season_code([mk_date(str(m["d"] or "")[:10]) for m in ms if m["d"]])
+        if not code:
+            continue
+        prev = (old.get("leagues") or {}).get(lid) or {}
+        try:
+            rows = mk_rows(mk_get(f"{MK_FD}/mmz4281/{code}/{div}.csv"))
+        except Exception as e:
+            log(f"  [السوق] {div} {code}: {e} — نُبقي الملف السابق")
+            if prev:
+                out["leagues"][lid] = prev
+            continue
+        if fixtures_txt:
+            rows += [r for r in mk_rows(fixtures_txt) if r[8] == div and r[3] is None]
+        done, un = mk_match(rows, ms)
+        out["leagues"][lid] = {"season": code, "n": len(done), "fin": sum(1 for x in done if x["fin"]), "unmatched": len(un),
+                               "unmatched_sample": [f"{d} {h} v {a}" for d, h, a in un[:8]], "rows": done}
+        log(f"  [السوق] {div} {code}: {len(rows)} صف، {len(done)} مطابق ({out['leagues'][lid]['fin']} منتهية)، {len(un)} بلا مطابقة"
+            + (f" — مثال: {out['leagues'][lid]['unmatched_sample'][:3]}" if un else ""))
+    if not out["leagues"]:
+        return
+    body = json.dumps({k: v for k, v in out.items() if k != "t"}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    h = hashlib.sha1(body.encode("utf-8")).hexdigest()[:10]
+    if old.get("h") == h:
+        return
+    out["h"] = h
+    gh_put(hub, MK_PATH, json.dumps(out, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), "Update bookmaker odds")
+
+
+def sync_elo(hub, now=None):
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    day = now.strftime("%Y-%m-%d")
+    old = gh_get_json(hub, ELO_PATH) or {}
+    if old.get("t") == day:
+        return
+    rows = mk_elo_rows(mk_get(f"{MK_ELO}/{day}"))
+    if not rows:
+        return
+    snap, miss = {}, {}
+    for lid, (_, country) in MK_LEAGUES.items():
+        teams = {r["h"] for r in q("SELECT home h FROM matches WHERE league_id=?", (lid,))} | {r["a"] for r in q("SELECT away a FROM matches WHERE league_id=?", (lid,))}
+        got, un = mk_elo_match(rows, country, teams)
+        if got:
+            snap[lid] = got
+        if un:
+            miss[lid] = un
+    if not snap:
+        return
+    hist = dict(old.get("hist") or {})
+    hist[day] = snap
+    for k in sorted(hist)[:-400]:
+        del hist[k]
+    out = {"t": day, "source": "clubelo.com", "r": snap, "unmatched": miss, "hist": hist}
+    gh_put(hub, ELO_PATH, json.dumps(out, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), "Update ClubElo ratings")
+    log(f"  [Elo] {day}: " + "، ".join(f"{lid[-3:]} {len(v)}" for lid, v in snap.items()) + (f" — بلا مطابقة: {miss}" if miss else ""))
+
+
+_orig_run_pipeline_mk = run_pipeline
+
+
+def run_pipeline(hub, pit_key):
+    out = _orig_run_pipeline_mk(hub, pit_key)
+    for name, fn in (("السوق", sync_market), ("Elo", sync_elo)):
+        try:
+            fn(hub)
+        except Exception as e:      # optional: never stops the sync
+            log(f"  [{name}] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
+    return out
+# ===== MARKET END =====
 
 
 if __name__ == "__main__":

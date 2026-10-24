@@ -1,7 +1,7 @@
 const {chromium}=require('playwright');const fs=require('fs');
 let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
 const U='http://127.0.0.1:8773/index.html';
-const SEC={home:['overview','data','settings'],league:['round','rare','table','sim','luck','states','xi','thrill','matches','teams','whatif'],players:['players','compare','twins','cards','rankings','ratings','gems','looklike'],analysis:['tactical','shots','reality','passing','ppda','height','defense','heatmaps','halves','clubtwins','carry','reportcard','leaguedna'],fpl:['fantasy','lab','beat','share']};
+const SEC={home:['overview','data','settings'],league:['round','rare','table','sim','luck','states','xi','thrill','matches','teams','whatif'],players:['players','compare','twins','cards','rankings','ratings','gems','looklike'],analysis:['tactical','shots','reality','passing','ppda','height','sbpress','defense','heatmaps','halves','clubtwins','carry','reportcard','leaguedna'],fpl:['fantasy','lab','beat','share']};
 const SENT={flipy:'1',fpl_myxi_cur_v1:'{"keep":1}',gh_repo:'x/y'};
 async function open(b,{vw=1280,lang='en',init=null,league='l_4WFCIZ'}={}){const ctx=await b.newContext({viewport:{width:vw,height:860}});
  await ctx.addInitScript(([a,S,init,lg])=>{if(!sessionStorage.getItem('seeded')){sessionStorage.setItem('seeded','1');localStorage.clear();for(const k in S)localStorage.setItem(k,S[k]);localStorage.setItem('league',lg);localStorage.setItem('lang',a);if(init!=null)localStorage.setItem('plx_fav_v1',init)}},[lang,SENT,init,league]);
@@ -12,7 +12,7 @@ const vis=pg=>pg.$$eval('#nav a',a=>a.filter(x=>x.offsetParent).map(x=>x.getAttr
 (async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  /* ---- sections ---- */
  {const {ctx,pg,errs}=await open(b);
-  const all=await pg.$$eval('#nav a',a=>a.map(x=>x.getAttribute('href').slice(2)));ok(all.length===39&&Object.values(SEC).flat().every(k=>all.includes(k)),'all 39 menu links (Comebacks & collapses, Likely line-ups, Thrill index, Club twins, Who carries the team, Model report card and League DNA added; Attack share, Very rare cases, Match What-If, Ratings, Halves, Hidden Gems, Reality Check, This round, Height, Season simulator, Luck table, Player twins, Player cards and Beat the model added) stay in the menu; each belongs to one of 5 sections');
+  const all=await pg.$$eval('#nav a',a=>a.map(x=>x.getAttribute('href').slice(2)));ok(all.length===40&&Object.values(SEC).flat().every(k=>all.includes(k)),'all 40 menu links (Pressing maps added; Comebacks & collapses, Likely line-ups, Thrill index, Club twins, Who carries the team, Model report card and League DNA added; Attack share, Very rare cases, Match What-If, Ratings, Halves, Hidden Gems, Reality Check, This round, Height, Season simulator, Luck table, Player twins, Player cards and Beat the model added) stay in the menu; each belongs to one of 5 sections');
   /* the menu drawer: every section with its pages in order, the open page marked; links open and close it */
   const drw=()=>pg.evaluate(()=>{drwOpen(true);const o={};document.querySelectorAll('#drw .drw-s').forEach(s=>o[s.dataset.s]=[...s.querySelectorAll('a')].map(a=>a.getAttribute('href').slice(2)));const on=document.querySelector('#drw a.on');const r={o,on:on&&on.getAttribute('href').slice(2)};drwOpen(false);return r});
   let bad=[];for(const [s,ps] of Object.entries(SEC))for(const p of ps){await go(pg,'#/'+p,400);const d=await drw();if(d.on!==p||JSON.stringify(d.o)!==JSON.stringify(SEC))bad.push(p+':'+d.on)}

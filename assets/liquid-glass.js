@@ -24,6 +24,9 @@
  const key=e=>e.getAttribute('href')||(e.dataset.cap?'cap':'')||e.getAttribute('onclick')||e.textContent;
  const G=[
   {id:'fp',sel:'#fproot > .ctl',items:c=>[...c.children].filter(e=>e.tagName==='BUTTON'),on:e=>!e.classList.contains('s'),rebuild:true,drag:true},
+  {id:'ins',sel:'.ins-tabs',items:c=>[...c.children].filter(e=>e.tagName==='BUTTON'),on:e=>!e.classList.contains('s'),rebuild:true,drag:true},
+  {id:'lab',sel:'.labtabs',items:c=>[...c.children].filter(e=>e.tagName==='BUTTON'),on:e=>e.classList.contains('on'),rebuild:true,drag:true},
+  {id:'sbp',sel:'.sbp-tabs',items:c=>[...c.children].filter(e=>e.tagName==='BUTTON'),on:e=>!e.classList.contains('s'),rebuild:true,drag:true},
   {id:'drw',sel:'#drw .drw-n',items:c=>[...c.querySelectorAll('a[href^="#/"]')],on:e=>e.classList.contains('on'),rebuild:false,deco:c=>[...c.querySelectorAll('.drw-s h3')]}
  ].map(g=>Object.assign(g,{box:null,el:null,wb:null,wt:null,L:[],R:[],S:[],P:[],k:null,s:null,T:null,A:0,raf:0,last:0,ro:null,
   end:0,sig:'',dirty:true,mv:false,arr:false,d0:0,dir:[1,0],pd:null,lean:[0,0],hv:null,sup:0}));
@@ -178,7 +181,7 @@
  /* the drawer: the chosen link moves at once, the glass travels to it, and the drawer closes when it has arrived
     (the page itself opens straight away behind it) */
  document.addEventListener('click',e=>{const a=e.target.closest&&e.target.closest('#drw a[href^="#/"]');if(!a||a.classList.contains('on'))return;
-  const g=G[1],L=ensure(g);if(!L)return;
+  const g=G.find(x=>x.id==='drw'),L=ensure(g);if(!L)return;
   L.forEach(x=>{const on=x===a;x.classList.toggle('on',on);if(on)x.setAttribute('aria-current','page');else x.removeAttribute('aria-current')});
   update(g,true)},true);
  /* ---- play: press, drag and let go (groups with drag), and the lean towards the pointed tab ---- */
@@ -209,7 +212,8 @@
  document.addEventListener('pointerup',e=>up(e,false),true);
  document.addEventListener('pointercancel',e=>up(e,true),true);
  window.addEventListener('click',e=>{if(G.some(g=>g.sup)){G.forEach(g=>{g.sup=0});e.preventDefault();e.stopImmediatePropagation()}},true);
- window.lgxHold=()=>{const g=G[1];return g.mv?Math.max(0,g.end-performance.now())+120:0};
- window.LGX={groups:G,tick};
+ window.lgxHold=()=>{const g=G.find(x=>x.id==='drw');return g.mv?Math.max(0,g.end-performance.now())+120:0};
+ /* for the tests: park a group's glass at a point (no animation) with the lens on, to look at what it shows there */
+ window.LGX={groups:G,tick,pose:(id,x,y,k)=>{const g=G.find(q=>q.id===id);if(!g||!g.s||!g.el)return false;stop(g);Object.assign(g.s,{x,y,vx:0,vy:0});g.A=k==null?.3:k;g.mv=true;g.el.classList.add('mv');render(g);return true}};
  tick();
 })();

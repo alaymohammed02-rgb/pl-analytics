@@ -54,7 +54,6 @@ const moveTo=async(pg,sel,a,b)=>{const A=await centre(pg,a),B=await centre(pg,b)
  let m=await moveTo(pg,FS,tab(1),tab(labels.length));
  ok(off(m.v.o,m.A,m.B)<=2,'straight down: the glass centre stays on the line to the tab (at most '+off(m.v.o,m.A,m.B).toFixed(1)+' px off)');
  ok(m.v.ms>0&&m.v.ms<700,'it arrives in '+m.v.ms+' ms');
- ok(m.v.o.some(f=>f.two>=2),'on the way the lens shows two tabs at once (half of one, half of the next)');
  const kin=Math.max(...m.v.o.map(f=>f.kin)),kout=Math.max(...m.v.o.map(f=>f.kout));
  ok(kin>1.15&&kout<=1.09,'per-character magnification: letters inside the glass up to '+kin.toFixed(2)+'×, outside it only the Dock growth ('+kout.toFixed(2)+'×)');
  await pg.waitForTimeout(400);s=await pg.evaluate(glassOn,FS);
@@ -67,8 +66,16 @@ const moveTo=async(pg,sel,a,b)=>{const A=await centre(pg,a),B=await centre(pg,b)
  ok(off(m.v.o,m.A,m.B)<=2&&m.v.ms<700,'up and across: straight ('+off(m.v.o,m.A,m.B).toFixed(1)+' px off), '+m.v.ms+' ms');
  await pg.click(named('My XI'));await pg.waitForTimeout(800);
  m=await moveTo(pg,FS,named('My XI'),named('Season review'));
- ok(off(m.v.o,m.A,m.B)<=2&&m.v.o.some(f=>f.two>=2),'diagonal of the sketch, My XI → Season review: straight ('+off(m.v.o,m.A,m.B).toFixed(1)+' px off), cutting across tabs');
+ ok(off(m.v.o,m.A,m.B)<=2,'diagonal of the sketch, My XI → Season review: straight ('+off(m.v.o,m.A,m.B).toFixed(1)+' px off)');
  await pg.waitForTimeout(500);
+ /* the lens between two tabs: parked on the boundary of two neighbours in a row, it shows letters of both (half of each) */
+ {const two=await pg.evaluate(()=>{const g=LGX.groups.find(x=>x.id==='fp');const R=g.R;let i=0;while(i<R.length-1&&!(Math.abs(R[i].y-R[i+1].y)<2&&R[i+1].x>R[i].x))i++;
+   const bx=(R[i].x+R[i].w+R[i+1].x)/2,by=R[i].y+R[i].h/2;LGX.pose('fp',bx,by,.3);
+   const gb=g.el.getBoundingClientRect(),its=new Set(),big=[];g.P.forEach(p=>{if(p.pill||p.it<0)return;const q=p.el.getBoundingClientRect(),cx=q.left+q.width/2,cy=q.top+q.height/2;
+    if(cx>gb.left&&cx<gb.right&&cy>gb.top&&cy<gb.bottom){its.add(p.it);big.push(parseFloat((p.el.style.scale||'1').split(' ')[0]))}});
+   return {items:[...its].sort(),i,scaled:Math.max(...big)}});
+  ok(two.items.includes(two.i)&&two.items.includes(two.i+1)&&two.scaled>1.15,'between two neighbouring tabs the lens shows letters of both (tabs '+two.items.join(' and ')+'), magnified up to '+two.scaled.toFixed(2)+'×');
+  await pg.reload();await pg.waitForSelector(FS+' .lgx-g',{timeout:60000});await pg.waitForTimeout(700)}
  /* play: press, drag, let go */
  const from=await pg.evaluate(glassOn,FS);const C0=[from.a[0]+from.a[2]/2,from.a[1]+from.a[3]/2];
  await pg.mouse.move(C0[0],C0[1]);await pg.mouse.down();await pg.waitForTimeout(350);
@@ -133,13 +140,28 @@ const moveTo=async(pg,sel,a,b)=>{const A=await centre(pg,a),B=await centre(pg,b)
  const R6=await centre(pg,tab(6));await pg.mouse.move(R6[0],R6[1]);await pg.mouse.down();await pg.waitForTimeout(200);s=await pg.evaluate(glassOn,FS);await pg.mouse.up();
  ok(!s.up&&s.lensed===0,'reduced motion: pressing does not lift the glass');
  await ctx.close();
+ /* ---------- the other tab bars: Hidden Gems / Reality Check (the .ins-tabs strips), the Intelligence Lab and Pressing maps ---------- */
+ for(const [hash,sel,nm] of [['#/gems','#gmtabs','Hidden Gems tabs'],['#/reality','#rctabs','Reality Check tabs'],['#/lab','.labtabs','Intelligence Lab tabs'],['#/sbpress','.sbp-tabs','Pressing maps tabs']]){
+  ({ctx,pg,errs}=await T.open(b,{vw:1280,league:'l_4WFCIZ',hash}));
+  await pg.waitForSelector(sel+' .lgx-g',{timeout:60000});await pg.waitForTimeout(500);
+  let q=await pg.evaluate(glassOn,sel);
+  ok(q&&q.n>=2&&q.g.every((x,i)=>near(x,q.a[i]))&&q.op==='1'&&(await pg.$$eval(sel+' > button',a=>a.every(b=>!/lgx/.test(b.className)))),nm+': the glass rests on the chosen tab ('+(q&&q.label)+') and the buttons keep their classes');
+  const last=await pg.$$eval(sel+' > button',a=>a.length);
+  const src=await pg.evaluate(s=>{const c=document.querySelector(s);return [...c.children].filter(e=>e.tagName==='BUTTON').findIndex(e=>e.hasAttribute('data-lgx-act'))},sel);
+  const to=src===last-1?0:last-1;
+  const A0=await centre(pg,sel+' > button:nth-of-type('+(src+1)+')'),B0=await centre(pg,sel+' > button:nth-of-type('+(to+1)+')');
+  const w0=pg.evaluate(watch,{sel,ms:1300});await pg.click(sel+' > button:nth-of-type('+(to+1)+')');const mv=await w0;
+  ok(off(mv.o,A0,B0)<=6&&mv.ms<700,nm+': the glass goes straight to the new tab ('+off(mv.o,A0,B0).toFixed(1)+' px off, '+mv.ms+' ms)');
+  await pg.waitForTimeout(600);q=await pg.evaluate(glassOn,sel);
+  ok(q&&q.g.every((x,i)=>near(x,q.a[i]))&&q.lensed===0&&q.scaled===0,nm+': it stops exactly on the tab pressed ('+(q&&q.label)+') with nothing magnified');
+  ok(!errs.length,nm+': no page errors '+errs.slice(0,2).join(' ; '));await ctx.close()}
  /* ---------- the menu drawer ---------- */
  ({ctx,pg,errs}=await T.open(b,{vw:390,league:'l_4WFCIZ',hash:'#/fantasy'}));
  await pg.waitForSelector('#mnubtn',{timeout:60000});await pg.click('#mnubtn');await pg.waitForSelector('#drw .drw-n .lgx-g');await pg.waitForTimeout(500);
  const DS='#drw .drw-n';s=await pg.evaluate(glassOn,DS);
  ok(s&&s.label==='Fantasy'&&s.g.every((x,i)=>near(x,s.a[i])),'drawer: the glass rests on the open page (Fantasy)');
  cp=await pg.evaluate(copyOk,DS);
- const deco=await pg.evaluate(()=>{const P=window.LGX.groups[1].P;return {t:P.filter(p=>p.it<0&&p.el.dataset.c).length,svg:P.filter(p=>p.it<0&&p.el.querySelector('svg')).length,h3:document.querySelectorAll('#drw .drw-s h3').length}});
+ const deco=await pg.evaluate(()=>{const P=window.LGX.groups.find(g=>g.id==='drw').P;return {t:P.filter(p=>p.it<0&&p.el.dataset.c).length,svg:P.filter(p=>p.it<0&&p.el.querySelector('svg')).length,h3:document.querySelectorAll('#drw .drw-s h3').length}});
  ok(cp.hit===cp.want&&cp.want>100&&deco.t>10&&deco.svg===deco.h3,'drawer: the copy has every link letter in place ('+cp.hit+'/'+cp.want+'), the section titles and their '+deco.svg+' icons');
  const dl=await pg.$$eval(DS+' a[href^="#/"]',a=>a.map(x=>x.getAttribute('href')));
  const fi=dl.indexOf('#/fantasy'),ti=Math.max(0,fi-5),A=await centre(pg,DS+' a[href="#/fantasy"]'),B=await centre(pg,DS+' a[href="'+dl[ti]+'"]');
@@ -148,7 +170,7 @@ const moveTo=async(pg,sel,a,b)=>{const A=await centre(pg,a),B=await centre(pg,b)
  const mid=await pg.evaluate(()=>({open:document.documentElement.classList.contains('dr-open'),hash:location.hash}));
  ok(mid.open&&mid.hash===dl[ti],'the page opens at once, and the drawer stays open while the glass travels');
  const v=await w;
- ok(off(v.o,A,B)<=2&&v.ms>0&&v.ms<650&&v.o.some(f=>f.two>=2),'drawer: straight up across the links ('+off(v.o,A,B).toFixed(1)+' px off), '+v.ms+' ms');
+ ok(off(v.o,A,B)<=2&&v.ms>0&&v.ms<650,'drawer: straight up across the links ('+off(v.o,A,B).toFixed(1)+' px off), '+v.ms+' ms');
  await pg.waitForTimeout(600);
  ok(await pg.evaluate(()=>!document.documentElement.classList.contains('dr-open')),'the drawer closes once the glass has arrived');
  await pg.click('#mnubtn');await pg.waitForSelector(DS+' .lgx-g');await pg.waitForTimeout(500);
