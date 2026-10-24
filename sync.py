@@ -8985,11 +8985,11 @@ INDEX = _x_fpx_index(INDEX)
 # الكود في ملفات مستقلة في المستودع: assets/*.js و assets/features.css و manifest.webmanifest و sw.js و assets/icons/.
 # هذا القسم يضيف روابطها للصفحة فقط (بعد السكربت الرئيسي، فتلقى R و PAGES جاهزة). غيّر FEATURES_V لما تتغير الملفات.
 # ============================================================================
-FEATURES_V = "33"
+FEATURES_V = "32"
 FEATURES_JS = ("pla-data", "share-card", "threat-map", "match-whatif", "player-page", "match-centre", "home-extra", "team-round",
                "preview", "club-extra", "rankings-extra", "fantasy-extra", "insights-core", "hidden-gems", "player-dna", "team-dna",
                "reality-check", "matches-board", "match-replay", "match-story", "overview", "press-height",
-               "season-sim", "luck-table", "player-twin", "player-cards", "beat-model", "rare-cases", "attack-share", "drawer", "tap-twice", "line-height", "league-pool", "game-states", "likely-xi", "club-twins", "carry-team", "report-card", "league-dna", "thrill", "defense-card", "press-card", "sb-press", "press-est", "seasons", "liquid-glass")
+               "season-sim", "luck-table", "player-twin", "player-cards", "beat-model", "rare-cases", "attack-share", "drawer", "tap-twice", "line-height", "league-pool", "game-states", "likely-xi", "club-twins", "carry-team", "report-card", "league-dna", "thrill", "defense-card", "press-card", "sb-press", "seasons", "liquid-glass")
 
 
 def _x_feat_index(html):
@@ -11098,9 +11098,7 @@ PS_LEAGUES = ["l_4WFCIZ", "l_0ErfuF", "l_1Isor4", "l_3FJFUl", "l_0ALvwF", "l_4Qe
 # مواسم الإنجليزي من 2024-25 إلى 2021-22 انجلبت "light" أولاً ثم صارت "full": المزامنة تكمل لها الناقص فقط
 # (الإحصائيات المتقدمة والحرارة والتشكيلات والتقييمات والشوطين) بدون ما تعيد المباريات.
 PS_JOBS = [("l_4WFCIZ", k, "full") for k in (1, 2, 3, 4, 5)] + [(l, 1, "full") for l in PS_LEAGUES[1:]]
-# دوري فرنسا 2022-23 "light": نفس الموسم عند StatsBomb Open Data (أحداث كاملة لمباريات باريس)، فنقيس عليه تقدير الضغط من أرقام PitchAPI.
-# 2021-22 جُرّب (24 أكتوبر 2026): PitchAPI ما يعطي لاعبين لهذا الموسم (3 من كل 5 طلبات "not_found")، فتركناه.
-PS_JOBS += [("l_3FJFUl", 4, "light")]
+
 PS_REQ_PER_RUN = 1200         # أقصى عدد طلبات لـ PitchAPI في المزامنة الوحدة لهذا القسم (حوالي 7 دقايق)
 PS_COST = {"full": 10, "light": 5}   # طلبات لكل مباراة (مقاسة: full = 10، light = 5)
 PS_RETRY_H = 24               # مباراة فشلت بسبب انقطاع أو حد الطلبات: نعيدها بعد يوم

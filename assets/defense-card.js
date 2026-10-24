@@ -171,7 +171,7 @@
    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fn;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500);
   }finally{URL.revokeObjectURL(url)}}
  /* the helpers the other cards (press-card.js) use: percentile colour, text fitting, XML escaping, the page's colours, saving as a PNG */
- INS.cardKit={pcol,fit,x_,css,savePng,FONT,pool,ROLE};
+ INS.cardKit={pcol,fit,x_,css,savePng,FONT};
  /* ---------- the section, at the top of the Defensive (defending), Shots (attacking) and Passing (passing) pages ---------- */
  [['defense','def'],['shots','att'],['passing','mid']].forEach(([pg,fam])=>{const orig=R[pg];if(typeof orig!=='function')return;
   R[pg]=async function(el){
