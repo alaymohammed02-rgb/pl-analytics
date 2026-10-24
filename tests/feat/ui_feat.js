@@ -41,7 +41,7 @@ async function open(b,{vw=1280,lang='en',league='l_4WFCIZ',hash='#/heatmaps'}={}
   await pg.selectOption('#tml','t');await pg.waitForTimeout(800);ok(/returned no shots for this match/.test(await pg.innerText('#tmout')),'a match without shots: a clear message, nothing invented');ok(!errs.length,'no page errors');await ctx.close()}
  /* ---- Match What-If ---- */
  {const {ctx,pg,errs}=await open(b,{hash:'#/whatif'});await pg.waitForSelector('#wiout .wi-score',{timeout:30000});
-  ok(await pg.evaluate(()=>[...document.querySelectorAll('#nav a')].some(a=>a.getAttribute('href')==='#/whatif')&&UI_SEC.find(s=>s.k==='league').p.includes('whatif')),'Match What-If has its own page in the League section of the menu');
+  ok(await pg.evaluate(()=>[...document.querySelectorAll('#nav a')].some(a=>a.getAttribute('href')==='#/whatif')&&UI_SEC.find(s=>s.k==='matches').p.includes('whatif')),'Match What-If has its own page in the Matches hub of the menu');
   ok(await pg.evaluate(()=>!document.querySelector('#app .tm-pitch')&&/Hypothetical/.test(document.querySelector('.wi-warn').textContent)),'separate from the Heat Map, with the hypothetical warning');
   const m=await pg.evaluate(()=>{const id=$('#wim').value,m=D.matches.find(x=>x.match_id===id);return {id,s:m.score,home:m.home,away:m.away}});
   const real=m.s.split('-').map(Number),shots=SH.rows.filter(r=>r[six.m]===m.id&&!r[six.og]);
