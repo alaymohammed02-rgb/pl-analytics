@@ -1,6 +1,6 @@
-/* ===== Menu drawer: one ☰ button in the header opens every section and page; the top links and the phone's bottom bar go =====
-   The pages and their sections are read when the drawer opens (PAGES and UI_SEC, including pages other files add), so nothing
-   is listed twice and no page is lost. The home page stays the matches overview. The drawer opens from the reading side (left
+/* ===== Menu drawer: one ☰ button in the header opens the ten hubs; the top links and the phone's bottom bar go =====
+   The hubs and their pages are read when the drawer opens (PAGES and UI_SEC, including pages other files add), so nothing
+   is listed twice and no page is lost; the pages of a hub are tabs above the page (uiNav in the inline script). The home page stays the matches overview. The drawer opens from the reading side (left
    in English, right in Arabic), closes with ✕, the dimmed page behind it, Escape or any link, and gives focus back to ☰. */
 (function(){
  if(typeof PAGES==='undefined')return;
@@ -31,9 +31,11 @@
  }
  function fill(){
   const c=cur();
+  const S=secs(),hub=S.find(s=>s.p.some(([k])=>k===c))||S[0];
+  /* ten hubs, one link each (to the page last open in it, else its first); the pages of a hub are the tabs above the page */
   box.innerHTML=`<div class="drw-h"><b>PL Analytics</b><button type="button" class="s drw-x" aria-label="Close menu">✕</button></div>
-   <nav class="drw-n" aria-label="Pages">${secs().map(s=>`<section class="drw-s" data-s="${s.k}"><h3><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="currentColor">${s.ic}</g></svg><span>${esc(s.n)}</span></h3>
-    <ul>${s.p.map(([k,n])=>`<li><a href="#/${esc(k)}"${k===c?' class="on" aria-current="page"':''}>${esc(n)}</a></li>`).join('')}</ul></section>`).join('')}</nav>`;
+   <nav class="drw-n" aria-label="Pages"><section class="drw-s" data-s="hubs"><ul>${S.filter(s=>s.p.length).map(s=>{const last=typeof UI_LAST==='object'&&UI_LAST?UI_LAST[s.k]:null,t=s.p.some(([k])=>k===last)?last:s.p[0][0];
+    return `<li><a href="#/${esc(t)}" data-hub="${esc(s.k)}"${s===hub?' class="on" aria-current="page"':''}>${esc(s.n)}</a></li>`}).join('')}</ul></section></nav>`;
   box.querySelector('.drw-x').addEventListener('click',()=>open(false));
  }
  function open(on){

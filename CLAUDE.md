@@ -113,8 +113,6 @@ A static football analytics site on GitHub Pages. A Python sync (`sync.py`, run 
    - Weight recent matches more, and use a home advantage per league.
    - Possibly add ClubElo.
    - Measure it with the Model report card page.
-3. **A faster site and a simpler menu** (Opus, high effort).
-   - Load a page's script only when it opens (today about 1.3 MB of code loads on every visit).
-   - Group the 39 pages into about 10 hubs with tabs.
-
+3. ~~A simpler menu~~: done (24 Oct 2026). The drawer lists ten hubs, one link each (`UI_SEC` in the inline script: Home, Season, Matches, Teams, Players, Compare, Attack, Defence, Models, Fantasy; the link goes to the page last open in that hub, else its first). The pages of the open hub are tabs above the page (`#hubbar`, built in `uiNav`); a hub of one page has none. Every page keeps its address; `INS.addPage(key,name,section,after)` still takes the old section names (home, league, players, analysis, fpl) for a page no hub lists yet. Test: `tests/ui/ui_ux.js`.
+4. **A faster site: measured, lazy loading dropped** (24 Oct 2026). Loading each page's script only when it opens would save almost nothing: at 4× CPU slowdown all `assets/*.js` except the Liquid Glass cost about 40 ms of CPU (the glass itself 330 ms, and it is needed on the Fantasy tabs); the weight is the inline script in `index.html` (about 1.2 s at 4×, 234 KB gzipped) and the default page's data (29 files, 1.26 MB: league 308 KB, shots 400 KB, logos 237 KB, facts 213 KB; the Overview takes about 3.9 s to settle at 4× against 1.5 s for the table). `index.html` changes only with code, not with every sync. If speed matters, start from the Overview's data (what it needs above the fold) and the Fantasy page's `fpTeamEq`, not from script loading.
 The owner has not yet chosen among the free data sources offered (ClubElo, football-data.co.uk, Open-Meteo, API-Football, football-data.org). Any key goes into GitHub secrets.

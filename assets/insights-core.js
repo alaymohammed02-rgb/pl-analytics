@@ -126,8 +126,9 @@
  /* tabs inside a card: [{k,t}] → buttons; the page swaps the body */
  INS.tabs=(id,T,on)=>`<div class="ins-tabs" role="tablist" id="${id}">${T.map(x=>`<button type="button" role="tab" class="${x.k===on?'':'s'}" aria-selected="${x.k===on}" data-k="${x.k}">${esc(x.t)}</button>`).join('')}</div>`;
  INS.wireTabs=(root,id,fn)=>{const t=root.querySelector('#'+id);if(!t)return;t.addEventListener('click',e=>{const b=e.target.closest('button[data-k]');if(!b)return;t.querySelectorAll('button').forEach(x=>{const on=x===b;x.className=on?'':'s';x.setAttribute('aria-selected',on)});fn(b.dataset.k)})};
+ /* a page asks for a section (home, league, players, analysis, fpl); the menu has ten hubs, so a page the hubs do not list yet goes to the hub of that name's kind */
  INS.addPage=(k,n,sec,after)=>{if(typeof PAGES==='undefined')return;if(!PAGES.some(p=>p[0]===k)){const i=PAGES.findIndex(p=>p[0]===after);PAGES.splice(i>=0?i+1:PAGES.length,0,[k,n])}
-  if(typeof UI_SEC!=='undefined'){const s=UI_SEC.find(x=>x.k===sec);if(s&&!s.p.includes(k)){const i=s.p.indexOf(after);s.p.splice(i>=0?i+1:s.p.length,0,k)}}};
+  if(typeof UI_SEC!=='undefined'&&!UI_SEC.some(x=>x.p.includes(k))){const hub={home:'home',league:'matches',players:'players',analysis:'attack',fpl:'fpl'}[sec]||sec,s=UI_SEC.find(x=>x.k===hub);if(s){const i=s.p.indexOf(after);s.p.splice(i>=0?i+1:s.p.length,0,k)}}};
  INS.ar=o=>{if(typeof AR==='object')Object.entries(o).forEach(([k,v])=>{if(!(k in AR)&&v!==k)AR[k]=v})};
  INS.ar({"No data to plot.":"ما فيه بيانات للرسم.","No data.":"ما فيه بيانات.","Not enough matches for a trend yet.":"المباريات ما تكفي لرسم اتجاه للحين.",
   "Goals":"الأهداف","Shots":"التسديدات","Key passes":"تمريرات مفتاحية","Shot-creating actions":"أفعال صنعت تسديدة","Passes into box":"تمريرات داخل المنطقة",

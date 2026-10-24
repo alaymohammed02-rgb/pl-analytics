@@ -7845,10 +7845,15 @@ _X_UIJS = r"""/* ===== Navigation, search, glossary and your team =====
    Everything runs after the page is drawn (a DOM observer), so no page's own code changes. */
 const UI_SEC=[
  {k:'home',n:'Home',p:['overview','data','settings'],ic:'<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>'},
- {k:'league',n:'League',p:['table','matches','teams'],ic:'<path d="M4 5h16v3H4zM4 10.5h16v3H4zM4 16h16v3H4z"/>'},
- {k:'players',n:'Players',p:['players','compare','rankings','looklike'],ic:'<circle cx="12" cy="7.5" r="4"/><path d="M4 21a8 8 0 0 1 16 0z"/>'},
- {k:'analysis',n:'Analysis',p:['tactical','shots','passing','ppda','defense','heatmaps'],ic:'<path d="M4 20V10h3v10zM10.5 20V4h3v16zM17 20v-7h3v7z"/>'},
- {k:'fpl',n:'Fantasy',p:['fantasy','lab'],ic:'<path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.3 5.9 20.6l1.4-6.8L2.2 9.1l6.9-.8z"/>'}];
+ {k:'season',n:'Season',p:['table','sim','luck','rare'],ic:'<path d="M4 5h16v3H4zM4 10.5h16v3H4zM4 16h16v3H4z"/>'},
+ {k:'matches',n:'Matches',p:['matches','round','whatif','thrill','states','xi'],ic:'<path d="M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zm1 4v10h12V8z"/>'},
+ {k:'teams',n:'Teams',p:['teams','tactical','halves','clubtwins','carry','leaguedna'],ic:'<path d="M12 2l8 3v6c0 5-3.4 9.3-8 11-4.6-1.7-8-6-8-11V5z"/>'},
+ {k:'players',n:'Players',p:['players','rankings','ratings','gems','looklike'],ic:'<circle cx="12" cy="7.5" r="4"/><path d="M4 21a8 8 0 0 1 16 0z"/>'},
+ {k:'compare',n:'Compare',p:['compare','twins','cards'],ic:'<path d="M4 4h7v16H4zM13 8h7v12h-7z"/>'},
+ {k:'attack',n:'Attack',p:['shots','reality','passing','heatmaps'],ic:'<path d="M13 2L4 14h6l-1 8 9-12h-6z"/>'},
+ {k:'defence',n:'Defence',p:['defense','ppda','height','sbpress'],ic:'<path fill-rule="evenodd" d="M12 2L4 6v6c0 5 3.4 8.6 8 10 4.6-1.4 8-5 8-10V6zm0 3l5 2.3V12c0 3.3-2.1 5.9-5 7-2.9-1.1-5-3.7-5-7V7.3z"/>'},
+ {k:'models',n:'Models',p:['lab','reportcard'],ic:'<path d="M4 19h16v2H4zM6 10h3v7H6zm5-5h3v12h-3zm5 3h3v9h-3z"/>'},
+ {k:'fpl',n:'Fantasy',p:['fantasy','beat','share'],ic:'<path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.3 5.9 20.6l1.4-6.8L2.2 9.1l6.9-.8z"/>'}];
 const UI_ALIAS={club:'teams',player:'players',match:'matches'};
 const uiPage=()=>((location.hash||'#/overview').split('/')[1]||'overview');
 const uiSecOf=pg=>{pg=UI_ALIAS[pg]||pg;return UI_SEC.find(s=>s.p.includes(pg))||UI_SEC[0]};
@@ -7868,6 +7873,12 @@ function uiNav(){
  if(!document.getElementById('secnav')){const b=document.createElement('nav');b.id='secnav';b.setAttribute('aria-label','Sections');b.innerHTML=btns;nav.parentNode.insertBefore(b,nav)}
  if(!document.getElementById('secbar')){const b=document.createElement('nav');b.id='secbar';b.setAttribute('aria-label','Sections');b.innerHTML=btns;document.body.appendChild(b)}
  document.querySelectorAll('#secnav button,#secbar button').forEach(b=>{const on=b.dataset.k===sec.k;b.classList.toggle('on',on);if(on)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
+ /* the pages of the open hub as tabs above the page (a hub with one page shows none): every page keeps its own address */
+ const app=document.getElementById('app');let hb=document.getElementById('hubbar');
+ if(!hb&&app){hb=document.createElement('nav');hb.id='hubbar';hb.setAttribute('aria-label','Pages in this section');app.parentNode.insertBefore(hb,app)}
+ if(hb){const name=new Map(PAGES.map(p=>[p[0],p[1]])),items=sec.p.filter(k=>name.has(k)),key=sec.k+'|'+sp+'|'+items.join();
+  if(hb.dataset.k!==key){hb.dataset.k=key;hb.innerHTML=items.length>1?items.map(k=>`<a href="#/${k}"${k===sp?' class="on" aria-current="page"':''}>${esc(name.get(k))}</a>`).join(''):'';hb.hidden=items.length<2;
+   const on=hb.querySelector('a.on');if(on&&hb.scrollWidth>hb.clientWidth)on.scrollIntoView({block:'nearest',inline:'center'})}}
  if(typeof lglKick==='function')lglKick();
 }
 
@@ -8026,6 +8037,10 @@ def _x_ui_index(html):
 
 _AR_SEASON.update({
     "Home": "الرئيسية",
+    "Season": "الموسم",
+    "Defence": "الدفاع",
+    "Models": "النماذج",
+    "Pages in this section": "صفحات هذا القسم",
     "League": "الدوري",
     "Analysis": "التحليل",
     "Fantasy": "الفانتازي",
@@ -8985,7 +9000,7 @@ INDEX = _x_fpx_index(INDEX)
 # الكود في ملفات مستقلة في المستودع: assets/*.js و assets/features.css و manifest.webmanifest و sw.js و assets/icons/.
 # هذا القسم يضيف روابطها للصفحة فقط (بعد السكربت الرئيسي، فتلقى R و PAGES جاهزة). غيّر FEATURES_V لما تتغير الملفات.
 # ============================================================================
-FEATURES_V = "32"
+FEATURES_V = "33"
 FEATURES_JS = ("pla-data", "share-card", "threat-map", "match-whatif", "player-page", "match-centre", "home-extra", "team-round",
                "preview", "club-extra", "rankings-extra", "fantasy-extra", "insights-core", "hidden-gems", "player-dna", "team-dna",
                "reality-check", "matches-board", "match-replay", "match-story", "overview", "press-height",
