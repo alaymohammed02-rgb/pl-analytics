@@ -46,7 +46,7 @@ const fpl=async pg=>{await pg.evaluate(()=>{const f=document.getElementById('hfp
    const sc=[...document.querySelectorAll('.hscc .hdot')];const L=new Map();c.fin.forEach(m=>{const g=wkSc(m.score);[[m.home,m.away],[m.away,m.home]].forEach(([t,u])=>{const xf=c.tx.get(m.match_id+'|'+t),xa=c.tx.get(m.match_id+'|'+u);if(xf==null||xa==null)return;const r=L.get(t)||{n:0,f:0,a:0};r.n++;r.f+=xf;r.a+=xa;L.set(t,r)})});
    const P=sc.map(a=>({t:a.getAttribute('aria-label'),x:parseFloat(a.style.left),y:parseFloat(a.style.top)})),R=P.map(p=>({...p,f:L.get(p.t).f/L.get(p.t).n,a:L.get(p.t).a/L.get(p.t).n}));
    o.scN=sc.length===[...L.values()].filter(r=>r.n>=3).length;
-   o.scX=R.every(p=>R.every(q=>(p.f<q.f)===(p.x<q.x)||Math.abs(p.f-q.f)<1e-9));o.scY=R.every(p=>R.every(q=>(p.a<q.a)===(p.y<q.y)||Math.abs(p.a-q.a)<1e-9));
+   const wk=(a,b,u,v)=>Math.abs(a-b)<1e-9||(a<b?u<=v:u>=v);o.scX=R.every(p=>R.every(q=>wk(p.f,q.f,p.x,q.x)));o.scY=R.every(p=>R.every(q=>wk(p.a,q.a,p.y,q.y)));o.scTie=R.some((p,i)=>R.some((q,j)=>j>i&&p.x===q.x&&Math.abs(p.f-q.f)>1e-9));
    o.scT=document.querySelectorAll('.hscc details tbody tr').length>=sc.length;
    o.rad=document.querySelectorAll('.hrad polygon.ra,.hrad polygon.rb').length===2&&document.querySelectorAll('.hrad circle.a').length===6&&document.querySelectorAll('.hrad circle.b').length===6;
    o.pair=[...document.querySelectorAll('.hstar .hpair')].every(p=>{const w=[...p.querySelectorAll('.hpt i')].map(i=>parseFloat(i.style.width));return w[0]===100&&w[1]<=100&&w[2]<=w[0]});
