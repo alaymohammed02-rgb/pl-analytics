@@ -246,25 +246,25 @@
      "api": "2024/2025",
      "id": "l_0ErfuF_2024-25",
      "n": 380,
-     "t": "2026-10-24 10:24:12",
+     "t": "2026-10-24 10:39:44",
      "err": null,
      "plan": false,
-     "req": 1200,
-     "sec": 317,
+     "req": 1900,
+     "sec": 496,
      "files": {
       "s": "2024-25",
       "id": "l_0ErfuF_2024-25",
       "file": "l_0ErfuF_2024-25.json",
-      "v": "1eeca3b9bd",
-      "size": 3888677,
+      "v": "5acb32e64c",
+      "size": 6196336,
       "pl_file": "l_0ErfuF_2024-25_pl.json",
-      "pl_v": "6835e06d85",
+      "pl_v": "4763da4805",
       "sh_file": "l_0ErfuF_2024-25_sh.json",
-      "sh_v": "9801d858df"
+      "sh_v": "d0293ab612"
      },
-     "got": 240,
-     "ok": 240,
-     "complete": false
+     "got": 380,
+     "ok": 380,
+     "complete": true
     }
    }
   },
@@ -314,6 +314,32 @@
      "got": 306,
      "ok": 306,
      "complete": true
+    },
+    "2024-25": {
+     "name": "Bundesliga",
+     "light": true,
+     "api": "2024/2025",
+     "id": "l_1Isor4_2024-25",
+     "n": 306,
+     "t": "2026-10-24 10:42:55",
+     "err": null,
+     "plan": false,
+     "req": 495,
+     "sec": 130,
+     "files": {
+      "s": "2024-25",
+      "id": "l_1Isor4_2024-25",
+      "file": "l_1Isor4_2024-25.json",
+      "v": "e116333c49",
+      "size": 1664050,
+      "pl_file": "l_1Isor4_2024-25_pl.json",
+      "pl_v": "15d2c7a006",
+      "sh_file": "l_1Isor4_2024-25_sh.json",
+      "sh_v": "699e4dbb1c"
+     },
+     "got": 99,
+     "ok": 95,
+     "complete": false
     }
    }
   },
@@ -414,6 +440,32 @@
      },
      "got": 339,
      "ok": 0,
+     "complete": false
+    },
+    "2024-25": {
+     "name": "Ligue 1",
+     "light": true,
+     "api": "2024/2025",
+     "id": "l_3FJFUl_2024-25",
+     "n": 306,
+     "t": "2026-10-24 10:45:13",
+     "err": null,
+     "plan": false,
+     "req": 5,
+     "sec": 1,
+     "files": {
+      "s": "2024-25",
+      "id": "l_3FJFUl_2024-25",
+      "file": "l_3FJFUl_2024-25.json",
+      "v": "4e010bdb69",
+      "size": 15892,
+      "pl_file": "l_3FJFUl_2024-25_pl.json",
+      "pl_v": "c6a9262f02",
+      "sh_file": "l_3FJFUl_2024-25_sh.json",
+      "sh_v": "107c0180e3"
+     },
+     "got": 1,
+     "ok": 1,
      "complete": false
     }
    }
