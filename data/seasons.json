@@ -598,25 +598,25 @@
      "api": "2024/2025",
      "id": "l_4QexZg_2024-25",
      "n": 306,
-     "t": "2026-10-24 12:02:56",
+     "t": "2026-10-24 12:27:37",
      "err": null,
      "plan": false,
-     "req": 335,
-     "sec": 76,
+     "req": 1530,
+     "sec": 366,
      "files": {
       "s": "2024-25",
       "id": "l_4QexZg_2024-25",
       "file": "l_4QexZg_2024-25.json",
-      "v": "97542a2156",
-      "size": 1090380,
+      "v": "3f39a7c428",
+      "size": 4964859,
       "pl_file": "l_4QexZg_2024-25_pl.json",
-      "pl_v": "8e60c916a9",
+      "pl_v": "11bfc997e5",
       "sh_file": "l_4QexZg_2024-25_sh.json",
-      "sh_v": "a5442a694b"
+      "sh_v": "75ebbd4241"
      },
-     "got": 67,
-     "ok": 67,
-     "complete": false
+     "got": 306,
+     "ok": 306,
+     "complete": true
     }
    }
   }
