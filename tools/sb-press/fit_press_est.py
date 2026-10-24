@@ -1,10 +1,11 @@
-"""Fits the pressing ESTIMATE for data/press_est.json: pressures per 90 from tackles, interceptions and blocks, per position group.
+"""Fits the pressing ESTIMATE for data/press_est.json: pressures per 90 from tackles and interceptions, per position group.
 
 Why an estimate: StatsBomb's free event data has the real pressures only for old league seasons and a few tournaments; the six current
 leagues come from PitchAPI, which has no pressure events. The estimate is trained on StatsBomb's full 2015/16 seasons of the Premier
 League, La Liga, Serie A and Ligue 1 (one row per player per match, from overlap_ligue1.py) and tested leave-one-league-out: fitted on
-three leagues, scored on the fourth, so it is always judged on a league it never saw. Clearances are left out on purpose: StatsBomb
-tagged far more clearances in 2015/16 than in 2021-23 (a centre-back: 5.5 against 2.6 per 90), so they do not carry over.
+three leagues, scored on the fourth, so it is always judged on a league it never saw. Clearances and blocks are left out on purpose:
+- StatsBomb tagged far more clearances in 2015/16 than in 2021-23 (a centre-back: 5.5 against 2.6 per 90);
+- PitchAPI's blocks are a different count from StatsBomb's (a midfielder: 0.25 against 1.9 per 90), while tackles and interceptions are of the same size.
 
 Needs the file overlap_ligue1.py writes ({season label: [match...]}) for StatsBomb 2015/16 (competition ids 2, 11, 12, 7 with season 27).
    python3 fit_press_est.py OUT.json ROWS.json
@@ -22,11 +23,11 @@ PR, TK, IC, BL = 5, 6, 7, 8
 
 def design(r):
     mi = r[4]
-    return [1.0] + [r[6][k] / mi * 90 for k in (1, 2, 3)]
+    return [1.0] + [r[6][k] / mi * 90 for k in (1, 2)]
 
 
 def fit(rows):
-    """One weighted ridge regression per position group: pressures per 90 on tackles, interceptions and blocks per 90."""
+    """One weighted ridge regression per position group: pressures per 90 on tackles and interceptions per 90."""
     coef = {}
     for g in GROUPS:
         G = [r for r in rows if r[5] == g]
@@ -69,7 +70,7 @@ def main():
     for label, ms in json.load(open(rows_path)).items():
         if len(ms) < 300:       # a partial competition (the open Bundesliga 2015/16 holds only Bayer Leverkusen's 34 matches) is no league pool
             continue
-        lg = label.split(" ")[0]
+        lg = {"PL": "Premier League", "LaLiga": "La Liga", "SerieA": "Serie A", "Ligue1": "Ligue 1"}.get(label.split(" ")[0], label.split(" ")[0])
         for m in ms:
             for r in m["rows"]:
                 if r[3] >= MIN_ROW and r[4] != "GK":
@@ -94,7 +95,7 @@ def main():
     coef = fit(allrows)
     pool = {g: dict(mean_pr=float(sum(r[6][0] for r in allrows if r[5] == g) / sum(r[4] for r in allrows if r[5] == g) * 90),
                     minutes=float(sum(r[4] for r in allrows if r[5] == g))) for g in GROUPS}
-    doc = dict(v=1, source="StatsBomb Open Data, full 2015/16 seasons (derived counts only)", leagues=leagues, features=["tk", "ic", "bl"],
+    doc = dict(v=1, source="StatsBomb Open Data, full 2015/16 seasons (derived counts only)", leagues=leagues, features=["tk", "ic"],
                min_row_minutes=MIN_ROW, min_season_minutes=MIN_SEASON, lam=LAM,
                coef={g: [round(float(x), 5) for x in coef[g]] for g in GROUPS}, groups=pool, cv=cv,
                rows=len(allrows))

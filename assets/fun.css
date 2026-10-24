@@ -395,3 +395,9 @@ html[dir=rtl] .dl-bars .ph-bn bdi{text-align:right}
 /* ===== Pressing maps (assets/sb-press.js) ===== */
 .sbp-att img{display:inline-block}.sbp-tabs{margin-top:10px}
 #sbpb .dcx-c svg{max-width:1100px}
+
+/* Estimated pressing (assets/press-est.js) */
+.pex-me{display:flex;flex-direction:column;gap:6px;margin:10px 0}.pex-n{font-size:18px}.pex-big{font-size:28px;font-weight:800}
+.pex-bar{height:10px;border-radius:5px;background:rgba(255,255,255,.08);overflow:hidden;direction:ltr}.pex-bar i{display:block;height:100%;border-radius:5px}
+.pex-c{position:relative;min-width:110px;direction:ltr}.pex-c span{position:relative;font-size:12px;padding:0 4px}.pex-p{position:absolute;left:0;top:50%;height:6px;margin-top:-3px;border-radius:3px;opacity:.85}
+.pex-sel td{background:rgba(255,255,255,.07)}.pex-ck{margin-top:14px;border-top:1px solid rgba(255,255,255,.1);padding-top:10px}.pex-ck h4{margin:0 0 6px}

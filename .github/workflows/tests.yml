@@ -26,7 +26,7 @@ jobs:
         run: pip install -q requests
       - name: Run Python tests
         run: |
-          bash tests/ci.sh cmp/t_cmp.py logo/t_logo.py theme/t_champ.py theme/t_retry.py t_resolve.py home/t_photos.py dq/t_dq.py mx/t_mx.py lv/t_lv.py fx/t_fx.py rare/t_rr.py eng/t_table.py ps/t_ps.py trk/t_py.py sb/t_press.py mk/t_market.py
+          bash tests/ci.sh cmp/t_cmp.py logo/t_logo.py theme/t_champ.py theme/t_retry.py t_resolve.py home/t_photos.py dq/t_dq.py mx/t_mx.py lv/t_lv.py fx/t_fx.py rare/t_rr.py eng/t_table.py ps/t_ps.py trk/t_py.py sb/t_press.py mk/t_market.py pe/t_fit.py
       - name: Upload logs
         if: failure()
         uses: actions/upload-artifact@v4
@@ -42,7 +42,7 @@ jobs:
       matrix:
         include:
           - shard: 7
-            tests: "ps/ui_ps.js ps/ui_ps_crawl.js"
+            tests: "ps/ui_ps.js ps/ui_ps_crawl.js pe/ui_pe.js"
           - shard: 1
             tests: "ui/ui_ux.js ph/ui_dlh.js fun/ui_sm.js fun/ui_lk.js"
           - shard: 2
