@@ -20,7 +20,10 @@ const rows=pg=>pg.evaluate(()=>[...document.querySelectorAll('.st-t tbody tr')].
  const top=want.slice(0,3).map(k=>NAMES[k]+' '+f2(L.stats[k].yoy)).join(', '),low=want.slice(-3).reverse().map(k=>NAMES[k]+' '+f2(L.stats[k].yoy)).join(', ');
  ok(intro.includes('Most repeatable: '+top+'.')&&intro.includes('Mostly luck: '+low+'.'),'the summary names the three most and least repeatable: '+top+' | '+low);
  ok(intro.includes('over '+L.seasons.length+' Premier League seasons ('+L.seasons[0]+' to '+L.seasons[L.seasons.length-1]+')')&&intro.includes(F.min+'+ minutes'),'the intro says which seasons and the minutes (900+)');
- ok(!(await pg.$('#stl')),'one league in the file: no league selector');
+ const LIDS=Object.keys(F.leagues);
+ ok(LIDS.length>1&&JSON.stringify(await pg.$$eval('#stl option',o=>o.map(x=>x.value)))===JSON.stringify(LIDS)&&await pg.$eval('#stl',x=>x.value)==='l_4WFCIZ','the league selector lists every league of the file ('+LIDS.length+'), the open league (Premier League) chosen');
+ {const fx=F.leagues.l_0ErfuF,before=await rows(pg);await pg.selectOption('#stl','l_0ErfuF');const Rl=await rows(pg),keys=Object.keys(NAMES).filter(k=>fx.stats[k]&&fx.stats[k].yoy!=null).sort((a,b)=>fx.stats[b].yoy-fx.stats[a].yoy||NAMES[a].localeCompare(NAMES[b]));
+  ok(JSON.stringify(Rl.map(r=>r.k))===JSON.stringify(keys)&&Rl.every(r=>r.y===f2(fx.stats[r.k].yoy)&&r.n===String(fx.stats[r.k].n_yoy))&&/LaLiga/.test(await pg.innerText('.lk-intro'))&&before.length>0,'LaLiga chosen: its own numbers, order and pair counts ('+Rl.length+' rows), the intro names LaLiga');await pg.selectOption('#stl','l_4WFCIZ')}
  /* groups */
  for(const g of ['att','cre','mov','def']){await pg.selectOption('#stg',g);R=await rows(pg);const w=order('yoy').filter(k=>GROUP[g].includes(k));ok(JSON.stringify(R.map(r=>r.k))===JSON.stringify(w),'group '+g+': '+R.length+' stats, same order')}
  await pg.selectOption('#stg','all');
@@ -39,10 +42,14 @@ const rows=pg=>pg.evaluate(()=>[...document.querySelectorAll('.st-t tbody tr')].
  {const c3=await b.newContext();let fail=true;await c3.route(/stability\.json/,r=>{if(fail)r.fulfill({status:500,body:''});else r.continue()});const p3=await c3.newPage();await p3.goto('http://127.0.0.1:8765/index.html#/stability');
   await p3.waitForSelector('#stroot .empty:not(.skel)',{timeout:90000});const msg=await p3.textContent('#stroot');fail=false;await p3.evaluate(()=>{location.hash='#/table'});await p3.waitForSelector('.lt',{timeout:60000});await p3.evaluate(()=>{location.hash='#/stability'});await p3.waitForSelector('.st-t',{timeout:60000});
   ok(/Could not load/.test(msg)&&!!(await p3.$('.st-t')),'a failing file shows a message and is loaded again on the next visit');await c3.close()}
- /* a league the file does not have: the file's first league is shown */
+ /* the open league is in the file (LaLiga): its own numbers are shown at once */
  {const c4=await b.newContext();const p4=await c4.newPage(),e4=[];p4.on('pageerror',e=>e4.push(e.message));await c4.addInitScript(()=>{try{localStorage.setItem('league','l_0ErfuF')}catch(e){}});
   await p4.goto('http://127.0.0.1:8765/index.html#/stability');await p4.waitForSelector('.st-t tbody tr',{timeout:90000});
-  ok(/Premier League/.test(await p4.innerText('.lk-intro'))&&!e4.length,'a league without two full past seasons (LaLiga): the Premier League\'s numbers are shown, saying which league');await c4.close()}
+  ok(/LaLiga/.test(await p4.innerText('.lk-intro'))&&await p4.$eval('#stl',x=>x.value)==='l_0ErfuF'&&!e4.length,'the open league is LaLiga: its numbers are shown and chosen in the selector');await c4.close()}
+ /* a league the file does not have (Champions League): the file's first league is shown */
+ {const lgx=T.IDX.leagues.find(l=>!F.leagues[l.id]&&T.DOM(l));if(lgx){const c5=await b.newContext();const p5=await c5.newPage(),e5=[];p5.on('pageerror',e=>e5.push(e.message));await c5.addInitScript(id=>{try{localStorage.setItem('league',id)}catch(e){}},lgx.id);
+  await p5.goto('http://127.0.0.1:8765/index.html#/stability');await p5.waitForSelector('.st-t tbody tr',{timeout:90000});
+  ok(/Premier League/.test(await p5.innerText('.lk-intro'))&&!e5.length,'a league the file does not have ('+lgx.name+'): the first league\'s numbers are shown, saying which league');await c5.close()}else console.log('ok   (every domestic league is in the file: no missing-league case)')}
  /* phone and Arabic */
  for(const lang of ['ar','en']){const {ctx,pg,errs}=await T.open(b,{vw:390,lang,league:'l_4WFCIZ',hash:'#/stability'});await pg.waitForSelector('.st-t tbody tr',{timeout:90000});await pg.waitForTimeout(400);
   ok(await T.noscroll(pg),lang+' phone: no horizontal scroll');
