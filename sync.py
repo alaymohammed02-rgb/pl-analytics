@@ -11761,13 +11761,28 @@ def sync_market(hub, now=None):
     gh_put(hub, MK_PATH, json.dumps(out, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), "Update bookmaker odds")
 
 
+def mk_elo_fetch(now):
+    """ClubElo's day file: today's first, then the two days before (the first sync runs got HTTP 502 for today's), http then https.
+    Returns (the day the file is for, its text)."""
+    last = None
+    for back in (0, 1, 2):
+        d = (now - datetime.timedelta(days=back)).strftime("%Y-%m-%d")
+        for base in dict.fromkeys([MK_ELO, MK_ELO.replace("http://", "https://")]):
+            try:
+                return d, mk_get(f"{base}/{d}", tries=2)
+            except Exception as e:
+                last = e
+    raise last
+
+
 def sync_elo(hub, now=None):
     now = now or datetime.datetime.now(datetime.timezone.utc)
     day = now.strftime("%Y-%m-%d")
     old = gh_get_json(hub, ELO_PATH) or {}
     if old.get("t") == day:
         return
-    rows = mk_elo_rows(mk_get(f"{MK_ELO}/{day}"))
+    asof, txt = mk_elo_fetch(now)
+    rows = mk_elo_rows(txt)
     if not rows:
         return
     snap, miss = {}, {}
@@ -11781,12 +11796,12 @@ def sync_elo(hub, now=None):
     if not snap:
         return
     hist = dict(old.get("hist") or {})
-    hist[day] = snap
+    hist[asof] = snap
     for k in sorted(hist)[:-400]:
         del hist[k]
-    out = {"t": day, "source": "clubelo.com", "r": snap, "unmatched": miss, "hist": hist}
+    out = {"t": day, "asof": asof, "source": "clubelo.com", "r": snap, "unmatched": miss, "hist": hist}
     gh_put(hub, ELO_PATH, json.dumps(out, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), "Update ClubElo ratings")
-    log(f"  [Elo] {day}: " + "، ".join(f"{lid[-3:]} {len(v)}" for lid, v in snap.items()) + (f" — بلا مطابقة: {miss}" if miss else ""))
+    log(f"  [Elo] {asof}: " + "، ".join(f"{lid[-3:]} {len(v)}" for lid, v in snap.items()) + (f" — بلا مطابقة: {miss}" if miss else ""))
 
 
 _orig_run_pipeline_mk = run_pipeline
