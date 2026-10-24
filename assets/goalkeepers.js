@@ -7,7 +7,7 @@
    even matches. It finds no sign that shot-stopping repeats, and the page says so, with how large a correlation the sample cannot rule out. */
 (function(){
  if(typeof R!=='object'||typeof INS!=='object'||typeof INS.addPage!=='function')return;
- INS.addPage('keepers','Goalkeepers','analysis','sbpress');
+ INS.addPage('keepers','Goalkeepers','defence','sbpress');
  const two=(en,ar)=>`<span class="fx-en">${en}</span><span class="fx-ar" dir="rtl">${ar}</span>`;
  const nb=x=>`<bdi dir="ltr">${x}</bdi>`,nm=x=>`<bdi>${esc(x)}</bdi>`;
  const ar=()=>typeof ARL==='object'&&!!ARL.on;
