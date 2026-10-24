@@ -26,7 +26,7 @@ jobs:
         run: pip install -q requests
       - name: Run Python tests
         run: |
-          bash tests/ci.sh cmp/t_cmp.py logo/t_logo.py theme/t_champ.py theme/t_retry.py t_resolve.py home/t_photos.py dq/t_dq.py mx/t_mx.py lv/t_lv.py fx/t_fx.py rare/t_rr.py eng/t_table.py ps/t_ps.py trk/t_py.py sb/t_press.py
+          bash tests/ci.sh cmp/t_cmp.py logo/t_logo.py theme/t_champ.py theme/t_retry.py t_resolve.py home/t_photos.py dq/t_dq.py mx/t_mx.py lv/t_lv.py fx/t_fx.py rare/t_rr.py eng/t_table.py ps/t_ps.py trk/t_py.py sb/t_press.py mk/t_market.py
       - name: Upload logs
         if: failure()
         uses: actions/upload-artifact@v4

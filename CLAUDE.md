@@ -56,6 +56,7 @@ A static football analytics site on GitHub Pages. A Python sync (`sync.py`, run 
     - StatsBomb's open Bundesliga 2023/24 holds only Bayer Leverkusen's 34 matches, so there is no league-wide pool.
     - Tests: `tests/sb/ui_sb.js` (a hand-made fixture, no network) and `tests/sb/t_press.py` (the builder on the same fixture, and the shape of the data file).
   - Both cards share the helpers `INS.cardKit` from `assets/defense-card.js`, so that file loads first.
+- **Market and Elo** (`sync_market`, `sync_elo` in `sync.py`, between the `MARKET START/END` markers; each wrapped so a failure never stops the sync): `data/market.json` = bookmaker closing odds from football-data.co.uk matched to our matches (date ±1 day plus score, then names via `MK_ALIAS`), de-vigged into probabilities, with unmatched counts; `data/elo.json` = ClubElo ratings once a day with history from the first sync (no backtest possible before that). Neither host is reachable from the sandbox: check the Actions log for matched/unmatched names after a run and extend `MK_ALIAS`. Test: `tests/mk/t_market.py`.
 - **Cross-league data:** `assets/league-pool.js` provides:
   - `INS.pool(need)`: the six domestic leagues;
   - `INS.poolOne(id, need)`: one league;
