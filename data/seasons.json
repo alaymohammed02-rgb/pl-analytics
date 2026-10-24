@@ -523,25 +523,25 @@
      "api": "2024/2025",
      "id": "l_0ALvwF_2024-25",
      "n": 380,
-     "t": "2026-10-24 11:35:15",
+     "t": "2026-10-24 11:59:26",
      "err": null,
      "plan": false,
-     "req": 1035,
-     "sec": 309,
+     "req": 1900,
+     "sec": 510,
      "files": {
       "s": "2024-25",
       "id": "l_0ALvwF_2024-25",
       "file": "l_0ALvwF_2024-25.json",
-      "v": "81cedd45f5",
-      "size": 3369564,
+      "v": "14a67354a6",
+      "size": 6157808,
       "pl_file": "l_0ALvwF_2024-25_pl.json",
-      "pl_v": "8fee214c79",
+      "pl_v": "58b746f0c4",
       "sh_file": "l_0ALvwF_2024-25_sh.json",
-      "sh_v": "a49a8fa64c"
+      "sh_v": "88292c9737"
      },
-     "got": 207,
-     "ok": 207,
-     "complete": false
+     "got": 380,
+     "ok": 380,
+     "complete": true
     }
    }
   },
@@ -598,24 +598,24 @@
      "api": "2024/2025",
      "id": "l_4QexZg_2024-25",
      "n": 306,
-     "t": "2026-10-24 11:40:34",
+     "t": "2026-10-24 12:02:56",
      "err": null,
      "plan": false,
-     "req": 5,
-     "sec": 1,
+     "req": 335,
+     "sec": 76,
      "files": {
       "s": "2024-25",
       "id": "l_4QexZg_2024-25",
       "file": "l_4QexZg_2024-25.json",
-      "v": "c8bebb44f1",
-      "size": 18149,
+      "v": "97542a2156",
+      "size": 1090380,
       "pl_file": "l_4QexZg_2024-25_pl.json",
-      "pl_v": "797b67cbd9",
+      "pl_v": "8e60c916a9",
       "sh_file": "l_4QexZg_2024-25_sh.json",
-      "sh_v": "9dd8d7d90d"
+      "sh_v": "a5442a694b"
      },
-     "got": 1,
-     "ok": 1,
+     "got": 67,
+     "ok": 67,
      "complete": false
     }
    }
