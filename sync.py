@@ -9009,7 +9009,7 @@ INDEX = _x_fpx_index(INDEX)
 # الكود في ملفات مستقلة في المستودع: assets/*.js و assets/features.css و manifest.webmanifest و sw.js و assets/icons/.
 # هذا القسم يضيف روابطها للصفحة فقط (بعد السكربت الرئيسي، فتلقى R و PAGES جاهزة). غيّر FEATURES_V لما تتغير الملفات.
 # ============================================================================
-FEATURES_V = "39"
+FEATURES_V = "40"
 FEATURES_JS = ("pla-data", "share-card", "threat-map", "match-whatif", "player-page", "match-centre", "home-extra", "team-round",
                "preview", "club-extra", "rankings-extra", "fantasy-extra", "insights-core", "hidden-gems", "player-dna", "team-dna",
                "reality-check", "matches-board", "match-replay", "match-story", "overview", "press-height",
@@ -12122,6 +12122,163 @@ def run_pipeline(hub, pit_key):
         log(f"  [النقطة الأولى] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
     return out
 # ===== PRIORS END =====
+
+
+# ===== TRANSFERMARKT START =====
+# تاريخ الميلاد والقيمة السوقية لكل لاعب (data/tm.json) من مجموعة البيانات المفتوحة transfermarkt-datasets (dcaribou، ترخيص CC0، جدول players):
+# ما نسحب موقع Transfermarkt نفسه. نربط اللاعبين بالاسم فقط (بعد توحيد الحروف والترتيب): اسم واحد بين لاعبين نشطين = مطابقة، وإذا تكرر الاسم
+# نختار بتطابق اسم النادي، وإذا ما انحسم أو العمر غير معقول يطلع اللاعب بلا رقم (ما نخمّن). الملف يوثّق عدد المطابَق والملتبس وتاريخ آخر تحديث
+# للمجموعة (Last-Modified). يُحمَّل مرة كل 7 أيام، في نافذة 30 دقيقة كل 3 ساعات. اختياري: الخطأ ما يوقف المزامنة، وبدون الملف الصفحة ما تعرض عمر ولا قيمة.
+import csv, gzip, io, unicodedata, email.utils
+TM_URL = "https://pub-e682421888d945d684bcae8890b0ec20.r2.dev/data/players.csv.gz"
+TM_PATH = "data/tm.json"
+TM_MAX_AGE_D = 7
+TM_MIN_SEASON = 2025          # last_season في الجدول = سنة بداية آخر موسم لعب فيه (2025 = 2025-26)
+TM_AGE = (15, 46)
+TM_COLS = ("name", "date_of_birth", "market_value_in_eur", "current_club_name", "last_season")
+TM_FOLD = str.maketrans({"ø": "o", "ð": "d", "æ": "ae", "œ": "oe", "ß": "ss", "ł": "l", "đ": "d", "ı": "i", "þ": "th"})
+TM_CUP = re.compile(r"champions|europa|conference|cup|copa|coppa|pokal|coupe|taça", re.I)
+
+
+def tm_norm(s):
+    s = unicodedata.normalize("NFKD", str(s or "").lower().translate(TM_FOLD))
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", s).split())
+
+
+def tm_age(dob, today):
+    y, m, d = (int(x) for x in dob.split("-"))
+    return today.year - y - ((today.month, today.day) < (m, d))
+
+
+def tm_rows(text):
+    rd = csv.DictReader(io.StringIO(text))
+    miss = [c for c in TM_COLS if c not in (rd.fieldnames or [])]
+    if miss:
+        raise ValueError("أعمدة ناقصة في ملف Transfermarkt: " + ", ".join(miss))
+    out = []
+    for r in rd:
+        try:
+            last = int(float(r["last_season"]))
+        except (TypeError, ValueError):
+            continue
+        if last < TM_MIN_SEASON or not tm_norm(r["name"]):
+            continue
+        dob = (r["date_of_birth"] or "")[:10]
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", dob):
+            dob = None
+        try:
+            val = int(float(r["market_value_in_eur"])) if r["market_value_in_eur"] not in ("", None) else None
+        except ValueError:
+            val = None
+        n = tm_norm(r["name"])
+        out.append({"n": n, "toks": frozenset(n.split()), "club": frozenset(tm_norm(r["current_club_name"]).split()), "dob": dob, "val": val})
+    return out
+
+
+def tm_club_ok(a, b):
+    return bool(a) and bool(b) and (a <= b or b <= a)
+
+
+def tm_match(players, rows, today):
+    """players: [{id, name, club, lgs}] → ({id: [dob, value]}, {"matched", "ambiguous", "unmatched", "implausible", by_league})."""
+    byn, byt = {}, {}
+    for r in rows:
+        byn.setdefault(r["n"], []).append(r)
+        if len(r["toks"]) > 1:
+            byt.setdefault(r["toks"], []).append(r)
+    got, st = {}, {"matched": 0, "ambiguous": 0, "unmatched": 0, "implausible": 0, "by_league": {}}
+    for p in players:
+        n = tm_norm(p["name"])
+        c = byn.get(n) or (byt.get(frozenset(n.split())) if len(n.split()) > 1 else None) or []
+        club = frozenset(tm_norm(p.get("club")).split())
+        if len(c) > 1:
+            c = [r for r in c if tm_club_ok(club, r["club"])]
+        if not c:
+            k = "unmatched" if not (byn.get(n) or byt.get(frozenset(n.split()))) else "ambiguous"
+        elif len(c) > 1:
+            k = "ambiguous"
+        elif not c[0]["dob"] or not (TM_AGE[0] <= tm_age(c[0]["dob"], today) <= TM_AGE[1]):
+            k = "implausible"
+        else:
+            k = "matched"
+            got[p["id"]] = [c[0]["dob"], c[0]["val"]]
+        st[k] += 1
+        for l in p.get("lgs") or []:
+            b = st["by_league"].setdefault(l, {"players": 0, "matched": 0})
+            b["players"] += 1
+            b["matched"] += k == "matched"
+    return got, st
+
+
+def tm_players(hub):
+    idx = gh_get_json(hub, "data/index.json") or {}
+    P = {}
+    ls = [l for l in idx.get("leagues") or [] if l.get("pl_file") and ((l.get("sh_file") and not TM_CUP.search(l.get("name") or "")) or re.search("world cup", l.get("name") or "", re.I))]
+    ls.sort(key=lambda l: bool(re.search("world cup", l.get("name") or "", re.I)))      # الدوريات أول، فنادي اللاعب يُؤخذ منها
+    for l in ls:
+        d = gh_get_json(hub, "data/" + l["pl_file"]) or {}
+        ix = {c: i for i, c in enumerate(d.get("cols") or [])}
+        if not all(k in ix for k in ("i", "n", "c", "mi")):
+            continue
+        wc = bool(re.search("world cup", l.get("name") or "", re.I))
+        for r in d.get("rows") or []:
+            if r[ix["mi"]] is None:
+                continue
+            p = P.setdefault(r[ix["i"]], {"id": r[ix["i"]], "name": r[ix["n"]], "club": "" if wc else (r[ix["c"]] or ""), "lgs": set()})
+            if not p["club"] and not wc:
+                p["club"] = r[ix["c"]] or ""
+            p["lgs"].add(l["id"])
+    return [dict(p, lgs=sorted(p["lgs"])) for p in P.values()]
+
+
+def tm_fetch():
+    r = requests.get(TM_URL, timeout=60, headers={"User-Agent": "pl-analytics-sync (github pages project)"})
+    if r.status_code != 200 or len(r.content) < 1000:
+        raise RuntimeError(f"HTTP {r.status_code}, {len(r.content)} bytes")
+    return r.content, r.headers.get("Last-Modified")
+
+
+def sync_tm(hub, now=None):
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    old = gh_get_json(hub, TM_PATH) or {}
+    try:
+        age = (now - datetime.datetime.strptime(old.get("t") or "", "%Y-%m-%d").replace(tzinfo=datetime.timezone.utc)).days
+    except ValueError:
+        age = None
+    if age is not None and age < TM_MAX_AGE_D:
+        return
+    if not (now.hour % 3 == 0 and now.minute < 30):
+        return        # أول تحميل أو تجديد أسبوعي: في نافذة 30 دقيقة كل 3 ساعات، مو في كل مزامنة
+    raw, lm = tm_fetch()
+    rows = tm_rows(gzip.decompress(raw).decode("utf-8-sig"))
+    players = tm_players(hub)
+    if not players or not rows:
+        return
+    got, st = tm_match(players, rows, now.date())
+    if not got:
+        raise RuntimeError(f"ما انطبق ولا لاعب (من {len(players)} لاعب و{len(rows)} صف)")
+    try:
+        asof = email.utils.parsedate_to_datetime(lm).strftime("%Y-%m-%d") if lm else None
+    except (TypeError, ValueError):
+        asof = None
+    out = {"t": now.strftime("%Y-%m-%d"), "asof": asof, "source": "transfermarkt-datasets (CC0), from Transfermarkt", "n_rows": len(rows), "n_players": len(players),
+           "matched": st["matched"], "ambiguous": st["ambiguous"], "unmatched": st["unmatched"], "implausible": st["implausible"], "by_league": st["by_league"], "p": got}
+    gh_put(hub, TM_PATH, json.dumps(out, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), "Update Transfermarkt ages and values")
+    log(f"  [Transfermarkt] آخر تحديث للمجموعة {asof}: طابقنا {st['matched']} من {len(players)} لاعب ({100 * st['matched'] // max(1, len(players))}%)، ملتبس {st['ambiguous']}، بلا مطابقة {st['unmatched']}، عمر غير معقول {st['implausible']}")
+
+
+_orig_run_pipeline_tm = run_pipeline
+
+
+def run_pipeline(hub, pit_key):
+    out = _orig_run_pipeline_tm(hub, pit_key)
+    try:
+        sync_tm(hub)
+    except Exception as e:      # optional: never stops the sync
+        log(f"  [Transfermarkt] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
+    return out
+# ===== TRANSFERMARKT END =====
 
 
 if __name__ == "__main__":
