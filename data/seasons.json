@@ -370,23 +370,23 @@
      "api": "2022/2023",
      "id": "l_3FJFUl_2022-23",
      "n": 380,
-     "t": "2026-10-24 04:23:54",
+     "t": "2026-10-24 04:36:33",
      "err": null,
      "plan": false,
-     "req": 495,
-     "sec": 152,
+     "req": 1695,
+     "sec": 492,
      "files": {
       "s": "2022-23",
       "id": "l_3FJFUl_2022-23",
       "file": "l_3FJFUl_2022-23.json",
-      "v": "a9229aea86",
-      "size": 822092,
+      "v": "a32bb6dde2",
+      "size": 2790576,
       "pl_file": "l_3FJFUl_2022-23_pl.json",
-      "pl_v": "93378c6b37",
+      "pl_v": "0991adea05",
       "sh_file": "l_3FJFUl_2022-23_sh.json",
-      "sh_v": "11ee13efd7"
+      "sh_v": "4adc700bfe"
      },
-     "got": 99,
+     "got": 339,
      "ok": 0,
      "complete": false
     }
