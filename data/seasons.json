@@ -448,25 +448,25 @@
      "api": "2024/2025",
      "id": "l_3FJFUl_2024-25",
      "n": 306,
-     "t": "2026-10-24 11:07:49",
+     "t": "2026-10-24 11:34:15",
      "err": null,
      "plan": false,
-     "req": 1365,
-     "sec": 410,
+     "req": 1530,
+     "sec": 459,
      "files": {
       "s": "2024-25",
       "id": "l_3FJFUl_2024-25",
       "file": "l_3FJFUl_2024-25.json",
-      "v": "c4e6fc5962",
-      "size": 4441813,
+      "v": "8e256a3584",
+      "size": 4969519,
       "pl_file": "l_3FJFUl_2024-25_pl.json",
-      "pl_v": "102fe1d357",
+      "pl_v": "a5b3f2d632",
       "sh_file": "l_3FJFUl_2024-25_sh.json",
-      "sh_v": "39e940def2"
+      "sh_v": "4688bf9b8c"
      },
-     "got": 273,
-     "ok": 273,
-     "complete": false
+     "got": 306,
+     "ok": 306,
+     "complete": true
     }
    }
   },
@@ -523,24 +523,24 @@
      "api": "2024/2025",
      "id": "l_0ALvwF_2024-25",
      "n": 380,
-     "t": "2026-10-24 11:02:58",
+     "t": "2026-10-24 11:35:15",
      "err": null,
      "plan": false,
-     "req": 5,
-     "sec": 2,
+     "req": 1035,
+     "sec": 309,
      "files": {
       "s": "2024-25",
       "id": "l_0ALvwF_2024-25",
       "file": "l_0ALvwF_2024-25.json",
-      "v": "d1890c0dc2",
-      "size": 18719,
+      "v": "81cedd45f5",
+      "size": 3369564,
       "pl_file": "l_0ALvwF_2024-25_pl.json",
-      "pl_v": "a22c49cf0e",
+      "pl_v": "8fee214c79",
       "sh_file": "l_0ALvwF_2024-25_sh.json",
-      "sh_v": "b23a56421f"
+      "sh_v": "a49a8fa64c"
      },
-     "got": 1,
-     "ok": 1,
+     "got": 207,
+     "ok": 207,
      "complete": false
     }
    }
@@ -591,6 +591,32 @@
      "got": 306,
      "ok": 306,
      "complete": true
+    },
+    "2024-25": {
+     "name": "Liga Portugal",
+     "light": true,
+     "api": "2024/2025",
+     "id": "l_4QexZg_2024-25",
+     "n": 306,
+     "t": "2026-10-24 11:40:34",
+     "err": null,
+     "plan": false,
+     "req": 5,
+     "sec": 1,
+     "files": {
+      "s": "2024-25",
+      "id": "l_4QexZg_2024-25",
+      "file": "l_4QexZg_2024-25.json",
+      "v": "c8bebb44f1",
+      "size": 18149,
+      "pl_file": "l_4QexZg_2024-25_pl.json",
+      "pl_v": "797b67cbd9",
+      "sh_file": "l_4QexZg_2024-25_sh.json",
+      "sh_v": "9dd8d7d90d"
+     },
+     "got": 1,
+     "ok": 1,
+     "complete": false
     }
    }
   }
