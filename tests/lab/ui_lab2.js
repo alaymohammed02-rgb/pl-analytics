@@ -7,7 +7,9 @@ const sc=s=>{const m=/^(\d+)-(\d+)$/.exec(s||'');return m?[+m[1],+m[2]]:null};
 const ci=Object.fromEntries(SH.cols.map((c,i)=>[c,i])),TX=new Map();SH.rows.forEach(r=>{if(r[ci.og])return;const k=r[ci.m]+'|'+r[ci.c];TX.set(k,(TX.get(k)||0)+(r[ci.xg]||0))});
 function model(h,a){const fin=PL.matches.filter(m=>sc(m.s)&&m.d);let n=0,hs=0,as=0;const T=new Map();
  fin.forEach(m=>{const xh=TX.get(m.i+'|'+m.h),xa=TX.get(m.i+'|'+m.a);if(xh==null||xa==null)return;n++;hs+=xh;as+=xa;[[m.h,xh,xa],[m.a,xa,xh]].forEach(([t,f,g])=>{const r=T.get(t)||{n:0,f:0,a:0};r.n++;r.f+=f;r.a+=g;T.set(t,r)})});
- const H=hs/n,A=as/n,mu=(H+A)/2,st=t=>{const r=T.get(t);return {att:(r.f+3*mu)/(r.n+3)/mu,def:(r.a+3*mu)/(r.n+3)/mu}},x=st(h),y=st(a),lh=H*x.att*y.def,la=A*y.att*x.def;
+ const PR=JSON.parse(require('fs').readFileSync((process.env.PLREPO||__dirname+'/../..')+'/data/priors.json','utf8')).leagues.l_4WFCIZ,pri=new Map();   /* last season's strengths, worth 12 matches */
+ Object.keys(PR.teams).forEach(t=>{const r=PR.teams[t];if(r[0]>=10)pri.set(t,[(r[1]+3*PR.mu)/(r[0]+3)/PR.mu,(r[2]+3*PR.mu)/(r[0]+3)/PR.mu])});
+ const H=hs/n,A=as/n,mu=(H+A)/2,st=t=>{const r=T.get(t)||{n:0,f:0,a:0},p=pri.get(t)||[1,1];return {att:(r.f+12*mu*p[0])/(r.n+12)/mu,def:(r.a+12*mu*p[1])/(r.n+12)/mu}},x=st(h),y=st(a),lh=H*x.att*y.def,la=A*y.att*x.def;
  const P=l=>{const o=[];let p=Math.exp(-l);for(let k=0;k<=10;k++){o.push(p);p*=l/(k+1)}return o},ph=P(lh),pa=P(la);let w=0,d=0,l=0;
  for(let i=0;i<=10;i++)for(let j=0;j<=10;j++){const q=ph[i]*pa[j];if(i>j)w+=q;else if(i===j)d+=q;else l+=q}const s=w+d+l;return [w/s,d/s,l/s]}
 const SENT={flipy:'1',gh_repo:'x/y',fpl_myxi_cur_v1:'{"keep":1}',fpl_ox_cal_v1:'{"k":1.2}'};

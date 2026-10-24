@@ -7318,21 +7318,30 @@ R.lab=async function(el){
 /* ===== Intelligence Lab, part 2: match results, weekly review, hidden patterns, case file, milestones, the feed ===== */
 
 /* ---------- match results in any league: your probabilities against a simple xG model ---------- */
-/* Match model "xG Poisson 1": each team's attack and defence are its xG for and against a match this season, pulled toward the
-   league average by 3 matches' worth; the home side scores the league's home xG average scaled by its attack and the
-   opponent's defence, the away side likewise; goals are independent Poisson counts. It needs 3 matches with shot data for
-   both teams. The probabilities are saved with your prediction, from the data of that moment, and stay hidden until kick-off. */
-const LAB_MM='xg-poisson-1';
+/* Match model "xG Poisson": each team's attack and defence are its xG for and against a match this season, pulled toward a starting
+   point; the home side scores the league's home xG average scaled by its attack and the opponent's defence, the away side
+   likewise; goals are independent Poisson counts.
+   - "xg-poisson-2" (used when data/priors.json has the league): the starting point is the club's own strengths last season, worth 12
+     matches, so a club is predicted from its first match. Tested on 409 finished matches of the six leagues with each match left out
+     (Model report card): Brier 0.600 → 0.579, better in all six leagues. A club without last-season numbers (promoted) starts from the
+     league average.
+   - "xg-poisson-1" (no priors file, or a past-season view): the league average, worth 3 matches, and a club needs 3 matches with shot data.
+   The probabilities are saved with your prediction, from the data of that moment, and stay hidden until kick-off. */
+const LAB_MM='xg-poisson-1',LAB_MM2='xg-poisson-2';let LAB_PRI=null;
+async function labPrior(){if(!LAB_PRI)LAB_PRI=loadJson('priors.json').then(d=>d&&d.leagues?d:null).catch(()=>{LAB_PRI=null;return null});const d=await LAB_PRI;return d&&d.leagues[D.id]||null}
 async function labMatchModel(){
  const sh=await loadSh().catch(()=>null),tx=wkTeamXg(sh?sh.rows:[]),fin=D.matches.filter(m=>wkSc(m.score)&&m.date),T=new Map();let hs=0,as=0,n=0;
  fin.forEach(m=>{const xh=tx.get(m.match_id+'|'+m.home),xa=tx.get(m.match_id+'|'+m.away);if(xh==null||xa==null)return;n++;hs+=xh;as+=xa;
   [[m.home,xh,xa],[m.away,xa,xh]].forEach(([t,f,a])=>{const r=T.get(t)||{n:0,f:0,a:0};r.n++;r.f+=f;r.a+=a;T.set(t,r)})});
  if(n<10)return null;
- const H=hs/n,A=as/n,mu=(H+A)/2,N0=3,str=t=>{const r=T.get(t);return r&&r.n>=3?{att:(r.f+N0*mu)/(r.n+N0)/mu,def:(r.a+N0*mu)/(r.n+N0)/mu,n:r.n}:null};
+ const pr=await labPrior(),pri=new Map();
+ if(pr&&pr.mu>0&&pr.teams)Object.keys(pr.teams).forEach(t=>{const r=pr.teams[t];if(r[0]>=10)pri.set(t,[(r[1]+3*pr.mu)/(r[0]+3)/pr.mu,(r[2]+3*pr.mu)/(r[0]+3)/pr.mu])});
+ const v2=pri.size>0,H=hs/n,A=as/n,mu=(H+A)/2,N0=v2?12:3,
+  str=t=>{const r=T.get(t),p=pri.get(t)||[1,1];if(!v2&&!(r&&r.n>=3))return null;const k=r?r.n:0;return {att:((r?r.f:0)+N0*mu*p[0])/(k+N0)/mu,def:((r?r.a:0)+N0*mu*p[1])/(k+N0)/mu,n:k}};
  const pois=l=>{const o=[];let p=Math.exp(-l);for(let k=0;k<=10;k++){o.push(p);p*=l/(k+1)}return o};
  return (h,a)=>{const x=str(h),y=str(a);if(!x||!y)return null;const lh=H*x.att*y.def,la=A*y.att*x.def,ph=pois(lh),pa=pois(la);let w=0,dr=0,l=0;
   for(let i=0;i<=10;i++)for(let j=0;j<=10;j++){const q=ph[i]*pa[j];if(i>j)w+=q;else if(i===j)dr+=q;else l+=q}const s=w+dr+l;
-  return {p:[w/s,dr/s,l/s],lh,la,n:[x.n,y.n],ver:LAB_MM}};
+  return {p:[w/s,dr/s,l/s],lh,la,n:[x.n,y.n],ver:v2?LAB_MM2:LAB_MM}};
 }
 const labBrier3=(p,o)=>p.reduce((s,x,i)=>s+Math.pow(x-(i===o?1:0),2),0);
 async function labMatchCard(){
@@ -9000,7 +9009,7 @@ INDEX = _x_fpx_index(INDEX)
 # الكود في ملفات مستقلة في المستودع: assets/*.js و assets/features.css و manifest.webmanifest و sw.js و assets/icons/.
 # هذا القسم يضيف روابطها للصفحة فقط (بعد السكربت الرئيسي، فتلقى R و PAGES جاهزة). غيّر FEATURES_V لما تتغير الملفات.
 # ============================================================================
-FEATURES_V = "34"
+FEATURES_V = "35"
 FEATURES_JS = ("pla-data", "share-card", "threat-map", "match-whatif", "player-page", "match-centre", "home-extra", "team-round",
                "preview", "club-extra", "rankings-extra", "fantasy-extra", "insights-core", "hidden-gems", "player-dna", "team-dna",
                "reality-check", "matches-board", "match-replay", "match-story", "overview", "press-height",
@@ -11473,7 +11482,7 @@ function psSaved(){for(const st of [()=>localStorage,()=>sessionStorage])try{con
 /* files that only describe the current season (today's matches, coming fixtures, live scores, season facts, rare cases):
    in a past season they answer "not found", so the widgets that use them stay out instead of mixing in this season */
 function psCurOnly(){if(window.__psF)return;const f0=window.fetch;window.__psF=1;
- window.fetch=function(u){const s=String(u&&u.url||u);if(/(^|\/)data\/(live|fixtures|schedule|facts|rare|fpl|fpl_track|market|elo)\.json/.test(s))return Promise.resolve(new Response('{}',{status:404}));return f0.apply(this,arguments)}}
+ window.fetch=function(u){const s=String(u&&u.url||u);if(/(^|\/)data\/(live|fixtures|schedule|facts|rare|fpl|fpl_track|market|elo|priors)\.json/.test(s))return Promise.resolve(new Response('{}',{status:404}));return f0.apply(this,arguments)}}
 function psView(x){
  ALL0=x;const s=psSaved();if(!s||!x||!x.seasons||!x.leagues)return x;
  let lid=null;for(const st of [()=>localStorage,()=>sessionStorage])try{lid=st().getItem('league');if(lid)break}catch(e){}
@@ -12005,6 +12014,87 @@ def run_pipeline(hub, pit_key):
         log(f"  [الثبات] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
     return out
 # ===== STABILITY END =====
+
+
+# ===== PRIORS START =====
+# أرقام الموسم الماضي كنقطة بداية لنموذج المباريات (data/priors.json): لكل دوري محلي، لكل فريق في آخر موسم سابق كامل:
+# عدد المباريات اللي فيها xG للفريقين، ومجموع xG له وعليه. المتصفح يحوّلها لقوة هجوم ودفاع (مع تقليص 3 مباريات) ويبدأ منها
+# بدل متوسط الدوري. يُعاد حسابه فقط إذا تغيّرت نسخة ملفات ذلك الموسم. اختياري: الخطأ ما يوقف المزامنة.
+PR_PATH = "data/priors.json"
+
+
+def pr_score(s):
+    m = re.match(r"^\s*(\d+)\s*[-–:]\s*(\d+)\s*$", str(s or ""))
+    return (int(m.group(1)), int(m.group(2))) if m else None
+
+
+def pr_compute(league, shots):
+    """league: ملف الدوري (matches)، shots: ملف التسديدات (cols, rows). ترجع {mu, teams:{فريق: [مباريات, xG له, xG عليه]}} أو None."""
+    c = {n: i for i, n in enumerate(shots["cols"])}
+    xg = {}
+    for r in shots["rows"]:
+        if r[c["og"]] or r[c["xg"]] is None:
+            continue
+        k = (r[c["m"]], r[c["c"]])
+        xg[k] = xg.get(k, 0.0) + r[c["xg"]]
+    teams, hs, as_, n = {}, 0.0, 0.0, 0
+    for m in league.get("matches", []):
+        if not pr_score(m.get("s")) or not m.get("d"):
+            continue
+        xh, xa = xg.get((m["i"], m["h"])), xg.get((m["i"], m["a"]))
+        if xh is None or xa is None:
+            continue
+        n += 1
+        hs += xh
+        as_ += xa
+        for t, f, a in ((m["h"], xh, xa), (m["a"], xa, xh)):
+            r = teams.setdefault(t, [0, 0.0, 0.0])
+            r[0] += 1
+            r[1] += f
+            r[2] += a
+    if n < 10:
+        return None
+    return {"n": n, "mu": round((hs + as_) / (2 * n), 4), "teams": {t: [r[0], round(r[1], 3), round(r[2], 3)] for t, r in sorted(teams.items())}}
+
+
+def sync_priors(hub, now=None):
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    idx = gh_get_json(hub, "data/index.json") or {}
+    names = {l["id"]: l for l in (idx.get("leagues") or [])}
+    plan = {}
+    for lid, v in (idx.get("seasons") or {}).items():
+        l = names.get(lid) or {}
+        past = [p for p in (v.get("past") or []) if p.get("complete") and p.get("sh_file") and p.get("file")]
+        if past and l.get("sh_file") and not re.search(r"world cup|champions|europa|conference|cup|copa|coppa|pokal|coupe|taça", str(l.get("name")), re.I):
+            plan[lid] = max(past, key=lambda p: p["s"])
+    key = hashlib.sha1(json.dumps({lid: (p["s"], p.get("sh_v"), p.get("v")) for lid, p in plan.items()}, sort_keys=True).encode()).hexdigest()[:10]
+    old = gh_get_json(hub, PR_PATH) or {}
+    if not plan or old.get("key") == key:
+        return
+    out = {"t": now.strftime("%Y-%m-%d %H:%M:%S"), "key": key, "leagues": {}}
+    for lid, p in plan.items():
+        lg, sh = gh_get_json(hub, "data/" + p["file"]), gh_get_json(hub, "data/" + p["sh_file"])
+        r = pr_compute(lg, sh) if lg and sh else None
+        if not r:
+            log(f"  [النقطة الأولى] {lid}: ملفات الموسم ناقصة، تخطيناه")
+            continue
+        out["leagues"][lid] = dict(r, season=p["s"], cur=(idx["seasons"][lid] or {}).get("cur"))
+    if out["leagues"]:
+        gh_put(hub, PR_PATH, json.dumps(out, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), "Update last-season strengths")
+        log("  [النقطة الأولى] " + "، ".join(f"{lid[-3:]} {v['season']} ({len(v['teams'])} فريق)" for lid, v in out["leagues"].items()))
+
+
+_orig_run_pipeline_pr = run_pipeline
+
+
+def run_pipeline(hub, pit_key):
+    out = _orig_run_pipeline_pr(hub, pit_key)
+    try:
+        sync_priors(hub)
+    except Exception as e:      # optional: never stops the sync
+        log(f"  [النقطة الأولى] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
+    return out
+# ===== PRIORS END =====
 
 
 if __name__ == "__main__":

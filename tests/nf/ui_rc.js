@@ -5,15 +5,22 @@ function leagueData(l){const L=J(l.file),S=J(l.sh_file),sx={};S.cols.forEach((c,
  for(const r of S.rows){const m=M.get(r[sx.m]);if(!m||r[sx.og]||r[sx.xg]==null)continue;const k=r[sx.m]+'|'+r[sx.c];xg[k]=(xg[k]||0)+r[sx.xg]}
  const ms=L.matches.filter(m=>/^\d+-\d+$/.test(m.s||'')&&m.d).map(m=>{const g=m.s.split('-').map(Number);return {id:m.i,home:m.h,away:m.a,hg:g[0],ag:g[1],d:String(m.d).slice(0,10)}}).sort((a,b)=>a.d.localeCompare(b.d)||a.id.localeCompare(b.id));
  return {ms,xg}}
-function predictor(ms,xg){const used=ms.filter(m=>xg[m.id+'|'+m.home]!=null&&xg[m.id+'|'+m.away]!=null);if(used.length<10)return null;
+function priorOf(l){const sd=((IDX.seasons||{})[l.id]||{}).past||[],p=sd.filter(x=>x.complete&&x.sh_file&&x.file).sort((a,b)=>b.s.localeCompare(a.s))[0];if(!p)return null;
+ const {ms,xg}=leagueData({file:p.file,sh_file:p.sh_file}),T_={};let hs=0,as=0,n=0;
+ for(const m of ms){const xh=xg[m.id+'|'+m.home],xa=xg[m.id+'|'+m.away];if(xh==null||xa==null)continue;n++;hs+=xh;as+=xa;
+  for(const [t,f,c] of [[m.home,xh,xa],[m.away,xa,xh]]){const r=T_[t]=T_[t]||[0,0,0];r[0]++;r[1]+=f;r[2]+=c}}
+ return n<10?null:{n,mu:(hs+as)/(2*n),teams:T_,season:p.s}}
+function predictor(ms,xg,prior){const used=ms.filter(m=>xg[m.id+'|'+m.home]!=null&&xg[m.id+'|'+m.away]!=null);if(used.length<10)return null;
+ const pri={};if(prior)for(const t in prior.teams){const r=prior.teams[t];if(r[0]>=10)pri[t]=[(r[1]+3*prior.mu)/(r[0]+3)/prior.mu,(r[2]+3*prior.mu)/(r[0]+3)/prior.mu]}
+ const v2=Object.keys(pri).length>0,N0=v2?12:3;
  return (h,a,skip)=>{let hs=0,as=0,n=0;const T_={};for(const m of used){if(m.id===skip)continue;const xh=xg[m.id+'|'+m.home],xa=xg[m.id+'|'+m.away];n++;hs+=xh;as+=xa;
    for(const [t,f,c] of [[m.home,xh,xa],[m.away,xa,xh]]){const r=T_[t]=T_[t]||{n:0,f:0,a:0};r.n++;r.f+=f;r.a+=c}}
-  if(n<10)return null;const H=hs/n,A=as/n,mu=(H+A)/2,str=t=>{const r=T_[t];return r&&r.n>=3?{att:(r.f+3*mu)/(r.n+3)/mu,def:(r.a+3*mu)/(r.n+3)/mu}:null};
+  if(n<10)return null;const H=hs/n,A=as/n,mu=(H+A)/2,str=t=>{const r=T_[t],p=pri[t]||[1,1];if(!v2&&!(r&&r.n>=3))return null;const k=r?r.n:0;return {att:((r?r.f:0)+N0*mu*p[0])/(k+N0)/mu,def:((r?r.a:0)+N0*mu*p[1])/(k+N0)/mu}};
   const x=str(h),y=str(a);if(!x||!y)return null;const lh=H*x.att*y.def,la=A*y.att*x.def,ph=pois(lh),pa=pois(la);let w=0,d=0,l=0;
   for(let i=0;i<=10;i++)for(let j=0;j<=10;j++){const q=ph[i]*pa[j];if(i>j)w+=q;else if(i===j)d+=q;else l+=q}const s=w+d+l;return {p:[w/s,d/s,l/s],lh,la}}}
 const br=(p,k)=>p.reduce((s,x,i)=>s+(x-(i===k?1:0))**2,0);
 function test(){const rows=[],A={n:0,b:0,bb:0,bu:0,acc:0,accB:0,gp:0,ga:0},bins=Array.from({length:10},()=>({n:0,p:0,h:0}));
- for(const l of IDX.leagues.filter(DOM)){const {ms,xg}=leagueData(l),pr=predictor(ms,xg);if(!pr)continue;const used=ms.filter(m=>xg[m.id+'|'+m.home]!=null&&xg[m.id+'|'+m.away]!=null),res=m=>m.hg>m.ag?0:m.hg===m.ag?1:2,cnt=[0,0,0];used.forEach(m=>cnt[res(m)]++);
+ for(const l of IDX.leagues.filter(DOM)){const {ms,xg}=leagueData(l),pr=predictor(ms,xg,priorOf(l));if(!pr)continue;const used=ms.filter(m=>xg[m.id+'|'+m.home]!=null&&xg[m.id+'|'+m.away]!=null),res=m=>m.hg>m.ag?0:m.hg===m.ag?1:2,cnt=[0,0,0];used.forEach(m=>cnt[res(m)]++);
   const L={name:l.name,n:0,b:0,bb:0,acc:0};
   for(const m of used){const r=pr(m.home,m.away,m.id);if(!r)continue;const k=res(m),oth=[cnt[0]-(k===0),cnt[1]-(k===1),cnt[2]-(k===2)],tot=oth[0]+oth[1]+oth[2],base=oth.map(x=>x/tot);
    const b=br(r.p,k),bb=br(base,k),pk=r.p.indexOf(Math.max(...r.p)),pb=base.indexOf(Math.max(...base));
@@ -24,11 +31,13 @@ function test(){const rows=[],A={n:0,b:0,bb:0,bu:0,acc:0,accB:0,gp:0,ga:0},bins=
 const pc=v=>Math.round(v*100),f3=v=>v.toFixed(3);
 
 /* the market comparison, recomputed from data/market.json with the same independent model */
-function marketTest(){const M=J('market.json'),A={n:0,b:0,m:0,bb:0,accP:0,accM:0,accB:0,d:0,d2:0,mg:0},rows=[];
- for(const l of IDX.leagues.filter(DOM)){const K=M.leagues[l.id];if(!K)continue;const {ms,xg}=leagueData(l),pr=predictor(ms,xg);if(!pr)continue;const by=new Map(ms.map(m=>[m.id,m])),res=m=>m.hg>m.ag?0:m.hg===m.ag?1:2,cnt=[0,0,0];ms.forEach(m=>cnt[res(m)]++);
-  const L={name:l.name,n:0,b:0,m:0,bb:0};
-  for(const r of K.rows){const m=by.get(r.m);if(!m||!r.fin)continue;const q=pr(m.home,m.away,m.id);if(!q)continue;const k=res(m),oth=[cnt[0]-(k===0),cnt[1]-(k===1),cnt[2]-(k===2)],tot=oth[0]+oth[1]+oth[2],base=oth.map(x=>x/tot),mx=a=>a.indexOf(Math.max(...a));
-   const bm=br(q.p,k),bk=br(r.p,k),bb=br(base,k);L.n++;L.b+=bm;L.m+=bk;L.bb+=bb;A.n++;A.b+=bm;A.m+=bk;A.bb+=bb;A.accP+=mx(q.p)===k;A.accM+=mx(r.p)===k;A.accB+=mx(base)===k;A.d+=bm-bk;A.d2+=(bm-bk)**2;A.mg+=r.mg||0}
+function marketTest(){const M=J('market.json'),A={n:0,b1:0,b2:0,m:0,bb:0,acc1:0,acc2:0,accM:0,accB:0,d12:0,d12s:0,d2m:0,d2ms:0,mg:0,priors:0},rows=[];
+ for(const l of IDX.leagues.filter(DOM)){const K=M.leagues[l.id];if(!K)continue;const {ms,xg}=leagueData(l),pri=priorOf(l),p1=predictor(ms,xg),p2=predictor(ms,xg,pri);if(!p1||!p2)continue;if(pri)A.priors++;
+  const by=new Map(ms.map(m=>[m.id,m])),res=m=>m.hg>m.ag?0:m.hg===m.ag?1:2,cnt=[0,0,0];ms.forEach(m=>cnt[res(m)]++);
+  const L={name:l.name,n:0,b1:0,b2:0,m:0,bb:0,prior:!!pri};
+  for(const r of K.rows){const m=by.get(r.m);if(!m||!r.fin)continue;const q1=p1(m.home,m.away,m.id),q2=p2(m.home,m.away,m.id);if(!q1||!q2)continue;const k=res(m),oth=[cnt[0]-(k===0),cnt[1]-(k===1),cnt[2]-(k===2)],tot=oth[0]+oth[1]+oth[2],base=oth.map(x=>x/tot),mx=a=>a.indexOf(Math.max(...a));
+   const b1=br(q1.p,k),b2=br(q2.p,k),bk=br(r.p,k),bb=br(base,k);L.n++;L.b1+=b1;L.b2+=b2;L.m+=bk;L.bb+=bb;A.n++;A.b1+=b1;A.b2+=b2;A.m+=bk;A.bb+=bb;A.acc1+=mx(q1.p)===k;A.acc2+=mx(q2.p)===k;A.accM+=mx(r.p)===k;A.accB+=mx(base)===k;
+   A.d12+=b2-b1;A.d12s+=(b2-b1)**2;A.d2m+=b2-bk;A.d2ms+=(b2-bk)**2;A.mg+=r.mg||0}
   if(L.n)rows.push(L)}
  return {A,rows,M}}
 (async()=>{const b=await T.launch(),E=test(),MK=marketTest();
@@ -47,21 +56,27 @@ function marketTest(){const M=J('market.json'),A={n:0,b:0,m:0,bb:0,accP:0,accM:0
  const wl=E.rows.map(r=>{const s=1-r.b/r.bb;return [r.name,String(r.n),pc(r.acc/r.n)+'%',f3(r.b/r.n),f3(r.bb/r.n),(s>=0?'+':'−')+Math.abs(s*100).toFixed(1)+'%']});
  ok(JSON.stringify(lg)===JSON.stringify(wl),'league table: '+wl.map(r=>r[0]+' '+r[1]+' '+r[5]).join(' | '));
  ok((await pg.textContent('.rc-fx')).includes(`expected ${(A.gp/A.n).toFixed(2)} goals per match; there were ${(A.ga/A.n).toFixed(2)}`),'goals expected '+(A.gp/A.n).toFixed(2)+' vs actual '+(A.ga/A.n).toFixed(2));
- /* ---- the bookmakers' odds ---- */
- {const A=MK.A,n=A.n,tx=await pg.textContent('.rc-mk');
-  ok(n>=100&&tx.includes('same '+n+' finished matches'),'bookmakers: '+n+' matches have both the model and the odds');
-  const t1=await pg.evaluate(()=>[...document.querySelectorAll('.rc-mkt tbody tr')].map(r=>[...r.cells].map(c=>c.textContent.trim())));
+ /* ---- last season's strengths, and the bookmakers' odds ---- */
+ {const A=MK.A,n=A.n,tx=await pg.innerText('.rc-mk');
+  ok(n>=100&&tx.includes('same '+n+' finished matches'),'bookmakers: '+n+' matches that both models and the odds can be scored on');
+  const t1=await pg.evaluate(()=>[...document.querySelectorAll('.rc-mkt tbody tr')].map(r=>[...r.cells].map(c=>c.innerText.trim())));
   const sk=(x,y)=>{const v=1-x/y;return (v>=0?'+':'−')+Math.abs(v*100).toFixed(1)+'%'};
-  const w1=[['Model',f3(A.b/n),pc(A.accP/n)+'%',sk(A.b,A.bb)],['Bookmakers',f3(A.m/n),pc(A.accM/n)+'%',sk(A.m,A.bb)],['Base rates',f3(A.bb/n),pc(A.accB/n)+'%','0.0%']];
-  const clean=t=>t.map(r=>r.map(c=>c.replace(/\s+/g,' ')));
-  ok(JSON.stringify(t1.map(r=>[r[0].replace(/.*?(Model|Bookmakers|Base rates).*/,'$1'),...r.slice(1)]))===JSON.stringify(w1),'comparison table matches the recomputation: '+w1.map(r=>r[0]+' '+r[1]).join(' | '));
-  const dm=A.d/n,se=Math.sqrt(Math.max(0,A.d2/n-dm*dm)/(n-1)),sig=Math.abs(dm/se)>=1.96;
-  ok(sig?tx.includes(dm<0?'The model is better:':'The bookmakers are better:'):/too close to separate/.test(tx),'the verdict follows the numbers ('+(sig?(dm<0?'model better':'bookmakers better')+', beyond noise':'within noise')+', diff '+dm.toFixed(4)+' per match)');
+  const w1=[['Model 1 (this season only)',f3(A.b1/n),pc(A.acc1/n)+'%',sk(A.b1,A.bb)],['Model 2 (starts from last season)',f3(A.b2/n),pc(A.acc2/n)+'%',sk(A.b2,A.bb)],['Bookmakers',f3(A.m/n),pc(A.accM/n)+'%',sk(A.m,A.bb)],['Base rates',f3(A.bb/n),pc(A.accB/n)+'%','+0.0%']];
+  ok(JSON.stringify(t1)===JSON.stringify(w1),'comparison table matches the recomputation: '+w1.map(r=>r[0].slice(0,7)+' '+r[1]).join(' | '));
+  const zz=(sum,sq)=>{const m=sum/n,v=Math.max(0,sq/n-m*m)*n/(n-1),se=Math.sqrt(v/n);return {m,sig:Math.abs(m/se)>=1.96}},z12=zz(A.d12,A.d12s),zm=zz(A.d2m,A.d2ms);
+  const better=rows=>rows.filter(r=>r.prior&&r.b2<r.b1).length,withP=MK.rows.filter(r=>r.prior).length;
+  ok(z12.sig?(z12.m<0?tx.includes('makes the model better: Brier '+f3(A.b1/n)+' → '+f3(A.b2/n))&&tx.includes('and better in '+better(MK.rows)+' of '+withP+' leagues'):tx.includes('makes the model worse')):/makes no clear difference/.test(tx),'the model 1 → 2 sentence follows the numbers: '+f3(A.b1/n)+' → '+f3(A.b2/n)+' ('+(z12.sig?'beyond noise':'within noise')+', better in '+better(MK.rows)+' of '+withP+' leagues)');
+  ok(zm.sig?(zm.m>0?/bookmakers are still better than the model/.test(tx):/The model is better than the bookmakers/.test(tx)):/too close to separate/.test(tx),'the model 2 against bookmakers sentence follows the numbers ('+(zm.sig?(zm.m>0?'bookmakers better':'model better')+', beyond noise':'within noise')+', diff '+(A.d2m/n).toFixed(4)+' per match)');
   const t2=await pg.evaluate(()=>[...document.querySelectorAll('.rc-mkl tbody tr')].map(r=>[...r.cells].map(c=>c.textContent.trim())));
-  const w2=MK.rows.map(r=>[r.name,String(r.n),f3(r.b/r.n),f3(r.m/r.n),f3(r.bb/r.n)]);
-  ok(JSON.stringify(t2)===JSON.stringify(w2),'bookmaker league table: '+w2.map(r=>r[0]+' '+r[1]).join(' | '));
+  const w2=MK.rows.map(r=>[r.name,String(r.n),f3(r.b1/r.n),r.prior?f3(r.b2/r.n):'–',f3(r.m/r.n),f3(r.bb/r.n)]);
+  ok(JSON.stringify(t2)===JSON.stringify(w2),'bookmaker league table: '+w2.map(r=>r[0]+' '+r[1]+' '+r[2]+'→'+r[3]).join(' | '));
   ok(tx.includes('The average margin removed from the odds was '+(A.mg/n*100).toFixed(1)+'%'),'average margin removed: '+(A.mg/n*100).toFixed(1)+'%');
-  ok(A.m<A.bb,'sanity: the bookmakers beat the league base rates ('+f3(A.m/n)+' < '+f3(A.bb/n)+')')}
+  ok(A.m<A.bb&&A.b2<A.b1,'sanity: the bookmakers beat the base rates ('+f3(A.m/n)+' < '+f3(A.bb/n)+') and model 2 beats model 1 ('+f3(A.b2/n)+' < '+f3(A.b1/n)+')')}
+ /* data/priors.json is last season's numbers per club, worked out again from the past season's shot and league files */
+ {const P=J('priors.json');let bad=[];for(const l of IDX.leagues.filter(DOM)){const w=priorOf(l),g=P.leagues[l.id];if(!w||!g){bad.push(l.name+' missing');continue}
+   if(g.season!==w.season||g.n!==w.n||Math.abs(g.mu-w.mu)>1e-3||Object.keys(g.teams).length!==Object.keys(w.teams).length)bad.push(l.name+' differs');
+   for(const t in w.teams){const r=g.teams[t];if(!r||r[0]!==w.teams[t][0]||Math.abs(r[1]-w.teams[t][1])>2e-3||Math.abs(r[2]-w.teams[t][2])>2e-3)bad.push(l.name+' '+t)}}
+  ok(!bad.length,'data/priors.json = last season\'s matches and xG for and against per club, worked out again for the six leagues '+bad.slice(0,3).join(' ; '))}
  ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await pg.screenshot({path:__dirname+'/rc_1280.png',fullPage:true});await ctx.close();
  {const c2=await b.newContext();await c2.route(/_sh\.json/,async r=>{await new Promise(z=>setTimeout(z,2500));r.continue()});const p2=await c2.newPage(),e2=[];p2.on('pageerror',e=>e2.push(e.message));
   await p2.goto('http://127.0.0.1:8765/index.html#/reportcard');await p2.waitForSelector('#rcroot',{timeout:60000});await p2.evaluate(()=>location.hash='#/table');await p2.waitForSelector('.lt',{timeout:60000});await p2.waitForTimeout(3500);
