@@ -392,3 +392,6 @@ html[dir=rtl] .dl-bars .ph-bn bdi{text-align:right}
 .dcx-a{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:center;margin-top:10px;font-size:13px}
 /* ===== Match pressing card (assets/press-card.js) ===== */
 .pcx-b .dcx-c svg{max-width:1100px}
+/* ===== Pressing maps (assets/sb-press.js) ===== */
+.sbp-att img{display:inline-block}.sbp-tabs{margin-top:10px}
+#sbpb .dcx-c svg{max-width:1100px}

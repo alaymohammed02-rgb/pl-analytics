@@ -47,6 +47,14 @@ A static football analytics site on GitHub Pages. A Python sync (`sync.py`, run 
   - The drawer closes once the glass arrives (`lgxHold()` in `assets/drawer.js`, from the spring's predicted arrival); the page itself opens at once.
   - More groups: add `{sel, items, on}` (and `deco`, `drag`) to `G`. Test: `tests/lg/ui_lg.js`.
 - **Player card** (`assets/defense-card.js`, top of `#/defense`, `#/shots` and `#/passing`): four kinds (defending, attacking, passing and creating, dribbling and carrying; each page opens on its own kind). A player, 3 to 8 measures and who he is compared with (same role from the line-ups / same position / all outfield; six leagues or the league; 270/450/900+ minutes) give a card (one SVG, also saved as a PNG) with each measure per 90 beside its name ("1.76 /90"), a bar as long as his percentile coloured red → amber → green, and his heat map (all actions, no average-position dot). Ratios need 5+ attempts. Uses `aggPl` per league via `INS.pool(['pl','mx'])`. A past season compares within its league only. Test: `tests/dc/ui_dc.js`.
+- **Pressing cards.**
+  - Match pressing card (`assets/press-card.js`, top of `#/ppda`): PitchAPI's team numbers for one match (PPDA, defensive actions, high turnovers, counterpress regains, regain time, defensive action height), each ranked among every team-match of the league (green = more pressing), the team heat map, and the nine players with most defensive actions. PitchAPI has no pressure events, and the card says so. Test: `tests/pc/ui_pc.js`.
+  - Pressing maps (`assets/sb-press.js`, `#/sbpress`): StatsBomb Open Data (analysis only, logo on page and cards, never committed raw).
+    - **Match map:** the browser reads the match's events and lineups from StatsBomb's public files; every Pressure event is a dot, with thirds and the players' pressures by third.
+    - **Player card:** percentiles from `data/sb_press.json`, built offline by `tools/sb-press/build_press.py` (per-player counts and a 12 × 8 pressure grid for Euro 2024, World Cup 2022, Copa América 2024 and AFCON 2023; definitions are in the script: a regain = the pressing team has the ball within 5 s, possession-adjusted = × 50 ÷ the opponent's share of the ball).
+    - StatsBomb's open Bundesliga 2023/24 holds only Bayer Leverkusen's 34 matches, so there is no league-wide pool.
+    - Tests: `tests/sb/ui_sb.js` (a hand-made fixture, no network) and `tests/sb/t_press.py` (the builder on the same fixture, and the shape of the data file).
+  - Both cards share the helpers `INS.cardKit` from `assets/defense-card.js`, so that file loads first.
 - **Cross-league data:** `assets/league-pool.js` provides:
   - `INS.pool(need)`: the six domestic leagues;
   - `INS.poolOne(id, need)`: one league;
