@@ -45,7 +45,7 @@
  const plh=(S,id)=>{const l=S.ids.get(id);return l?'#/player/'+encodeURIComponent(l.key+'||'+S.name):null};
  function clNext(S){
   const f=S.next;if(!f)return '';const t=Date.parse(f.k),opp=f.h===S.name?f.a:f.h;
-  return `<a class="card clx-next" href="#/preview/${encodeURIComponent(f.i)}"><span class="mu">Next match</span>${hCrest(opp)}<b>${f.h===S.name?'':'@ '}${esc(opp)}</b><span class="mu">${isNaN(t)?esc(f.d||''):esc(new Date(t).toLocaleString(document.documentElement.lang==='ar'?'ar-u-ca-gregory-nu-latn':'en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))}</span><span class="clx-go">Preview →</span></a>`;
+  return `<a class="card clx-next" href="#/preview/${encodeURIComponent(f.i)}"><span class="mu">Next match</span>${hCrest(opp)}<b>${f.h===S.name?'':'@ '}<bdi>${esc(opp)}</bdi></b><span class="mu">${isNaN(t)?esc(f.d||''):esc(new Date(t).toLocaleString(document.documentElement.lang==='ar'?'ar-u-ca-gregory-nu-latn':'en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))}</span><span class="clx-go">Preview →</span></a>`;
  }
  function clXg(S){
   if(!S.xg.length)return '';
