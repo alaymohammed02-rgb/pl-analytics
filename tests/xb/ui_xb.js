@@ -10,17 +10,24 @@ for(const id of LG){const l=T.lg(id),f=J(l.pl_file),ix={};f.cols.forEach((c,i)=>
  let ph={};try{ph=J('photos_'+id+'.json')}catch(e){}PH[id]=ph;
  for(const a of M.values()){const pos=Object.keys(a.pos).sort((x,y)=>a.pos[y]-a.pos[x])[0]||null;P.push({key:id+'|'+a.id,id:a.id,lg:id,name:a.name,club:a.club,pos,mi:a.mi,nat:(ph.c&&ph.c[a.id])||'',photo:!!(ph.public&&ph.p&&ph.p[a.id])})}}
 const cnt=(f)=>P.filter(f).length;
+const hash=id=>[...String(id)].reduce((a,c)=>(a*31+c.charCodeAt(0))>>>0,7);
+const TMP={};[...new Set(P.map(p=>p.id))].forEach(id=>{const h=hash(id);if(h%3===0)return;TMP[id]=['19'+(88+h%15)+'-0'+(1+h%9)+'-1'+(h%9),h%7===0?null:[200000,3e6,8e6,3e7,6e7][h%5]]});
+const TM={t:'2026-10-24',asof:'2026-07-06',source:'test',matched:Object.keys(TMP).length,n_players:new Set(P.map(p=>p.id)).size,p:TMP};
+const ageOf=dob=>{const [y,m,d]=dob.split('-').map(Number),t=new Date();return t.getFullYear()-y-((t.getMonth()+1<m||(t.getMonth()+1===m&&t.getDate()<d))?1:0)};
+P.forEach(p=>{const t=TMP[p.id];p.age=t?ageOf(t[0]):null;p.val=t?t[1]:null});
+const money=v=>v==null?'':v>=1e6?'€'+(v/1e6).toFixed(v>=1e7?0:1)+'m':'€'+Math.round(v/1e3)+'k';
 const FORMS={'4-3-3':[1,4,3,3],'4-2-3-1':[1,4,5,1],'4-4-2':[1,4,4,2],'3-5-2':[1,3,5,2],'3-4-3':[1,3,4,3],'4-1-4-1':[1,4,5,1],'5-3-2':[1,5,3,2],'4-5-1':[1,4,5,1]};
-const info=pg=>pg.evaluate(()=>{const t=document.querySelector('.xb-pick .ins-note')?.innerText||'';const m=/Showing 40 of (\d+)/.exec(t)||/^(\d+) players/.exec(t);return {n:m?+m[1]:null,rows:[...document.querySelectorAll('.xb-row')].map(r=>({k:r.dataset.k,dis:r.disabled,img:!!r.querySelector('.xb-av img'),t:r.innerText}))}});
+const info=pg=>pg.evaluate(()=>{const t=[...document.querySelectorAll('.xb-pick .ins-note')].pop()?.innerText||'';const m=/Showing 40 of (\d+)/.exec(t)||/^(\d+) players/.exec(t);return {n:m?+m[1]:null,rows:[...document.querySelectorAll('.xb-row')].map(r=>({k:r.dataset.k,dis:r.disabled,img:!!r.querySelector('.xb-av img'),t:r.innerText}))}});
 (async()=>{const b=await T.launch();
  ok(P.length>2500&&P.some(p=>p.photo),'sanity: '+P.length+' players in the 7 files, '+P.filter(p=>p.photo).length+' with a photo');
  async function open(o){const r=await T.open(b,o);return r}
- async function mk(vw,lang,hash,fail){const ctx=await b.newContext({viewport:{width:vw,height:900}});
+ async function mk(vw,lang,hash,fail,tm){const ctx=await b.newContext({viewport:{width:vw,height:900}});
   await ctx.addInitScript(([l,lg])=>{if(!sessionStorage.getItem('s')){sessionStorage.setItem('s','1');localStorage.clear();localStorage.setItem('league','l_4WFCIZ');localStorage.setItem('lang',l)}},[lang]);
   await ctx.route(/cdn\.pitchapi/,r=>r.fulfill({contentType:'image/png',body:PNG}));
   if(PRISTINE)await ctx.route(/data\/index\.json/,r=>r.fulfill({contentType:'application/json',body:PRISTINE}));
+  if(tm)await ctx.route(/data\/tm\.json/,r=>r.fulfill({contentType:'application/json',body:JSON.stringify(tm)}));
   if(fail)await ctx.route(fail,r=>r.fulfill({status:500,body:''}));
-  const pg=await ctx.newPage(),errs=[];pg.on('pageerror',e=>errs.push(e.message));pg.on('console',m=>{const u=(m.location()||{}).url||'';if(m.type()==='error'&&!/favicon|ERR_TUNNEL|api.github.com|status of 500/.test(u+m.text()))errs.push(m.text())});
+  const pg=await ctx.newPage(),errs=[];pg.on('pageerror',e=>errs.push(e.message));pg.on('console',m=>{const u=(m.location()||{}).url||'';if(m.type()==='error'&&!/favicon|ERR_TUNNEL|api.github.com|status of 500|tm\.json/.test(u+m.text()))errs.push(m.text())});
   await pg.goto('http://127.0.0.1:8765/index.html'+hash);await pg.waitForSelector('.xb-pitch',{timeout:90000});return {ctx,pg,errs}}
  let {ctx,pg,errs}=await mk(1280,'en','#/builder');
  /* formations */
@@ -65,7 +72,23 @@ const info=pg=>pg.evaluate(()=>{const t=document.querySelector('.xb-pick .ins-no
  await pg.click('.xb-slot.fill');await pg.click('#xbrm');ok(await pg.evaluate(()=>document.querySelectorAll('.xb-slot.fill').length)===before-1,'remove: one fewer');
  await pg.click('#xbc');ok(await pg.evaluate(()=>document.querySelectorAll('.xb-slot.fill').length)===0,'clear: empty pitch');
  ok(await pg.evaluate(()=>{const a=[...document.querySelectorAll('#hubbar a')].map(x=>x.getAttribute('href'));return a.includes('#/builder')&&document.querySelector('#hubbar a.on').getAttribute('href')==='#/builder'}),'the page is a tab of the Compare hub, marked open');
+ ok(await pg.evaluate(()=>!document.querySelector('#xba,#xbv,#xbs,.xb-tm')),'without data/tm.json: no age, value or order choice and no Transfermarkt note');
  ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await ctx.close();
+ /* with ages and values (a made-up data/tm.json) */
+ {const r=await mk(1280,'en','#/builder',null,TM);const g=r.pg;await g.click('.xb-slot[data-i="5"]');await g.waitForSelector('.xb-row');await g.uncheck('#xbo');
+  const ex=[['u21',0,21],['a2225',22,25],['a2629',26,29],['a30',30,99]];
+  for(const [k,lo,hi] of ex){await g.selectOption('#xba',k);const I=await info(g);ok(I.n===cnt(p=>p.age!=null&&p.age>=lo&&p.age<=hi),'age band '+k+': '+I.n+' players (the ones with an age in the band)')}
+  await g.selectOption('#xba','');
+  const VB=[['v0',0,5e6],['v5',5e6,2e7],['v20',2e7,5e7],['v50',5e7,Infinity]];
+  for(const [k,lo,hi] of VB){await g.selectOption('#xbv',k);const I=await info(g);ok(I.n===cnt(p=>p.val!=null&&p.val>=lo&&p.val<hi),'value band '+k+': '+I.n+' players')}
+  await g.selectOption('#xbv','');await g.selectOption('#xbs','val');let I=await info(g);const bv=P.slice().sort((a,c)=>(a.val==null)-(c.val==null)||(c.val||0)-(a.val||0)||c.mi-a.mi||a.name.localeCompare(c.name));
+  ok(I.rows.every((r,i)=>r.k===bv[i].key),'order by market value: highest first ('+bv[0].name+' '+money(bv[0].val)+'), players without one last');
+  ok(I.rows[0].t.includes(money(bv[0].val))&&I.rows[0].t.includes(bv[0].age+' y'),'a row shows his age and value: '+I.rows[0].t.replace(/\s+/g,' ').slice(0,90));
+  await g.selectOption('#xbs','age');I=await info(g);const ba=P.slice().sort((a,c)=>(a.age==null)-(c.age==null)||(a.age||0)-(c.age||0)||c.mi-a.mi||a.name.localeCompare(c.name));
+  ok(I.rows.every((r,i)=>r.k===ba[i].key),'order by age: youngest first ('+ba[0].name+', '+ba[0].age+')');
+  const note=await g.innerText('.xb-tm');ok(note.includes('2026-07-06')&&note.includes(TM.matched+' of '+TM.n_players),'the note names Transfermarkt, the dataset date and '+TM.matched+' of '+TM.n_players+' matched');
+  await g.selectOption('#xbs','mi');await g.selectOption('#xba','a2225');await g.selectOption('#xbv','v5');I=await info(g);ok(I.n===cnt(p=>p.age>=22&&p.age<=25&&p.val>=5e6&&p.val<2e7),'age and value together: '+I.n+' players');
+  ok(!r.errs.length,'no page errors with ages and values '+r.errs.slice(0,2).join(' ; '));await r.ctx.close()}
  /* one league file failing: the others still load */
  {const r=await mk(1280,'en','#/builder',/l_0ErfuF_pl\.json/);await r.pg.click('.xb-slot[data-i="0"]');await r.pg.waitForSelector('.xb-row');
   const o=await r.pg.$$eval('#xbl option',a=>a.map(x=>x.value));ok(!o.includes('l_0ErfuF')&&o.length===LG.length,'LaLiga file failing: the page still opens, LaLiga is not in the league list ('+(o.length-1)+' leagues)');await r.ctx.close()}
@@ -73,7 +96,7 @@ const info=pg=>pg.evaluate(()=>{const t=document.querySelector('.xb-pick .ins-no
  {const c2=await b.newContext();await c2.route(/l_4WFCIZ_pl\.json/,async r=>{await new Promise(z=>setTimeout(z,2500));r.continue()});const p2=await c2.newPage(),e2=[];p2.on('pageerror',e=>e2.push(e.message));
   await p2.goto('http://127.0.0.1:8765/index.html#/builder');await p2.waitForSelector('#xbroot',{timeout:60000});await p2.evaluate(()=>location.hash='#/table');await p2.waitForSelector('.lt',{timeout:60000});await p2.waitForTimeout(3500);
   ok(!(await p2.$('#xbroot'))&&await p2.$('.lt')&&!e2.length,'leaving before the data arrives: the table stays, no error');await c2.close()}
- for(const lang of ['ar','en']){const r=await mk(390,lang,'#/builder');await r.pg.waitForTimeout(400);
+ for(const lang of ['ar','en']){const r=await mk(390,lang,'#/builder',null,TM);await r.pg.waitForTimeout(400);
   ok(await T.noscroll(r.pg),lang+' phone: no horizontal scroll');
   ok(await r.pg.evaluate(()=>{const p=document.querySelector('.xb-pitch').getBoundingClientRect();return [...document.querySelectorAll('.xb-slot')].every(s=>{const a=s.getBoundingClientRect();return a.left>=p.left-1&&a.right<=p.right+1&&a.top>=p.top-1&&a.bottom<=p.bottom+1})}),lang+' phone: every spot sits inside the pitch');
   await r.pg.click('.xb-slot[data-i="3"]');await r.pg.waitForSelector('.xb-row');await r.pg.waitForTimeout(300);
