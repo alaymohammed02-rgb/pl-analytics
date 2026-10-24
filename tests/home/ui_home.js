@@ -26,7 +26,7 @@ const fpl=async pg=>{await pg.evaluate(()=>{const f=document.getElementById('hfp
    const shown=[...document.querySelectorAll('#hrk .hrank li')].map(li=>[li.querySelector('.hrp b').textContent,li.querySelector('.hrv').textContent]);
    const fresh=aggPl(c.P).filter(a=>!c.gk.has(a.id)&&a.s.mi>=HOME_RULES.minMin);
    const same=L.every(([a,v],i)=>shown[i]&&shown[i][0]===a.n&&shown[i][1]===hF(v)&&Math.abs(M('sca').f(fresh.find(x=>x.id===a.id))-v)<1e-9);
-   const hero=document.querySelector('.hmain .hbig').textContent,h=homeStories(c)[0],hv=h.a?Object.values(HOME_RULES.metrics).map(m=>m.f(h.a)).some(x=>x!=null&&(+x).toFixed(2)===hero):true;
+   const hb=document.querySelector('.hmain .hbig'),hero=hb?hb.textContent:null,h=homeStories(c)[0],hv=h.a?hero!=null&&Object.values(HOME_RULES.metrics).map(m=>m.f(h.a)).some(x=>x!=null&&(+x).toFixed(2)===hero):hero==null;
    const vsA=c.q.find(x=>x.id===HOME.vs[0]),vsRow=document.querySelector('#hvbody .hrow b').textContent;
    return {same,n:shown.length,hv,vs:vsRow===(+M('npxg').f(vsA)).toFixed(2),gk:c.q.some(a=>c.gk.has(a.id)),min:c.q.every(a=>a.s.mi>=450)}});
   ok(num.same&&num.n===5,'quick rankings: top 5 shot-creating actions per 90 match aggPl exactly (names, values, order)');
