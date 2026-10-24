@@ -115,12 +115,21 @@ ok(R['sh']['half'] is not None and 0 < R['sh']['half'] <= 1 and R['sh']['n_half'
 G['ST_STATS'][:] = ['sh', 'tk', 'gl']
 for p in past:
     for f in (p['pl_file'], p['file']): STORE['data/' + f] = json.load(open(D + f))
-STORE['data/index.json'] = {'leagues': [{'id': 'l_4WFCIZ', 'name': 'Premier League'}], 'seasons': {'l_4WFCIZ': {'past': past}, 'l_0ErfuF': {'past': past[:1]}}}
+STORE['data/index.json'] = {'leagues': [{'id': 'l_4WFCIZ', 'name': 'Premier League'}], 'seasons': {}}
+def entry(p, **kw):
+    e = {'complete': True, 'files': {'s': p['s'], 'file': p['file'], 'pl_file': p['pl_file'], 'pl_v': p.get('pl_v'), 'v': p.get('v')}}; e.update(kw); return e
+def empty(lab):   # a season PitchAPI has matches for but no player rows (Ligue 1 before 2025-26)
+    f = {'s': lab, 'file': 'l_3FJFUl_%s.json' % lab, 'pl_file': 'l_3FJFUl_%s_pl.json' % lab, 'pl_v': 'x', 'v': 'y'}
+    STORE['data/' + f['file']] = {'matches': [{'i': 'm1', 'd': '2022-01-01'}]}; STORE['data/' + f['pl_file']] = {'cols': ['m', 'i', 'mi', 'o'], 'rows': []}
+    return {'complete': True, 'light': True, 'files': f}
+STORE['data/seasons.json'] = {'leagues': {'l_4WFCIZ': {'seasons': {p['s']: entry(p) for p in past}},
+                                          'l_0ErfuF': {'seasons': {past[0]['s']: entry(past[0])}},        # one season: not enough
+                                          'l_3FJFUl': {'seasons': {lab: empty(lab) for lab in ('2021-22', '2022-23')}}}}
 G['sync_stability'](None)
 S = PUT.get('data/stability.json')
-ok(S and list(S['leagues']) == ['l_4WFCIZ'] and S['leagues']['l_4WFCIZ']['seasons'] == [p['s'] for p in past] and set(S['leagues']['l_4WFCIZ']['stats']) == {'sh', 'tk', 'gl'} and S['key'], 'sync_stability writes the file: the league with 2+ full seasons only (one season is not enough), its seasons in order, every stat, a key')
+ok(S and list(S['leagues']) == ['l_4WFCIZ'] and S['leagues']['l_4WFCIZ']['seasons'] == [p['s'] for p in past] and set(S['leagues']['l_4WFCIZ']['stats']) == {'sh', 'tk', 'gl'} and S['key'], 'sync_stability writes the file: the league with 2+ seasons that have player rows only (one season is not enough, and two seasons without player rows are not seasons), its seasons in order, every stat, a key')
 n = len(PUT); G['sync_stability'](None); ok(len(PUT) == n, 'unchanged season files: the file is not computed or written again (same key)')
-STORE['data/index.json']['seasons']['l_4WFCIZ']['past'][0] = dict(past[0], pl_v='changed')
+STORE['data/seasons.json']['leagues']['l_4WFCIZ']['seasons'][past[0]['s']]['files']['pl_v'] = 'changed'
 G['sync_stability'](None); ok(PUT['data/stability.json']['key'] != S['key'], 'a changed file version recomputes it')
 PUT.clear(); STORE.pop('data/stability.json')
 del STORE['data/' + past[0]['pl_file']]

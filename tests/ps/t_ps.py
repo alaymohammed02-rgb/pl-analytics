@@ -5,6 +5,7 @@ from types import SimpleNamespace as N
 HERE=os.path.dirname(os.path.abspath(__file__));ROOT=os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0,os.path.join(HERE,'..','stub'));os.environ['PITCHAPI_KEY']='SECRET'
 spec=importlib.util.spec_from_file_location("m",os.path.join(ROOT,'sync.py'));m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+m.PS_PROBE=0   # the probe of a new light season has its own tests below; the others keep their numbers
 fails=0
 def ok(c,msg):
     global fails;print(('ok  ' if c else 'FAIL'),msg);fails+=0 if c else 1
@@ -32,13 +33,14 @@ def prow(mid,j,side):return N(name='P%s%d'%(side,j),player=N(id='%s%d'%(side,j),
     minutes_played=90,stats=[G(xg=E('expected_goals',0.1*j)),G(r=E('rating',6.5))])
 LP=lambda i:N(player_id=i,name='N'+i,shirt_number='1',position_id=11,is_captain=False,pitch_x=.1,pitch_y=.5)
 side=lambda:N(formation='4-3-3',confirmed=True,coach=N(name='C'),starters=[LP('p%d'%j) for j in range(11)],subs=[])
-calls=[];PLAN=set();LISTPLAN=set()
+calls=[];PLAN=set();LISTPLAN=set();ROWS=set()   # ROWS: league tags (last 3 characters of the id) whose matches have advanced player rows; the others have none, like Ligue 1 before 2025-26 in PitchAPI
 class MT:
     def __getattr__(s,name):
         def f(mid,*a,**kw):
             calls.append((name,mid)+a)
             if mid in PLAN:raise m.PlanUpgradeRequiredError('plan')
             if name=='players':return [prow(mid,j,sd) for sd in 'ha' for j in range(3)]
+            if name=='advanced_players' and mid[:3] in ROWS:return N(players=[N(player=N(id='%s-ap%d'%(mid,j),name='AP%d'%j),team_id='t%d'%(j%2),minutes_played=90) for j in range(3)])
             if name=='lineups':return N(home=side(),away=side())
             if name=='momentum':return N(points=[N(minute=k,value=k/10) for k in range(1,5)])
             if name=='players_halves':return N(players=[N(player=N(id='h1'),team_id='t',periods=[N(period='FirstHalf',stats=[G(p=E('passes',10))])])])
@@ -57,7 +59,7 @@ class C:
 ok(m.ps_seasons('l_4WFCIZ')==[('2025/2026','2025-26')],'the previous season: the one before the current season in the league\'s list, named like the site (2025-26)')
 ok(m.ps_seasons('l_4WFCIZ',back=2)==[('2025/2026','2025-26'),('2024/2025','2024-25')] and m.ps_seasons('nope')==[],'further back on request; unknown league: none')
 
-m.PS_JOBS=[('l_4WFCIZ',1,'full')];m.PS_REQ_PER_RUN=400
+m.PS_JOBS=[('l_4WFCIZ',1,'full')];m.PS_REQ_PER_RUN=400;m.PS_PROBE=0;ROWS.clear()
 call0,due0=m.call,m.match_due
 calls.clear();m.sync_past_seasons(C(),None)
 ok(m.call is call0 and m.match_due is due0,'call() and match_due() are restored after the section')
@@ -130,6 +132,20 @@ fresh_db();m.PS['state']=None;m.sync_past_seasons(C(),None);s3=store['data/seaso
 ok(s3['got']==100 and s3['complete'],'light season: the next run completes it')
 ok(all('data/%s%s.json'%(P2,x) in store for x in ('','_pl','_sh')) and not any('data/%s%s.json'%(P2,x) in store for x in ('_adv','_heat','_mx','_rt','_hv')),'light season: league, players and shots files only')
 ok([p['s'] for p in store['data/index.json']['seasons']['l_4WFCIZ']['past']]==['2025-26'],'light seasons are not offered in the season selector')
+# a new light season whose matches have no advanced player rows: only the first PS_PROBE matches are fetched, nothing is published, and it is retried after a week
+m.PS_PROBE=6;m.PS_JOBS=[('l_0ErfuF',1,'light')];fresh_db();calls.clear();logs.clear();m.PS['state']=None
+store['data/seasons.json']['leagues'].setdefault('l_0ErfuF',{}).pop('seasons',None);m.PS_REQ_PER_RUN=1200;m.sync_past_seasons(C(),None)
+sp=store['data/seasons.json']['leagues']['l_0ErfuF']['seasons']['2025-26']
+fetched={c[1] for c in calls if c[0]!='list'}
+ok(len(fetched)==m.PS_PROBE and sp['plan'] and sp['err']=='no player rows' and not sp.get('got'),'no player rows: only the first %d matches were fetched (%d requests), the season is marked and left alone'%(len(fetched),sum(1 for c in calls if c[0]!='list')))
+ok(not any(p.startswith('data/l_0ErfuF_2025-26') for p in store) and any('إحصائيات لاعبين' in l for l in logs),'no player rows: nothing published, and the log says why')
+calls.clear();m.PS['state']=None;m.sync_past_seasons(C(),None)
+ok(not any(c[0]!='list' for c in calls),'the next run leaves it alone (retry after PS_PLAN_RETRY_D days)')
+store['data/seasons.json']['leagues']['l_0ErfuF']['seasons']['2025-26']['t']='2020-01-01 00:00:00';ROWS.add('fuF');fresh_db();calls.clear();m.PS['state']=None;m.sync_past_seasons(C(),None)
+sp=store['data/seasons.json']['leagues']['l_0ErfuF']['seasons']['2025-26']
+ok(sp['got']==100 and sp['complete'] and not sp['plan'],'a week later, with player rows: the probe passes and the whole season is fetched in the same run (%s matches)'%sp['got'])
+store['data/seasons.json']['leagues'].pop('l_0ErfuF',None);m.PS_REQ_PER_RUN=400
+
 ok(store['data/seasons.json']['leagues']['l_4WFCIZ']['api_seasons']==['2026/2027','2025/2026','2024/2025'],'the seasons PitchAPI lists for the league are recorded')
 # the light season becomes full: only the missing parts are fetched, within the request budget, and it joins the season selector
 m.PS_JOBS=[('l_4WFCIZ',2,'full')];before=copy.deepcopy(store['data/%s.json'%P2]);runs=[]

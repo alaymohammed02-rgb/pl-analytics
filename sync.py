@@ -11122,7 +11122,11 @@ PS_LEAGUES = ["l_4WFCIZ", "l_0ErfuF", "l_1Isor4", "l_3FJFUl", "l_0ALvwF", "l_4Qe
 # مواسم الإنجليزي من 2024-25 إلى 2021-22 انجلبت "light" أولاً ثم صارت "full": المزامنة تكمل لها الناقص فقط
 # (الإحصائيات المتقدمة والحرارة والتشكيلات والتقييمات والشوطين) بدون ما تعيد المباريات.
 PS_JOBS = [("l_4WFCIZ", k, "full") for k in (1, 2, 3, 4, 5)] + [(l, 1, "full") for l in PS_LEAGUES[1:]]
+# 2024-25 "light" لبقية الدوريات (إحصائيات لاعبين، تسديدات): يغذي صفحة ثبات الإحصائيات بمقارنة موسمين. كل موسم يبدأ بفحص PS_PROBE مباريات:
+# إذا PitchAPI ما عنده إحصائيات لاعبين لذلك الموسم (حصل مع دوري فرنسا 2021-22 و2022-23) نتركه ما يكلّف إلا ~30 طلب.
+PS_JOBS += [(l, 2, "light") for l in PS_LEAGUES[1:]]
 
+PS_PROBE = 6                  # موسم خفيف جديد: نجلب أول هذي المباريات ونتأكد أن PitchAPI عنده إحصائيات لاعبين له قبل ما نصرف على بقية الموسم (دوري فرنسا 2021-22 و2022-23 ما فيهم لاعبين: صُرفت ~3600 طلب على لا شي)
 PS_REQ_PER_RUN = 1200         # أقصى عدد طلبات لـ PitchAPI في المزامنة الوحدة لهذا القسم (حوالي 7 دقايق)
 PS_COST = {"full": 10, "light": 5}   # طلبات لكل مباراة (مقاسة: full = 10، light = 5)
 PS_RETRY_H = 24               # مباراة فشلت بسبب انقطاع أو حد الطلبات: نعيدها بعد يوم
@@ -11280,15 +11284,23 @@ def ps_season(client, hub, lid, api_season, label, budget, st, light=False):
     info = {r["match_id"]: r for r in q("SELECT match_id, status, fetched_at FROM matches WHERE league_id=?", (P,))}
     todo = sorted([m for m in ms if ps_due(info.get(str(m.id)))], key=lambda m: (str(m.date or ""), str(m.id)))
     batch = todo[:max(1, budget // PS_COST["light" if light else "full"])]
+    probe = bool(PS_PROBE) and light and not st.get("got") and len(batch) > PS_PROBE
     log(f"  [المواسم السابقة] {lid} {label}: {len(ms)} مباراة في PitchAPI | محفوظة {len(info)} | الحين {len(batch)} | باقي بعدها {len(todo) - len(batch)}")
     st.update(api=api_season, id=P, n=len(ms), t=now(), err=None, plan=False)
     r0, t0 = PS["req"], time.time()
     if batch:
-        ps_base(client, P, batch)
+        ps_base(client, P, batch[:PS_PROBE] if probe else batch)
     if PS["errs"].get("rate_limit"):
         log("  [المواسم السابقة] PitchAPI يحدّ الطلبات: نحفظ اللي وصل ونكمل في المزامنة الجاية")
     elif light:
         sync_pstats(client, P)
+        if probe and not PS["errs"].get("rate_limit"):
+            if q("SELECT COUNT(*) n FROM pl_adv WHERE league_id=?", (P,))[0]["n"] == 0:
+                log(f"  [المواسم السابقة] {lid} {label}: PitchAPI ما عنده إحصائيات لاعبين لأول {PS_PROBE} مباريات من هذا الموسم — تركناه، نجرب مرة ثانية بعد {PS_PLAN_RETRY_D} أيام")
+                st.update(plan=True, err="no player rows")
+                return PS["req"] - rs
+            ps_base(client, P, batch[PS_PROBE:])
+            sync_pstats(client, P)
         sync_shots(client, P)
     else:
         # كل خطوة تجلب فقط المباريات اللي ما انجلبت لها (بعد انقطاع سابق أو موسم خفيف صار كامل تكمل الناقص)
@@ -11972,15 +11984,25 @@ def st_compute(seasons):
     return res
 
 
-def sync_stability(hub, now=None):
-    now = now or datetime.datetime.now(datetime.timezone.utc)
-    idx = gh_get_json(hub, "data/index.json") or {}
+def st_plan(hub):
+    """{دوري: [موسم سابق مكتمل له ملف لاعبين وملف مباريات، الأقدم أولاً]} من data/seasons.json (يشمل المواسم الخفيفة اللي ما تظهر في اختيار الموسم)."""
+    sj = gh_get_json(hub, "data/seasons.json") or {}
     plan = {}
-    for lid, v in (idx.get("seasons") or {}).items():
-        past = [p for p in (v.get("past") or []) if p.get("complete") and p.get("pl_file") and p.get("file")]
+    for lid, v in (sj.get("leagues") or {}).items():
+        past = []
+        for lab, e in (v.get("seasons") or {}).items():
+            f = e.get("files") or {}
+            if e.get("complete") and f.get("pl_file") and f.get("file"):
+                past.append({"s": lab, "pl_file": f["pl_file"], "file": f["file"], "pl_v": f.get("pl_v"), "v": f.get("v")})
         if len(past) >= 2:
             plan[lid] = sorted(past, key=lambda p: p["s"])
-    names = {l["id"]: l.get("name") for l in (idx.get("leagues") or [])}
+    return plan
+
+
+def sync_stability(hub, now=None):
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    plan = st_plan(hub)
+    names = {l["id"]: l.get("name") for l in ((gh_get_json(hub, "data/index.json") or {}).get("leagues") or [])}
     key = hashlib.sha1(json.dumps({lid: [(p["s"], p.get("pl_v"), p.get("v")) for p in ps] for lid, ps in plan.items()}, sort_keys=True).encode()).hexdigest()[:10]
     old = gh_get_json(hub, ST_PATH) or {}
     if not plan or old.get("key") == key:
@@ -11991,11 +12013,14 @@ def sync_stability(hub, now=None):
         for p in ps:
             pl, lg = gh_get_json(hub, "data/" + p["pl_file"]), gh_get_json(hub, "data/" + p["file"])
             if not pl or not lg:
+                log(f"  [الثبات] {lid} {p['s']}: ملفات ناقصة، تخطينا الدوري")
                 seasons = []
                 break
+            if not pl.get("rows"):
+                seasons = []                      # موسم بدون إحصائيات لاعبين في PitchAPI (دوري فرنسا قبل 2025-26): ما يدخل، والمواسم قبله ما تتصل بما بعده
+                continue
             seasons.append((p["s"], pl["cols"], pl["rows"], {m["i"]: m.get("d") for m in lg.get("matches", [])}))
         if len(seasons) < 2:
-            log(f"  [الثبات] {lid}: ملفات ناقصة، تخطيناه")
             continue
         out["leagues"][lid] = {"name": names.get(lid), "seasons": [s[0] for s in seasons], "stats": st_compute(seasons)}
     if out["leagues"]:
