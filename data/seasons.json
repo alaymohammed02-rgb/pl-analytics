@@ -337,6 +337,32 @@
      "got": 306,
      "ok": 306,
      "complete": true
+    },
+    "2021-22": {
+     "name": "Ligue 1",
+     "light": true,
+     "api": "2021/2022",
+     "id": "l_3FJFUl_2021-22",
+     "n": 380,
+     "t": "2026-10-24 04:08:12",
+     "err": null,
+     "plan": false,
+     "req": 1200,
+     "sec": 300,
+     "files": {
+      "s": "2021-22",
+      "id": "l_3FJFUl_2021-22",
+      "file": "l_3FJFUl_2021-22.json",
+      "v": "ba41ad89e4",
+      "size": 1914099,
+      "pl_file": "l_3FJFUl_2021-22_pl.json",
+      "pl_v": "c4707db4ca",
+      "sh_file": "l_3FJFUl_2021-22_sh.json",
+      "sh_v": "19dbe2026d"
+     },
+     "got": 240,
+     "ok": 0,
+     "complete": false
     }
    }
   },
