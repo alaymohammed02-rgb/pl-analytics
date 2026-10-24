@@ -46,6 +46,7 @@ A static football analytics site on GitHub Pages. A Python sync (`sync.py`, run 
   - The buttons are untouched: the glass is `aria-hidden` with pointer events off; the attribute `data-lgx-act` marks the chosen one, never a class (tests compare `className`). A group with one button gets no glass; reduced motion jumps, without lens, lift or drag.
   - The drawer closes once the glass arrives (`lgxHold()` in `assets/drawer.js`, from the spring's predicted arrival); the page itself opens at once.
   - More groups: add `{sel, items, on}` (and `deco`, `drag`) to `G`. Test: `tests/lg/ui_lg.js`.
+- **Player card** (`assets/defense-card.js`, top of `#/defense`, `#/shots` and `#/passing`): four kinds (defending, attacking, passing and creating, dribbling and carrying; each page opens on its own kind). A player, 3 to 8 measures and who he is compared with (same role from the line-ups / same position / all outfield; six leagues or the league; 270/450/900+ minutes) give a card (one SVG, also saved as a PNG) with each measure per 90 beside its name ("1.76 /90"), a bar as long as his percentile coloured red → amber → green, and his heat map (all actions, no average-position dot). Ratios need 5+ attempts. Uses `aggPl` per league via `INS.pool(['pl','mx'])`. A past season compares within its league only. Test: `tests/dc/ui_dc.js`.
 - **Cross-league data:** `assets/league-pool.js` provides:
   - `INS.pool(need)`: the six domestic leagues;
   - `INS.poolOne(id, need)`: one league;
@@ -63,6 +64,9 @@ A static football analytics site on GitHub Pages. A Python sync (`sync.py`, run 
   - Slots 30–39 are the defensive line; centre-backs are the ones with lateral between 0.15 and 0.85.
   - A match can have a line-up but no player rows (status "partial").
 - **Player rows** (`*_pl.json`): `xag` is missing for whole matches, not per player.
+  - `duw` (duels won) does not include aerial duels: it is lower than `aerw` in about a third of player-matches, so "duels won − aerials won" is not ground duels (the Defensive table's "Ground won" column still derives it that way; reported to the owner, 23 Oct 2026).
+  - `tko`/`tkw` are take-ons, not tackles (`tk`).
+  - `*_px.json.gz` / `*_pxa.json` (recoveries, touches…) are old files the sync no longer writes (last 19 Oct 2026); nothing on the site reads them.
 - **Heat maps** (`*_heat.json`): 16 cells along the pitch. A player's average position is the action-weighted cell centre (10+ actions).
 - **Defensive line** (`data/dlh.json`, built offline by `tools/line-height/`):
   - StatsBomb 360 lines, corrected by a SkillCorner-trained model (0.31 m error);
