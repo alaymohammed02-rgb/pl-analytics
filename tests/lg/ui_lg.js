@@ -161,10 +161,9 @@ const moveTo=async(pg,sel,a,b)=>{const A=await centre(pg,a),B=await centre(pg,b)
  const DS='#drw .drw-n';s=await pg.evaluate(glassOn,DS);
  ok(s&&s.label==='Fantasy'&&s.g.every((x,i)=>near(x,s.a[i])),'drawer: the glass rests on the open page (Fantasy)');
  cp=await pg.evaluate(copyOk,DS);
- const deco=await pg.evaluate(()=>{const P=window.LGX.groups.find(g=>g.id==='drw').P;return {t:P.filter(p=>p.it<0&&p.el.dataset.c).length,svg:P.filter(p=>p.it<0&&p.el.querySelector('svg')).length,h3:document.querySelectorAll('#drw .drw-s h3').length}});
- ok(cp.hit===cp.want&&cp.want>100&&deco.t>10&&deco.svg===deco.h3,'drawer: the copy has every link letter in place ('+cp.hit+'/'+cp.want+'), the section titles and their '+deco.svg+' icons');
+ ok(cp.hit===cp.want&&cp.want>40,'drawer: the copy has every hub name letter in place ('+cp.hit+'/'+cp.want+')');
  const dl=await pg.$$eval(DS+' a[href^="#/"]',a=>a.map(x=>x.getAttribute('href')));
- const fi=dl.indexOf('#/fantasy'),ti=Math.max(0,fi-5),A=await centre(pg,DS+' a[href="#/fantasy"]'),B=await centre(pg,DS+' a[href="'+dl[ti]+'"]');
+ const fi=dl.indexOf('#/fantasy'),ti=Math.max(0,fi-4),A=await centre(pg,DS+' a[href="#/fantasy"]'),B=await centre(pg,DS+' a[href="'+dl[ti]+'"]');
  const w=pg.evaluate(watch,{sel:DS,ms:1100});
  await pg.click(DS+' a[href="'+dl[ti]+'"]');
  const mid=await pg.evaluate(()=>({open:document.documentElement.classList.contains('dr-open'),hash:location.hash}));

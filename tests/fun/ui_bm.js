@@ -6,7 +6,9 @@ function model(lid){const lg=IDX.leagues.find(l=>l.id===lid),L=J(lg.file),S=J(lg
  const tx=new Map();S.rows.forEach(r=>{if(r[ix.og])return;const k=r[ix.m]+'|'+r[ix.c],x=r[ix.xg];tx.set(k,(tx.get(k)||0)+(typeof x==='number'&&isFinite(x)?x:0))});
  const T=new Map();let hs=0,as=0,n=0;L.matches.filter(m=>/^\d+-\d+$/.test(m.s||'')&&m.d).forEach(m=>{const xh=tx.get(m.i+'|'+m.h),xa=tx.get(m.i+'|'+m.a);if(xh==null||xa==null)return;n++;hs+=xh;as+=xa;
   [[m.h,xh,xa],[m.a,xa,xh]].forEach(([t,f,a])=>{const r=T.get(t)||{n:0,f:0,a:0};r.n++;r.f+=f;r.a+=a;T.set(t,r)})});
- const H=hs/n,A=as/n,mu=(H+A)/2,str=t=>{const r=T.get(t);return r&&r.n>=3?{att:(r.f+3*mu)/(r.n+3)/mu,def:(r.a+3*mu)/(r.n+3)/mu}:null};
+ const pr=(J('priors.json').leagues||{})[lid],pri=new Map();   /* last season's strengths (data/priors.json, checked in nf/ui_rc.js): each club starts from its own, worth 12 matches */
+ if(pr)Object.keys(pr.teams).forEach(t=>{const r=pr.teams[t];if(r[0]>=10)pri.set(t,[(r[1]+3*pr.mu)/(r[0]+3)/pr.mu,(r[2]+3*pr.mu)/(r[0]+3)/pr.mu])});
+ const v2=pri.size>0,N0=v2?12:3,H=hs/n,A=as/n,mu=(H+A)/2,str=t=>{const r=T.get(t),p=pri.get(t)||[1,1];if(!v2&&!(r&&r.n>=3))return null;const k=r?r.n:0;return {att:((r?r.f:0)+N0*mu*p[0])/(k+N0)/mu,def:((r?r.a:0)+N0*mu*p[1])/(k+N0)/mu}};
  const pois=l=>{const o=[];let p=Math.exp(-l);for(let k=0;k<=10;k++){o.push(p);p*=l/(k+1)}return o},res=(i,j)=>i>j?'H':i<j?'A':'D';
  return {L,pick:(h,a)=>{const x=str(h),y=str(a);if(!x||!y)return null;const lh=H*x.att*y.def,la=A*y.att*x.def,ph=pois(lh),pa=pois(la);let w=0,d=0,l=0;for(let i=0;i<=10;i++)for(let j=0;j<=10;j++){const q=ph[i]*pa[j];if(i>j)w+=q;else if(i===j)d+=q;else l+=q}
   const P={H:w,D:d,A:l};let b=null;for(let i=0;i<=5;i++)for(let j=0;j<=5;j++){const e=2*ph[i]*pa[j]+P[res(i,j)];if(!b||e>b.e+1e-12)b={hs:i,as:j,e}}return b}}}

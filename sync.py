@@ -7318,21 +7318,30 @@ R.lab=async function(el){
 /* ===== Intelligence Lab, part 2: match results, weekly review, hidden patterns, case file, milestones, the feed ===== */
 
 /* ---------- match results in any league: your probabilities against a simple xG model ---------- */
-/* Match model "xG Poisson 1": each team's attack and defence are its xG for and against a match this season, pulled toward the
-   league average by 3 matches' worth; the home side scores the league's home xG average scaled by its attack and the
-   opponent's defence, the away side likewise; goals are independent Poisson counts. It needs 3 matches with shot data for
-   both teams. The probabilities are saved with your prediction, from the data of that moment, and stay hidden until kick-off. */
-const LAB_MM='xg-poisson-1';
+/* Match model "xG Poisson": each team's attack and defence are its xG for and against a match this season, pulled toward a starting
+   point; the home side scores the league's home xG average scaled by its attack and the opponent's defence, the away side
+   likewise; goals are independent Poisson counts.
+   - "xg-poisson-2" (used when data/priors.json has the league): the starting point is the club's own strengths last season, worth 12
+     matches, so a club is predicted from its first match. Tested on 409 finished matches of the six leagues with each match left out
+     (Model report card): Brier 0.600 → 0.579, better in all six leagues. A club without last-season numbers (promoted) starts from the
+     league average.
+   - "xg-poisson-1" (no priors file, or a past-season view): the league average, worth 3 matches, and a club needs 3 matches with shot data.
+   The probabilities are saved with your prediction, from the data of that moment, and stay hidden until kick-off. */
+const LAB_MM='xg-poisson-1',LAB_MM2='xg-poisson-2';let LAB_PRI=null;
+async function labPrior(){if(!LAB_PRI)LAB_PRI=loadJson('priors.json').then(d=>d&&d.leagues?d:null).catch(()=>{LAB_PRI=null;return null});const d=await LAB_PRI;return d&&d.leagues[D.id]||null}
 async function labMatchModel(){
  const sh=await loadSh().catch(()=>null),tx=wkTeamXg(sh?sh.rows:[]),fin=D.matches.filter(m=>wkSc(m.score)&&m.date),T=new Map();let hs=0,as=0,n=0;
  fin.forEach(m=>{const xh=tx.get(m.match_id+'|'+m.home),xa=tx.get(m.match_id+'|'+m.away);if(xh==null||xa==null)return;n++;hs+=xh;as+=xa;
   [[m.home,xh,xa],[m.away,xa,xh]].forEach(([t,f,a])=>{const r=T.get(t)||{n:0,f:0,a:0};r.n++;r.f+=f;r.a+=a;T.set(t,r)})});
  if(n<10)return null;
- const H=hs/n,A=as/n,mu=(H+A)/2,N0=3,str=t=>{const r=T.get(t);return r&&r.n>=3?{att:(r.f+N0*mu)/(r.n+N0)/mu,def:(r.a+N0*mu)/(r.n+N0)/mu,n:r.n}:null};
+ const pr=await labPrior(),pri=new Map();
+ if(pr&&pr.mu>0&&pr.teams)Object.keys(pr.teams).forEach(t=>{const r=pr.teams[t];if(r[0]>=10)pri.set(t,[(r[1]+3*pr.mu)/(r[0]+3)/pr.mu,(r[2]+3*pr.mu)/(r[0]+3)/pr.mu])});
+ const v2=pri.size>0,H=hs/n,A=as/n,mu=(H+A)/2,N0=v2?12:3,
+  str=t=>{const r=T.get(t),p=pri.get(t)||[1,1];if(!v2&&!(r&&r.n>=3))return null;const k=r?r.n:0;return {att:((r?r.f:0)+N0*mu*p[0])/(k+N0)/mu,def:((r?r.a:0)+N0*mu*p[1])/(k+N0)/mu,n:k}};
  const pois=l=>{const o=[];let p=Math.exp(-l);for(let k=0;k<=10;k++){o.push(p);p*=l/(k+1)}return o};
  return (h,a)=>{const x=str(h),y=str(a);if(!x||!y)return null;const lh=H*x.att*y.def,la=A*y.att*x.def,ph=pois(lh),pa=pois(la);let w=0,dr=0,l=0;
   for(let i=0;i<=10;i++)for(let j=0;j<=10;j++){const q=ph[i]*pa[j];if(i>j)w+=q;else if(i===j)dr+=q;else l+=q}const s=w+dr+l;
-  return {p:[w/s,dr/s,l/s],lh,la,n:[x.n,y.n],ver:LAB_MM}};
+  return {p:[w/s,dr/s,l/s],lh,la,n:[x.n,y.n],ver:v2?LAB_MM2:LAB_MM}};
 }
 const labBrier3=(p,o)=>p.reduce((s,x,i)=>s+Math.pow(x-(i===o?1:0),2),0);
 async function labMatchCard(){
@@ -7845,10 +7854,15 @@ _X_UIJS = r"""/* ===== Navigation, search, glossary and your team =====
    Everything runs after the page is drawn (a DOM observer), so no page's own code changes. */
 const UI_SEC=[
  {k:'home',n:'Home',p:['overview','data','settings'],ic:'<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>'},
- {k:'league',n:'League',p:['table','matches','teams'],ic:'<path d="M4 5h16v3H4zM4 10.5h16v3H4zM4 16h16v3H4z"/>'},
- {k:'players',n:'Players',p:['players','compare','rankings','looklike'],ic:'<circle cx="12" cy="7.5" r="4"/><path d="M4 21a8 8 0 0 1 16 0z"/>'},
- {k:'analysis',n:'Analysis',p:['tactical','shots','passing','ppda','defense','heatmaps'],ic:'<path d="M4 20V10h3v10zM10.5 20V4h3v16zM17 20v-7h3v7z"/>'},
- {k:'fpl',n:'Fantasy',p:['fantasy','lab'],ic:'<path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.3 5.9 20.6l1.4-6.8L2.2 9.1l6.9-.8z"/>'}];
+ {k:'season',n:'Season',p:['table','sim','luck','rare'],ic:'<path d="M4 5h16v3H4zM4 10.5h16v3H4zM4 16h16v3H4z"/>'},
+ {k:'matches',n:'Matches',p:['matches','round','whatif','thrill','states','xi'],ic:'<path d="M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zm1 4v10h12V8z"/>'},
+ {k:'teams',n:'Teams',p:['teams','tactical','halves','clubtwins','carry','leaguedna'],ic:'<path d="M12 2l8 3v6c0 5-3.4 9.3-8 11-4.6-1.7-8-6-8-11V5z"/>'},
+ {k:'players',n:'Players',p:['players','rankings','ratings','gems','looklike'],ic:'<circle cx="12" cy="7.5" r="4"/><path d="M4 21a8 8 0 0 1 16 0z"/>'},
+ {k:'compare',n:'Compare',p:['compare','twins','cards'],ic:'<path d="M4 4h7v16H4zM13 8h7v12h-7z"/>'},
+ {k:'attack',n:'Attack',p:['shots','reality','passing','heatmaps'],ic:'<path d="M13 2L4 14h6l-1 8 9-12h-6z"/>'},
+ {k:'defence',n:'Defence',p:['defense','ppda','height','sbpress'],ic:'<path fill-rule="evenodd" d="M12 2L4 6v6c0 5 3.4 8.6 8 10 4.6-1.4 8-5 8-10V6zm0 3l5 2.3V12c0 3.3-2.1 5.9-5 7-2.9-1.1-5-3.7-5-7V7.3z"/>'},
+ {k:'models',n:'Models',p:['lab','reportcard'],ic:'<path d="M4 19h16v2H4zM6 10h3v7H6zm5-5h3v12h-3zm5 3h3v9h-3z"/>'},
+ {k:'fpl',n:'Fantasy',p:['fantasy','beat','share'],ic:'<path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.3 5.9 20.6l1.4-6.8L2.2 9.1l6.9-.8z"/>'}];
 const UI_ALIAS={club:'teams',player:'players',match:'matches'};
 const uiPage=()=>((location.hash||'#/overview').split('/')[1]||'overview');
 const uiSecOf=pg=>{pg=UI_ALIAS[pg]||pg;return UI_SEC.find(s=>s.p.includes(pg))||UI_SEC[0]};
@@ -7868,6 +7882,12 @@ function uiNav(){
  if(!document.getElementById('secnav')){const b=document.createElement('nav');b.id='secnav';b.setAttribute('aria-label','Sections');b.innerHTML=btns;nav.parentNode.insertBefore(b,nav)}
  if(!document.getElementById('secbar')){const b=document.createElement('nav');b.id='secbar';b.setAttribute('aria-label','Sections');b.innerHTML=btns;document.body.appendChild(b)}
  document.querySelectorAll('#secnav button,#secbar button').forEach(b=>{const on=b.dataset.k===sec.k;b.classList.toggle('on',on);if(on)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current')});
+ /* the pages of the open hub as tabs above the page (a hub with one page shows none): every page keeps its own address */
+ const app=document.getElementById('app');let hb=document.getElementById('hubbar');
+ if(!hb&&app){hb=document.createElement('nav');hb.id='hubbar';hb.setAttribute('aria-label','Pages in this section');app.parentNode.insertBefore(hb,app)}
+ if(hb){const name=new Map(PAGES.map(p=>[p[0],p[1]])),items=sec.p.filter(k=>name.has(k)),key=sec.k+'|'+sp+'|'+items.join();
+  if(hb.dataset.k!==key){hb.dataset.k=key;hb.innerHTML=items.length>1?items.map(k=>`<a href="#/${k}"${k===sp?' class="on" aria-current="page"':''}>${esc(name.get(k))}</a>`).join(''):'';hb.hidden=items.length<2;
+   const on=hb.querySelector('a.on');if(on&&hb.scrollWidth>hb.clientWidth)on.scrollIntoView({block:'nearest',inline:'center'})}}
  if(typeof lglKick==='function')lglKick();
 }
 
@@ -8026,6 +8046,10 @@ def _x_ui_index(html):
 
 _AR_SEASON.update({
     "Home": "الرئيسية",
+    "Season": "الموسم",
+    "Defence": "الدفاع",
+    "Models": "النماذج",
+    "Pages in this section": "صفحات هذا القسم",
     "League": "الدوري",
     "Analysis": "التحليل",
     "Fantasy": "الفانتازي",
@@ -8985,11 +9009,11 @@ INDEX = _x_fpx_index(INDEX)
 # الكود في ملفات مستقلة في المستودع: assets/*.js و assets/features.css و manifest.webmanifest و sw.js و assets/icons/.
 # هذا القسم يضيف روابطها للصفحة فقط (بعد السكربت الرئيسي، فتلقى R و PAGES جاهزة). غيّر FEATURES_V لما تتغير الملفات.
 # ============================================================================
-FEATURES_V = "32"
+FEATURES_V = "35"
 FEATURES_JS = ("pla-data", "share-card", "threat-map", "match-whatif", "player-page", "match-centre", "home-extra", "team-round",
                "preview", "club-extra", "rankings-extra", "fantasy-extra", "insights-core", "hidden-gems", "player-dna", "team-dna",
                "reality-check", "matches-board", "match-replay", "match-story", "overview", "press-height",
-               "season-sim", "luck-table", "player-twin", "player-cards", "beat-model", "rare-cases", "attack-share", "drawer", "tap-twice", "line-height", "league-pool", "game-states", "likely-xi", "club-twins", "carry-team", "report-card", "league-dna", "thrill", "defense-card", "press-card", "sb-press", "seasons", "liquid-glass")
+               "season-sim", "luck-table", "player-twin", "player-cards", "beat-model", "rare-cases", "attack-share", "drawer", "tap-twice", "line-height", "league-pool", "game-states", "likely-xi", "club-twins", "carry-team", "report-card", "league-dna", "thrill", "defense-card", "press-card", "sb-press", "stat-stability", "seasons", "liquid-glass")
 
 
 def _x_feat_index(html):
@@ -11098,7 +11122,11 @@ PS_LEAGUES = ["l_4WFCIZ", "l_0ErfuF", "l_1Isor4", "l_3FJFUl", "l_0ALvwF", "l_4Qe
 # مواسم الإنجليزي من 2024-25 إلى 2021-22 انجلبت "light" أولاً ثم صارت "full": المزامنة تكمل لها الناقص فقط
 # (الإحصائيات المتقدمة والحرارة والتشكيلات والتقييمات والشوطين) بدون ما تعيد المباريات.
 PS_JOBS = [("l_4WFCIZ", k, "full") for k in (1, 2, 3, 4, 5)] + [(l, 1, "full") for l in PS_LEAGUES[1:]]
+# 2024-25 "light" لبقية الدوريات (إحصائيات لاعبين، تسديدات): يغذي صفحة ثبات الإحصائيات بمقارنة موسمين. كل موسم يبدأ بفحص PS_PROBE مباريات:
+# إذا PitchAPI ما عنده إحصائيات لاعبين لذلك الموسم (حصل مع دوري فرنسا 2021-22 و2022-23) نتركه ما يكلّف إلا ~30 طلب.
+PS_JOBS += [(l, 2, "light") for l in PS_LEAGUES[1:]]
 
+PS_PROBE = 6                  # موسم خفيف جديد: نجلب أول هذي المباريات ونتأكد أن PitchAPI عنده إحصائيات لاعبين له قبل ما نصرف على بقية الموسم (دوري فرنسا 2021-22 و2022-23 ما فيهم لاعبين: صُرفت ~3600 طلب على لا شي)
 PS_REQ_PER_RUN = 1200         # أقصى عدد طلبات لـ PitchAPI في المزامنة الوحدة لهذا القسم (حوالي 7 دقايق)
 PS_COST = {"full": 10, "light": 5}   # طلبات لكل مباراة (مقاسة: full = 10، light = 5)
 PS_RETRY_H = 24               # مباراة فشلت بسبب انقطاع أو حد الطلبات: نعيدها بعد يوم
@@ -11256,15 +11284,23 @@ def ps_season(client, hub, lid, api_season, label, budget, st, light=False):
     info = {r["match_id"]: r for r in q("SELECT match_id, status, fetched_at FROM matches WHERE league_id=?", (P,))}
     todo = sorted([m for m in ms if ps_due(info.get(str(m.id)))], key=lambda m: (str(m.date or ""), str(m.id)))
     batch = todo[:max(1, budget // PS_COST["light" if light else "full"])]
+    probe = bool(PS_PROBE) and light and not st.get("got") and len(batch) > PS_PROBE
     log(f"  [المواسم السابقة] {lid} {label}: {len(ms)} مباراة في PitchAPI | محفوظة {len(info)} | الحين {len(batch)} | باقي بعدها {len(todo) - len(batch)}")
     st.update(api=api_season, id=P, n=len(ms), t=now(), err=None, plan=False)
     r0, t0 = PS["req"], time.time()
     if batch:
-        ps_base(client, P, batch)
+        ps_base(client, P, batch[:PS_PROBE] if probe else batch)
     if PS["errs"].get("rate_limit"):
         log("  [المواسم السابقة] PitchAPI يحدّ الطلبات: نحفظ اللي وصل ونكمل في المزامنة الجاية")
     elif light:
         sync_pstats(client, P)
+        if probe and not PS["errs"].get("rate_limit"):
+            if q("SELECT COUNT(*) n FROM pl_adv WHERE league_id=?", (P,))[0]["n"] == 0:
+                log(f"  [المواسم السابقة] {lid} {label}: PitchAPI ما عنده إحصائيات لاعبين لأول {PS_PROBE} مباريات من هذا الموسم — تركناه، نجرب مرة ثانية بعد {PS_PLAN_RETRY_D} أيام")
+                st.update(plan=True, err="no player rows")
+                return PS["req"] - rs
+            ps_base(client, P, batch[PS_PROBE:])
+            sync_pstats(client, P)
         sync_shots(client, P)
     else:
         # كل خطوة تجلب فقط المباريات اللي ما انجلبت لها (بعد انقطاع سابق أو موسم خفيف صار كامل تكمل الناقص)
@@ -11458,7 +11494,7 @@ function psSaved(){for(const st of [()=>localStorage,()=>sessionStorage])try{con
 /* files that only describe the current season (today's matches, coming fixtures, live scores, season facts, rare cases):
    in a past season they answer "not found", so the widgets that use them stay out instead of mixing in this season */
 function psCurOnly(){if(window.__psF)return;const f0=window.fetch;window.__psF=1;
- window.fetch=function(u){const s=String(u&&u.url||u);if(/(^|\/)data\/(live|fixtures|schedule|facts|rare|fpl|fpl_track|market|elo)\.json/.test(s))return Promise.resolve(new Response('{}',{status:404}));return f0.apply(this,arguments)}}
+ window.fetch=function(u){const s=String(u&&u.url||u);if(/(^|\/)data\/(live|fixtures|schedule|facts|rare|fpl|fpl_track|market|elo|priors)\.json/.test(s))return Promise.resolve(new Response('{}',{status:404}));return f0.apply(this,arguments)}}
 function psView(x){
  ALL0=x;const s=psSaved();if(!s||!x||!x.seasons||!x.leagues)return x;
  let lid=null;for(const st of [()=>localStorage,()=>sessionStorage])try{lid=st().getItem('league');if(lid)break}catch(e){}
@@ -11746,13 +11782,28 @@ def sync_market(hub, now=None):
     gh_put(hub, MK_PATH, json.dumps(out, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), "Update bookmaker odds")
 
 
+def mk_elo_fetch(now):
+    """ClubElo's day file: today's first, then the two days before (the first sync runs got HTTP 502 for today's), http then https.
+    Returns (the day the file is for, its text)."""
+    last = None
+    for back in (0, 1, 2):
+        d = (now - datetime.timedelta(days=back)).strftime("%Y-%m-%d")
+        for base in dict.fromkeys([MK_ELO, MK_ELO.replace("http://", "https://")]):
+            try:
+                return d, mk_get(f"{base}/{d}", tries=2)
+            except Exception as e:
+                last = e
+    raise last
+
+
 def sync_elo(hub, now=None):
     now = now or datetime.datetime.now(datetime.timezone.utc)
     day = now.strftime("%Y-%m-%d")
     old = gh_get_json(hub, ELO_PATH) or {}
     if old.get("t") == day:
         return
-    rows = mk_elo_rows(mk_get(f"{MK_ELO}/{day}"))
+    asof, txt = mk_elo_fetch(now)
+    rows = mk_elo_rows(txt)
     if not rows:
         return
     snap, miss = {}, {}
@@ -11766,12 +11817,12 @@ def sync_elo(hub, now=None):
     if not snap:
         return
     hist = dict(old.get("hist") or {})
-    hist[day] = snap
+    hist[asof] = snap
     for k in sorted(hist)[:-400]:
         del hist[k]
-    out = {"t": day, "source": "clubelo.com", "r": snap, "unmatched": miss, "hist": hist}
+    out = {"t": day, "asof": asof, "source": "clubelo.com", "r": snap, "unmatched": miss, "hist": hist}
     gh_put(hub, ELO_PATH, json.dumps(out, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), "Update ClubElo ratings")
-    log(f"  [Elo] {day}: " + "، ".join(f"{lid[-3:]} {len(v)}" for lid, v in snap.items()) + (f" — بلا مطابقة: {miss}" if miss else ""))
+    log(f"  [Elo] {asof}: " + "، ".join(f"{lid[-3:]} {len(v)}" for lid, v in snap.items()) + (f" — بلا مطابقة: {miss}" if miss else ""))
 
 
 _orig_run_pipeline_mk = run_pipeline
@@ -11786,6 +11837,289 @@ def run_pipeline(hub, pit_key):
             log(f"  [{name}] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
     return out
 # ===== MARKET END =====
+
+
+# ===== STABILITY START =====
+# كم يتكرر رقم اللاعب؟ (data/stability.json، صفحة "Stat stability"): لكل دوري عنده موسمان كاملان أو أكثر، لكل إحصائية:
+#  - الارتباط (Spearman) بين رقمها لكل 90 دقيقة في موسم والموسم اللي بعده، للاعبين اللي لعبوا 900+ دقيقة في الموسمين؛
+#  - ثبات الموسم الواحد: رقم المباريات الفردية مقابل الزوجية (مرتبة بالتاريخ) داخل الموسم، مع تصحيح Spearman-Brown (2r÷(1+r)).
+# يُحسب من ملفات اللاعبين للمواسم الكاملة السابقة، ويُعاد فقط إذا تغيّرت نسخ الملفات. اختياري: الخطأ ما يوقف المزامنة.
+ST_PATH = "data/stability.json"
+ST_MIN = 900          # دقائق اللاعب في الموسم ليدخل (وفي الموسمين للمقارنة بين موسمين)
+ST_HALF_MIN = 300     # دقائق كل نصف (فردي/زوجي) ليدخل اللاعب في ثبات الموسم الواحد
+ST_NEED = 20          # أقل عدد لاعبين لعرض رقم
+ST_STATS = ["gl", "xg", "npxg", "sh", "sot", "xag", "ast", "sca", "gca", "xgc", "xgb", "xt", "vaep", "kp", "ps", "pr", "bx", "tb", "cr", "ca", "pc", "cb",
+            "tko", "tkw", "tk", "ic", "bl", "cl", "duw", "aer", "aerw"]
+
+
+def st_ranks(v):
+    """متوسط الرتب (التعادل يأخذ متوسط رتبه)."""
+    idx = sorted(range(len(v)), key=lambda i: v[i])
+    out = [0.0] * len(v)
+    i = 0
+    while i < len(idx):
+        j = i
+        while j + 1 < len(idx) and v[idx[j + 1]] == v[idx[i]]:
+            j += 1
+        r = (i + j) / 2 + 1
+        for k in range(i, j + 1):
+            out[idx[k]] = r
+        i = j + 1
+    return out
+
+
+def st_spearman(x, y):
+    if len(x) < 3:
+        return None
+    a, b = st_ranks(x), st_ranks(y)
+    ma, mb = sum(a) / len(a), sum(b) / len(b)
+    sa = sum((u - ma) ** 2 for u in a)
+    sb = sum((u - mb) ** 2 for u in b)
+    if sa <= 0 or sb <= 0:
+        return None
+    return sum((u - ma) * (w - mb) for u, w in zip(a, b)) / (sa * sb) ** 0.5
+
+
+def st_per90(rows, cols, stats):
+    """{لاعب: {mi, pos, k: لكل 90}} من صفوف ملف اللاعبين (المجموع ÷ دقائق المباريات التي فيها الرقم × 90)."""
+    ix = {c: i for i, c in enumerate(cols)}
+    acc = {}
+    for r in rows:
+        mi = r[ix["mi"]]
+        if mi is None:
+            continue
+        a = acc.setdefault(r[ix["i"]], {"mi": 0.0, "pos": {}, "t": {}, "d": {}})
+        a["mi"] += mi
+        if r[ix["o"]]:
+            a["pos"][r[ix["o"]]] = a["pos"].get(r[ix["o"]], 0.0) + mi
+        for k in stats:
+            v = r[ix[k]] if k in ix else None
+            if v is not None:
+                a["t"][k] = a["t"].get(k, 0.0) + v
+                a["d"][k] = a["d"].get(k, 0.0) + mi
+    out = {}
+    for pid, a in acc.items():
+        pos = max(a["pos"].items(), key=lambda kv: kv[1])[0] if a["pos"] else None
+        o = {"mi": a["mi"], "pos": pos}
+        for k in stats:
+            if a["d"].get(k, 0) > 0:
+                o[k] = a["t"][k] / a["d"][k] * 90
+        out[pid] = o
+    return out
+
+
+def st_halves(rows, cols, dates, stats):
+    """{لاعب: (نصف المباريات الفردية، الزوجية)}: كل لاعب تُرتّب مبارياته بالتاريخ ثم تُوزّع بالتناوب."""
+    ix = {c: i for i, c in enumerate(cols)}
+    by = {}
+    for r in rows:
+        if r[ix["mi"]] is None:
+            continue
+        by.setdefault(r[ix["i"]], []).append(r)
+    out = {}
+    for pid, rs in by.items():
+        rs.sort(key=lambda r: (dates.get(r[ix["m"]]) or "", r[ix["m"]]))
+        h = (st_per90([r for n, r in enumerate(rs) if n % 2 == 0], cols, stats), st_per90([r for n, r in enumerate(rs) if n % 2 == 1], cols, stats))
+        out[pid] = (h[0].get(pid), h[1].get(pid))
+    return out
+
+
+def st_zparams(season, k):
+    """{مركز: (المتوسط، الانحراف)} لرقم k بين لاعبي الموسم المؤهلين (900+ دقيقة، بدون الحراس): لمقارنة اللاعب بمن هم في مركزه."""
+    g = {}
+    for a in season.values():
+        if a["mi"] >= ST_MIN and a["pos"] and a["pos"] != "GK" and k in a:
+            g.setdefault(a["pos"], []).append(a[k])
+    out = {}
+    for pos, v in g.items():
+        m = sum(v) / len(v)
+        sd = (sum((x - m) ** 2 for x in v) / len(v)) ** 0.5
+        if len(v) >= 5 and sd > 0:
+            out[pos] = (m, sd)
+    return out
+
+
+def st_compute(seasons):
+    """seasons: [(الموسم، cols، rows، {مباراة: تاريخ})] مرتبة من الأقدم. لكل إحصائية:
+    yoy / half = الارتباط بعد مقارنة اللاعب بمن في مركزه (الرقم كدرجة معيارية داخل مركزه في موسمه)، وyoy_all / half_all = على الأرقام الخام
+    (يخلط فروق المراكز: المهاجم يسدد أكثر من المدافع في كل موسم)."""
+    per = [(lab, st_per90(rows, cols, ST_STATS)) for lab, cols, rows, _ in seasons]
+    halves = {lab: st_halves(rows, cols, dates, ST_STATS) for lab, cols, rows, dates in seasons}
+    byseason = dict(per)
+    res = {}
+    for k in ST_STATS:
+        zp = {lab: st_zparams(S, k) for lab, S in per}
+        z = lambda lab, pos, v: (v - zp[lab][pos][0]) / zp[lab][pos][1] if pos in zp[lab] else None
+        P = {"x": [], "y": [], "zx": [], "zy": []}
+        H = {"x": [], "y": [], "zx": [], "zy": []}
+        for (la, A), (lb, B) in zip(per, per[1:]):
+            for pid, a in A.items():
+                b = B.get(pid)
+                if b and a["mi"] >= ST_MIN and b["mi"] >= ST_MIN and a["pos"] != "GK" and b["pos"] != "GK" and k in a and k in b:
+                    P["x"].append(a[k])
+                    P["y"].append(b[k])
+                    za, zb = z(la, a["pos"], a[k]), z(lb, b["pos"], b[k])
+                    if za is not None and zb is not None:
+                        P["zx"].append(za)
+                        P["zy"].append(zb)
+        for lab, cols, rows, dates in seasons:
+            for pid, (h1, h2) in halves[lab].items():
+                a = byseason[lab].get(pid)
+                if a and a["mi"] >= ST_MIN and a["pos"] != "GK" and h1 and h2 and h1["mi"] >= ST_HALF_MIN and h2["mi"] >= ST_HALF_MIN and k in h1 and k in h2:
+                    H["x"].append(h1[k])
+                    H["y"].append(h2[k])
+                    z1, z2 = z(lab, a["pos"], h1[k]), z(lab, a["pos"], h2[k])
+                    if z1 is not None and z2 is not None:
+                        H["zx"].append(z1)
+                        H["zy"].append(z2)
+
+        def rho(x, y):
+            r = st_spearman(x, y) if len(x) >= ST_NEED else None
+            return None if r is None else round(r, 3)
+
+        def sb(r):
+            return None if r is None else round(2 * r / (1 + r), 3)
+        res[k] = {"yoy": rho(P["zx"], P["zy"]), "yoy_all": rho(P["x"], P["y"]), "n_yoy": len(P["zx"]),
+                  "half": sb(rho(H["zx"], H["zy"])), "half_all": sb(rho(H["x"], H["y"])), "n_half": len(H["zx"])}
+    return res
+
+
+def st_plan(hub):
+    """{دوري: [موسم سابق مكتمل له ملف لاعبين وملف مباريات، الأقدم أولاً]} من data/seasons.json (يشمل المواسم الخفيفة اللي ما تظهر في اختيار الموسم)."""
+    sj = gh_get_json(hub, "data/seasons.json") or {}
+    plan = {}
+    for lid, v in (sj.get("leagues") or {}).items():
+        past = []
+        for lab, e in (v.get("seasons") or {}).items():
+            f = e.get("files") or {}
+            if e.get("complete") and f.get("pl_file") and f.get("file"):
+                past.append({"s": lab, "pl_file": f["pl_file"], "file": f["file"], "pl_v": f.get("pl_v"), "v": f.get("v")})
+        if len(past) >= 2:
+            plan[lid] = sorted(past, key=lambda p: p["s"])
+    return plan
+
+
+def sync_stability(hub, now=None):
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    plan = st_plan(hub)
+    names = {l["id"]: l.get("name") for l in ((gh_get_json(hub, "data/index.json") or {}).get("leagues") or [])}
+    key = hashlib.sha1(json.dumps({lid: [(p["s"], p.get("pl_v"), p.get("v")) for p in ps] for lid, ps in plan.items()}, sort_keys=True).encode()).hexdigest()[:10]
+    old = gh_get_json(hub, ST_PATH) or {}
+    if not plan or old.get("key") == key:
+        return
+    out = {"t": now.strftime("%Y-%m-%d %H:%M:%S"), "key": key, "min": ST_MIN, "half_min": ST_HALF_MIN, "leagues": {}}
+    for lid, ps in plan.items():
+        seasons = []
+        for p in ps:
+            pl, lg = gh_get_json(hub, "data/" + p["pl_file"]), gh_get_json(hub, "data/" + p["file"])
+            if not pl or not lg:
+                log(f"  [الثبات] {lid} {p['s']}: ملفات ناقصة، تخطينا الدوري")
+                seasons = []
+                break
+            if not pl.get("rows"):
+                seasons = []                      # موسم بدون إحصائيات لاعبين في PitchAPI (دوري فرنسا قبل 2025-26): ما يدخل، والمواسم قبله ما تتصل بما بعده
+                continue
+            seasons.append((p["s"], pl["cols"], pl["rows"], {m["i"]: m.get("d") for m in lg.get("matches", [])}))
+        if len(seasons) < 2:
+            continue
+        out["leagues"][lid] = {"name": names.get(lid), "seasons": [s[0] for s in seasons], "stats": st_compute(seasons)}
+    if out["leagues"]:
+        gh_put(hub, ST_PATH, json.dumps(out, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), "Update stat stability")
+        log("  [الثبات] " + "، ".join(f"{lid[-3:]} {len(v['seasons'])} مواسم" for lid, v in out["leagues"].items()))
+
+
+_orig_run_pipeline_st = run_pipeline
+
+
+def run_pipeline(hub, pit_key):
+    out = _orig_run_pipeline_st(hub, pit_key)
+    try:
+        sync_stability(hub)
+    except Exception as e:      # optional: never stops the sync
+        log(f"  [الثبات] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
+    return out
+# ===== STABILITY END =====
+
+
+# ===== PRIORS START =====
+# أرقام الموسم الماضي كنقطة بداية لنموذج المباريات (data/priors.json): لكل دوري محلي، لكل فريق في آخر موسم سابق كامل:
+# عدد المباريات اللي فيها xG للفريقين، ومجموع xG له وعليه. المتصفح يحوّلها لقوة هجوم ودفاع (مع تقليص 3 مباريات) ويبدأ منها
+# بدل متوسط الدوري. يُعاد حسابه فقط إذا تغيّرت نسخة ملفات ذلك الموسم. اختياري: الخطأ ما يوقف المزامنة.
+PR_PATH = "data/priors.json"
+
+
+def pr_score(s):
+    m = re.match(r"^\s*(\d+)\s*[-–:]\s*(\d+)\s*$", str(s or ""))
+    return (int(m.group(1)), int(m.group(2))) if m else None
+
+
+def pr_compute(league, shots):
+    """league: ملف الدوري (matches)، shots: ملف التسديدات (cols, rows). ترجع {mu, teams:{فريق: [مباريات, xG له, xG عليه]}} أو None."""
+    c = {n: i for i, n in enumerate(shots["cols"])}
+    xg = {}
+    for r in shots["rows"]:
+        if r[c["og"]] or r[c["xg"]] is None:
+            continue
+        k = (r[c["m"]], r[c["c"]])
+        xg[k] = xg.get(k, 0.0) + r[c["xg"]]
+    teams, hs, as_, n = {}, 0.0, 0.0, 0
+    for m in league.get("matches", []):
+        if not pr_score(m.get("s")) or not m.get("d"):
+            continue
+        xh, xa = xg.get((m["i"], m["h"])), xg.get((m["i"], m["a"]))
+        if xh is None or xa is None:
+            continue
+        n += 1
+        hs += xh
+        as_ += xa
+        for t, f, a in ((m["h"], xh, xa), (m["a"], xa, xh)):
+            r = teams.setdefault(t, [0, 0.0, 0.0])
+            r[0] += 1
+            r[1] += f
+            r[2] += a
+    if n < 10:
+        return None
+    return {"n": n, "mu": round((hs + as_) / (2 * n), 4), "teams": {t: [r[0], round(r[1], 3), round(r[2], 3)] for t, r in sorted(teams.items())}}
+
+
+def sync_priors(hub, now=None):
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    idx = gh_get_json(hub, "data/index.json") or {}
+    names = {l["id"]: l for l in (idx.get("leagues") or [])}
+    plan = {}
+    for lid, v in (idx.get("seasons") or {}).items():
+        l = names.get(lid) or {}
+        past = [p for p in (v.get("past") or []) if p.get("complete") and p.get("sh_file") and p.get("file")]
+        if past and l.get("sh_file") and not re.search(r"world cup|champions|europa|conference|cup|copa|coppa|pokal|coupe|taça", str(l.get("name")), re.I):
+            plan[lid] = max(past, key=lambda p: p["s"])
+    key = hashlib.sha1(json.dumps({lid: (p["s"], p.get("sh_v"), p.get("v")) for lid, p in plan.items()}, sort_keys=True).encode()).hexdigest()[:10]
+    old = gh_get_json(hub, PR_PATH) or {}
+    if not plan or old.get("key") == key:
+        return
+    out = {"t": now.strftime("%Y-%m-%d %H:%M:%S"), "key": key, "leagues": {}}
+    for lid, p in plan.items():
+        lg, sh = gh_get_json(hub, "data/" + p["file"]), gh_get_json(hub, "data/" + p["sh_file"])
+        r = pr_compute(lg, sh) if lg and sh else None
+        if not r:
+            log(f"  [النقطة الأولى] {lid}: ملفات الموسم ناقصة، تخطيناه")
+            continue
+        out["leagues"][lid] = dict(r, season=p["s"], cur=(idx["seasons"][lid] or {}).get("cur"))
+    if out["leagues"]:
+        gh_put(hub, PR_PATH, json.dumps(out, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), "Update last-season strengths")
+        log("  [النقطة الأولى] " + "، ".join(f"{lid[-3:]} {v['season']} ({len(v['teams'])} فريق)" for lid, v in out["leagues"].items()))
+
+
+_orig_run_pipeline_pr = run_pipeline
+
+
+def run_pipeline(hub, pit_key):
+    out = _orig_run_pipeline_pr(hub, pit_key)
+    try:
+        sync_priors(hub)
+    except Exception as e:      # optional: never stops the sync
+        log(f"  [النقطة الأولى] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
+    return out
+# ===== PRIORS END =====
 
 
 if __name__ == "__main__":

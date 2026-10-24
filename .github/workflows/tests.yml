@@ -26,7 +26,7 @@ jobs:
         run: pip install -q requests
       - name: Run Python tests
         run: |
-          bash tests/ci.sh cmp/t_cmp.py logo/t_logo.py theme/t_champ.py theme/t_retry.py t_resolve.py home/t_photos.py dq/t_dq.py mx/t_mx.py lv/t_lv.py fx/t_fx.py rare/t_rr.py eng/t_table.py ps/t_ps.py trk/t_py.py sb/t_press.py mk/t_market.py
+          bash tests/ci.sh cmp/t_cmp.py logo/t_logo.py theme/t_champ.py theme/t_retry.py t_resolve.py home/t_photos.py dq/t_dq.py mx/t_mx.py lv/t_lv.py fx/t_fx.py rare/t_rr.py eng/t_table.py ps/t_ps.py trk/t_py.py sb/t_press.py mk/t_market.py stab/t_stab.py pri/t_priors.py
       - name: Upload logs
         if: failure()
         uses: actions/upload-artifact@v4
@@ -54,7 +54,7 @@ jobs:
           - shard: 5
             tests: "rp/ui_rp.js rp/ui_ms.js ov/ui_ov.js ph/ui_ph.js fun/ui_tw.js fun/ui_pc.js home/ui_home.js"
           - shard: 6
-            tests: "fun/ui_bm.js rare/ui_rr.js fun/ui_as.js fun/ui_tap.js nf/ui_gs.js nf/ui_xi.js nf/ui_ct.js nf/ui_cy.js nf/ui_rc.js nf/ui_ld.js nf/ui_th.js lg/ui_lg.js dc/ui_dc.js pc/ui_pc.js sb/ui_sb.js"
+            tests: "fun/ui_bm.js rare/ui_rr.js fun/ui_as.js fun/ui_tap.js nf/ui_gs.js nf/ui_xi.js nf/ui_ct.js nf/ui_cy.js nf/ui_rc.js nf/ui_ld.js nf/ui_th.js lg/ui_lg.js dc/ui_dc.js pc/ui_pc.js sb/ui_sb.js stab/ui_stab.js"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

@@ -79,7 +79,7 @@ const untranslated=sel=>{const o=[];document.querySelectorAll(sel).forEach(r=>{c
   ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await ctx.close()}
  /* ---------------- ratings page ---------------- */
  {const {ctx,pg,errs}=await open(b);await pg.waitForSelector('#home .hsec',{timeout:60000});
-  ok(await pg.evaluate(()=>PAGES.some(p=>p[0]==='ratings')&&UI_SEC.find(s=>s.k==='players').p.includes('ratings')&&PAGES.some(p=>p[0]==='halves')&&UI_SEC.find(s=>s.k==='analysis').p.includes('halves')),'Ratings in Players, Halves in Analysis');
+  ok(await pg.evaluate(()=>PAGES.some(p=>p[0]==='ratings')&&UI_SEC.find(s=>s.k==='players').p.includes('ratings')&&PAGES.some(p=>p[0]==='halves')&&UI_SEC.find(s=>s.k==='teams').p.includes('halves')),'Ratings in the Players hub, Halves in the Teams hub');
   await go(pg,'#/ratings','#rtout table');
   const A=new Map();Object.entries(RT.m).forEach(([mid,R])=>Object.entries(R).forEach(([pid,v])=>{if(!PL.rows.some(r=>r[pix.m]===mid&&r[pix.i]===pid))return;const o=A.get(pid)||{s:0,n:0};o.s+=v;o.n++;A.set(pid,o)}));
   const exp=[...A.values()].filter(o=>o.n>=3).map(o=>o.s/o.n).sort((a,b)=>b-a)[0];

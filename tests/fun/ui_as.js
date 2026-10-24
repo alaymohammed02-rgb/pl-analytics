@@ -21,7 +21,7 @@ const read=pg=>pg.evaluate(()=>[...document.querySelectorAll('.as-d')].map(g=>({
 (async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  {const {ctx,pg,errs}=await open(b,{league:'l_0ErfuF'});await pg.waitForSelector('.as-t',{timeout:90000});
   ok(await pg.evaluate(()=>/Premier League/.test(D.name)),'opened from LaLiga: the Premier League opens (Fantasy is the Premier League)');
-  const nav=await pg.evaluate(()=>{drwOpen(true);const a=[...document.querySelectorAll('#drw .drw-s[data-s="fpl"] a')].map(a=>a.getAttribute('href'));drwOpen(false);return a});ok(nav.join()==='#/fantasy,#/lab,#/beat,#/share','in Fantasy, after Beat the model');
+  const nav=await pg.evaluate(()=>UI_SEC.find(x=>x.k==='fpl').p.map(k=>'#/'+k));ok(nav.join()==='#/fantasy,#/beat,#/share','in the Fantasy hub, after Beat the model comes Attack share (the Intelligence Lab is in Models)');
   const link=await pg.evaluate(()=>[...fpLink().map].map(([id,r])=>[id,r.player_id,r.player]));const LM=new Map(link.map(x=>[x[0],x]));
   for(const [pos,lab] of [[3,'Midfielders'],[4,'Forwards'],[2,'Defenders']])for(const win of ['all','4']){
    await pg.click(`[data-pos="${pos}"]`);await pg.selectOption('#aswin',win);await pg.waitForTimeout(250);

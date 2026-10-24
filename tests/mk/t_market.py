@@ -138,6 +138,18 @@ ok(E1['t'] == '2026-10-24' and E1['r']['l_4WFCIZ']['Manchester City'] == 2050.4 
 PUT.clear(); G['sync_elo'](None, now); ok('data/elo.json' not in PUT, 'a second run the same day writes nothing')
 G['sync_elo'](None, now + datetime.timedelta(days=1)); E2 = PUT['data/elo.json']
 ok(sorted(E2['hist']) == ['2026-10-24', '2026-10-25'], 'the next day adds a snapshot to the history')
+# ClubElo answered HTTP 502 for today's file in the first real runs: today's, then the two days before, then https
+seen = []
+PUT.clear(); STORE.pop('data/elo.json', None)
+def only_old(url, tries=3):
+    seen.append(url)
+    if not url.endswith('2026-10-22'):
+        raise RuntimeError('HTTP 502')
+    return elo_txt
+G['mk_get'] = only_old
+G['sync_elo'](None, now); E4 = PUT['data/elo.json']
+ok(E4['t'] == '2026-10-24' and E4['asof'] == '2026-10-22' and list(E4['hist']) == ['2026-10-22'], 'today and yesterday fail: the file of two days before is used and kept under its own day')
+ok(seen[:2] == ['%s/2026-10-24' % G['MK_ELO'], G['MK_ELO'].replace('http://', 'https://') + '/2026-10-24'], 'it tries http and https for a day before going back a day')
 # an error in either step never stops the pipeline
 G['mk_get'] = lambda url, tries=3: (_ for _ in ()).throw(RuntimeError('boom'))
 G['sync_elo'] = lambda hub, now=None: (_ for _ in ()).throw(RuntimeError('boom'))

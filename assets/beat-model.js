@@ -1,6 +1,6 @@
 /* ===== Beat the model (#/beat, in Fantasy after the Intelligence Lab): your score predictions against the site's model =====
    Fixtures: PitchAPI's fixture list (data/fixtures.json) of the open league, from now to BM_DAYS days ahead.
-   The model: the site's "xG Poisson 1" (labMatchModel, as in the Intelligence Lab and the match preview). Its pick is the score
+   The model: the site's "xG Poisson" (labMatchModel, version 2 when the league has last-season numbers, as in the Intelligence Lab and the match preview). Its pick is the score
    with the most expected points under this game's rules (exact score 3, right result 1): it maximises 2 × P(score) +
    P(result of that score) over scores up to 5 goals a side. Its pick is sealed with your prediction, from the data of that
    moment, and shown only from kick-off. Predictions can be changed until kick-off.
