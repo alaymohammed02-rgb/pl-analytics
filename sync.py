@@ -9000,11 +9000,11 @@ INDEX = _x_fpx_index(INDEX)
 # الكود في ملفات مستقلة في المستودع: assets/*.js و assets/features.css و manifest.webmanifest و sw.js و assets/icons/.
 # هذا القسم يضيف روابطها للصفحة فقط (بعد السكربت الرئيسي، فتلقى R و PAGES جاهزة). غيّر FEATURES_V لما تتغير الملفات.
 # ============================================================================
-FEATURES_V = "33"
+FEATURES_V = "34"
 FEATURES_JS = ("pla-data", "share-card", "threat-map", "match-whatif", "player-page", "match-centre", "home-extra", "team-round",
                "preview", "club-extra", "rankings-extra", "fantasy-extra", "insights-core", "hidden-gems", "player-dna", "team-dna",
                "reality-check", "matches-board", "match-replay", "match-story", "overview", "press-height",
-               "season-sim", "luck-table", "player-twin", "player-cards", "beat-model", "rare-cases", "attack-share", "drawer", "tap-twice", "line-height", "league-pool", "game-states", "likely-xi", "club-twins", "carry-team", "report-card", "league-dna", "thrill", "defense-card", "press-card", "sb-press", "seasons", "liquid-glass")
+               "season-sim", "luck-table", "player-twin", "player-cards", "beat-model", "rare-cases", "attack-share", "drawer", "tap-twice", "line-height", "league-pool", "game-states", "likely-xi", "club-twins", "carry-team", "report-card", "league-dna", "thrill", "defense-card", "press-card", "sb-press", "stat-stability", "seasons", "liquid-glass")
 
 
 def _x_feat_index(html):
@@ -11816,6 +11816,195 @@ def run_pipeline(hub, pit_key):
             log(f"  [{name}] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
     return out
 # ===== MARKET END =====
+
+
+# ===== STABILITY START =====
+# كم يتكرر رقم اللاعب؟ (data/stability.json، صفحة "Stat stability"): لكل دوري عنده موسمان كاملان أو أكثر، لكل إحصائية:
+#  - الارتباط (Spearman) بين رقمها لكل 90 دقيقة في موسم والموسم اللي بعده، للاعبين اللي لعبوا 900+ دقيقة في الموسمين؛
+#  - ثبات الموسم الواحد: رقم المباريات الفردية مقابل الزوجية (مرتبة بالتاريخ) داخل الموسم، مع تصحيح Spearman-Brown (2r÷(1+r)).
+# يُحسب من ملفات اللاعبين للمواسم الكاملة السابقة، ويُعاد فقط إذا تغيّرت نسخ الملفات. اختياري: الخطأ ما يوقف المزامنة.
+ST_PATH = "data/stability.json"
+ST_MIN = 900          # دقائق اللاعب في الموسم ليدخل (وفي الموسمين للمقارنة بين موسمين)
+ST_HALF_MIN = 300     # دقائق كل نصف (فردي/زوجي) ليدخل اللاعب في ثبات الموسم الواحد
+ST_NEED = 20          # أقل عدد لاعبين لعرض رقم
+ST_STATS = ["gl", "xg", "npxg", "sh", "sot", "xag", "ast", "sca", "gca", "xgc", "xgb", "xt", "vaep", "kp", "ps", "pr", "bx", "tb", "cr", "ca", "pc", "cb",
+            "tko", "tkw", "tk", "ic", "bl", "cl", "duw", "aer", "aerw"]
+
+
+def st_ranks(v):
+    """متوسط الرتب (التعادل يأخذ متوسط رتبه)."""
+    idx = sorted(range(len(v)), key=lambda i: v[i])
+    out = [0.0] * len(v)
+    i = 0
+    while i < len(idx):
+        j = i
+        while j + 1 < len(idx) and v[idx[j + 1]] == v[idx[i]]:
+            j += 1
+        r = (i + j) / 2 + 1
+        for k in range(i, j + 1):
+            out[idx[k]] = r
+        i = j + 1
+    return out
+
+
+def st_spearman(x, y):
+    if len(x) < 3:
+        return None
+    a, b = st_ranks(x), st_ranks(y)
+    ma, mb = sum(a) / len(a), sum(b) / len(b)
+    sa = sum((u - ma) ** 2 for u in a)
+    sb = sum((u - mb) ** 2 for u in b)
+    if sa <= 0 or sb <= 0:
+        return None
+    return sum((u - ma) * (w - mb) for u, w in zip(a, b)) / (sa * sb) ** 0.5
+
+
+def st_per90(rows, cols, stats):
+    """{لاعب: {mi, pos, k: لكل 90}} من صفوف ملف اللاعبين (المجموع ÷ دقائق المباريات التي فيها الرقم × 90)."""
+    ix = {c: i for i, c in enumerate(cols)}
+    acc = {}
+    for r in rows:
+        mi = r[ix["mi"]]
+        if mi is None:
+            continue
+        a = acc.setdefault(r[ix["i"]], {"mi": 0.0, "pos": {}, "t": {}, "d": {}})
+        a["mi"] += mi
+        if r[ix["o"]]:
+            a["pos"][r[ix["o"]]] = a["pos"].get(r[ix["o"]], 0.0) + mi
+        for k in stats:
+            v = r[ix[k]] if k in ix else None
+            if v is not None:
+                a["t"][k] = a["t"].get(k, 0.0) + v
+                a["d"][k] = a["d"].get(k, 0.0) + mi
+    out = {}
+    for pid, a in acc.items():
+        pos = max(a["pos"].items(), key=lambda kv: kv[1])[0] if a["pos"] else None
+        o = {"mi": a["mi"], "pos": pos}
+        for k in stats:
+            if a["d"].get(k, 0) > 0:
+                o[k] = a["t"][k] / a["d"][k] * 90
+        out[pid] = o
+    return out
+
+
+def st_halves(rows, cols, dates, stats):
+    """{لاعب: (نصف المباريات الفردية، الزوجية)}: كل لاعب تُرتّب مبارياته بالتاريخ ثم تُوزّع بالتناوب."""
+    ix = {c: i for i, c in enumerate(cols)}
+    by = {}
+    for r in rows:
+        if r[ix["mi"]] is None:
+            continue
+        by.setdefault(r[ix["i"]], []).append(r)
+    out = {}
+    for pid, rs in by.items():
+        rs.sort(key=lambda r: (dates.get(r[ix["m"]]) or "", r[ix["m"]]))
+        h = (st_per90([r for n, r in enumerate(rs) if n % 2 == 0], cols, stats), st_per90([r for n, r in enumerate(rs) if n % 2 == 1], cols, stats))
+        out[pid] = (h[0].get(pid), h[1].get(pid))
+    return out
+
+
+def st_zparams(season, k):
+    """{مركز: (المتوسط، الانحراف)} لرقم k بين لاعبي الموسم المؤهلين (900+ دقيقة، بدون الحراس): لمقارنة اللاعب بمن هم في مركزه."""
+    g = {}
+    for a in season.values():
+        if a["mi"] >= ST_MIN and a["pos"] and a["pos"] != "GK" and k in a:
+            g.setdefault(a["pos"], []).append(a[k])
+    out = {}
+    for pos, v in g.items():
+        m = sum(v) / len(v)
+        sd = (sum((x - m) ** 2 for x in v) / len(v)) ** 0.5
+        if len(v) >= 5 and sd > 0:
+            out[pos] = (m, sd)
+    return out
+
+
+def st_compute(seasons):
+    """seasons: [(الموسم، cols، rows، {مباراة: تاريخ})] مرتبة من الأقدم. لكل إحصائية:
+    yoy / half = الارتباط بعد مقارنة اللاعب بمن في مركزه (الرقم كدرجة معيارية داخل مركزه في موسمه)، وyoy_all / half_all = على الأرقام الخام
+    (يخلط فروق المراكز: المهاجم يسدد أكثر من المدافع في كل موسم)."""
+    per = [(lab, st_per90(rows, cols, ST_STATS)) for lab, cols, rows, _ in seasons]
+    halves = {lab: st_halves(rows, cols, dates, ST_STATS) for lab, cols, rows, dates in seasons}
+    byseason = dict(per)
+    res = {}
+    for k in ST_STATS:
+        zp = {lab: st_zparams(S, k) for lab, S in per}
+        z = lambda lab, pos, v: (v - zp[lab][pos][0]) / zp[lab][pos][1] if pos in zp[lab] else None
+        P = {"x": [], "y": [], "zx": [], "zy": []}
+        H = {"x": [], "y": [], "zx": [], "zy": []}
+        for (la, A), (lb, B) in zip(per, per[1:]):
+            for pid, a in A.items():
+                b = B.get(pid)
+                if b and a["mi"] >= ST_MIN and b["mi"] >= ST_MIN and a["pos"] != "GK" and b["pos"] != "GK" and k in a and k in b:
+                    P["x"].append(a[k])
+                    P["y"].append(b[k])
+                    za, zb = z(la, a["pos"], a[k]), z(lb, b["pos"], b[k])
+                    if za is not None and zb is not None:
+                        P["zx"].append(za)
+                        P["zy"].append(zb)
+        for lab, cols, rows, dates in seasons:
+            for pid, (h1, h2) in halves[lab].items():
+                a = byseason[lab].get(pid)
+                if a and a["mi"] >= ST_MIN and a["pos"] != "GK" and h1 and h2 and h1["mi"] >= ST_HALF_MIN and h2["mi"] >= ST_HALF_MIN and k in h1 and k in h2:
+                    H["x"].append(h1[k])
+                    H["y"].append(h2[k])
+                    z1, z2 = z(lab, a["pos"], h1[k]), z(lab, a["pos"], h2[k])
+                    if z1 is not None and z2 is not None:
+                        H["zx"].append(z1)
+                        H["zy"].append(z2)
+
+        def rho(x, y):
+            r = st_spearman(x, y) if len(x) >= ST_NEED else None
+            return None if r is None else round(r, 3)
+
+        def sb(r):
+            return None if r is None else round(2 * r / (1 + r), 3)
+        res[k] = {"yoy": rho(P["zx"], P["zy"]), "yoy_all": rho(P["x"], P["y"]), "n_yoy": len(P["zx"]),
+                  "half": sb(rho(H["zx"], H["zy"])), "half_all": sb(rho(H["x"], H["y"])), "n_half": len(H["zx"])}
+    return res
+
+
+def sync_stability(hub, now=None):
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    idx = gh_get_json(hub, "data/index.json") or {}
+    plan = {}
+    for lid, v in (idx.get("seasons") or {}).items():
+        past = [p for p in (v.get("past") or []) if p.get("complete") and p.get("pl_file") and p.get("file")]
+        if len(past) >= 2:
+            plan[lid] = sorted(past, key=lambda p: p["s"])
+    names = {l["id"]: l.get("name") for l in (idx.get("leagues") or [])}
+    key = hashlib.sha1(json.dumps({lid: [(p["s"], p.get("pl_v"), p.get("v")) for p in ps] for lid, ps in plan.items()}, sort_keys=True).encode()).hexdigest()[:10]
+    old = gh_get_json(hub, ST_PATH) or {}
+    if not plan or old.get("key") == key:
+        return
+    out = {"t": now.strftime("%Y-%m-%d %H:%M:%S"), "key": key, "min": ST_MIN, "half_min": ST_HALF_MIN, "leagues": {}}
+    for lid, ps in plan.items():
+        seasons = []
+        for p in ps:
+            pl, lg = gh_get_json(hub, "data/" + p["pl_file"]), gh_get_json(hub, "data/" + p["file"])
+            if not pl or not lg:
+                seasons = []
+                break
+            seasons.append((p["s"], pl["cols"], pl["rows"], {m["i"]: m.get("d") for m in lg.get("matches", [])}))
+        if len(seasons) < 2:
+            log(f"  [الثبات] {lid}: ملفات ناقصة، تخطيناه")
+            continue
+        out["leagues"][lid] = {"name": names.get(lid), "seasons": [s[0] for s in seasons], "stats": st_compute(seasons)}
+    if out["leagues"]:
+        gh_put(hub, ST_PATH, json.dumps(out, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), "Update stat stability")
+        log("  [الثبات] " + "، ".join(f"{lid[-3:]} {len(v['seasons'])} مواسم" for lid, v in out["leagues"].items()))
+
+
+_orig_run_pipeline_st = run_pipeline
+
+
+def run_pipeline(hub, pit_key):
+    out = _orig_run_pipeline_st(hub, pit_key)
+    try:
+        sync_stability(hub)
+    except Exception as e:      # optional: never stops the sync
+        log(f"  [الثبات] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
+    return out
+# ===== STABILITY END =====
 
 
 if __name__ == "__main__":
