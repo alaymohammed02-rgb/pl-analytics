@@ -8985,7 +8985,7 @@ INDEX = _x_fpx_index(INDEX)
 # الكود في ملفات مستقلة في المستودع: assets/*.js و assets/features.css و manifest.webmanifest و sw.js و assets/icons/.
 # هذا القسم يضيف روابطها للصفحة فقط (بعد السكربت الرئيسي، فتلقى R و PAGES جاهزة). غيّر FEATURES_V لما تتغير الملفات.
 # ============================================================================
-FEATURES_V = "31"
+FEATURES_V = "32"
 FEATURES_JS = ("pla-data", "share-card", "threat-map", "match-whatif", "player-page", "match-centre", "home-extra", "team-round",
                "preview", "club-extra", "rankings-extra", "fantasy-extra", "insights-core", "hidden-gems", "player-dna", "team-dna",
                "reality-check", "matches-board", "match-replay", "match-story", "overview", "press-height",
@@ -11457,7 +11457,7 @@ function psSaved(){for(const st of [()=>localStorage,()=>sessionStorage])try{con
 /* files that only describe the current season (today's matches, coming fixtures, live scores, season facts, rare cases):
    in a past season they answer "not found", so the widgets that use them stay out instead of mixing in this season */
 function psCurOnly(){if(window.__psF)return;const f0=window.fetch;window.__psF=1;
- window.fetch=function(u){const s=String(u&&u.url||u);if(/(^|\/)data\/(live|fixtures|schedule|facts|rare|fpl|fpl_track)\.json/.test(s))return Promise.resolve(new Response('{}',{status:404}));return f0.apply(this,arguments)}}
+ window.fetch=function(u){const s=String(u&&u.url||u);if(/(^|\/)data\/(live|fixtures|schedule|facts|rare|fpl|fpl_track|market|elo)\.json/.test(s))return Promise.resolve(new Response('{}',{status:404}));return f0.apply(this,arguments)}}
 function psView(x){
  ALL0=x;const s=psSaved();if(!s||!x||!x.seasons||!x.leagues)return x;
  let lid=null;for(const st of [()=>localStorage,()=>sessionStorage])try{lid=st().getItem('league');if(lid)break}catch(e){}
@@ -11641,8 +11641,10 @@ def mk_match(rows, matches):
         pick = None
         if hg is not None:
             sc = [m for m in cand if mk_score(m.get("s")) == (hg, ag)]
+            # the same score on the same day is not enough: at least one team name has to agree,
+            # otherwise a match missing from PitchAPI could take another game's odds
             if len(sc) == 1:
-                pick = sc[0]
+                pick = sc[0] if (mk_same(sc[0]["h"], h, False) or mk_same(sc[0]["a"], a, False)) else None
             elif len(sc) > 1:
                 pick = mk_one(sc, lambda st: (lambda m: mk_same(m["h"], h, st) and mk_same(m["a"], a, st))) or \
                     mk_one(sc, lambda st: (lambda m: mk_same(m["h"], h, st) or mk_same(m["a"], a, st)))

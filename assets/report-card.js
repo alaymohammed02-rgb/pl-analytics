@@ -31,7 +31,27 @@
     all.n++;all.b+=b;all.bb+=bb;all.bu+=bu;all.ll+=-Math.log(Math.max(r.p[k],1e-9));all.acc+=pick===k?1:0;all.accB+=pickB===k?1:0;all.goalsP+=r.lh+r.la;all.goalsA+=m.hg+m.ag;
     r.p.forEach((p,i)=>{const q=bins[Math.min(9,Math.floor(p*10))];q.n++;q.p+=p;q.h+=i===k?1:0})});
    if(L.n)out.push(L)});
-  return {rows:out,all,bins};
+  return {rows:out,all,bins,P};
+ }
+ /* model against the bookmakers' closing odds, on the finished matches that have both: same leave-one-out model, same base rates */
+ async function market(P){
+  let M;try{M=await loadJson('market.json',ALL.generated)}catch(e){return {none:true}}
+  if(!M||!M.leagues)return {none:true};
+  const rows=[],A={n:0,b:0,m:0,bb:0,accB:0,accM:0,accP:0,d:0,d2:0,mg:0};
+  P.leagues.forEach(o=>{
+   const K=M.leagues[o.l.id];if(!K||!K.rows)return;
+   const mm=INS.mm(o.ms,o.xg);if(!mm)return;
+   const byId=new Map(o.ms.map(m=>[m.id,m])),res=m=>m.hg>m.ag?0:m.hg===m.ag?1:2,cnt=[0,0,0];o.ms.forEach(m=>cnt[res(m)]++);
+   const L={l:o.l,n:0,b:0,m:0,bb:0,skipped:0};
+   K.rows.forEach(r=>{
+    const m=byId.get(r.m);if(!m||!r.fin||!r.p||r.p.length!==3)return;
+    const q=mm(m.home,m.away,m.id);if(!q){L.skipped++;return}
+    const k=res(m),oth=[cnt[0]-(k===0),cnt[1]-(k===1),cnt[2]-(k===2)],tot=oth[0]+oth[1]+oth[2],base=oth.map(x=>x/tot);
+    const bm=brier(q.p,k),bk=brier(r.p,k),bb=brier(base,k),mx=a=>a.indexOf(Math.max(...a));
+    L.n++;L.b+=bm;L.m+=bk;L.bb+=bb;
+    A.n++;A.b+=bm;A.m+=bk;A.bb+=bb;A.accP+=mx(q.p)===k?1:0;A.accM+=mx(r.p)===k?1:0;A.accB+=mx(base)===k?1:0;A.d+=bm-bk;A.d2+=(bm-bk)*(bm-bk);A.mg+=r.mg||0});
+   if(L.n)rows.push(L)});
+  return {rows,A,t:M.t,source:M.source};
  }
  R.reportcard=async function(el){
   el.innerHTML='<h2>Model report card</h2><div id="rcroot" class="ins lk rc"><div class="empty skel">Loading…</div></div>';
@@ -52,7 +72,32 @@
     <div class="card"><h3>${two('Does "60%" mean 60%?','هل «60%» تعني 60%؟')}</h3>${rel(C.bins)}</div>
     <div class="card"><h3>${two('League by league','دوري بدوري')}</h3>${table(C.rows)}</div>
     <div class="card rc-fx"><h3>${two('Goals','الأهداف')}</h3><p>${two(`The model expected ${(A.goalsP/A.n).toFixed(2)} goals per match; there were ${(A.goalsA/A.n).toFixed(2)}. Against the uniform guess (a third each) its skill is ${(skillU>=0?'+':'−')+Math.abs(skillU*100).toFixed(1)}%.`,`توقع النموذج ${nb((A.goalsP/A.n).toFixed(2))} هدف للمباراة؛ والفعلي ${nb((A.goalsA/A.n).toFixed(2))}. مقابل التخمين المتساوي (ثلث لكل نتيجة) مهارته ${nb((skillU>=0?'+':'−')+Math.abs(skillU*100).toFixed(1)+'%')}.`)}</p></div>`;
+  const K=await market(C.P).catch(()=>({none:true}));if(!root.isConnected)return;
+  root.insertAdjacentHTML('beforeend',mkCard(K));
  };
+ function mkCard(K){
+  const hd=`<h3>${two('Model against the bookmakers','النموذج مقابل شركات المراهنات')}</h3>`;
+  if(K.none||!K.A||K.A.n<30)return `<div class="card rc-mk">${hd}<p class="mu">${two('Bookmaker odds are not available for this view yet (they come from football-data.co.uk, only for the current season, and only for matches that have been played).','أسعار المراهنات مو متوفرة لهذا العرض الحين (تجي من football-data.co.uk، للموسم الحالي فقط، وللمباريات اللي انلعبت بس).')}</p></div>`;
+  const A=K.A,n=A.n,dm=A.d/n,se=Math.sqrt(Math.max(0,A.d2/n-dm*dm)/(n-1)),z=se>0?dm/se:0,sig=Math.abs(z)>=1.96;
+  const better=dm<0?'model':'market';
+  const vEn=!sig?`The two are <b>too close to separate</b> on ${n} matches (the model's Brier is ${dm<0?'lower':'higher'} by ${Math.abs(dm).toFixed(4)} per match, within noise).`:
+    better==='market'?`The bookmakers are <b>better</b>: their Brier is lower by ${Math.abs(dm).toFixed(4)} per match, a gap that is larger than noise on ${n} matches.`:
+    `The model is <b>better</b>: its Brier is lower by ${Math.abs(dm).toFixed(4)} per match, a gap that is larger than noise on ${n} matches.`;
+  const vAr=!sig?`الاثنين <b>قريبين لدرجة ما نقدر نفرّق</b> على ${nb(n)} مباراة (${nb('Brier')} النموذج ${dm<0?'أقل':'أعلى'} بـ${nb(Math.abs(dm).toFixed(4))} للمباراة، داخل الضجيج).`:
+    better==='market'?`شركات المراهنات <b>أحسن</b>: ${nb('Brier')} عندها أقل بـ${nb(Math.abs(dm).toFixed(4))} للمباراة، وفرق أكبر من الضجيج على ${nb(n)} مباراة.`:
+    `النموذج <b>أحسن</b>: ${nb('Brier')} عنده أقل بـ${nb(Math.abs(dm).toFixed(4))} للمباراة، وفرق أكبر من الضجيج على ${nb(n)} مباراة.`;
+  const sk=(x,y)=>{const s=1-x/y;return nb((s>=0?'+':'−')+Math.abs(s*100).toFixed(1)+'%')};
+  return `<div class="card rc-mk">${hd}
+   <p>${two(`The bookmakers' closing odds, with their margin taken out, as a forecast of the same ${n} finished matches. The model is asked with each match left out, as above; the odds were set just before kick-off, when line-ups and injuries were known, which the model never sees. ${vEn}`,
+     `أسعار إغلاق شركات المراهنات، بعد شيل هامش الربح، كتوقع لنفس الـ${nb(n)} مباراة المنتهية. النموذج انسأل وهو ما يشوف المباراة، مثل فوق؛ والأسعار انحطت قبل الانطلاقة بشوي، لما التشكيلات والإصابات معروفة، وهذا النموذج ما يشوفه. ${vAr}`)}</p>
+   <div class="wrap"><table class="lk-t rc-t rc-mkt"><thead><tr><th></th><th class="n">Brier</th><th class="n">${two('Right','صح')}</th><th class="n">${two('Skill','المهارة')}</th></tr></thead><tbody>
+    <tr><td>${two('Model','النموذج')}</td><td class="n">${f3(A.b/n)}</td><td class="n">${nb(pc(A.accP/n)+'%')}</td><td class="n">${sk(A.b,A.bb)}</td></tr>
+    <tr><td>${two('Bookmakers','شركات المراهنات')}</td><td class="n">${f3(A.m/n)}</td><td class="n">${nb(pc(A.accM/n)+'%')}</td><td class="n">${sk(A.m,A.bb)}</td></tr>
+    <tr><td>${two('Base rates','النسب العامة')}</td><td class="n">${f3(A.bb/n)}</td><td class="n">${nb(pc(A.accB/n)+'%')}</td><td class="n">${nb('0.0%')}</td></tr></tbody></table></div>
+   <div class="wrap"><table class="lk-t rc-t rc-mkl"><thead><tr><th>${two('League','الدوري')}</th><th class="n">${two('Matches','المباريات')}</th><th class="n">${two('Model','النموذج')}</th><th class="n">${two('Bookmakers','المراهنات')}</th><th class="n lk-nm">${two('Base rates','النسب العامة')}</th></tr></thead><tbody>
+    ${K.rows.map(r=>`<tr><td>${nm(r.l.name)}</td><td class="n">${r.n}</td><td class="n">${f3(r.b/r.n)}</td><td class="n">${f3(r.m/r.n)}</td><td class="n lk-nm">${f3(r.bb/r.n)}</td></tr>`).join('')}</tbody></table></div>
+   <p class="mu ins-note">${two(`Brier: lower is better. Skill: against the league base rates. The average margin removed from the odds was ${(A.mg/n*100).toFixed(1)}% (the bookmakers' built-in profit). "Within noise" means the gap is under two standard errors of the per-match differences. Odds: football-data.co.uk, closing average where it has it.`,`${nb('Brier')}: الأقل أحسن. المهارة: مقابل النسب العامة للدوري. متوسط الهامش اللي انشال من الأسعار ${nb((A.mg/n*100).toFixed(1)+'%')} (ربح الشركات المدمج). «داخل الضجيج» يعني الفرق أقل من خطأين معياريين لفروق كل مباراة. الأسعار: football-data.co.uk، متوسط الإغلاق لو موجود.`)}</p></div>`;
+ }
  /* every chance the model gave (three per match), grouped by size: what it said against how often it happened */
  function rel(B){
   return `<div class="wrap"><table class="lk-t rc-t"><thead><tr><th>${two('The model said','النموذج قال')}</th><th class="n">${two('Chances','احتمالات')}</th><th class="n">${two('Average said','متوسط ما قاله')}</th><th class="n">${two('Happened','صار فعلًا')}</th></tr></thead><tbody>
@@ -62,7 +107,7 @@
  function table(L){
   return `<div class="wrap"><table class="lk-t rc-t"><thead><tr><th>${two('League','الدوري')}</th><th class="n">${two('Matches','المباريات')}</th><th class="n">${two('Right','صح')}</th><th class="n">Brier</th><th class="n lk-nm">${two('Base rates','النسب العامة')}</th><th class="n">${two('Skill','المهارة')}</th></tr></thead><tbody>
    ${L.map(r=>{const s=1-r.b/r.bb;return `<tr><td>${nm(r.l.name)}</td><td class="n">${r.n}</td><td class="n">${nb(pc(r.acc/r.n)+'%')}</td><td class="n">${f3(r.b/r.n)}</td><td class="n lk-nm">${f3(r.bb/r.n)}</td><td class="n"><b class="${s>=0?'lk-up':'lk-dn'}">${nb((s>=0?'+':'−')+Math.abs(s*100).toFixed(1)+'%')}</b></td></tr>`}).join('')}</tbody></table></div>
-   <p class="mu ins-note">${two('Brier: lower is better. Skill: how much lower than the base-rates guess (negative = worse). A league has only ${Math.min(...L.map(r=>r.n))} to ${Math.max(...L.map(r=>r.n))} matches tested so far, so its number moves a lot.','Brier: الأقل أحسن. المهارة: كم أقل من تخمين النسب العامة (سالب = أسوأ). الدوري ما فيه إلا من ${nb(Math.min(...L.map(r=>r.n)))} إلى ${nb(Math.max(...L.map(r=>r.n)))} مباراة مختبرة لين الحين، فرقمه يتحرك كثير.')}</p>`;
+   <p class="mu ins-note">${two(`Brier: lower is better. Skill: how much lower than the base-rates guess (negative = worse). A league has only ${Math.min(...L.map(r=>r.n))} to ${Math.max(...L.map(r=>r.n))} matches tested so far, so its number moves a lot.`,`Brier: الأقل أحسن. المهارة: كم أقل من تخمين النسب العامة (سالب = أسوأ). الدوري ما فيه إلا من ${nb(Math.min(...L.map(r=>r.n)))} إلى ${nb(Math.max(...L.map(r=>r.n)))} مباراة مختبرة لين الحين، فرقمه يتحرك كثير.`)}</p>`;
  }
  INS.ar({"Model report card":"بطاقة تقييم النموذج","League":"الدوري","Chances":"احتمالات","Matches":"المباريات"});
  if(typeof D==='object'&&D&&typeof route==='function')route();

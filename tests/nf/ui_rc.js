@@ -22,7 +22,16 @@ function test(){const rows=[],A={n:0,b:0,bb:0,bu:0,acc:0,accB:0,gp:0,ga:0},bins=
   if(L.n)rows.push(L)}
  return {rows,A,bins}}
 const pc=v=>Math.round(v*100),f3=v=>v.toFixed(3);
-(async()=>{const b=await T.launch(),E=test();
+
+/* the market comparison, recomputed from data/market.json with the same independent model */
+function marketTest(){const M=J('market.json'),A={n:0,b:0,m:0,bb:0,accP:0,accM:0,accB:0,d:0,d2:0,mg:0},rows=[];
+ for(const l of IDX.leagues.filter(DOM)){const K=M.leagues[l.id];if(!K)continue;const {ms,xg}=leagueData(l),pr=predictor(ms,xg);if(!pr)continue;const by=new Map(ms.map(m=>[m.id,m])),res=m=>m.hg>m.ag?0:m.hg===m.ag?1:2,cnt=[0,0,0];ms.forEach(m=>cnt[res(m)]++);
+  const L={name:l.name,n:0,b:0,m:0,bb:0};
+  for(const r of K.rows){const m=by.get(r.m);if(!m||!r.fin)continue;const q=pr(m.home,m.away,m.id);if(!q)continue;const k=res(m),oth=[cnt[0]-(k===0),cnt[1]-(k===1),cnt[2]-(k===2)],tot=oth[0]+oth[1]+oth[2],base=oth.map(x=>x/tot),mx=a=>a.indexOf(Math.max(...a));
+   const bm=br(q.p,k),bk=br(r.p,k),bb=br(base,k);L.n++;L.b+=bm;L.m+=bk;L.bb+=bb;A.n++;A.b+=bm;A.m+=bk;A.bb+=bb;A.accP+=mx(q.p)===k;A.accM+=mx(r.p)===k;A.accB+=mx(base)===k;A.d+=bm-bk;A.d2+=(bm-bk)**2;A.mg+=r.mg||0}
+  if(L.n)rows.push(L)}
+ return {A,rows,M}}
+(async()=>{const b=await T.launch(),E=test(),MK=marketTest();
  const {ctx,pg,errs}=await T.open(b,{hash:'#/reportcard'});await pg.waitForSelector('.rc-t',{timeout:120000});
  const A=E.A,skill=1-A.b/A.bb,intro=await pg.textContent('.lk-intro');
  ok(intro.includes(`tested on ${A.n} finished matches`),'matches tested: '+A.n+' (six leagues, a club needs 3 other matches)');
@@ -38,6 +47,21 @@ const pc=v=>Math.round(v*100),f3=v=>v.toFixed(3);
  const wl=E.rows.map(r=>{const s=1-r.b/r.bb;return [r.name,String(r.n),pc(r.acc/r.n)+'%',f3(r.b/r.n),f3(r.bb/r.n),(s>=0?'+':'−')+Math.abs(s*100).toFixed(1)+'%']});
  ok(JSON.stringify(lg)===JSON.stringify(wl),'league table: '+wl.map(r=>r[0]+' '+r[1]+' '+r[5]).join(' | '));
  ok((await pg.textContent('.rc-fx')).includes(`expected ${(A.gp/A.n).toFixed(2)} goals per match; there were ${(A.ga/A.n).toFixed(2)}`),'goals expected '+(A.gp/A.n).toFixed(2)+' vs actual '+(A.ga/A.n).toFixed(2));
+ /* ---- the bookmakers' odds ---- */
+ {const A=MK.A,n=A.n,tx=await pg.textContent('.rc-mk');
+  ok(n>=100&&tx.includes('same '+n+' finished matches'),'bookmakers: '+n+' matches have both the model and the odds');
+  const t1=await pg.evaluate(()=>[...document.querySelectorAll('.rc-mkt tbody tr')].map(r=>[...r.cells].map(c=>c.textContent.trim())));
+  const sk=(x,y)=>{const v=1-x/y;return (v>=0?'+':'−')+Math.abs(v*100).toFixed(1)+'%'};
+  const w1=[['Model',f3(A.b/n),pc(A.accP/n)+'%',sk(A.b,A.bb)],['Bookmakers',f3(A.m/n),pc(A.accM/n)+'%',sk(A.m,A.bb)],['Base rates',f3(A.bb/n),pc(A.accB/n)+'%','0.0%']];
+  const clean=t=>t.map(r=>r.map(c=>c.replace(/\s+/g,' ')));
+  ok(JSON.stringify(t1.map(r=>[r[0].replace(/.*?(Model|Bookmakers|Base rates).*/,'$1'),...r.slice(1)]))===JSON.stringify(w1),'comparison table matches the recomputation: '+w1.map(r=>r[0]+' '+r[1]).join(' | '));
+  const dm=A.d/n,se=Math.sqrt(Math.max(0,A.d2/n-dm*dm)/(n-1)),sig=Math.abs(dm/se)>=1.96;
+  ok(sig?tx.includes(dm<0?'The model is better:':'The bookmakers are better:'):/too close to separate/.test(tx),'the verdict follows the numbers ('+(sig?(dm<0?'model better':'bookmakers better')+', beyond noise':'within noise')+', diff '+dm.toFixed(4)+' per match)');
+  const t2=await pg.evaluate(()=>[...document.querySelectorAll('.rc-mkl tbody tr')].map(r=>[...r.cells].map(c=>c.textContent.trim())));
+  const w2=MK.rows.map(r=>[r.name,String(r.n),f3(r.b/r.n),f3(r.m/r.n),f3(r.bb/r.n)]);
+  ok(JSON.stringify(t2)===JSON.stringify(w2),'bookmaker league table: '+w2.map(r=>r[0]+' '+r[1]).join(' | '));
+  ok(tx.includes('The average margin removed from the odds was '+(A.mg/n*100).toFixed(1)+'%'),'average margin removed: '+(A.mg/n*100).toFixed(1)+'%');
+  ok(A.m<A.bb,'sanity: the bookmakers beat the league base rates ('+f3(A.m/n)+' < '+f3(A.bb/n)+')')}
  ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await pg.screenshot({path:__dirname+'/rc_1280.png',fullPage:true});await ctx.close();
  {const c2=await b.newContext();await c2.route(/_sh\.json/,async r=>{await new Promise(z=>setTimeout(z,2500));r.continue()});const p2=await c2.newPage(),e2=[];p2.on('pageerror',e=>e2.push(e.message));
   await p2.goto('http://127.0.0.1:8765/index.html#/reportcard');await p2.waitForSelector('#rcroot',{timeout:60000});await p2.evaluate(()=>location.hash='#/table');await p2.waitForSelector('.lt',{timeout:60000});await p2.waitForTimeout(3500);
@@ -46,8 +70,13 @@ const pc=v=>Math.round(v*100),f3=v=>v.toFixed(3);
  {const c3=await b.newContext();let fail=true;await c3.route(/l_4WFCIZ_sh\.json/,r=>{if(fail)r.fulfill({status:500,body:''});else r.continue()});const p3=await c3.newPage();await p3.goto('http://127.0.0.1:8765/index.html#/reportcard');
   await p3.waitForSelector('#rcroot .empty:not(.skel)',{timeout:90000});const msg=await p3.textContent('#rcroot');fail=false;await p3.evaluate(()=>{location.hash='#/table'});await p3.waitForSelector('.lt',{timeout:60000});await p3.evaluate(()=>{location.hash='#/reportcard'});await p3.waitForSelector('.rc-t',{timeout:90000});
   ok(/not available/.test(msg)&&(await p3.$('.rc-t')),'a failed file shows a message and is retried on the next visit');await c3.close()}
+
+ /* the odds file missing: the report card stays, the odds card says so */
+ {const c4=await b.newContext();await c4.route(/market\.json/,r=>r.fulfill({status:404,body:''}));const p4=await c4.newPage(),e4=[];p4.on('pageerror',e=>e4.push(e.message));await p4.goto('http://127.0.0.1:8765/index.html#/reportcard');await p4.waitForSelector('.rc-mk',{timeout:120000});
+  ok((await p4.$$('.rc-t')).length===2&&/not available for this view yet/.test(await p4.textContent('.rc-mk'))&&!e4.length,'odds file missing: the report card stays whole, the odds card says it is not available');await c4.close()}
  for(const lang of ['ar','en']){const {ctx,pg,errs}=await T.open(b,{vw:390,lang,hash:'#/reportcard'});await pg.waitForSelector('.rc-t',{timeout:120000});await pg.waitForTimeout(400);
   ok(await T.noscroll(pg),lang+' phone: no horizontal scroll');
+  ok(!/\$\{|nb\(/.test(await pg.textContent('#app')),lang+': no template text leaking onto the page');
   if(lang==='ar'){const u=await pg.evaluate(T.untr,'#app');ok(!u.length,'Arabic: page translated '+u.slice(0,5).join(' | '));ok((await pg.textContent('#app h2')).trim()==='بطاقة تقييم النموذج','Arabic title')}
   ok(!errs.length,lang+' phone: no page errors '+errs.slice(0,2).join(' ; '));await pg.screenshot({path:__dirname+'/rc_390_'+lang+'.png',fullPage:true});await ctx.close()}
  await T.done(b)})();
