@@ -88,6 +88,11 @@ ok(len(FETCH) == 1 and f and f['p'] == {'p1': ['2000-07-12', 150000000], 'p2': [
 ok(f['matched'] == 2 and f['unmatched'] == 1 and f['n_players'] == 3 and f['by_league']['L1'] == {'players': 3, 'matched': 2} and any('طابقنا 2 من 3' in l for l in LOG), 'the file counts matched / unmatched and the log says how many of how many (%s)' % LOG[-1:])
 FETCH.clear(); PUT.clear(); sync('hub', at(12, 10, datetime.datetime(2026, 10, 28))); ok(not FETCH and not PUT, 'a file from 4 days ago: not downloaded again')
 sync('hub', at(12, 10, datetime.datetime(2026, 11, 2))); ok(len(FETCH) == 1 and PUT['data/tm.json']['t'] == '2026-11-02', 'a file from 9 days ago: downloaded again in the window')
+# the empty placeholder file kept in the repo (so the page's request does not 404 before the first download) counts as no file
+STORE['data/tm.json'] = {'t': '', 'p': {}}; FETCH.clear(); PUT.clear()
+sync('hub', at(13, 10)); ok(not FETCH, 'placeholder file, 13:10: outside the window, nothing downloaded')
+sync('hub', at(12, 10)); ok(len(FETCH) == 1 and PUT['data/tm.json']['matched'] == 2, 'placeholder file, 12:10: treated as no file, downloaded and replaced')
+ok(json.load(open(os.path.join(REPO, 'data', 'tm.json'))) == {'t': '', 'p': {}}, 'data/tm.json in the repo is the empty placeholder until the first download')
 # ---- failures never stop the sync and never overwrite
 STORE.pop('data/tm.json'); PUT.clear(); LOG.clear()
 def fetch_bad():
