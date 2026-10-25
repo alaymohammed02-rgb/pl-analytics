@@ -24,7 +24,10 @@ def find(n):
 import datetime
 recent=(datetime.datetime.now(datetime.timezone.utc)-datetime.timedelta(days=1)).strftime('%Y-%m-%d')
 fp={(find(h),find(a)) for h,a,_,_ in FIN}
-skipped=[(d,h,a) for d,h,a,_,_ in PM if (h,a) not in fp and d>=recent]
+# FPL also keeps a match it has not marked finished yet with its provisional score (sometimes for more than a day): a PitchAPI result that FPL lists
+# with the SAME provisional score is left out too; a different provisional score still fails
+prov={(find(tn[x[1]]),find(tn[x[2]])):(x[6],x[7]) for x in F['fix'] if not x[5] and x[6] is not None}
+skipped=[(d,h,a) for d,h,a,g1,g2 in PM if (h,a) not in fp and (d>=recent or prov.get((h,a))==(g1,g2))]
 A=tab([(h,a,g1,g2) for d,h,a,g1,g2 in PM if (d,h,a) not in skipped])
 B=tab(FIN)
 bad=[]
@@ -32,5 +35,5 @@ for t,v in B.items():
     k=find(t)
     if k is None:bad.append('no match for '+t);continue
     if A[k]!=v:bad.append(f'{t}: PitchAPI {A[k]} vs FPL {v}')
-print('teams',len(A),len(B),'| left out (finished in the last day, not in FPL yet):',[x[1]+' v '+x[2] for x in skipped],'| mismatches:',bad or 'none')
+print('teams',len(A),len(B),'| left out (finished in the last day or with FPL\'s same provisional score, not marked finished in FPL yet):',[x[1]+' v '+x[2] for x in skipped],'| mismatches:',bad or 'none')
 print(('ok  ' if not bad and len(A)==len(B) else 'FAIL'),'Premier League table: PitchAPI results equal FPL fixtures for every team (%d teams)'%len(A),bad or '')
