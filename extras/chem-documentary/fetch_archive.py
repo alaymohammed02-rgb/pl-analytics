@@ -2,7 +2,7 @@
 
 Run on a machine with internet access (the build sandbox could not reach Wikimedia):
     python3 fetch_archive.py
-Only files whose Commons licence is public domain or CC0 are kept; each one's author, date and licence go into
+Only files whose Commons licence is public domain, CC0 or CC BY(-SA) are kept; each one's author, date and licence go into
 archive/archive.json and are printed on screen under the photo. With no files, scene 2 shows labelled illustrations.
 """
 import json, os, re, sys, urllib.parse, urllib.request
@@ -13,12 +13,17 @@ API = 'https://commons.wikimedia.org/w/api.php'
 UA = {'User-Agent': 'chem-documentary/1.0 (educational video build script)'}
 
 # slot: (caption on screen, exact Commons titles to try first, search text if none of them is usable)
+# archive_* = scene 2 (black-and-white archive); portrait_* = scene 7 (the scientists' cards)
 SLOTS = [
-    ('curie', 'ماري كوري في مختبرها', ['File:Pierre and Marie Curie.jpg', 'File:Marie Curie c1920.jpg', 'File:Marie Curie 1903.jpg'],
-     'Marie Curie laboratory photograph'),
-    ('mendeleev', 'جدول مندلييف الدوري (1869)', ["File:Mendeleev's 1869 periodic table.png", 'File:Mendelejevs periodiska system 1871.png'],
+    ('archive_curie', 'بيير وماري كوري في مختبرهما', ['File:Pierre and Marie Curie.jpg', 'File:Pierre Curie and Marie Sklodowska Curie, 1903.jpg'],
+     'Pierre Marie Curie laboratory photograph'),
+    ('archive_mendeleev', 'جدول مندلييف الدوري الأصلي (1869)', ["File:Mendeleev's 1869 periodic table.png", 'File:Mendelejevs periodiska system 1871.png'],
      'Mendeleev 1869 periodic table'),
-    ('solvay', 'مؤتمر سولفاي 1927 — بروكسل', ['File:Solvay conference 1927.jpg'], 'Solvay conference 1927'),
+    ('archive_solvay', 'مؤتمر سولفاي 1927 — بروكسل', ['File:Solvay conference 1927.jpg'], 'Solvay conference 1927'),
+    ('portrait_razi', 'الرازي في مخطوطة لاتينية (نحو 1250م)', ['File:Al-RaziInGerardusCremonensis1250.JPG'], 'Rhazes Gerard of Cremona manuscript'),
+    ('portrait_lavoisier', 'لافوازييه', ['File:Antoine lavoisier.jpg', 'File:Antoine-Laurent Lavoisier.jpg'], 'Antoine Lavoisier portrait'),
+    ('portrait_mendeleev', 'مندلييف', ['File:Dmitri Mendeleev 1890s.jpg', 'File:Dmitri Mendeleev.jpg'], 'Dmitri Mendeleev portrait photograph'),
+    ('portrait_curie', 'ماري كوري', ['File:Marie Curie c1920.jpg', 'File:Marie Curie 1903.jpg', 'File:Mariecurie.jpg'], 'Marie Curie portrait photograph'),
 ]
 
 
@@ -40,7 +45,8 @@ def info(title):
 
 
 def free(i):
-    return bool(i) and re.search(r'public domain|^pd|cc0', i['license'], re.I)
+    # public domain / CC0, or CC BY(-SA) whose credit is printed under the picture
+    return bool(i) and re.search(r'public domain|^pd|cc0|^cc by', i['license'], re.I)
 
 
 def search(text):
@@ -72,7 +78,7 @@ def main():
         with urllib.request.urlopen(urllib.request.Request(chosen['url'], headers=UA), timeout=60) as r:
             open(os.path.join(OUT, fn), 'wb').write(r.read())
         artist = chosen['artist'][:60] or 'مجهول'
-        items.append(dict(file=fn, caption=cap, credit=f"{chosen['title'][5:]} — {artist} — {chosen['license']} — Wikimedia Commons",
+        items.append(dict(slot=slot, file=fn, caption=cap, credit=f"{chosen['title'][5:]} — {artist} — {chosen['license']} — Wikimedia Commons",
                           source=chosen['page']))
         print(f'{slot}: {chosen["title"]} ({chosen["license"]})')
     json.dump(items, open(os.path.join(OUT, 'archive.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)

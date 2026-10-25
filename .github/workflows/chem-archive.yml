@@ -1,0 +1,23 @@
+# Downloads the chemistry documentary's archive photos from Wikimedia Commons (the build sandbox cannot reach it)
+# and commits them to the branch that triggered the run.
+name: chem-documentary archive photos
+on:
+  push:
+    branches-ignore: [main]
+    paths: ['extras/chem-documentary/fetch_archive.py']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 extras/chem-documentary/fetch_archive.py
+      - run: cat extras/chem-documentary/archive/archive.json
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f extras/chem-documentary/archive
+          git commit -m "chem-documentary: archive photos from Wikimedia Commons" || exit 0
+          git push
