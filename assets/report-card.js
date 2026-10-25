@@ -38,22 +38,24 @@
  async function market(P){
   let M;try{M=await loadJson('market.json',ALL.generated)}catch(e){return {none:true}}
   if(!M||!M.leagues)return {none:true};
-  const rows=[],A={n:0,b1:0,b2:0,m:0,bb:0,accB:0,accM:0,acc1:0,acc2:0,d12:0,d12s:0,d2m:0,d2ms:0,mg:0,priors:0};
+  let EL=null;try{const e=await loadJson('elo_own.json',ALL.generated);if(e&&e.leagues&&Object.keys(e.leagues).length)EL=e}catch(e){EL=null}   /* club Elo from results (data/elo_own.json), asked BEFORE each match, so no leave-one-out is needed */
+  const rows=[],A={n:0,b1:0,b2:0,m:0,bb:0,accB:0,accM:0,acc1:0,acc2:0,d12:0,d12s:0,d2m:0,d2ms:0,mg:0,priors:0,be:0,accE:0,de2:0,de2s:0,dem:0,dems:0};
   P.leagues.forEach(o=>{
    const K=M.leagues[o.l.id];if(!K||!K.rows)return;
    const mm1=INS.mm(o.ms,o.xg),mm2=INS.mm(o.ms,o.xg,o.prior);if(!mm1||!mm2)return;
    const byId=new Map(o.ms.map(m=>[m.id,m])),res=m=>m.hg>m.ag?0:m.hg===m.ag?1:2,cnt=[0,0,0];o.ms.forEach(m=>cnt[res(m)]++);
-   const L={l:o.l,n:0,b1:0,b2:0,m:0,bb:0,prior:!!(o.prior&&o.prior.teams)};if(L.prior)A.priors++;
+   const L={l:o.l,n:0,b1:0,b2:0,m:0,bb:0,be:0,prior:!!(o.prior&&o.prior.teams)};if(L.prior)A.priors++;
    K.rows.forEach(r=>{
     const m=byId.get(r.m);if(!m||!r.fin||!r.p||r.p.length!==3)return;
     const q1=mm1(m.home,m.away,m.id),q2=mm2(m.home,m.away,m.id);if(!q1||!q2)return;   /* the matches model 1 can predict: the same ones for every row of the table */
+    const ep=EL&&EL.leagues[o.l.id]&&EL.leagues[o.l.id].pred&&EL.leagues[o.l.id].pred[r.m];if(EL&&!ep)return;
     const k=res(m),oth=[cnt[0]-(k===0),cnt[1]-(k===1),cnt[2]-(k===2)],tot=oth[0]+oth[1]+oth[2],base=oth.map(x=>x/tot);
-    const b1=brier(q1.p,k),b2=brier(q2.p,k),bk=brier(r.p,k),bb=brier(base,k),mx=a=>a.indexOf(Math.max(...a));
-    L.n++;L.b1+=b1;L.b2+=b2;L.m+=bk;L.bb+=bb;
+    const b1=brier(q1.p,k),b2=brier(q2.p,k),bk=brier(r.p,k),bb=brier(base,k),mx=a=>a.indexOf(Math.max(...a)),be=ep?brier(ep,k):0;
+    L.n++;L.b1+=b1;L.b2+=b2;L.m+=bk;L.bb+=bb;L.be+=be;if(ep){A.be+=be;A.accE+=mx(ep)===k?1:0;A.de2+=be-b2;A.de2s+=(be-b2)*(be-b2);A.dem+=be-bk;A.dems+=(be-bk)*(be-bk)}
     A.n++;A.b1+=b1;A.b2+=b2;A.m+=bk;A.bb+=bb;A.acc1+=mx(q1.p)===k?1:0;A.acc2+=mx(q2.p)===k?1:0;A.accM+=mx(r.p)===k?1:0;A.accB+=mx(base)===k?1:0;
     A.d12+=b2-b1;A.d12s+=(b2-b1)*(b2-b1);A.d2m+=b2-bk;A.d2ms+=(b2-bk)*(b2-bk);A.mg+=r.mg||0});
    if(L.n)rows.push(L)});
-  return {rows,A,t:M.t,source:M.source};
+  return {rows,A,elo:!!EL,t:M.t,source:M.source};
  }
  R.reportcard=async function(el){
   el.innerHTML='<h2>Model report card</h2><div id="rcroot" class="ins lk rc"><div class="empty skel">Loading…</div></div>';
@@ -84,7 +86,7 @@
   const hd=`<h3>${two('Model against the bookmakers','النموذج مقابل شركات المراهنات')}</h3>`;
   if(K.none||!K.A||K.A.n<30)return `<div class="card rc-mk">${hd}<p class="mu">${two('Bookmaker odds are not available for this view yet (they come from football-data.co.uk, only for the current season, and only for matches that have been played).','أسعار المراهنات مو متوفرة لهذا العرض الحين (تجي من football-data.co.uk، للموسم الحالي فقط، وللمباريات اللي انلعبت بس).')}</p></div>`;
   const A=K.A,n=A.n,v2=A.priors>0,zq=zOf(A.d12,A.d12s,n),zm=zOf(A.d2m,A.d2ms,n),better=K.rows.filter(r=>r.prior&&r.b2<r.b1).length,withP=K.rows.filter(r=>r.prior).length;
-  const d12=Math.abs(zq.m).toFixed(4),dm=Math.abs(zm.m).toFixed(4);
+  const d12=Math.abs(zq.m).toFixed(4),dm=Math.abs(zm.m).toFixed(4),hasE=!!K.elo,zE2=hasE?zOf(A.de2,A.de2s,n):null,zEm=hasE?zOf(A.dem,A.dems,n):null,dE2=hasE?Math.abs(zE2.m).toFixed(4):'',dEm=hasE?Math.abs(zEm.m).toFixed(4):'';
   const s1En=!v2?`This view has no last-season numbers, so there is only one version of the model.`:
     !zq.sig?`Starting each club from its strengths last season makes <b>no clear difference</b> (Brier ${zq.m<0?'lower':'higher'} by ${d12} per match, within noise).`:
     zq.m<0?`Starting each club from its strengths last season (worth 12 matches) makes the model <b>better</b>: Brier ${f3(A.b1/n)} → ${f3(A.b2/n)}, ${d12} lower per match, beyond noise, and better in ${better} of ${withP} leagues.`:
@@ -99,15 +101,19 @@
   const s2Ar=!zm.sig?`مقابل شركات المراهنات النموذج <b>قريب لدرجة ما نقدر نفرّق</b> على ${nb(n)} مباراة (${nb(dm)} للمباراة، داخل الضجيج).`:
     zm.m>0?`شركات المراهنات ما زالت <b>أحسن</b> من النموذج: ${nb('Brier')} عندها أقل بـ${nb(dm)} للمباراة، وفرق أكبر من الضجيج على ${nb(n)} مباراة. أسعار إغلاقها تعرف التشكيلات والإصابات، والنموذج ما يشوفها.`:
     `النموذج <b>أحسن</b> من شركات المراهنات: ${nb('Brier')} عنده أقل بـ${nb(dm)} للمباراة، وفرق أكبر من الضجيج على ${nb(n)} مباراة.`;
+  const vs=(z,d,wEn,bEn,wAr,bAr)=>[!z.sig?`too close to separate (${d} per match, within noise)`:z.m>0?`${wEn} by ${d} per match, beyond noise`:`${bEn} by ${d} per match, beyond noise`,!z.sig?`قريب لدرجة ما نقدر نفرّق (${nb(d)} للمباراة، داخل الضجيج)`:z.m>0?`${wAr} بـ${nb(d)} للمباراة، وفرق أكبر من الضجيج`:`${bAr} بـ${nb(d)} للمباراة، وفرق أكبر من الضجيج`];
+  const e2=hasE?vs(zE2,dE2,'worse','better','أسوأ','أحسن'):null,em=hasE?vs(zEm,dEm,'worse','better','أسوأ','أحسن'):null;
+  const s3En=hasE?`Club Elo, built only from past results (no goals model, no last season's xG), scores Brier ${f3(A.be/n)} on the same matches: against Model 2 it is ${e2[0]}; against the bookmakers it is ${em[0]}.`:'';
+  const s3Ar=hasE?`Elo للأندية، مبني على النتائج السابقة فقط (بدون نموذج أهداف ولا xG الموسم الماضي)، يسجّل ${nb('Brier')} ${nb(f3(A.be/n))} على نفس المباريات: مقابل النموذج 2 هو ${e2[1]}؛ ومقابل شركات المراهنات هو ${em[1]}.`:'';
   const sk=(x,y)=>{const q=1-x/y;return nb((q>=0?'+':'−')+Math.abs(q*100).toFixed(1)+'%')};
   const row=(en,ar,b,acc)=>`<tr><td>${two(en,ar)}</td><td class="n">${f3(b/n)}</td><td class="n">${acc==null?'–':nb(pc(acc/n)+'%')}</td><td class="n">${sk(b,A.bb)}</td></tr>`;
   return `<div class="card rc-mk">${hd}
-   <p>${two(`The bookmakers' closing odds, with their margin taken out, as a forecast of the same ${n} finished matches. Every model row is asked with each match left out, as above. ${s1En} ${s2En}`,
-     `أسعار إغلاق شركات المراهنات، بعد شيل هامش الربح، كتوقع لنفس الـ${nb(n)} مباراة المنتهية. كل صف نموذج انسأل وهو ما يشوف المباراة، مثل فوق. ${s1Ar} ${s2Ar}`)}</p>
+   <p>${two(`The bookmakers' closing odds, with their margin taken out, as a forecast of the same ${n} finished matches. Every model row is asked with each match left out, as above. ${s1En} ${s2En} ${s3En}`,
+     `أسعار إغلاق شركات المراهنات، بعد شيل هامش الربح، كتوقع لنفس الـ${nb(n)} مباراة المنتهية. كل صف نموذج انسأل وهو ما يشوف المباراة، مثل فوق. ${s1Ar} ${s2Ar} ${s3Ar}`)}</p>
    <div class="wrap"><table class="lk-t rc-t rc-mkt"><thead><tr><th></th><th class="n">Brier</th><th class="n">${two('Right','صح')}</th><th class="n">${two('Skill','المهارة')}</th></tr></thead><tbody>
-    ${row('Model 1 (this season only)','النموذج 1 (هذا الموسم فقط)',A.b1,A.acc1)}${v2?row('Model 2 (starts from last season)','النموذج 2 (يبدأ من الموسم الماضي)',A.b2,A.acc2):''}${row('Bookmakers','شركات المراهنات',A.m,A.accM)}${row('Base rates','النسب العامة',A.bb,A.accB)}</tbody></table></div>
-   <div class="wrap"><table class="lk-t rc-t rc-mkl"><thead><tr><th>${two('League','الدوري')}</th><th class="n">${two('Matches','المباريات')}</th><th class="n">${two('Model 1','النموذج 1')}</th>${v2?`<th class="n">${two('Model 2','النموذج 2')}</th>`:''}<th class="n">${two('Bookmakers','المراهنات')}</th><th class="n lk-nm">${two('Base rates','النسب العامة')}</th></tr></thead><tbody>
-    ${K.rows.map(r=>`<tr><td>${nm(r.l.name)}</td><td class="n">${r.n}</td><td class="n">${f3(r.b1/r.n)}</td>${v2?`<td class="n">${r.prior?f3(r.b2/r.n):'–'}</td>`:''}<td class="n">${f3(r.m/r.n)}</td><td class="n lk-nm">${f3(r.bb/r.n)}</td></tr>`).join('')}</tbody></table></div>
+    ${row('Model 1 (this season only)','النموذج 1 (هذا الموسم فقط)',A.b1,A.acc1)}${v2?row('Model 2 (starts from last season)','النموذج 2 (يبدأ من الموسم الماضي)',A.b2,A.acc2):''}${hasE?row('Club Elo (from results only)','Elo للأندية (من النتائج فقط)',A.be,A.accE):''}${row('Bookmakers','شركات المراهنات',A.m,A.accM)}${row('Base rates','النسب العامة',A.bb,A.accB)}</tbody></table></div>
+   <div class="wrap"><table class="lk-t rc-t rc-mkl"><thead><tr><th>${two('League','الدوري')}</th><th class="n">${two('Matches','المباريات')}</th><th class="n">${two('Model 1','النموذج 1')}</th>${v2?`<th class="n">${two('Model 2','النموذج 2')}</th>`:''}${hasE?`<th class="n">${nb('Elo')}</th>`:''}<th class="n">${two('Bookmakers','المراهنات')}</th><th class="n lk-nm">${two('Base rates','النسب العامة')}</th></tr></thead><tbody>
+    ${K.rows.map(r=>`<tr><td>${nm(r.l.name)}</td><td class="n">${r.n}</td><td class="n">${f3(r.b1/r.n)}</td>${v2?`<td class="n">${r.prior?f3(r.b2/r.n):'–'}</td>`:''}${hasE?`<td class="n">${f3(r.be/r.n)}</td>`:''}<td class="n">${f3(r.m/r.n)}</td><td class="n lk-nm">${f3(r.bb/r.n)}</td></tr>`).join('')}</tbody></table></div>
    <p class="mu ins-note">${two(`Brier: lower is better. Skill: against the league base rates. Model 2 is the one the site uses (Lab, match previews, Beat the model) when the league has last season's numbers; the first tables on this page score it. "Within noise" means the gap is under two standard errors of the per-match differences. The average margin removed from the odds was ${(A.mg/n*100).toFixed(1)}%. Odds: football-data.co.uk, closing average where it has it.`,
      `${nb('Brier')}: الأقل أحسن. المهارة: مقابل النسب العامة للدوري. النموذج 2 هو اللي يستخدمه الموقع (المختبر ومعاينات المباريات وتحدي النموذج) لما يكون للدوري أرقام الموسم الماضي؛ والجداول الأولى بهذي الصفحة تقيّمه. «داخل الضجيج» يعني الفرق أقل من خطأين معياريين لفروق كل مباراة. متوسط الهامش اللي انشال من الأسعار ${nb((A.mg/n*100).toFixed(1)+'%')}. الأسعار: football-data.co.uk، متوسط الإغلاق لو موجود.`)}</p></div>`;
  }

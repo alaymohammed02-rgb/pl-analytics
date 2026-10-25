@@ -31,15 +31,15 @@ function test(){const rows=[],A={n:0,b:0,bb:0,bu:0,acc:0,accB:0,gp:0,ga:0},bins=
 const pc=v=>Math.round(v*100),f3=v=>v.toFixed(3);
 
 /* the market comparison, recomputed from data/market.json with the same independent model */
-function marketTest(){const M=J('market.json'),A={n:0,b1:0,b2:0,m:0,bb:0,acc1:0,acc2:0,accM:0,accB:0,d12:0,d12s:0,d2m:0,d2ms:0,mg:0,priors:0},rows=[];
+function marketTest(){const M=J('market.json'),A={n:0,b1:0,b2:0,m:0,bb:0,acc1:0,acc2:0,accM:0,accB:0,d12:0,d12s:0,d2m:0,d2ms:0,mg:0,priors:0,be:0,accE:0,de2:0,de2s:0,dem:0,dems:0},rows=[];let EL=null;try{EL=J('elo_own.json');if(!EL.leagues||!Object.keys(EL.leagues).length)EL=null}catch(e){EL=null}
  for(const l of IDX.leagues.filter(DOM)){const K=M.leagues[l.id];if(!K)continue;const {ms,xg}=leagueData(l),pri=priorOf(l),p1=predictor(ms,xg),p2=predictor(ms,xg,pri);if(!p1||!p2)continue;if(pri)A.priors++;
   const by=new Map(ms.map(m=>[m.id,m])),res=m=>m.hg>m.ag?0:m.hg===m.ag?1:2,cnt=[0,0,0];ms.forEach(m=>cnt[res(m)]++);
-  const L={name:l.name,n:0,b1:0,b2:0,m:0,bb:0,prior:!!pri};
-  for(const r of K.rows){const m=by.get(r.m);if(!m||!r.fin)continue;const q1=p1(m.home,m.away,m.id),q2=p2(m.home,m.away,m.id);if(!q1||!q2)continue;const k=res(m),oth=[cnt[0]-(k===0),cnt[1]-(k===1),cnt[2]-(k===2)],tot=oth[0]+oth[1]+oth[2],base=oth.map(x=>x/tot),mx=a=>a.indexOf(Math.max(...a));
-   const b1=br(q1.p,k),b2=br(q2.p,k),bk=br(r.p,k),bb=br(base,k);L.n++;L.b1+=b1;L.b2+=b2;L.m+=bk;L.bb+=bb;A.n++;A.b1+=b1;A.b2+=b2;A.m+=bk;A.bb+=bb;A.acc1+=mx(q1.p)===k;A.acc2+=mx(q2.p)===k;A.accM+=mx(r.p)===k;A.accB+=mx(base)===k;
+  const L={name:l.name,n:0,b1:0,b2:0,m:0,bb:0,be:0,prior:!!pri};
+  for(const r of K.rows){const m=by.get(r.m);if(!m||!r.fin)continue;const q1=p1(m.home,m.away,m.id),q2=p2(m.home,m.away,m.id);if(!q1||!q2)continue;const ep=EL&&EL.leagues[l.id]&&EL.leagues[l.id].pred&&EL.leagues[l.id].pred[r.m];if(EL&&!ep)continue;const k=res(m),oth=[cnt[0]-(k===0),cnt[1]-(k===1),cnt[2]-(k===2)],tot=oth[0]+oth[1]+oth[2],base=oth.map(x=>x/tot),mx=a=>a.indexOf(Math.max(...a));
+   const b1=br(q1.p,k),b2=br(q2.p,k),bk=br(r.p,k),bb=br(base,k),be=ep?br(ep,k):0;if(ep){L.be+=be;A.be+=be;A.accE+=mx(ep)===k;A.de2+=be-b2;A.de2s+=(be-b2)**2;A.dem+=be-bk;A.dems+=(be-bk)**2}L.n++;L.b1+=b1;L.b2+=b2;L.m+=bk;L.bb+=bb;A.n++;A.b1+=b1;A.b2+=b2;A.m+=bk;A.bb+=bb;A.acc1+=mx(q1.p)===k;A.acc2+=mx(q2.p)===k;A.accM+=mx(r.p)===k;A.accB+=mx(base)===k;
    A.d12+=b2-b1;A.d12s+=(b2-b1)**2;A.d2m+=b2-bk;A.d2ms+=(b2-bk)**2;A.mg+=r.mg||0}
   if(L.n)rows.push(L)}
- return {A,rows,M}}
+ return {A,rows,M,elo:!!EL}}
 (async()=>{const b=await T.launch(),E=test(),MK=marketTest();
  const {ctx,pg,errs}=await T.open(b,{hash:'#/reportcard'});await pg.waitForSelector('.rc-t',{timeout:120000});
  const A=E.A,skill=1-A.b/A.bb,intro=await pg.textContent('.lk-intro');
@@ -61,14 +61,18 @@ function marketTest(){const M=J('market.json'),A={n:0,b1:0,b2:0,m:0,bb:0,acc1:0,
   ok(n>=100&&tx.includes('same '+n+' finished matches'),'bookmakers: '+n+' matches that both models and the odds can be scored on');
   const t1=await pg.evaluate(()=>[...document.querySelectorAll('.rc-mkt tbody tr')].map(r=>[...r.cells].map(c=>c.innerText.trim())));
   const sk=(x,y)=>{const v=1-x/y;return (v>=0?'+':'−')+Math.abs(v*100).toFixed(1)+'%'};
-  const w1=[['Model 1 (this season only)',f3(A.b1/n),pc(A.acc1/n)+'%',sk(A.b1,A.bb)],['Model 2 (starts from last season)',f3(A.b2/n),pc(A.acc2/n)+'%',sk(A.b2,A.bb)],['Bookmakers',f3(A.m/n),pc(A.accM/n)+'%',sk(A.m,A.bb)],['Base rates',f3(A.bb/n),pc(A.accB/n)+'%','+0.0%']];
+  const w1=[['Model 1 (this season only)',f3(A.b1/n),pc(A.acc1/n)+'%',sk(A.b1,A.bb)],['Model 2 (starts from last season)',f3(A.b2/n),pc(A.acc2/n)+'%',sk(A.b2,A.bb)],...(MK.elo?[['Club Elo (from results only)',f3(A.be/n),pc(A.accE/n)+'%',sk(A.be,A.bb)]]:[]),['Bookmakers',f3(A.m/n),pc(A.accM/n)+'%',sk(A.m,A.bb)],['Base rates',f3(A.bb/n),pc(A.accB/n)+'%','+0.0%']];
   ok(JSON.stringify(t1)===JSON.stringify(w1),'comparison table matches the recomputation: '+w1.map(r=>r[0].slice(0,7)+' '+r[1]).join(' | '));
   const zz=(sum,sq)=>{const m=sum/n,v=Math.max(0,sq/n-m*m)*n/(n-1),se=Math.sqrt(v/n);return {m,sig:Math.abs(m/se)>=1.96}},z12=zz(A.d12,A.d12s),zm=zz(A.d2m,A.d2ms);
   const better=rows=>rows.filter(r=>r.prior&&r.b2<r.b1).length,withP=MK.rows.filter(r=>r.prior).length;
   ok(z12.sig?(z12.m<0?tx.includes('makes the model better: Brier '+f3(A.b1/n)+' → '+f3(A.b2/n))&&tx.includes('and better in '+better(MK.rows)+' of '+withP+' leagues'):tx.includes('makes the model worse')):/makes no clear difference/.test(tx),'the model 1 → 2 sentence follows the numbers: '+f3(A.b1/n)+' → '+f3(A.b2/n)+' ('+(z12.sig?'beyond noise':'within noise')+', better in '+better(MK.rows)+' of '+withP+' leagues)');
   ok(zm.sig?(zm.m>0?/bookmakers are still better than the model/.test(tx):/The model is better than the bookmakers/.test(tx)):/too close to separate/.test(tx),'the model 2 against bookmakers sentence follows the numbers ('+(zm.sig?(zm.m>0?'bookmakers better':'model better')+', beyond noise':'within noise')+', diff '+(A.d2m/n).toFixed(4)+' per match)');
+  if(MK.elo){const zE2=zz(A.de2,A.de2s),zEm=zz(A.dem,A.dems),word=(z,d)=>!z.sig?'too close to separate':(z.m>0?'worse':'better'),i=tx.indexOf('Club Elo, built only from past results');
+   ok(i>=0&&tx.includes('scores Brier '+f3(A.be/n)+' on the same matches')&&tx.includes('against Model 2 it is '+word(zE2)+(zE2.sig?' by':' (')),'the Elo sentence: Brier '+f3(A.be/n)+', against Model 2 '+word(zE2)+' ('+(A.de2/n).toFixed(4)+' per match)');
+   ok(tx.slice(i).includes('against the bookmakers it is '+word(zEm)),'the Elo sentence: against the bookmakers '+word(zEm)+' ('+(A.dem/n).toFixed(4)+' per match)');
+   ok(A.be/n<A.bb/n,'sanity: Elo beats the base rates on these matches ('+f3(A.be/n)+' < '+f3(A.bb/n)+')')}
   const t2=await pg.evaluate(()=>[...document.querySelectorAll('.rc-mkl tbody tr')].map(r=>[...r.cells].map(c=>c.textContent.trim())));
-  const w2=MK.rows.map(r=>[r.name,String(r.n),f3(r.b1/r.n),r.prior?f3(r.b2/r.n):'–',f3(r.m/r.n),f3(r.bb/r.n)]);
+  const w2=MK.rows.map(r=>[r.name,String(r.n),f3(r.b1/r.n),r.prior?f3(r.b2/r.n):'–',...(MK.elo?[f3(r.be/r.n)]:[]),f3(r.m/r.n),f3(r.bb/r.n)]);
   ok(JSON.stringify(t2)===JSON.stringify(w2),'bookmaker league table: '+w2.map(r=>r[0]+' '+r[1]+' '+r[2]+'→'+r[3]).join(' | '));
   ok(tx.includes('The average margin removed from the odds was '+(A.mg/n*100).toFixed(1)+'%'),'average margin removed: '+(A.mg/n*100).toFixed(1)+'%');
   ok(A.m<A.bb&&A.b2<A.b1,'sanity: the bookmakers beat the base rates ('+f3(A.m/n)+' < '+f3(A.bb/n)+') and model 2 beats model 1 ('+f3(A.b2/n)+' < '+f3(A.b1/n)+')')}
