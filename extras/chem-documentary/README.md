@@ -16,14 +16,14 @@ pip install "sherpa-onnx==1.12.40" soundfile numpy pillow   # الإصدار 2.0
 # الصوت (ملف ~67 MB):
 curl -LO https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-piper-ar_JO-kareem-medium.tar.bz2 && tar xjf vits-piper-ar_JO-kareem-medium.tar.bz2
 python3 tts.py vits-piper-ar_JO-kareem-medium build/voice 1.4
-python3 fetch_archive.py                      # اختياري، يحتاج إنترنت عاديًا
-DOC_NAME="اسمك هنا" python3 render.py         # ← build/chemistry_documentary.mp4
+python3 fetch_archive.py                      # يحتاج إنترنت؛ أو ادفع تعديلًا على الملف فيشغّله GitHub Actions
+DOC_NAME="زكريا أحمد العي" DOC_CLASS="الفصل 302" python3 render.py         # ← build/chemistry_documentary.mp4
 python3 render.py --preview 5,30,90           # صور ثابتة للمعاينة في build/stills
 ```
 
 يحتاج `ffmpeg`، ويستعمل خطّي Cairo وAmiri (رخصة OFL، موجودان في `fonts/`).
 
-## المشاهد بالتوقيت (المدة الكلية 2:59.0)
+## المشاهد بالتوقيت (المدة الكلية 3:00.5)
 
 | التوقيت | المشهد | التعليق الصوتي | الصورة |
 |---|---|---|---|
@@ -50,6 +50,8 @@ python3 render.py --preview 5,30,90           # صور ثابتة للمعاين
 
 ## حدود معروفة
 
-- **الصور الأرشيفية:** خوادم Wikimedia وأرشيفات الصور محجوبة في بيئة البناء السحابية. لذلك تعرض النسخة المبنية هنا رسومًا توضيحية بالأبيض والأسود، مكتوبًا عليها صراحة «رسم توضيحي — ليست صورة أرشيفية». لاستبدالها بالصور الحقيقية شغّل `fetch_archive.py` ثم `render.py` على جهاز متصل بالإنترنت.
+- **الصور الأرشيفية وصور العلماء:** تُنزَّل من Wikimedia Commons، وكلها ملكية عامة. التنزيل يجري عبر GitHub Actions (`.github/workflows/chem-archive.yml`)، لأن بيئة البناء السحابية لا تصل إلى Wikimedia. يحتفظ السكربت بثلاث صور مرشحة لكل خانة، والصور المختارة بعد المراجعة بالعين محددة في `PICK` داخل `scenes.py`.
+  - المشهد 2: بيير وماري كوري في مختبرهما، وجدول مندلييف الأصلي (1869)، ومؤتمر سولفاي 1927 (تصوير Benjamin Couprie).
+  - المشهد 7: الرازي من مخطوطة لاتينية تعود إلى نحو 1250م، وليست صورته الحقيقية، والشاشة تقول ذلك. لافوازييه من نقش قديم. مندلييف وماري كوري (نحو 1920) صور فوتوغرافية حقيقية.
 - **لقطات المختبر والتفاعلات:** رسوم متحركة مولّدة بالكود، وليست تصويرًا حقيقيًا.
 - **الصوت:** صوت Piper عربي طبيعي إلى حد جيد، لكنه ليس بجودة الأصوات التجارية.

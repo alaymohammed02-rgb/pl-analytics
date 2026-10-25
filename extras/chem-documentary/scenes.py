@@ -5,7 +5,8 @@ from PIL import Image, ImageDraw, ImageFilter, ImageOps
 from gfx import *
 
 ARCH_DIR = os.environ.get('ARCHIVE_DIR', os.path.join(HERE, 'archive'))
-NAME = os.environ.get('DOC_NAME', '[اكتب اسمك]')
+NAME = os.environ.get('DOC_NAME', 'زكريا أحمد العي')
+CLASS = os.environ.get('DOC_CLASS', 'الفصل 302')
 
 
 # ---------- shared pieces ----------
@@ -92,12 +93,48 @@ def card(F, cx, cy, w, h, title, sub, col, k, title_size=54, sub_size=34, icon=N
         yy += sub_size * 1.35
 
 
+# candidates checked by eye (fetch_archive.py keeps up to three per slot)
+PICK = {'archive_curie_1.jpg', 'archive_mendeleev_1.png', 'archive_solvay_1.jpg', 'portrait_razi_1.JPG',
+        'portrait_lavoisier_1.jpg', 'portrait_mendeleev_2.jpg', 'portrait_curie_1.jpg'}
+
+
 def archive_items():
     p = os.path.join(ARCH_DIR, 'archive.json')
     if not os.path.exists(p):
         return []
     items = [i for i in json.load(open(p, encoding='utf-8')) if os.path.exists(os.path.join(ARCH_DIR, i['file']))]
-    return items
+    arch = [i for i in items if i.get('slot', 'archive').startswith('archive')]
+    # one photo per archive slot: the hand-checked pick when present, else the first candidate
+    out = []
+    for slot in ('archive_curie', 'archive_mendeleev', 'archive_solvay'):
+        c = [i for i in arch if i.get('slot') == slot]
+        c.sort(key=lambda i: i['file'] not in PICK)
+        out += c[:1]
+    return out or arch[:3]
+
+
+def portrait(slot):
+    p = os.path.join(ARCH_DIR, 'archive.json')
+    if not os.path.exists(p):
+        return None
+    c = [i for i in json.load(open(p, encoding='utf-8')) if i.get('slot') == slot and os.path.exists(os.path.join(ARCH_DIR, i['file']))]
+    c.sort(key=lambda i: i['file'] not in PICK)
+    return c[0] if c else None
+
+
+_PORT = {}
+
+
+def portrait_img(name, w, h):
+    key = (name, w, h)
+    if key not in _PORT:
+        im = Image.open(os.path.join(ARCH_DIR, name)).convert('RGB')
+        im = ImageOps.fit(im, (w, h), Image.LANCZOS, centering=(0.5, 0.3))
+        m = Image.new('L', (w, h), 0)
+        ImageDraw.Draw(m).rounded_rectangle([0, 0, w - 1, h - 1], 22, fill=255)
+        im = im.convert('RGBA'); im.putalpha(m)
+        _PORT[key] = im
+    return _PORT[key]
 
 
 _IMG = {}
@@ -108,7 +145,13 @@ def arch_img(name, box_w, box_h):
     if key not in _IMG:
         im = Image.open(os.path.join(ARCH_DIR, name)).convert('L')
         im = ImageOps.autocontrast(im, cutoff=1)
-        im = ImageOps.fit(im, (box_w, box_h), Image.LANCZOS, centering=(0.5, 0.4))
+        if name.lower().endswith('.png'):
+            bg = Image.new('L', (box_w, box_h), 236)
+            im = ImageOps.contain(im, (box_w - 40, box_h - 40), Image.LANCZOS)
+            bg.paste(im, ((box_w - im.width) // 2, (box_h - im.height) // 2))
+            im = bg
+        else:
+            im = ImageOps.fit(im, (box_w, box_h), Image.LANCZOS, centering=(0.5, 0.4))
         _IMG[key] = im.convert('RGBA')
     return _IMG[key]
 
@@ -222,16 +265,18 @@ def s02(F, t, d, B):
     n = len(items)
     if n:
         # real archive photographs (downloaded by fetch_archive.py), Ken Burns + grain
-        seg = d / n
-        i = min(n - 1, int(t / seg))
-        lt = t - i * seg
+        starts = [d * k / n for k in range(n)]   # even share: the narration names the three in a few seconds
+        i = max(k for k in range(n) if t >= starts[k])
+        seg = (starts[i + 1] if i + 1 < n else d) - starts[i]
+        lt = t - starts[i]
         it = items[i]
         im = arch_img(it['file'], 1500, 860)
         z = 1.0 + 0.07 * lt / seg
         k = ease(clamp01(lt / 0.3))
         put(F, im, W / 2 + 30 * (lt / seg - .5) * (1 if i % 2 else -1), 520, alpha=k, scale=z)
-        caption(F, it['caption'], i * seg + 0.2, t, y=975, size=44)
-        text(F, it['credit'], W - 40, H - 22, 22, (200, 200, 200), anchor='rb', alpha=k * 0.9, weight=500)
+        caption(F, it['caption'], starts[i] + 0.15, t, y=975, size=44)
+        text(F, f"{it.get('title', '')[5:]} · {it.get('license', '')} · Wikimedia Commons", W - 40, H - 22, 22, (200, 200, 200),
+             anchor='rb', alpha=k * 0.9, weight=500, rtl=False)
     else:
         # no photographs available: labelled illustrations, never presented as real photos
         idx = 0 if t < beats[1] else (1 if t < beats[2] else 2)
@@ -435,6 +480,10 @@ SCI = [('razi', 'أبو بكر الرازي', 'تُوفّي نحو 925م', 'صن
        ('curie', 'ماري كوري', '1867–1934', 'البولونيوم والراديوم\nأول من فاز بنوبل مرتين', PINK)]
 
 
+PSLOT = ('razi', 'lavoisier', 'mendeleev', 'curie')
+PNOTE = ('مخطوطة لاتينية، نحو 1250م', 'نقش قديم', 'صورة فوتوغرافية', 'صورة نحو 1920')
+
+
 def s07(F, t, d, B):
     F.alpha_composite(background('navy')); particles(F, t, 0.3)
     chip(F, 7, 'أشهر العلماء', t)
@@ -447,12 +496,21 @@ def s07(F, t, d, B):
             continue
         y = 600 - 25 * big
         rounded(F, (cx - 210, y - 330, cx + 210, y + 330), 30, (12, 18, 38, 225), (col if j == cur else GREY) + (255,), 3 + 2 * big, alpha=min(1, k))
-        put(F, glow(95, col), cx, y - 190, alpha=min(1, k) * (0.5 + 0.5 * big))
-        text(F, ('ر', 'ل', 'م', 'ك')[j], cx, y - 195, 110, WHITE, alpha=min(1, k), weight=900)
-        text(F, name, cx, y - 30, 48, col, alpha=min(1, k), weight=900)
-        text(F, yrs, cx, y + 40, 38, GREY, alpha=min(1, k), weight=600, rtl=(j == 0))
+        pi = portrait('portrait_' + PSLOT[j])
+        if pi:
+            put(F, glow(170, col), cx, y - 165, alpha=min(1, k) * 0.35 * (0.5 + 0.5 * big))
+            put(F, portrait_img(pi['file'], 330, 330), cx, y - 165, alpha=min(1, k))
+            if PNOTE[j]:
+                text(F, PNOTE[j], cx, y + 36, 24, GREY, alpha=min(1, k), weight=500)
+        else:
+            put(F, glow(95, col), cx, y - 150, alpha=min(1, k) * (0.5 + 0.5 * big))
+            text(F, ('ر', 'ل', 'م', 'ك')[j], cx, y - 155, 110, WHITE, alpha=min(1, k), weight=900)
+        text(F, name, cx, y + 85, 44, col, alpha=min(1, k), weight=900)
+        text(F, yrs, cx, y + 140, 34, GREY, alpha=min(1, k), weight=600, rtl=(j == 0))
         for li, line in enumerate(what.split('\n')):
-            text(F, line, cx, y + 140 + li * 58, 38, WHITE, alpha=min(1, k), weight=600)
+            text(F, line, cx, y + 205 + li * 50, 33, WHITE, alpha=min(1, k), weight=600)
+    if any(portrait('portrait_' + p) for p in PSLOT):
+        text(F, 'الصور: Wikimedia Commons (ملكية عامة)', 40, H - 22, 22, GREY, anchor='lb', alpha=0.85, weight=500)
 
 
 def _medal(F, x, y, r, t, a):
@@ -497,7 +555,8 @@ def s09(F, t, d, B):
     lt = t - (B['m1'], B['m2'], B['m3'])[part - 1]
     k = min(1, pop(lt, 0))
     myth = ('تحويل الرصاص إلى ذهب', 'إكسير الحياة', 'العالم من أربعة عناصر فقط')[part - 1]
-    rounded(F, (1000, 200, 1820, 330), 30, (40, 10, 24, 220), PINK + (255,), 3, alpha=k)
+    tw = text_img('خرافة: ' + myth, 50, WHITE, 800).width
+    rounded(F, (1660 - tw - 40, 200, 1820, 330), 30, (40, 10, 24, 220), PINK + (255,), 3, alpha=k)
     ic_x(F, 1740, 265, k, 0.8)
     text(F, 'خرافة: ' + myth, 1660, 265, 50, WHITE, anchor='rm', alpha=k, weight=800)
     tk = min(1, pop(t, (B['f1'], B['f2'], B['f3'])[part - 1]))
@@ -526,8 +585,8 @@ def s09(F, t, d, B):
             put(F, glow(110, col), x, 560, alpha=k * fade * 0.8)
             text(F, n, x, 560, 64, WHITE, alpha=k * fade, weight=800)
         if t >= B['f3']:
-            periodic(F, 175, 380, 82, clamp01((t - B['f3']) / 1.2) * 1.0, alpha=1)
-            caption(F, '118 عنصرًا معروفًا اليوم', B['f3'] + 0.3, t, y=1020, size=50)
+            periodic(F, 357, 372, 62, clamp01((t - B['f3']) / 1.2), alpha=1)
+            caption(F, '118 عنصرًا معروفًا اليوم', B['f3'] + 0.3, t, y=1035, size=44)
 
 
 def s10(F, t, d, B):
@@ -540,10 +599,11 @@ def s10(F, t, d, B):
         k3 = ease(clamp01((t - B['thanks'] - 0.5) / 0.5))
         text(F, 'إعداد', W / 2, 700, 44, GREY, alpha=k3, weight=600)
         text(F, NAME, W / 2, 790, 92, AMBER, alpha=k3, weight=800, family='Amiri-Bold')
+        text(F, CLASS, W / 2, 900, 52, WHITE, alpha=k3, weight=700)
         credit = 'التعليق الصوتي: صوت عربي مُولَّد بالذكاء الاصطناعي (Piper)  •  الموسيقى: مولَّدة برمجيًا'
         if archive_items():
             credit += '  •  الصور الأرشيفية: Wikimedia Commons (ملكية عامة)'
-        text(F, credit, W / 2, 1010, 26, GREY, alpha=k3 * 0.9, weight=500)
+        text(F, credit, W / 2, 1035, 26, GREY, alpha=k3 * 0.9, weight=500)
 
 
 SCENES = [s01, s02, s03, s04, s05, s06, s07, s08, s09, s10]

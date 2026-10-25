@@ -9,24 +9,6 @@
   "credit": "Pierre and Marie Curie.jpg — Unknown photographer — Public domain — Wikimedia Commons"
  },
  {
-  "slot": "archive_curie",
-  "file": "archive_curie_2.jpg",
-  "caption": "بيير وماري كوري في مختبرهما",
-  "title": "File:Pierre Curie, by Marie Curie—Illustrations 2.jpg",
-  "source": "https://commons.wikimedia.org/wiki/File:Pierre_Curie,_by_Marie_Curie%E2%80%94Illustrations_2.jpg",
-  "license": "Public domain",
-  "credit": "Pierre Curie, by Marie Curie—Illustrations 2.jpg — Marie Curie, Henri Manuel (1874-1947) — Public domain — Wikimedia Commons"
- },
- {
-  "slot": "archive_curie",
-  "file": "archive_curie_3.jpg",
-  "caption": "بيير وماري كوري في مختبرهما",
-  "title": "File:Marie et Pierre Curie.jpg",
-  "source": "https://commons.wikimedia.org/wiki/File:Marie_et_Pierre_Curie.jpg",
-  "license": "Public domain",
-  "credit": "Marie et Pierre Curie.jpg — Unknown authorUnknown author — Public domain — Wikimedia Commons"
- },
- {
   "slot": "archive_mendeleev",
   "file": "archive_mendeleev_1.png",
   "caption": "جدول مندلييف الدوري الأصلي (1869)",
@@ -36,24 +18,6 @@
   "credit": "Mendeleev's 1869 periodic table.png — Dmitri Mendeleev — Public domain — Wikimedia Commons"
  },
  {
-  "slot": "archive_mendeleev",
-  "file": "archive_mendeleev_2.png",
-  "caption": "جدول مندلييف الدوري الأصلي (1869)",
-  "title": "File:Mendelejevs periodiska system 1871.png",
-  "source": "https://commons.wikimedia.org/wiki/File:Mendelejevs_periodiska_system_1871.png",
-  "license": "Public domain",
-  "credit": "Mendelejevs periodiska system 1871.png — The original uploader was Den fjättrade ankan at Swedish Wik — Public domain — Wikimedia Commons"
- },
- {
-  "slot": "archive_mendeleev",
-  "file": "archive_mendeleev_3.jpg",
-  "caption": "جدول مندلييف الدوري الأصلي (1869)",
-  "title": "File:Mendeleev's periodic table (1869 year).jpg",
-  "source": "https://commons.wikimedia.org/wiki/File:Mendeleev%27s_periodic_table_(1869_year).jpg",
-  "license": "Public domain",
-  "credit": "Mendeleev's periodic table (1869 year).jpg — Dmitri Mendeleev — Public domain — Wikimedia Commons"
- },
- {
   "slot": "archive_solvay",
   "file": "archive_solvay_1.jpg",
   "caption": "مؤتمر سولفاي 1927 — بروكسل",
@@ -61,24 +25,6 @@
   "source": "https://commons.wikimedia.org/wiki/File:Solvay_conference_1927.jpg",
   "license": "Public domain",
   "credit": "Solvay conference 1927.jpg — Benjamin Couprie — Public domain — Wikimedia Commons"
- },
- {
-  "slot": "archive_solvay",
-  "file": "archive_solvay_2.jpg",
-  "caption": "مؤتمر سولفاي 1927 — بروكسل",
-  "title": "File:Solvay conference 1927 Version2.jpg",
-  "source": "https://commons.wikimedia.org/wiki/File:Solvay_conference_1927_Version2.jpg",
-  "license": "Public domain",
-  "credit": "Solvay conference 1927 Version2.jpg — Benjamin Couprie — Public domain — Wikimedia Commons"
- },
- {
-  "slot": "archive_solvay",
-  "file": "archive_solvay_3.jpg",
-  "caption": "مؤتمر سولفاي 1927 — بروكسل",
-  "title": "File:Solvay conference 1927 (color).jpg",
-  "source": "https://commons.wikimedia.org/wiki/File:Solvay_conference_1927_(color).jpg",
-  "license": "CC BY 2.0",
-  "credit": "Solvay conference 1927 (color).jpg — Colorized by Sanna Dullaway — CC BY 2.0 — Wikimedia Commons"
  },
  {
   "slot": "portrait_razi",
@@ -99,33 +45,6 @@
   "credit": "Antoine lavoisier.jpg — Unknown authorUnknown author — Public domain — Wikimedia Commons"
  },
  {
-  "slot": "portrait_lavoisier",
-  "file": "portrait_lavoisier_2.jpg",
-  "caption": "لافوازييه",
-  "title": "File:David - Portrait of Monsieur Lavoisier and His Wife.jpg",
-  "source": "https://commons.wikimedia.org/wiki/File:David_-_Portrait_of_Monsieur_Lavoisier_and_His_Wife.jpg",
-  "license": "Public domain",
-  "credit": "David - Portrait of Monsieur Lavoisier and His Wife.jpg — Jacques-Louis David — Public domain — Wikimedia Commons"
- },
- {
-  "slot": "portrait_lavoisier",
-  "file": "portrait_lavoisier_3.jpg",
-  "caption": "لافوازييه",
-  "title": "File:Portrait of Antoine-Laurent Lavoisier and his wife.jpg",
-  "source": "https://commons.wikimedia.org/wiki/File:Portrait_of_Antoine-Laurent_Lavoisier_and_his_wife.jpg",
-  "license": "Public domain",
-  "credit": "Portrait of Antoine-Laurent Lavoisier and his wife.jpg — Jacques-Louis David — Public domain — Wikimedia Commons"
- },
- {
-  "slot": "portrait_mendeleev",
-  "file": "portrait_mendeleev_1.jpg",
-  "caption": "مندلييف",
-  "title": "File:Dmitri Mendeleev 1890s.jpg",
-  "source": "https://commons.wikimedia.org/wiki/File:Dmitri_Mendeleev_1890s.jpg",
-  "license": "Public domain",
-  "credit": "Dmitri Mendeleev 1890s.jpg — Unknown authorUnknown author — Public domain — Wikimedia Commons"
- },
- {
   "slot": "portrait_mendeleev",
   "file": "portrait_mendeleev_2.jpg",
   "caption": "مندلييف",
@@ -135,15 +54,6 @@
   "credit": "Dmitri Mendeleev.jpg — Original:  Unknown authorUnknown author Upload:  Germansocie — Public domain — Wikimedia Commons"
  },
  {
-  "slot": "portrait_mendeleev",
-  "file": "portrait_mendeleev_3.jpg",
-  "caption": "مندلييف",
-  "title": "File:Dmitri Mendeleev. Photograph. Wellcome M0002600.jpg",
-  "source": "https://commons.wikimedia.org/wiki/File:Dmitri_Mendeleev._Photograph._Wellcome_M0002600.jpg",
-  "license": "CC BY 4.0",
-  "credit": "Dmitri Mendeleev. Photograph. Wellcome M0002600.jpg — مجهول — CC BY 4.0 — Wikimedia Commons"
- },
- {
   "slot": "portrait_curie",
   "file": "portrait_curie_1.jpg",
   "caption": "ماري كوري",
@@ -151,23 +61,5 @@
   "source": "https://commons.wikimedia.org/wiki/File:Marie_Curie_c1920.jpg",
   "license": "Public domain",
   "credit": "Marie Curie c1920.jpg — Henri Manuel — Public domain — Wikimedia Commons"
- },
- {
-  "slot": "portrait_curie",
-  "file": "portrait_curie_2.jpg",
-  "caption": "ماري كوري",
-  "title": "File:Marie Curie 1903.jpg",
-  "source": "https://commons.wikimedia.org/wiki/File:Marie_Curie_1903.jpg",
-  "license": "Public domain",
-  "credit": "Marie Curie 1903.jpg — Nobel foundation — Public domain — Wikimedia Commons"
- },
- {
-  "slot": "portrait_curie",
-  "file": "portrait_curie_3.jpg",
-  "caption": "ماري كوري",
-  "title": "File:Marie Curie c. 1920s.jpg",
-  "source": "https://commons.wikimedia.org/wiki/File:Marie_Curie_c._1920s.jpg",
-  "license": "Public domain",
-  "credit": "Marie Curie c. 1920s.jpg — Henri Manuel — Public domain — Wikimedia Commons"
  }
 ]

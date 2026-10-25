@@ -15,6 +15,7 @@ VOICE = os.path.join(BUILD, 'voice')
 FPS = 30
 LEAD, GAP, HOLD_END = 0.10, 0.22, 1.6     # voice starts LEAD after a cut; GAP after it; end card holds HOLD_END
 SR = 44100
+EXTRA = {'s02': 1.5}   # let the archive photos breathe (music only, no long silence)
 
 
 def timeline():
@@ -23,7 +24,7 @@ def timeline():
     T, t = [], 0.0
     for i, s in enumerate(script):
         v = sf.info(os.path.join(VOICE, s['id'] + '.wav')).duration
-        d = LEAD + v + GAP + (HOLD_END if i == len(script) - 1 else 0)
+        d = LEAD + v + GAP + (HOLD_END if i == len(script) - 1 else 0) + EXTRA.get(s['id'], 0)
         # beats: share of characters before the phrase (tashkeel counted alike on both sides) -> share of voice time
         txt = s['text']
         beats = {}
