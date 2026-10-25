@@ -9009,11 +9009,11 @@ INDEX = _x_fpx_index(INDEX)
 # الكود في ملفات مستقلة في المستودع: assets/*.js و assets/features.css و manifest.webmanifest و sw.js و assets/icons/.
 # هذا القسم يضيف روابطها للصفحة فقط (بعد السكربت الرئيسي، فتلقى R و PAGES جاهزة). غيّر FEATURES_V لما تتغير الملفات.
 # ============================================================================
-FEATURES_V = "41"
+FEATURES_V = "42"
 FEATURES_JS = ("pla-data", "share-card", "threat-map", "match-whatif", "player-page", "match-centre", "home-extra", "team-round",
                "preview", "club-extra", "rankings-extra", "fantasy-extra", "insights-core", "hidden-gems", "player-dna", "team-dna",
                "reality-check", "matches-board", "match-replay", "match-story", "overview", "press-height",
-               "season-sim", "luck-table", "player-twin", "player-cards", "beat-model", "rare-cases", "attack-share", "drawer", "tap-twice", "line-height", "league-pool", "game-states", "likely-xi", "club-twins", "carry-team", "report-card", "league-dna", "thrill", "defense-card", "press-card", "sb-press", "stat-stability", "keeps-up", "goalkeepers", "xi-builder", "seasons", "liquid-glass")
+               "season-sim", "luck-table", "player-twin", "player-cards", "beat-model", "rare-cases", "attack-share", "drawer", "tap-twice", "line-height", "league-pool", "game-states", "likely-xi", "club-twins", "carry-team", "report-card", "league-dna", "thrill", "defense-card", "press-card", "sb-press", "stat-stability", "keeps-up", "goalkeepers", "xi-builder", "player-prices", "seasons", "liquid-glass")
 
 
 def _x_feat_index(html):
@@ -12135,8 +12135,10 @@ TM_PATH = "data/tm.json"
 TM_MAX_AGE_D = 7
 TM_MIN_SEASON = 2025          # last_season في الجدول = سنة بداية آخر موسم لعب فيه (2025 = 2025-26)
 TM_AGE = (15, 46)
+TM_MATCH_V = 2               # نسخة قواعد المطابقة: إذا تغيّرت يُعاد التحميل والمطابقة في أول نافذة بدل انتظار أسبوع
 TM_COLS = ("name", "date_of_birth", "market_value_in_eur", "current_club_name", "last_season")
 TM_FOLD = str.maketrans({"ø": "o", "ð": "d", "æ": "ae", "œ": "oe", "ß": "ss", "ł": "l", "đ": "d", "ı": "i", "þ": "th"})
+TM_POS = {"goalkeeper": "GK", "defender": "DF", "midfield": "MF", "attack": "FW"}      # عمود position في الجدول (اختياري: بدونه ما نفرّق بالمركز)
 TM_CUP = re.compile(r"champions|europa|conference|cup|copa|coppa|pokal|coupe|taça", re.I)
 
 
@@ -12172,7 +12174,8 @@ def tm_rows(text):
         except ValueError:
             val = None
         n = tm_norm(r["name"])
-        out.append({"n": n, "toks": frozenset(n.split()), "club": frozenset(tm_norm(r["current_club_name"]).split()), "dob": dob, "val": val})
+        out.append({"n": n, "toks": frozenset(n.split()), "club": frozenset(tm_norm(r["current_club_name"]).split()), "dob": dob, "val": val,
+                    "pos": TM_POS.get(tm_norm(r.get("position")))})
     return out
 
 
@@ -12181,28 +12184,62 @@ def tm_club_ok(a, b):
 
 
 def tm_match(players, rows, today):
-    """players: [{id, name, club, lgs}] → ({id: [dob, value]}, {"matched", "ambiguous", "unmatched", "implausible", by_league})."""
-    byn, byt = {}, {}
+    """players: [{id, name, club, pos, lgs}] → ({id: [dob, value]}, counts). Order of trust: the same words (any order) = a match if one active row has them;
+    several rows → the club decides, then the position; one name inside the other ("Victor Nilsson Lindelof" / "Victor Lindelof", the shorter with 2+ words
+    and at most 2 words fewer) and a one-word row ("Alisson" / "Alisson Becker") count only when the club agrees too and exactly one row fits."""
+    byn, byt, bytok, one = {}, {}, {}, {}
     for r in rows:
         byn.setdefault(r["n"], []).append(r)
         if len(r["toks"]) > 1:
             byt.setdefault(r["toks"], []).append(r)
-    got, st = {}, {"matched": 0, "ambiguous": 0, "unmatched": 0, "implausible": 0, "by_league": {}}
+            for t in r["toks"]:
+                bytok.setdefault(t, []).append(r)
+        else:
+            one.setdefault(r["n"], []).append(r)
+    got, st = {}, {"matched": 0, "ambiguous": 0, "unmatched": 0, "implausible": 0, "tiers": {"words": 0, "club": 0, "position": 0, "inside": 0, "one_word": 0}, "by_league": {}}
     for p in players:
         n = tm_norm(p["name"])
-        c = byn.get(n) or (byt.get(frozenset(n.split())) if len(n.split()) > 1 else None) or []
+        toks = frozenset(n.split())
         club = frozenset(tm_norm(p.get("club")).split())
+        pos = p.get("pos")
+        c = byn.get(n) or (byt.get(toks) if len(toks) > 1 else None) or []
+        tier = "words"
+        seen_any = bool(c)
         if len(c) > 1:
-            c = [r for r in c if tm_club_ok(club, r["club"])]
-        if not c:
-            k = "unmatched" if not (byn.get(n) or byt.get(frozenset(n.split()))) else "ambiguous"
-        elif len(c) > 1:
-            k = "ambiguous"
-        elif not c[0]["dob"] or not (TM_AGE[0] <= tm_age(c[0]["dob"], today) <= TM_AGE[1]):
-            k = "implausible"
+            f = [r for r in c if tm_club_ok(club, r["club"])]
+            if len(f) == 1:
+                c, tier = f, "club"
+            else:
+                g = [r for r in (f or c) if pos and r["pos"] == pos]
+                c, tier = (g, "position") if len(g) == 1 else ([], tier)
+        if not c and not seen_any:
+            hits, ids = [], set()
+            if len(toks) > 1:
+                for t in toks:
+                    for r in bytok.get(t, ()):
+                        a, b = r["toks"], toks
+                        sm, lg = (a, b) if len(a) <= len(b) else (b, a)
+                        if id(r) not in ids and len(sm) >= 2 and sm < lg and len(lg) - len(sm) <= 2 and tm_club_ok(club, r["club"]):
+                            ids.add(id(r)); hits.append(r)
+            if len(hits) == 1:
+                c, tier = hits, "inside"
+            elif not hits:
+                for t in toks:
+                    for r in one.get(t, ()):
+                        if id(r) not in ids and tm_club_ok(club, r["club"]):
+                            ids.add(id(r)); hits.append(r)
+                if len(hits) == 1:
+                    c, tier = hits, "one_word"
+            seen_any = bool(hits)
+        if len(c) == 1:
+            if not c[0]["dob"] or not (TM_AGE[0] <= tm_age(c[0]["dob"], today) <= TM_AGE[1]):
+                k = "implausible"
+            else:
+                k = "matched"
+                got[p["id"]] = [c[0]["dob"], c[0]["val"]]
+                st["tiers"][tier] += 1
         else:
-            k = "matched"
-            got[p["id"]] = [c[0]["dob"], c[0]["val"]]
+            k = "ambiguous" if seen_any else "unmatched"
         st[k] += 1
         for l in p.get("lgs") or []:
             b = st["by_league"].setdefault(l, {"players": 0, "matched": 0})
@@ -12225,11 +12262,13 @@ def tm_players(hub):
         for r in d.get("rows") or []:
             if r[ix["mi"]] is None:
                 continue
-            p = P.setdefault(r[ix["i"]], {"id": r[ix["i"]], "name": r[ix["n"]], "club": "" if wc else (r[ix["c"]] or ""), "lgs": set()})
+            p = P.setdefault(r[ix["i"]], {"id": r[ix["i"]], "name": r[ix["n"]], "club": "" if wc else (r[ix["c"]] or ""), "lgs": set(), "pm": {}})
             if not p["club"] and not wc:
                 p["club"] = r[ix["c"]] or ""
             p["lgs"].add(l["id"])
-    return [dict(p, lgs=sorted(p["lgs"])) for p in P.values()]
+            if "o" in ix and r[ix["o"]]:
+                p["pm"][r[ix["o"]]] = p["pm"].get(r[ix["o"]], 0) + r[ix["mi"]]
+    return [dict({k: v for k, v in p.items() if k != "pm"}, lgs=sorted(p["lgs"]), pos=max(p["pm"], key=p["pm"].get) if p["pm"] else None) for p in P.values()]
 
 
 def tm_fetch():
@@ -12246,7 +12285,7 @@ def sync_tm(hub, now=None):
         age = (now - datetime.datetime.strptime(old.get("t") or "", "%Y-%m-%d").replace(tzinfo=datetime.timezone.utc)).days
     except ValueError:
         age = None
-    if age is not None and age < TM_MAX_AGE_D:
+    if age is not None and age < TM_MAX_AGE_D and old.get("mv") == TM_MATCH_V:
         return
     if not (now.hour % 3 == 0 and now.minute < 30):
         return        # أول تحميل أو تجديد أسبوعي: في نافذة 30 دقيقة كل 3 ساعات، مو في كل مزامنة
@@ -12262,10 +12301,10 @@ def sync_tm(hub, now=None):
         asof = email.utils.parsedate_to_datetime(lm).strftime("%Y-%m-%d") if lm else None
     except (TypeError, ValueError):
         asof = None
-    out = {"t": now.strftime("%Y-%m-%d"), "asof": asof, "source": "transfermarkt-datasets (CC0), from Transfermarkt", "n_rows": len(rows), "n_players": len(players),
-           "matched": st["matched"], "ambiguous": st["ambiguous"], "unmatched": st["unmatched"], "implausible": st["implausible"], "by_league": st["by_league"], "p": got}
+    out = {"t": now.strftime("%Y-%m-%d"), "mv": TM_MATCH_V, "asof": asof, "source": "transfermarkt-datasets (CC0), from Transfermarkt", "n_rows": len(rows), "n_players": len(players),
+           "matched": st["matched"], "ambiguous": st["ambiguous"], "unmatched": st["unmatched"], "implausible": st["implausible"], "tiers": st["tiers"], "by_league": st["by_league"], "p": got}
     gh_put(hub, TM_PATH, json.dumps(out, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), "Update Transfermarkt ages and values")
-    log(f"  [Transfermarkt] آخر تحديث للمجموعة {asof}: طابقنا {st['matched']} من {len(players)} لاعب ({100 * st['matched'] // max(1, len(players))}%)، ملتبس {st['ambiguous']}، بلا مطابقة {st['unmatched']}، عمر غير معقول {st['implausible']}")
+    log(f"  [Transfermarkt] آخر تحديث للمجموعة {asof}: طابقنا {st['matched']} من {len(players)} لاعب ({100 * st['matched'] // max(1, len(players))}%)، ملتبس {st['ambiguous']}، بلا مطابقة {st['unmatched']}، عمر غير معقول {st['implausible']}، طرق المطابقة {st['tiers']}")
 
 
 _orig_run_pipeline_tm = run_pipeline

@@ -61,6 +61,35 @@ ok('p7' not in got and st['unmatched'] == 1, 'a name that is not in the table: u
 ok('p8' not in got and st['implausible'] == 2, 'born in 1900, or no usable date: no number (implausible)')
 ok(got['p10'] == ['2001-03-03', None] and got['p9'][1] == 110000000, 'a player with a date but no value keeps the date')
 ok(st['matched'] == 7 and st['by_league']['L1'] == {'players': 9, 'matched': 5} and st['by_league']['L2'] == {'players': 2, 'matched': 2}, 'counts: 7 matched; per league L1 5 of 9, L2 2 of 2 %s' % st['by_league'])
+# ---- the looser names: one inside the other, one-word names, the position as a tiebreak (the club must agree for the looser two)
+R2 = rows_of(HEAD + '\n'.join([
+ '20,Victor Lindelöf,1994-07-17,12000000.0,Aston Villa Football Club,2025,Defender',
+ '21,Alisson,1992-10-02,20000000.0,Liverpool Football Club,2025,Goalkeeper',
+ '22,Luis Fernando Díaz,1997-01-13,80000000.0,Liverpool Football Club,2025,Attack',
+ '23,Sam Smith,1999-01-01,3000000.0,Club One,2025,Defender',
+ '24,Sam Smith,2000-02-02,4000000.0,Club Two,2025,Attack',
+ '25,Ann Bea,1999-09-09,1000000.0,Same FC,2025,Attack',
+ '26,Ann Bea Cee,1998-08-08,2000000.0,Same FC,2025,Attack',
+ '27,Kim Lee,1997-07-07,1000000.0,Seoul FC,2025,Midfield',
+]))
+P2 = [dict(id='q1', name='Victor Nilsson Lindelof', club='Aston Villa', pos='DF', lgs=['L1']),
+      dict(id='q2', name='Alisson Becker', club='Liverpool', pos='GK', lgs=['L1']),
+      dict(id='q3', name='Alisson Becker', club='Chelsea', pos='GK', lgs=['L1']),
+      dict(id='q4', name='Luis Diaz', club='Bayern München', pos='FW', lgs=['L1']),
+      dict(id='q5', name='Luis Diaz', club='Liverpool', pos='FW', lgs=['L1']),
+      dict(id='q6', name='Sam Smith', club='Elsewhere', pos='FW', lgs=['L1']),
+      dict(id='q7', name='Sam Smith', club='Elsewhere', pos=None, lgs=['L1']),
+      dict(id='q8', name='Ann Bea', club='Same', pos='FW', lgs=['L1']),
+      dict(id='q9', name='Kim Lee Park Choi Han', club='Seoul', pos='MF', lgs=['L1'])]
+got2, st2 = match(P2, R2, T)
+ok(got2['q1'] == ['1994-07-17', 12000000], 'one name inside the other: "Victor Nilsson Lindelof" finds "Victor Lindelöf" (same club)')
+ok(got2['q2'] == ['1992-10-02', 20000000], 'a one-word row: "Alisson Becker" finds "Alisson" at Liverpool')
+ok('q3' not in got2, 'the same, but his club is another one: no number (a one-word row needs the club)')
+ok('q4' not in got2 and got2['q5'] == ['1997-01-13', 80000000], '"Luis Diaz" finds "Luis Fernando Díaz" only when the club agrees')
+ok(got2['q6'] == ['2000-02-02', 4000000] and 'q7' not in got2, 'the same name at two clubs, neither the club: the position decides (forward); without a position it stays ambiguous')
+ok(got2['q8'] == ['1999-09-09', 1000000], '"Ann Bea": the exact row wins, the longer "Ann Bea Cee" is never tried')
+ok('q9' not in got2, 'a row with three words fewer is not "inside" (at most two words fewer)')
+ok(st2['tiers'] == {'words': 1, 'club': 0, 'position': 1, 'inside': 2, 'one_word': 1}, 'the tiers counted: %s' % st2['tiers'])
 # ---- which players are asked about
 STORE['data/index.json'] = {'leagues': [
  {'id': 'WC', 'name': 'World Cup', 'pl_file': 'WC_pl.json'},
@@ -87,7 +116,9 @@ f = PUT.get('data/tm.json')
 ok(len(FETCH) == 1 and f and f['p'] == {'p1': ['2000-07-12', 150000000], 'p2': ['1998-12-17', 70000000]} and f['asof'] == '2026-07-06' and f['t'] == '2026-10-24', 'no file, 12:10: downloaded and written: two players matched, the dataset dated 2026-07-06 (its Last-Modified)')
 ok(f['matched'] == 2 and f['unmatched'] == 1 and f['n_players'] == 3 and f['by_league']['L1'] == {'players': 3, 'matched': 2} and any('طابقنا 2 من 3' in l for l in LOG), 'the file counts matched / unmatched and the log says how many of how many (%s)' % LOG[-1:])
 FETCH.clear(); PUT.clear(); sync('hub', at(12, 10, datetime.datetime(2026, 10, 28))); ok(not FETCH and not PUT, 'a file from 4 days ago: not downloaded again')
-sync('hub', at(12, 10, datetime.datetime(2026, 11, 2))); ok(len(FETCH) == 1 and PUT['data/tm.json']['t'] == '2026-11-02', 'a file from 9 days ago: downloaded again in the window')
+STORE['data/tm.json'] = dict(STORE['data/tm.json'], mv=1); sync('hub', at(12, 10, datetime.datetime(2026, 10, 28))); ok(len(FETCH) == 1 and PUT['data/tm.json']['mv'] == G['TM_MATCH_V'], 'a file made with older matching rules (mv 1), even 4 days old: matched again in the window')
+FETCH.clear(); PUT.clear()
+sync('hub', at(12, 10, datetime.datetime(2026, 11, 6))); ok(len(FETCH) == 1 and PUT['data/tm.json']['t'] == '2026-11-06', 'a file from 9 days ago (28 Oct → 6 Nov): downloaded again in the window')
 # the empty placeholder file kept in the repo (so the page's request does not 404 before the first download) counts as no file
 STORE['data/tm.json'] = {'t': '', 'p': {}}; FETCH.clear(); PUT.clear()
 sync('hub', at(13, 10)); ok(not FETCH, 'placeholder file, 13:10: outside the window, nothing downloaded')
