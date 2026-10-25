@@ -5,7 +5,7 @@ Run on a machine with internet access (the build sandbox could not reach Wikimed
 Only files whose Commons licence is public domain, CC0 or CC BY(-SA) are kept; each one's author, date and licence go into
 archive/archive.json and are printed on screen under the photo. With no files, scene 2 shows labelled illustrations.
 """
-import json, os, re, sys, urllib.parse, urllib.request
+import json, os, re, sys, time, urllib.error, urllib.parse, urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, 'archive')
@@ -27,10 +27,21 @@ SLOTS = [
 ]
 
 
+def fetch(url, tries=6):
+    # Wikimedia answers 429 to fast callers: pace every request and back off
+    for k in range(tries):
+        time.sleep(1.5)
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=60) as r:
+                return r.read()
+        except urllib.error.HTTPError as e:
+            if e.code != 429 or k == tries - 1:
+                raise
+            time.sleep(5 * 2 ** k)
+
+
 def get(params):
-    q = urllib.parse.urlencode(dict(params, format='json'))
-    with urllib.request.urlopen(urllib.request.Request(f'{API}?{q}', headers=UA), timeout=30) as r:
-        return json.load(r)
+    return json.loads(fetch(f"{API}?{urllib.parse.urlencode(dict(params, format='json'))}"))
 
 
 def info(title):
@@ -38,7 +49,7 @@ def info(title):
     for p in r['query']['pages'].values():
         if 'imageinfo' in p:
             ii = p['imageinfo'][0]
-            md = {k: re.sub('<[^>]+>', '', v.get('value', '')).strip() for k, v in ii.get('extmetadata', {}).items()}
+            md = {k: re.sub('<[^>]+>', '', str(v.get('value', ''))).strip() for k, v in ii.get('extmetadata', {}).items()}
             return dict(title=p['title'], url=ii.get('thumburl') or ii['url'], page=ii.get('descriptionurl', ''),
                         license=md.get('LicenseShortName', ''), artist=md.get('Artist', ''), date=md.get('DateTimeOriginal', ''))
     return None
@@ -54,33 +65,40 @@ def search(text):
     return [h['title'] for h in r['query']['search']]
 
 
+PER_SLOT = 3   # keep a few candidates per slot; the first one is used unless archive.json is reordered
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     items = []
     for slot, cap, titles, q in SLOTS:
-        chosen = None
         try:
             found = search(q)
         except Exception as e:
             print('   search error', e); found = []
+        got, seen = 0, set()
         for t in titles + found:
+            if got >= PER_SLOT or t in seen or not re.search(r'\.(jpe?g|png|tiff?)$', t, re.I):
+                continue
+            seen.add(t)
             try:
                 i = info(t)
             except Exception as e:
                 print('  ', t, 'error', e); continue
             print(f"  {t}: {i and i['license']}")
-            if free(i):
-                chosen = i; break
-        if not chosen:
-            print(f'{slot}: no public-domain file found, scene 2 keeps the illustration'); continue
-        ext = os.path.splitext(urllib.parse.urlparse(chosen['url']).path)[1] or '.jpg'
-        fn = f'{slot}{ext}'
-        with urllib.request.urlopen(urllib.request.Request(chosen['url'], headers=UA), timeout=60) as r:
-            open(os.path.join(OUT, fn), 'wb').write(r.read())
-        artist = chosen['artist'][:60] or 'مجهول'
-        items.append(dict(slot=slot, file=fn, caption=cap, credit=f"{chosen['title'][5:]} — {artist} — {chosen['license']} — Wikimedia Commons",
-                          source=chosen['page']))
-        print(f'{slot}: {chosen["title"]} ({chosen["license"]})')
+            if not free(i):
+                continue
+            ext = os.path.splitext(urllib.parse.urlparse(i['url']).path)[1] or '.jpg'
+            fn = f'{slot}_{got + 1}{ext}'
+            try:
+                open(os.path.join(OUT, fn), 'wb').write(fetch(i['url']))
+            except Exception as e:
+                print('   download error', e); continue
+            artist = (i['artist'][:60] or 'مجهول').replace('\n', ' ')
+            items.append(dict(slot=slot, file=fn, caption=cap, title=i['title'], source=i['page'], license=i['license'],
+                              credit=f"{i['title'][5:]} — {artist} — {i['license']} — Wikimedia Commons"))
+            got += 1
+        print(f'{slot}: {got} file(s)')
     json.dump(items, open(os.path.join(OUT, 'archive.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
     print(f'{len(items)} photos saved in {OUT}')
     return 0 if items else 1
