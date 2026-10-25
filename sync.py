@@ -9009,11 +9009,11 @@ INDEX = _x_fpx_index(INDEX)
 # الكود في ملفات مستقلة في المستودع: assets/*.js و assets/features.css و manifest.webmanifest و sw.js و assets/icons/.
 # هذا القسم يضيف روابطها للصفحة فقط (بعد السكربت الرئيسي، فتلقى R و PAGES جاهزة). غيّر FEATURES_V لما تتغير الملفات.
 # ============================================================================
-FEATURES_V = "42"
+FEATURES_V = "43"
 FEATURES_JS = ("pla-data", "share-card", "threat-map", "match-whatif", "player-page", "match-centre", "home-extra", "team-round",
                "preview", "club-extra", "rankings-extra", "fantasy-extra", "insights-core", "hidden-gems", "player-dna", "team-dna",
                "reality-check", "matches-board", "match-replay", "match-story", "overview", "press-height",
-               "season-sim", "luck-table", "player-twin", "player-cards", "beat-model", "rare-cases", "attack-share", "drawer", "tap-twice", "line-height", "league-pool", "game-states", "likely-xi", "club-twins", "carry-team", "report-card", "league-dna", "thrill", "defense-card", "press-card", "sb-press", "stat-stability", "keeps-up", "goalkeepers", "xi-builder", "player-prices", "seasons", "liquid-glass")
+               "season-sim", "luck-table", "player-twin", "player-cards", "beat-model", "rare-cases", "attack-share", "drawer", "tap-twice", "line-height", "league-pool", "game-states", "likely-xi", "club-twins", "carry-team", "report-card", "league-dna", "thrill", "defense-card", "press-card", "sb-press", "stat-stability", "keeps-up", "goalkeepers", "xi-builder", "player-prices", "club-elo", "seasons", "liquid-glass")
 
 
 def _x_feat_index(html):
@@ -11494,7 +11494,7 @@ function psSaved(){for(const st of [()=>localStorage,()=>sessionStorage])try{con
 /* files that only describe the current season (today's matches, coming fixtures, live scores, season facts, rare cases):
    in a past season they answer "not found", so the widgets that use them stay out instead of mixing in this season */
 function psCurOnly(){if(window.__psF)return;const f0=window.fetch;window.__psF=1;
- window.fetch=function(u){const s=String(u&&u.url||u);if(/(^|\/)data\/(live|fixtures|schedule|facts|rare|fpl|fpl_track|market|elo|priors)\.json/.test(s))return Promise.resolve(new Response('{}',{status:404}));return f0.apply(this,arguments)}}
+ window.fetch=function(u){const s=String(u&&u.url||u);if(/(^|\/)data\/(live|fixtures|schedule|facts|rare|fpl|fpl_track|market|elo|elo_own|priors)\.json/.test(s))return Promise.resolve(new Response('{}',{status:404}));return f0.apply(this,arguments)}}
 function psView(x){
  ALL0=x;const s=psSaved();if(!s||!x||!x.seasons||!x.leagues)return x;
  let lid=null;for(const st of [()=>localStorage,()=>sessionStorage])try{lid=st().getItem('league');if(lid)break}catch(e){}
@@ -12318,6 +12318,164 @@ def run_pipeline(hub, pit_key):
         log(f"  [Transfermarkt] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
     return out
 # ===== TRANSFERMARKT END =====
+
+
+# ===== ELO2 START =====
+# تقييم Elo للأندية من نتائج PitchAPI نفسها (data/elo_own.json)، بدل ClubElo اللي ما يرد على سيرفرات GitHub: لكل دوري على حدة (التقييمات بين الدوريات
+# ما تتقارن)، من سلسلة المواسم المتصلة المنتهية بالموسم الحالي (الإنجليزي من 2021-22، الباقي من 2024-25). المعاملات انضبطت على مباريات قبل 1 أغسطس 2025 فقط
+# (tools/elo/fit.py) وجُرّبت على ما بعده: K=30، أفضلية الأرض 50 نقطة، مضاعف فرق الأهداف (1 / 1.5 / (11+فرق)/8)، سحب 10% نحو متوسط الدوري بين موسم وموسم،
+# والنادي الجديد يبدأ من متوسط الدوري. احتمال الفوز/التعادل/الخسارة من فرق التقييم عبر ordered logit (s=175، c=0.55) انضبط على نفس المباريات القديمة.
+# الملف فيه: التقييم الحالي وآخر 60 تقييم لكل نادي، واحتمالات مباريات الموسم الحالي المحسوبة قبل انطلاقها، واختبار على كل المباريات من 2025-08-01
+# (Brier مقابل نسب الفوز/التعادل العامة). يُعاد حسابه فقط إذا تغيّر عدد المباريات. اختياري: الخطأ ما يوقف المزامنة.
+import math
+EL2_PATH = "data/elo_own.json"
+EL2 = {"K": 30.0, "H": 50.0, "reg": 0.1, "s": 175.0, "c": 0.55}
+EL2_SPLIT = "2025-08-01"
+EL2_HIST = 60
+
+
+def el2_season(d):
+    y = int(d[:4])
+    return y if int(d[5:7]) >= 7 else y - 1
+
+
+def el2_probs(dr, P=EL2):
+    x = dr / P["s"]
+    ph = 1 / (1 + math.exp(-(x - P["c"])))
+    pa = 1 - 1 / (1 + math.exp(-(x + P["c"])))
+    return [ph, 1 - ph - pa, pa]
+
+
+def el2_run(ms, P=EL2):
+    """ms: [(date, home, away, hg, ag, id)] (any order) → (ratings, hist, rows): rows = [(date, id, dr, outcome 0/1/2, probs)] computed BEFORE each match is played."""
+    R, hist, rows, last = {}, {}, [], None
+    for d, h, a, g1, g2, mid in sorted(ms, key=lambda m: (m[0], m[5])):
+        sea = el2_season(d)
+        if last is not None and sea != last and R:
+            mean = sum(R.values()) / len(R)
+            for t in R:
+                R[t] = mean + (1 - P["reg"]) * (R[t] - mean)
+        last = sea
+        for t in (h, a):
+            if t not in R:
+                R[t] = sum(R.values()) / len(R) if R else 1500.0
+        dr = R[h] - R[a] + P["H"]
+        e = 1 / (1 + 10 ** (-dr / 400))
+        sc = 1.0 if g1 > g2 else 0.5 if g1 == g2 else 0.0
+        gd = abs(g1 - g2)
+        mult = 1.0 if gd <= 1 else 1.5 if gd == 2 else (11 + gd) / 8
+        rows.append((d, mid, dr, 0 if g1 > g2 else 1 if g1 == g2 else 2, el2_probs(dr, P)))
+        ch = P["K"] * mult * (sc - e)
+        R[h] += ch
+        R[a] -= ch
+        for t in (h, a):
+            hist.setdefault(t, []).append([d, round(R[t], 1)])
+    return R, hist, rows
+
+
+def el2_brier(p, o):
+    return sum((p[i] - (1 if i == o else 0)) ** 2 for i in range(3))
+
+
+def el2_files(sj, idx, lid):
+    """the file names of the chain of finished past seasons that ends right before the current one (each one year after the other), then the current file."""
+    v = (sj.get("leagues") or {}).get(lid) or {}
+    cur = v.get("cur")
+    ok = {lab for lab, e in (v.get("seasons") or {}).items() if e.get("complete") and (e.get("files") or {}).get("file")}
+    chain, y = [], int(cur[:4]) - 1 if cur else None
+    while y is not None:
+        lab = f"{y}-{str(y + 1)[2:]}"
+        if lab not in ok:
+            break
+        chain.append(lab)
+        y -= 1
+    chain.reverse()
+    files = [v["seasons"][lab]["files"]["file"] for lab in chain]
+    now = next((l for l in (idx.get("leagues") or []) if l.get("id") == lid), None)
+    if now and now.get("file"):
+        files.append(now["file"])
+    return chain, files
+
+
+def el2_matches(hub, files):
+    seen, out = set(), []
+    for f in files:
+        for m in (gh_get_json(hub, "data/" + f) or {}).get("matches") or []:
+            sc = re.fullmatch(r"(\d+)-(\d+)", str(m.get("s") or "").strip())
+            if sc and m.get("d") and m.get("i") not in seen:
+                seen.add(m["i"])
+                out.append((str(m["d"])[:10], m["h"], m["a"], int(sc.group(1)), int(sc.group(2)), m["i"]))
+    return out
+
+
+def el2_backtest(rows_by_league):
+    allr = [(lid,) + r for lid, rs in rows_by_league.items() for r in rs]
+    tr = [r for r in allr if r[1] < EL2_SPLIT]
+    te = [r for r in allr if r[1] >= EL2_SPLIT]
+    if not tr or not te:
+        return None
+    base = [sum(1 for r in tr if r[4] == i) / len(tr) for i in range(3)]
+    b = sum(el2_brier(r[5], r[4]) for r in te) / len(te)
+    bb = sum(el2_brier(base, r[4]) for r in te) / len(te)
+    acc = sum(1 for r in te if max(range(3), key=lambda i: r[5][i]) == r[4]) / len(te)
+    per = {}
+    for lid in rows_by_league:
+        t = [r for r in te if r[0] == lid]
+        if t:
+            per[lid] = {"n": len(t), "brier": round(sum(el2_brier(r[5], r[4]) for r in t) / len(t), 4), "base": round(sum(el2_brier(base, r[4]) for r in t) / len(t), 4)}
+    return {"split": EL2_SPLIT, "n": len(te), "n_train": len(tr), "brier": round(b, 4), "base": round(bb, 4), "acc": round(acc, 4), "base_rates": [round(x, 4) for x in base], "per_league": per}
+
+
+def sync_elo2(hub, now=None):
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    idx = gh_get_json(hub, "data/index.json") or {}
+    sj = gh_get_json(hub, "data/seasons.json") or {}
+    names = {l["id"]: l.get("name") for l in idx.get("leagues") or []}
+    data, key_src = {}, {}
+    for lid in MK_LEAGUES:
+        if lid not in names:
+            continue
+        chain, files = el2_files(sj, idx, lid)
+        ms = el2_matches(hub, files)
+        if len(ms) < 50:
+            continue
+        data[lid] = (chain, files, ms)
+        key_src[lid] = [len(ms), max(m[0] for m in ms), chain]
+    key = hashlib.sha1(json.dumps([key_src, EL2], sort_keys=True).encode()).hexdigest()[:10]
+    old = gh_get_json(hub, EL2_PATH) or {}
+    if not data or old.get("key") == key:
+        return
+    out = {"t": now.strftime("%Y-%m-%d %H:%M:%S"), "key": key, "params": EL2, "source": "PitchAPI results", "leagues": {}}
+    rows_by = {}
+    for lid, (chain, files, ms) in data.items():
+        R, hist, rows = el2_run(ms)
+        rows_by[lid] = rows
+        cur_year = el2_season(max(m[0] for m in ms))
+        cur_teams = {t for m in ms if el2_season(m[0]) == cur_year for t in (m[1], m[2])}
+        teams = {}
+        for t in sorted(cur_teams):
+            h = hist.get(t) or []
+            teams[t] = {"r": round(R[t], 1), "n": len(h), "d5": round(h[-1][1] - h[-6][1], 1) if len(h) > 5 else None,
+                        "d10": round(h[-1][1] - h[-11][1], 1) if len(h) > 10 else None, "h": h[-EL2_HIST:]}
+        out["leagues"][lid] = {"name": names.get(lid), "seasons": chain + [f"{cur_year}-{str(cur_year + 1)[2:]}"], "n": len(ms), "last": max(m[0] for m in ms), "teams": teams,
+                               "pred": {r[1]: [round(x, 4) for x in r[4]] for r in rows if el2_season(r[0]) == cur_year}}
+    out["backtest"] = el2_backtest(rows_by)
+    gh_put(hub, EL2_PATH, json.dumps(out, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), "Update club Elo ratings")
+    bt = out["backtest"] or {}
+    log(f"  [Elo خاص] {len(out['leagues'])} دوري، " + "، ".join(f"{lid[-3:]} {v['n']} مباراة" for lid, v in out["leagues"].items()) + f" — اختبار {bt.get('n')} مباراة: Brier {bt.get('brier')} مقابل {bt.get('base')} لنسب الفوز العامة")
+
+
+_orig_run_pipeline_el2 = run_pipeline
+
+
+def run_pipeline(hub, pit_key):
+    out = _orig_run_pipeline_el2(hub, pit_key)
+    try:
+        sync_elo2(hub)
+    except Exception as e:      # optional: never stops the sync
+        log(f"  [Elo خاص] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
+    return out
+# ===== ELO2 END =====
 
 
 if __name__ == "__main__":

@@ -424,5 +424,7 @@ html[dir=rtl] .dl-bars .ph-bn bdi{text-align:right}
 .pr-p{display:inline-flex;align-items:center;gap:8px}.pr-p .xb-av{width:30px;height:30px;font-size:11px}.pr-v{font-weight:600}.pr-n{margin:2px 0 6px}
 .pr-tm{font-size:12px}.lk-t.pr-t td,.lk-t.pr-c td{vertical-align:middle}
 @media(max-width:600px){.pr-t th:nth-child(1),.pr-t td:nth-child(1),.pr-t th:nth-child(3),.pr-t td:nth-child(3),.pr-t th:nth-child(4),.pr-t td:nth-child(4),.pr-t th:nth-child(5),.pr-t td:nth-child(5),.pr-t th:nth-child(7),.pr-t td:nth-child(7),.pr-c th:nth-child(1),.pr-c td:nth-child(1),.pr-c th:nth-child(3),.pr-c td:nth-child(3),.pr-c th:nth-child(6),.pr-c td:nth-child(6),.pr-c th:nth-child(7),.pr-c td:nth-child(7){display:none}.pr-t td:nth-child(2),.pr-c td:nth-child(2){white-space:normal}}
+.el-sp{display:block}.el-t td{vertical-align:middle}
+@media(max-width:600px){.el-t th:nth-child(1),.el-t td:nth-child(1),.el-t th:nth-child(5),.el-t td:nth-child(5),.el-t th:nth-child(6),.el-t td:nth-child(6),.el-t th:nth-child(7),.el-t td:nth-child(7){display:none}.el-t td:nth-child(2){white-space:normal}}
 @media(max-width:600px){.xb-av{width:36px;height:36px;font-size:12px}.xb-av.big{width:46px;height:46px}.xb-nm{font-size:10.5px}.xb-slot{width:24%}}
 
