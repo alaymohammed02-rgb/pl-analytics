@@ -35,7 +35,8 @@ const store=pg=>pg.evaluate(()=>JSON.parse(localStorage.getItem('plx_lab_v1')||'
   /* finished matches here and in LaLiga, one saved too late */
   /* matches whose deadline (23:00 UTC on their day) has already passed: a match played today is not settled until then */
   const past=m=>sc(m.s)&&Date.parse(m.d.slice(0,10)+'T23:00:00Z')<Date.now();
-  const pm=PL.matches.filter(past).slice(-3),LA=J('l_0ErfuF.json'),lm=LA.matches.filter(past).slice(-1)[0];
+  /* the three matches are taken from before the end of Gameweek 7 (22 Oct), so the weekly review below always has results in its week, whatever day the test runs */
+  const pm=PL.matches.filter(m=>past(m)&&m.d.slice(0,10)<='2026-10-22').slice(-3),LA=J('l_0ErfuF.json'),lm=LA.matches.filter(past).slice(-1)[0];
   await pg.evaluate(([pm,lm])=>{const o=labRead();pm.forEach((m,i)=>o.recs.push({id:'m'+i,type:'match',lid:'l_4WFCIZ',lname:'Premier League',mid:m.i,h:m.h,a:m.a,dl:m.d.slice(0,10)+'T23:00:00Z',at:i===2?m.d.slice(0,10)+'T23:30:00Z':'2026-10-01T00:00:00Z',pick:'H',conf:.6,pr:[.6,.2,.2],model:{p:[.5,.3,.2],ver:'xg-poisson-1'},why:''}));
    o.recs.push({id:'la',type:'match',lid:'l_0ErfuF',lname:'LaLiga',mid:lm.i,h:lm.h,a:lm.a,dl:lm.d.slice(0,10)+'T23:00:00Z',at:'2026-10-01T00:00:00Z',pick:'D',conf:.4,pr:[.3,.4,.3],model:null,why:''});labWrite(o)},[pm,lm]);
   await tab(pg,'review');S=await store(pg);const B=(p,o)=>p.reduce((s,x,i)=>s+Math.pow(x-(i===o?1:0),2),0),oc=s=>{const g=sc(s);return g[0]>g[1]?0:g[0]===g[1]?1:2};
