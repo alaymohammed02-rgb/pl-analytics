@@ -12,8 +12,25 @@ import re
 
 
 def pausal(text):
-    # MSA pause form: a word-final taa marbuta before a pause is read "h", not "t" (the voice said "al-udwiyyat")
-    return re.sub(r'ة[\u064B-\u0652]*(?=\s*[،.:؛؟!»]|$)', 'ه', text)
+    """Waqf (pausal form) before every pause: a clause-final word loses its case vowel / nunation.
+    Read with the vowel, the voice sounds it ("al-kimiya'u", "nawatihi"); a fluent MSA reader stops on a sukun.
+      -u -i -a  ->  sukun        -un -in  ->  sukun        -an (with alif)  ->  -a + alif        ta marbuta -> ha
+    """
+    D = '\u064B\u064C\u064D\u064E\u064F\u0650\u0651\u0652'          # tanween x3, fatha, damma, kasra, shadda, sukun
+    pause = r'(?=[\u00BB"\u201D]*\s*(?:[\u060C.:\u061B\u061F!]|$))'
+
+    def fix(m):
+        w = m.group(0)
+        w = re.sub('\u064B\u0627$', '\u064E\u0627', w)                 # -an + alif  -> -a + alif (long a in waqf)
+        w = re.sub('\u0629\u064B$', '\u0647\u0652', w)                 # ta marbuta + -an -> ha
+        w = re.sub('\u0629[\u064C\u064D\u064E\u064F\u0650]?$', '\u0647\u0652', w)   # ta marbuta (+ vowel) -> ha
+        w = re.sub('\u064B$', '', w)                                    # bare -an (on hamza / ta) -> nothing
+        w = re.sub('[\u064B\u064C\u064D\u064E\u064F\u0650]\u0651$', '\u0651', w)   # vowel + shadda (-iyyu, -mmun) -> shadda
+        w = re.sub('\u0651[\u064B\u064C\u064D\u064E\u064F\u0650]$', '\u0651', w)   # shadda + vowel -> shadda
+        w = re.sub('\u0651\u0652$', '\u0651', w)                      # shadda + sukun -> shadda
+        w = re.sub('[\u064C\u064D\u064E\u064F\u0650]$', '\u0652', w)  # -un -in -a -u -i  -> sukun
+        return w
+    return re.sub('[\u0621-\u064A' + D + ']+' + pause, fix, text)
 
 
 for s in json.load(open(f'{here}/script.json', encoding='utf-8')):
