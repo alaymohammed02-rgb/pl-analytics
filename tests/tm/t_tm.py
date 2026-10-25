@@ -92,7 +92,11 @@ sync('hub', at(12, 10, datetime.datetime(2026, 11, 2))); ok(len(FETCH) == 1 and 
 STORE['data/tm.json'] = {'t': '', 'p': {}}; FETCH.clear(); PUT.clear()
 sync('hub', at(13, 10)); ok(not FETCH, 'placeholder file, 13:10: outside the window, nothing downloaded')
 sync('hub', at(12, 10)); ok(len(FETCH) == 1 and PUT['data/tm.json']['matched'] == 2, 'placeholder file, 12:10: treated as no file, downloaded and replaced')
-ok(json.load(open(os.path.join(REPO, 'data', 'tm.json'))) == {'t': '', 'p': {}}, 'data/tm.json in the repo is the empty placeholder until the first download')
+F = json.load(open(os.path.join(REPO, 'data', 'tm.json')))
+if F.get('p'):   # the real file the sync wrote: its own counts add up and every entry is [date of birth, value]
+    ok(F['matched'] == len(F['p']) and F['matched'] + F['ambiguous'] + F['unmatched'] + F['implausible'] == F['n_players'] and all(re.fullmatch(r'\d{4}-\d{2}-\d{2}', v[0]) and (v[1] is None or v[1] >= 0) for v in F['p'].values()), 'data/tm.json: %d matched of %d players, the counts add up and every entry is [date, value]' % (F['matched'], F['n_players']))
+else:
+    ok(F == {'t': '', 'p': {}}, 'data/tm.json in the repo is the empty placeholder until the first download')
 # ---- failures never stop the sync and never overwrite
 STORE.pop('data/tm.json'); PUT.clear(); LOG.clear()
 def fetch_bad():
