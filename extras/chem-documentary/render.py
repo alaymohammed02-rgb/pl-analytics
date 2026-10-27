@@ -13,28 +13,52 @@ sys.path.insert(0, HERE)
 BUILD = os.path.join(HERE, 'build')
 VOICE = os.path.join(BUILD, 'voice')
 FPS = 30
-LEAD, GAP, HOLD_END = 0.10, 0.22, 1.6     # voice starts LEAD after a cut; GAP after it; end card holds HOLD_END
+LEAD, GAP, HOLD_END = 0.10, 0.20, 1.3     # voice starts LEAD after a cut; GAP after it; end card holds HOLD_END
 SR = 44100
-EXTRA = {'s02': 1.5}   # let the archive photos breathe (music only, no long silence)
+EXTRA = {'s02': 0.8}   # let the archive photos breathe (music only, no long silence)
+
+
+def letters(s):
+    return len(re.findall('[\u0621-\u064A]', s))
 
 
 def timeline():
+    """Scene list with start, duration, on-screen cue times (beats) and subtitle lines, from build/voice/timing.json."""
+    import subs
     script = json.load(open(os.path.join(HERE, 'script.json'), encoding='utf-8'))
+    timing = {x['id']: x for x in json.load(open(os.path.join(VOICE, 'timing.json'), encoding='utf-8'))}
     from scenes import BEATS
     T, t = [], 0.0
     for i, s in enumerate(script):
-        v = sf.info(os.path.join(VOICE, s['id'] + '.wav')).duration
+        tm = timing[s['id']]; v = tm['dur']
         d = LEAD + v + GAP + (HOLD_END if i == len(script) - 1 else 0) + EXTRA.get(s['id'], 0)
-        # beats: share of characters before the phrase (tashkeel counted alike on both sides) -> share of voice time
-        txt = s['text']
+        # beats: where the phrase is spoken = its place among the letters of the chunk that holds it
         beats = {}
         for k, ph in BEATS.get(s['id'], {}).items():
-            j = txt.find(ph)
-            assert j >= 0, (s['id'], ph)
-            beats[k] = LEAD + v * j / len(txt)
-        T.append(dict(id=s['id'], start=t, dur=d, voice=v, beats=beats))
+            for ck in tm['clauses']:
+                j = ck['text'].find(ph)
+                if j >= 0:
+                    beats[k] = LEAD + ck['start'] + (ck['end'] - ck['start']) * letters(ck['text'][:j]) / max(1, letters(ck['text']))
+                    break
+            else:
+                raise AssertionError((s['id'], ph))
+        lines = [(LEAD + a, LEAD + b, x) for a, b, x in subs.scene_lines(tm['clauses'])]
+        T.append(dict(id=s['id'], start=t, dur=d, voice=v, beats=beats, subs=lines))
         t += d
     return T, t
+
+
+def subtitle(F, lines, lt):
+    """Burned-in subtitle: dark pill at the bottom, one short line at a time."""
+    from gfx import W, H, put, text_img, rounded, clamp01
+    for a, b, tx in lines:
+        if a - 0.02 <= lt < b:
+            k = min(clamp01((lt - a + 0.02) / 0.10), clamp01((b - lt) / 0.10))
+            im = text_img(tx, 46, (255, 255, 255), 700)
+            w, h = im.width, 74
+            rounded(F, (W / 2 - w / 2 - 34, 1006 - h / 2, W / 2 + w / 2 + 34, 1006 + h / 2), 24, (6, 10, 22, 205), alpha=k)
+            put(F, im, W / 2, 1006, alpha=k)
+            return
 
 
 def frame_at(T, gt):
@@ -46,6 +70,7 @@ def frame_at(T, gt):
     lt = gt - s['start']
     F = Image.new('RGBA', (W, H), (0, 0, 0, 255))
     scenes.SCENES[i](F, lt, s['dur'], s['beats'])
+    subtitle(F, s['subs'], lt)
     # fast cut transition: punch-in zoom + light flash at each scene start
     if i > 0 and lt < 0.45:
         k = ease(clamp01(lt / 0.45))
@@ -159,6 +184,8 @@ def main():
     os.makedirs(BUILD, exist_ok=True)
     json.dump(dict(total=total, scenes=T), open(os.path.join(BUILD, 'timeline.json'), 'w'), indent=1, ensure_ascii=False)
     print(f'total {total:.2f}s')
+    import subs
+    subs.write_srt(os.path.join(BUILD, 'subtitles.srt'), [(x['start'], 0.0, x['subs']) for x in T])
     if a.preview:
         os.makedirs(os.path.join(BUILD, 'stills'), exist_ok=True)
         for x in a.preview.split(','):

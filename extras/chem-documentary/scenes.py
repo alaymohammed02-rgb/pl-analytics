@@ -5,6 +5,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageOps
 from gfx import *
 
 ARCH_DIR = os.environ.get('ARCHIVE_DIR', os.path.join(HERE, 'archive'))
+SUB_TOP = 958   # the subtitle band (render.py) starts here; nothing else is drawn below it
 NAME = os.environ.get('DOC_NAME', 'زكريا أحمد العي')
 CLASS = os.environ.get('DOC_CLASS', 'الفصل 302')
 
@@ -62,6 +63,7 @@ def caption(F, s, t0, t, y=930, size=50, color=WHITE, dur=None, box=True):
     """Lower caption that pops in at t0 (and out after dur)."""
     if t < t0:
         return
+    y = min(y, SUB_TOP - 40)
     a = ease(clamp01((t - t0) / 0.25))
     if dur is not None:
         a *= 1 - ease(clamp01((t - t0 - dur) / 0.25))
@@ -222,7 +224,7 @@ def s01(F, t, d, B):
     if k > 0:
         text(F, 'الكيمياء', W / 2, 430, 210, WHITE, alpha=min(1, k), scale=0.7 + 0.3 * k, weight=900)
         text(F, 'علم المادة: مِمَّ تتكوّن؟ وكيف تتغيّر؟', W / 2, 640, 64, TEAL, alpha=ease(clamp01((t - B['kimya'] - 0.4) / 0.4)))
-        flask(F, W / 2, 1010, 70, mix(TEAL, PINK, 0.5 + 0.5 * math.sin(t * 1.5)), 0.45, t, bubbles=10, alpha=ease(clamp01((t - B['kimya'] - 0.6) / 0.4)))
+        flask(F, W / 2, 905, 62, mix(TEAL, PINK, 0.5 + 0.5 * math.sin(t * 1.5)), 0.45, t, bubbles=10, alpha=ease(clamp01((t - B['kimya'] - 0.6) / 0.4)))
 
 
 def _ill_lab(F, x, y, w, h, t):
@@ -265,18 +267,18 @@ def s02(F, t, d, B):
     n = len(items)
     if n:
         # real archive photographs (downloaded by fetch_archive.py), Ken Burns + grain
-        starts = [d * k / n for k in range(n)]   # even share: the narration names the three in a few seconds
+        starts = ([0.0, B['mend'] - 0.25, B['solvay'] - 0.25] + [d] * 9)[:n]   # photo changes as the narration names each one
         i = max(k for k in range(n) if t >= starts[k])
         seg = (starts[i + 1] if i + 1 < n else d) - starts[i]
         lt = t - starts[i]
         it = items[i]
-        im = arch_img(it['file'], 1500, 860)
+        im = arch_img(it['file'], 1500, 760)
         z = 1.0 + 0.07 * lt / seg
         k = ease(clamp01(lt / 0.3))
-        put(F, im, W / 2 + 30 * (lt / seg - .5) * (1 if i % 2 else -1), 520, alpha=k, scale=z)
-        caption(F, it['caption'], starts[i] + 0.15, t, y=975, size=44)
-        text(F, f"{it.get('title', '')[5:]} · {it.get('license', '')} · Wikimedia Commons", W - 40, H - 22, 22, (200, 200, 200),
-             anchor='rb', alpha=k * 0.9, weight=500, rtl=False)
+        put(F, im, W / 2 + 30 * (lt / seg - .5) * (1 if i % 2 else -1), 480, alpha=k, scale=z)
+        caption(F, it['caption'], starts[i] + 0.15, t, y=905, size=44)
+        text(F, f"{it.get('title', '')[5:]} · {it.get('license', '')} · Wikimedia Commons", 40, 30, 22, (200, 200, 200),
+             anchor='lt', alpha=k * 0.9, weight=500, rtl=False)
     else:
         # no photographs available: labelled illustrations, never presented as real photos
         idx = 0 if t < beats[1] else (1 if t < beats[2] else 2)
@@ -295,7 +297,7 @@ def s02(F, t, d, B):
                     cx, cy = 400 + c * 140 + (70 if r % 2 else 0), 360 + r * 150
                     put(F, glow(52, (50, 48, 46)), cx, cy, alpha=k * 0.95)
             text(F, 'مؤتمر سولفاي 1927 — بروكسل', W / 2, 800, 52, (40, 38, 36), alpha=k, rtl=True)
-        text(F, 'رسم توضيحي — ليست صورة أرشيفية', 40, H - 22, 26, (230, 230, 230), anchor='lb', alpha=0.9, weight=600)
+        text(F, 'رسم توضيحي — ليست صورة أرشيفية', 40, 30, 26, (230, 230, 230), anchor='lt', alpha=0.9, weight=600)
     film(F, t, 0.45)
     chip(F, 2, 'من الأرشيف', t)
 
@@ -337,13 +339,12 @@ def s03(F, t, d, B):
             text(F, w, x, 520, 84, WHITE, alpha=min(1, kk), rtl=(lang == 'ar'), weight=800)
             if j:
                 arrow(F, x + 375, 520, x + 260, 520, GREY, 8, alpha=min(1, kk))
-        caption(F, 'الاسم وصل إلى أوروبا عبر العربية', 0.3, lt, y=780, size=52)
     else:
         lt = t - B['jabir']
         k = pop(lt, 0.0)
         rounded(F, (1010, 230, 1800, 760), 30, (12, 18, 38, 220), AMBER + (255,), 3, alpha=min(1, k))
         text(F, 'جابر بن حيّان', 1405, 330, 86, AMBER, alpha=min(1, k), weight=900)
-        text(F, 'القرن الثامن الميلادي', 1405, 440, 46, WHITE, alpha=min(1, k), weight=600)
+        text(F, 'القرن الثامن الميلادي (العصر العباسي)', 1405, 440, 42, WHITE, alpha=min(1, k), weight=600)
         text(F, 'لُقِّب بأبي الكيمياء — عُرف لاتينيًا باسم Geber', 1405, 520, 34, GREY, alpha=min(1, k), weight=500)
         text(F, 'لا توجد له صورة حقيقية', 1405, 690, 30, GREY, alpha=min(1, k) * 0.9, weight=500)
         _alembic(F, t, 520, 700, 150, min(1, pop(lt, 0.3)), clamp01((lt - 0.5) / max(1, d - B['jabir'])))
@@ -351,8 +352,9 @@ def s03(F, t, d, B):
             kk = pop(t, B['taqtir'] + j * 0.55)
             rounded(F, (1010 + j * 270, 800, 1260 + j * 270, 890), 22, (12, 18, 38, 220), TEAL + (255,), 2, alpha=min(1, kk))
             text(F, w, 1135 + j * 270, 845, 44, WHITE, alpha=min(1, kk))
-        caption(F, 'التجربة قبل التخمين', B['tajriba'], t, y=980, size=46, dur=B['muarrikh'] - B['tajriba'])
-        caption(F, 'المؤرخون: بعض الكتب المنسوبة إليه كتبها أتباعه لاحقًا', B['muarrikh'], t, y=980, size=40)
+        kk = pop(t, B['muarrikh'])
+        if kk > 0:
+            text(F, 'يرى مؤرخون أن أتباعه كتبوا بعض كتبه', 1405, 610, 32, AMBER, alpha=min(1, kk), weight=600)
 
 
 BR = [('العضوية', TEAL), ('غير العضوية', BLUE), ('الفيزيائية', AMBER), ('التحليلية', PINK), ('الحيوية', (150, 230, 120))]
@@ -396,20 +398,20 @@ def s05(F, t, d, B):
     text(F, 'الكيمياء ' + name, 1690, 300, 92, WHITE, anchor='rm', alpha=min(1, k), weight=900)
     if part == 0:
         A, Bo = mol_aspirin()
-        molecule(F, A, Bo, 500, 600, 80 * min(1, k), 0.25 * math.sin(t), t * 0.9)
-        text(F, 'جزيء الأسبرين C₉H₈O₄', 520, 960, 44, GREY, alpha=min(1, k), weight=600)
+        molecule(F, A, Bo, 500, 570, 80 * min(1, k), 0.25 * math.sin(t), t * 0.9)
+        text(F, 'جزيء الأسبرين C₉H₈O₄', 520, 905, 44, GREY, alpha=min(1, k), weight=600)
         for j, w in enumerate(('مركّبات الكربون', 'الأدوية', 'البلاستيك')):
             caption_box(F, w, 1330, 500 + j * 130, pop(t, B[('org_c', 'org_d', 'org_p')[j]]), col)
     elif part == 1:
         A, Bo = mol_nacl(3)
-        molecule(F, A, Bo, 500, 600, 110 * min(1, k), 0.5 + 0.2 * math.sin(t), t * 0.7)
-        text(F, 'بلّورة ملح الطعام NaCl', 520, 960, 44, GREY, alpha=min(1, k), weight=600)
+        molecule(F, A, Bo, 500, 570, 100 * min(1, k), 0.5 + 0.2 * math.sin(t), t * 0.7)
+        text(F, 'بلّورة ملح الطعام NaCl', 520, 905, 44, GREY, alpha=min(1, k), weight=600)
         for j, w in enumerate(('الفلزات', 'الأملاح والمعادن', 'كلوريد الصوديوم NaCl')):
             caption_box(F, w, 1330, 500 + j * 130, pop(t, B[('in_m', 'in_s', 'in_n')[j]]), col)
     else:
         A, Bo = mol_dna(15)
-        molecule(F, A, Bo, 520, 600, 75 * min(1, k), 0.15, t * 1.2)
-        text(F, 'الحمض النووي DNA', 520, 1000, 44, GREY, alpha=min(1, k), weight=600)
+        molecule(F, A, Bo, 520, 570, 70 * min(1, k), 0.15, t * 1.2)
+        text(F, 'الحمض النووي DNA', 520, 905, 44, GREY, alpha=min(1, k), weight=600)
         for j, w in enumerate(('كيمياء الكائنات الحية', 'الإنزيمات تهضم الطعام', 'DNA يحمل الصفات الوراثية')):
             caption_box(F, w, 1330, 500 + j * 130, pop(t, B[('bio_l', 'bio_e', 'bio_d')[j]]), col)
 
@@ -510,7 +512,7 @@ def s07(F, t, d, B):
         for li, line in enumerate(what.split('\n')):
             text(F, line, cx, y + 205 + li * 50, 33, WHITE, alpha=min(1, k), weight=600)
     if any(portrait('portrait_' + p) for p in PSLOT):
-        text(F, 'الصور: Wikimedia Commons (ملكية عامة)', 40, H - 22, 22, GREY, anchor='lb', alpha=0.85, weight=500)
+        text(F, 'الصور: Wikimedia Commons (ملكية عامة)', 40, 30, 22, GREY, anchor='lt', alpha=0.85, weight=500)
 
 
 def _medal(F, x, y, r, t, a):
@@ -568,15 +570,14 @@ def s09(F, t, d, B):
             text(F, f'{z} بروتونًا', x, 760, 54, WHITE, alpha=k, weight=800)
         arrow(F, 1290, 560, 640, 560, GREY, 10, alpha=k)
         ic_x(F, 960, 560, k, 0.9)
-        caption(F, 'هوية العنصر = عدد البروتونات في نواته — والتفاعل الكيميائي لا يمسّ النواة', (B['f1']), t, y=900, size=42)
-        caption(F, '(التحويل ممكن نوويًا فقط، بكميات ضئيلة وكلفة هائلة)', B['f1'] + 2.5, t, y=990, size=34, color=GREY, box=False)
+        text(F, 'التحويل ممكن نوويًا فقط، بكميات ضئيلة وكلفة هائلة', W / 2, 835, 34, GREY, alpha=tk * 0.9, weight=500)
+        caption(F, 'هوية العنصر = عدد البروتونات في نواته', B['f1'], t, y=905, size=46)
     elif part == 2:
         flask(F, 560, 820, 120, (200, 60, 255), 0.5, t, bubbles=12, seed=3, alpha=k)
         put(F, glow(70, (200, 210, 230)), 1400, 600, alpha=tk)
         put(F, sphere((200, 205, 215), 70), 1400, 600, alpha=tk)
         text(F, 'Hg', 1400, 595, 64, (30, 30, 40), alpha=tk, rtl=False, weight=900)
         text(F, 'زئبق سامّ', 1400, 730, 54, PINK, alpha=tk, weight=800)
-        caption(F, 'لا توجد مادة تمنح الخلود', B['f2'], t, y=950, size=50)
     else:
         names = (('نار', (255, 110, 50)), ('ماء', BLUE), ('هواء', (200, 220, 240)), ('تراب', (170, 120, 70)))
         fade = 1 - ease(clamp01((t - B['f3']) / 0.5))
@@ -585,25 +586,27 @@ def s09(F, t, d, B):
             put(F, glow(110, col), x, 560, alpha=k * fade * 0.8)
             text(F, n, x, 560, 64, WHITE, alpha=k * fade, weight=800)
         if t >= B['f3']:
-            periodic(F, 357, 372, 62, clamp01((t - B['f3']) / 1.2), alpha=1)
-            caption(F, '118 عنصرًا معروفًا اليوم', B['f3'] + 0.3, t, y=1035, size=44)
+            periodic(F, 435, 372, 54, clamp01((t - B['f3']) / 1.2), alpha=1)
+            kk = pop(t, B['f3'] + 0.3)
+            text(F, '118', 560, 262, 110, GOLD, alpha=min(1, kk), rtl=False, weight=900)
+            text(F, 'عنصرًا معروفًا اليوم', 330, 262, 46, WHITE, anchor='rm', alpha=min(1, kk), weight=700)
 
 
 def s10(F, t, d, B):
     F.alpha_composite(background('navy')); particles(F, t, 0.6, 0.7)
     k = pop(t, 0.05, 0.5)
-    text(F, 'الكيمياء ليست سحرًا… بل علمٌ يفسّر العالم', W / 2, 300, 66, TEAL, alpha=min(1, k) * (1 - ease(clamp01((t - B['thanks']) / 0.4)) * 0.5), weight=800)
+    text(F, 'الكيمياء ليست سحرًا… بل علمٌ يفسّر العالم', W / 2, 250, 66, TEAL, alpha=min(1, k) * (1 - ease(clamp01((t - B['thanks']) / 0.4)) * 0.5), weight=800)
     k2 = pop(t, B['thanks'], 0.5)
     if k2 > 0:
-        text(F, 'شكرًا على المتابعة', W / 2, 520, 150, WHITE, alpha=min(1, k2), scale=0.75 + 0.25 * min(1, k2), weight=900)
+        text(F, 'شكرًا على المتابعة', W / 2, 430, 150, WHITE, alpha=min(1, k2), scale=0.75 + 0.25 * min(1, k2), weight=900)
         k3 = ease(clamp01((t - B['thanks'] - 0.5) / 0.5))
-        text(F, 'إعداد', W / 2, 700, 44, GREY, alpha=k3, weight=600)
-        text(F, NAME, W / 2, 790, 92, AMBER, alpha=k3, weight=800, family='Amiri-Bold')
-        text(F, CLASS, W / 2, 900, 52, WHITE, alpha=k3, weight=700)
+        text(F, 'إعداد', W / 2, 590, 44, GREY, alpha=k3, weight=600)
+        text(F, NAME, W / 2, 685, 92, AMBER, alpha=k3, weight=800, family='Amiri-Bold')
+        text(F, CLASS, W / 2, 790, 52, WHITE, alpha=k3, weight=700)
         credit = 'التعليق الصوتي: صوت عربي مُولَّد بالذكاء الاصطناعي (Piper)  •  الموسيقى: مولَّدة برمجيًا'
         if archive_items():
             credit += '  •  الصور الأرشيفية: Wikimedia Commons (ملكية عامة)'
-        text(F, credit, W / 2, 1035, 26, GREY, alpha=k3 * 0.9, weight=500)
+        text(F, credit, W / 2, 890, 26, GREY, alpha=k3 * 0.9, weight=500)
 
 
 SCENES = [s01, s02, s03, s04, s05, s06, s07, s08, s09, s10]
@@ -611,15 +614,15 @@ SCENES = [s01, s02, s03, s04, s05, s06, s07, s08, s09, s10]
 # beats: phrase (as written in script.json, without tashkeel matching) -> time, by character position
 BEATS = {
     's01': {'bread': 'رَغِيفِ', 'pill': 'حَبَّةِ', 'batt': 'بَطَّارِيَّةِ', 'kimya': 'إِنَّهَا'},
-    's02': {'curie': 'مَارِي', 'mend': 'جَدْوَلِ', 'solvay': 'مُؤْتَمَرِ'},
-    's03': {'etym': 'وَقَدْ وَصَلَ', 'jabir': 'وَفِي الْقَرْنِ', 'taqtir': 'التَّقْطِيرَ', 'tajriba': 'وَتُقَدِّمُ', 'muarrikh': 'وَيَرَى'},
-    's04': {'b0': 'الْعُضْوِيَّةُ', 'b1': 'وَغَيْرُ', 'b2': 'وَالْفِيزْيَائِيَّةُ', 'b3': 'وَالتَّحْلِيلِيَّةُ', 'b4': 'وَالْحَيَوِيَّةُ'},
-    's05': {'org_c': 'كِيمِيَاءُ مُرَكَّبَاتِ', 'org_d': 'الْأَدْوِيَةُ', 'org_p': 'وَالْبْلَاسْتِيكُ', 'inorg': 'ثَانِيًا',
-            'in_m': 'وَتَدْرُسُ', 'in_s': 'وَالْأَمْلَاحَ', 'in_n': 'كُلُورِيدِ', 'bio': 'ثَالِثًا', 'bio_l': 'كِيمِيَاءُ الْكَائِنَاتِ',
-            'bio_e': 'كَالْإِنْزِيمَاتِ', 'bio_d': 'وَالْحَمْضِ'},
+    's02': {'curie': 'مُخْتَبَرُ', 'mend': 'جَدْوَلُ', 'solvay': 'مُؤْتَمَرُ'},
+    's03': {'etym': 'وَقَدْ دَخَلَ', 'jabir': 'وَفِي الْعَصْرِ', 'taqtir': 'التَّقْطِيرِ', 'muarrikh': 'وَيَرَى'},
+    's04': {'b0': 'الْعُضْوِيَّةُ', 'b1': 'وَغَيْرُ', 'b2': 'وَالْفِيزِيَائِيَّةُ', 'b3': 'وَالتَّحْلِيلِيَّةُ', 'b4': 'وَالْحَيَوِيَّةُ'},
+    's05': {'org_c': 'كِيمِيَاءُ مُرَكَّبَاتِ', 'org_d': 'الْأَدْوِيَةُ', 'org_p': 'وَالْبْلَاسْتِيك', 'inorg': 'ثَانِيًا',
+            'in_m': 'وَتَدْرُسُ الْمَعَادِنَ', 'in_s': 'وَالْأَمْلَاحَ', 'in_n': 'كَمِلْحِ', 'bio': 'ثَالِثًا',
+            'bio_l': 'وَتَدْرُسُ الْكَائِنَاتِ', 'bio_e': 'كَالْإِنْزِيمَاتِ', 'bio_d': 'وَالْحَمْضِ'},
     's06': {'soap': 'الصَّابُونُ', 'rust': 'وَالْحَدِيدُ', 'bread': 'وَقِشْرَةُ', 'batt': 'وَبَطَّارِيَّةُ'},
     's07': {'razi': 'أَبُو بَكْرٍ', 'lav': 'وَأَنْطْوَانْ', 'mend': 'وَدِيمِتْرِي', 'curie': 'وَمَارِي'},
-    's08': {'y1901': 'مُنْذُ', 'vh': 'وَأَوَّلُ', 'zew': 'وَمِنَ الْعَرَبِ', 'yag': 'وَعُمَرُ'},
-    's09': {'m1': 'الْخُرَافَةُ الْأُولَى', 'f1': 'وَالْحَقِيقَةُ', 'm2': 'الثَّانِيَةُ', 'f2': 'فَلَا مَادَّةَ', 'm3': 'وَالثَّالِثَةُ', 'f3': 'وَنَعْرِفُ'},
+    's08': {'y1901': 'مُنْذُ عَامِ', 'vh': 'وَأَوَّلُ', 'zew': 'وَمِنَ الْعَرَبِ', 'yag': 'وَعُمَرُ'},
+    's09': {'m1': 'أَوَّلًا', 'f1': 'وَالْحَقِيقَةُ', 'm2': 'ثَانِيًا', 'f2': 'وَلَا مَادَّةَ', 'm3': 'ثَالِثًا', 'f3': 'وَنَحْنُ نَعْرِفُ'},
     's10': {'thanks': 'شُكْرًا'},
 }
