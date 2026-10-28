@@ -450,3 +450,16 @@ html[dir=rtl] .dl-bars .ph-bn bdi{text-align:right}
 .ps-t{display:block;height:12px;border-radius:7px;background:var(--glass-bd);overflow:hidden}.ps-t i{display:block;height:100%;border-radius:7px}
 .ps-v{text-align:end}.ps-bar.low{opacity:.85}
 @media(max-width:600px){.ps-bar{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 30px}.ps-l{font-size:12.5px}}
+/* Time machine (assets/time-machine.js) */
+.tmc-pick .ctl{display:flex;flex-wrap:wrap;gap:8px}.tmc-pick select{flex:1 1 150px;min-width:0}
+.tmc-sl{display:flex;flex-direction:column;gap:6px;margin:12px 0 4px}.tmc-sl input{width:100%}.tmc-q{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.tmc-w{overflow-x:auto}.tmc-t td,.tmc-t th{white-space:nowrap}.tmc-e b{font-weight:700}.tmc-sc p{margin:8px 0}
+@media(max-width:600px){.tmc-t th:nth-child(3),.tmc-t td:nth-child(3),.tmc-t th:nth-child(7),.tmc-t td:nth-child(7){display:none}.tmc-t{font-size:12px}.tmc-t th,.tmc-t td{padding:5px 3px}.tmc-t td:first-child,.tmc-t th{white-space:normal}.tmc-t td:first-child{overflow-wrap:anywhere}.tmc-tt th,.tmc-tt td{white-space:normal;padding:5px 4px}.tmc-tt{font-size:12.5px}}
+/* Ask the site (assets/ask.js) */
+.ak-f{display:flex;gap:8px;margin-top:10px}.ak-f input{flex:1;min-width:0}
+.ak .ak-ex{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.ak .ak-chip{background:transparent;border:1px solid var(--glass-bd);color:inherit;border-radius:999px;padding:5px 11px;font:inherit;font-size:12.5px;font-weight:400;cursor:pointer;box-shadow:none;min-height:0;text-align:start}
+.ak .ak-chip:hover{background:var(--glass-bd)}
+.ak-u{font-size:12.5px;margin:0 0 8px}.ak-b{display:inline-block;padding:1px 8px;border-radius:999px;background:var(--glass-bd);margin:2px 2px 2px 0}
+.ak-t td,.ak-t th{white-space:normal}.ak-t td.n{white-space:nowrap}.ak-p h3,.ak-c h3{margin:4px 0}
+.ak-t .mu bdi{white-space:nowrap}
