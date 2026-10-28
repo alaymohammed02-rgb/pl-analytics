@@ -9009,11 +9009,11 @@ INDEX = _x_fpx_index(INDEX)
 # الكود في ملفات مستقلة في المستودع: assets/*.js و assets/features.css و manifest.webmanifest و sw.js و assets/icons/.
 # هذا القسم يضيف روابطها للصفحة فقط (بعد السكربت الرئيسي، فتلقى R و PAGES جاهزة). غيّر FEATURES_V لما تتغير الملفات.
 # ============================================================================
-FEATURES_V = "43"
+FEATURES_V = "44"
 FEATURES_JS = ("pla-data", "share-card", "threat-map", "match-whatif", "player-page", "match-centre", "home-extra", "team-round",
                "preview", "club-extra", "rankings-extra", "fantasy-extra", "insights-core", "hidden-gems", "player-dna", "team-dna",
                "reality-check", "matches-board", "match-replay", "match-story", "overview", "press-height",
-               "season-sim", "luck-table", "player-twin", "player-cards", "beat-model", "rare-cases", "attack-share", "drawer", "tap-twice", "line-height", "league-pool", "game-states", "likely-xi", "club-twins", "carry-team", "report-card", "league-dna", "thrill", "defense-card", "press-card", "sb-press", "stat-stability", "keeps-up", "goalkeepers", "xi-builder", "player-prices", "club-elo", "seasons", "liquid-glass")
+               "season-sim", "luck-table", "player-twin", "player-cards", "beat-model", "rare-cases", "attack-share", "drawer", "tap-twice", "line-height", "league-pool", "game-states", "likely-xi", "club-twins", "carry-team", "report-card", "league-dna", "thrill", "defense-card", "press-card", "sb-press", "stat-stability", "keeps-up", "goalkeepers", "xi-builder", "player-prices", "xi-battle", "club-elo", "seasons", "liquid-glass")
 
 
 def _x_feat_index(html):
@@ -11494,7 +11494,7 @@ function psSaved(){for(const st of [()=>localStorage,()=>sessionStorage])try{con
 /* files that only describe the current season (today's matches, coming fixtures, live scores, season facts, rare cases):
    in a past season they answer "not found", so the widgets that use them stay out instead of mixing in this season */
 function psCurOnly(){if(window.__psF)return;const f0=window.fetch;window.__psF=1;
- window.fetch=function(u){const s=String(u&&u.url||u);if(/(^|\/)data\/(live|fixtures|schedule|facts|rare|fpl|fpl_track|market|elo|elo_own|priors)\.json/.test(s))return Promise.resolve(new Response('{}',{status:404}));return f0.apply(this,arguments)}}
+ window.fetch=function(u){const s=String(u&&u.url||u);if(/(^|\/)data\/(live|fixtures|schedule|facts|rare|fpl|fpl_track|market|elo|elo_own|priors|xib|xib_test)\.json/.test(s))return Promise.resolve(new Response('{}',{status:404}));return f0.apply(this,arguments)}}
 function psView(x){
  ALL0=x;const s=psSaved();if(!s||!x||!x.seasons||!x.leagues)return x;
  let lid=null;for(const st of [()=>localStorage,()=>sessionStorage])try{lid=st().getItem('league');if(lid)break}catch(e){}
@@ -12476,6 +12476,199 @@ def run_pipeline(hub, pit_key):
         log(f"  [Elo خاص] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
     return out
 # ===== ELO2 END =====
+
+# ===== XIB START =====
+# معركة التشكيلات (data/xib.json): تقييم كل لاعب من مبارياته في الدوريات الستة (كل مواسم السلسلة + الموسم الحالي، بوزن ينقص للنص كل 365 يوم):
+#   att = (npxG + xAG) لكل 90 دقيقة، مسحوب نحو متوسط مركزه بما يعادل Ka × 90 دقيقة؛
+#   onf / ona = xG الفريق له وعليه لكل 90 وهو في الملعب (xG المباراة × دقايقه ÷ 90)، مسحوب نحو متوسط الفريق بما يعادل Kt × 90 دقيقة.
+# أهداف كل فريق Poisson: log λ = b0 + bh×(أرضه) + b1×log(مجموع att للتشكيلة) + b2×log(متوسط onf) + b3×log(متوسط ona للخصم).
+# المعاملات انضبطت على مباريات قبل 1 أغسطس 2025 فقط (tools/xib/fit.py --fit) وانجرّبت على كل ما بعده بتشكيلاته الحقيقية (data/xib_test.json).
+# الدوريات تُعامل كأنها بنفس المستوى (ما عندنا طريقة نقيس الفرق بينها). يُعاد حسابه فقط إذا تغيّرت ملفات اللاعبين. اختياري: الخطأ ما يوقف المزامنة.
+XIB_PATH = "data/xib.json"
+XIB = {"hl": 365.0, "Ka": 2.0, "Kt": 3.0, "b": [-0.6237, 0.1876, 0.5399, 0.5449, 1.0803]}
+XIB_LEAGUES = ("l_4WFCIZ", "l_0ErfuF", "l_1Isor4", "l_3FJFUl", "l_0ALvwF", "l_4QexZg")
+
+
+def xib_files(sj, idx, lid):
+    """[(league file, player file, line-up file)] of the chain of finished past seasons (one year after the other) that ends right before the current one, then the current season."""
+    v = (sj.get("leagues") or {}).get(lid) or {}
+    cur = v.get("cur")
+    ok = {lab: e["files"] for lab, e in (v.get("seasons") or {}).items() if e.get("complete") and (e.get("files") or {}).get("file") and e["files"].get("pl_file")}
+    out, y = [], int(cur[:4]) - 1 if cur else None
+    while y is not None and f"{y}-{str(y + 1)[2:]}" in ok:
+        f = ok[f"{y}-{str(y + 1)[2:]}"]
+        out.append((f["file"], f["pl_file"], f.get("mx_file")))
+        y -= 1
+    out.reverse()
+    now = next((l for l in (idx.get("leagues") or []) if l.get("id") == lid), None)
+    if now and now.get("file") and now.get("pl_file"):
+        out.append((now["file"], now["pl_file"], now.get("mx_file")))
+    return out
+
+
+def xib_load(get, files):
+    """get(path) → json. Returns (matches, minutes by position): matches = {id: {d, lid, ht, at, hg, ag, rows: {team: [(player, minutes, npxG, xAG)]}, mx}}
+    (finished matches with player rows for exactly two teams, home and away known)."""
+    M, pos = {}, {}
+    for lid, fl, fp, fm in files:
+        L, P = get("data/" + fl) or {}, get("data/" + fp) or {}
+        if not P.get("rows"):
+            continue
+        info = {m.get("i"): m for m in L.get("matches") or []}
+        c = {k: i for i, k in enumerate(P["cols"])}
+        side = {(t.get("m"), t.get("i")): t.get("s") for t in P.get("team") or []}
+        by = {}
+        for r in P["rows"]:
+            by.setdefault(r[c["m"]], []).append(r)
+        for mid, rows in by.items():
+            m = info.get(mid) or {}
+            sc = re.fullmatch(r"(\d+)-(\d+)", str(m.get("s") or "").strip())
+            if not sc or not m.get("d"):
+                continue
+            T = {}
+            for r in rows:
+                T.setdefault(r[c["t"]], []).append((r[c["i"]], r[c["mi"]] or 0, r[c["npxg"]], r[c["xag"]]))
+                if r[c["o"]] and r[c["mi"]]:
+                    q = pos.setdefault(r[c["i"]], {})
+                    q[r[c["o"]]] = q.get(r[c["o"]], 0) + r[c["mi"]]
+            ht = [t for t in T if side.get((mid, t)) == "home"]
+            at = [t for t in T if side.get((mid, t)) == "away"]
+            if len(T) != 2 or len(ht) != 1 or len(at) != 1:
+                continue
+            M[mid] = {"d": str(m["d"])[:10], "lid": lid, "ht": ht[0], "at": at[0], "hg": int(sc.group(1)), "ag": int(sc.group(2)), "rows": T, "mx": fm}
+    return M, {p: max(v, key=v.get) for p, v in pos.items()}
+
+
+def xib_day(d):
+    return datetime.date(int(d[:4]), int(d[5:7]), int(d[8:10])).toordinal()
+
+
+def xib_rate(S, mu, p, grp, t, P=XIB):
+    """a player's (att, onf, ona, minutes ÷ 90) on day t from his decayed sums; a player with no minutes gets his position's mean and the mean team."""
+    s = S.get(p)
+    f = math.exp(-math.log(2) / P["hl"] * (t - s[0])) if s else 0.0
+    s = [x * f for x in s[1:]] if s else [0.0] * 5
+    a = mu["att"].get(grp) or [0.0, 0.0]
+    ma = a[0] / a[1] if a[1] else 0.15
+    gm = mu["f"][0] / mu["f"][1] if mu["f"][1] else 1.3
+    return ((s[1] + P["Ka"] * ma) / (s[0] + P["Ka"]), (s[3] + P["Kt"] * gm) / (s[2] + P["Kt"]), (s[4] + P["Kt"] * gm) / (s[2] + P["Kt"]), s[2])
+
+
+def xib_grp(pos, p):
+    return pos.get(p) if pos.get(p) in ("GK", "DF", "MF", "FW") else "MF"
+
+
+def xib_stream(M, pos, P=XIB, probe=None):
+    """runs every match in date order. probe(mid, m, rate) is called for each match BEFORE its day is added (rate(p) = that player's numbers then).
+    Returns (S, mu, last day): S = {player: [day, minutes÷90 with npxG/xAG, npxG+xAG, minutes÷90, team xG for, team xG against]} (sums decayed to `day`)."""
+    lam = math.log(2) / P["hl"]
+    S, mu = {}, {"att": {}, "f": [0.0, 0]}
+    ms = sorted(M.items(), key=lambda kv: (kv[1]["d"], kv[0]))
+    i, t = 0, None
+    while i < len(ms):
+        d = ms[i][1]["d"]
+        j = i
+        while j < len(ms) and ms[j][1]["d"] == d:
+            j += 1
+        t = xib_day(d)
+        if probe:
+            for mid, m in ms[i:j]:
+                probe(mid, m, lambda p: xib_rate(S, mu, p, xib_grp(pos, p), t, P))
+        for mid, m in ms[i:j]:
+            tx = {tm: sum(r[2] or 0 for r in rows) for tm, rows in m["rows"].items()}
+            for tm, rows in m["rows"].items():
+                op = m["at"] if tm == m["ht"] else m["ht"]
+                mu["f"][0] += tx[tm]
+                mu["f"][1] += 1
+                for p, mi, npx, xa in rows:
+                    if not mi:
+                        continue
+                    s = S.get(p)
+                    s = [t] + [x * math.exp(-lam * (t - s[0])) for x in s[1:]] if s else [t, 0.0, 0.0, 0.0, 0.0, 0.0]
+                    w = mi / 90
+                    if npx is not None and xa is not None:
+                        s[1] += w
+                        s[2] += npx + xa
+                        a = mu["att"].setdefault(xib_grp(pos, p), [0.0, 0.0])
+                        a[0] += npx + xa
+                        a[1] += w
+                    s[3] += w
+                    s[4] += tx[tm] * w
+                    s[5] += tx[op] * w
+                    S[p] = s
+        i = j
+    return S, mu, t
+
+
+def xib_side(rates):
+    """the three numbers of an XI from its eleven players' (att, onf, ona, ...): attack = sum of att, xG for and against = means"""
+    return (sum(r[0] for r in rates), sum(r[1] for r in rates) / len(rates), sum(r[2] for r in rates) / len(rates))
+
+
+def xib_probs(a, b, home=1.0, P=XIB):
+    """win/draw/loss of side a against side b (each from xib_side); home = 1 a at home, 0 b at home, 0.5 neutral"""
+    c = P["b"]
+    lh = math.exp(c[0] + c[1] * home + c[2] * math.log(max(a[0], 1e-3)) + c[3] * math.log(max(a[1], 1e-3)) + c[4] * math.log(max(b[2], 1e-3)))
+    la = math.exp(c[0] + c[1] * (1 - home) + c[2] * math.log(max(b[0], 1e-3)) + c[3] * math.log(max(b[1], 1e-3)) + c[4] * math.log(max(a[2], 1e-3)))
+    ph = [math.exp(-lh) * lh ** k / math.factorial(k) for k in range(11)]
+    pa = [math.exp(-la) * la ** k / math.factorial(k) for k in range(11)]
+    w = sum(ph[i] * pa[j] for i in range(11) for j in range(11) if i > j)
+    dr = sum(ph[i] * pa[i] for i in range(11))
+    l = sum(ph[i] * pa[j] for i in range(11) for j in range(11) if i < j)
+    s = w + dr + l
+    return [w / s, dr / s, l / s], lh, la
+
+
+def sync_xib(hub, now=None):
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    idx = gh_get_json(hub, "data/index.json") or {}
+    sj = gh_get_json(hub, "data/seasons.json") or {}
+    have = {l.get("id"): l for l in idx.get("leagues") or []}
+    files, ver = [], []
+    for lid in XIB_LEAGUES:
+        if lid not in have:
+            continue
+        for fl, fp, fm in xib_files(sj, idx, lid):
+            files.append((lid, fl, fp, fm))
+        cur = have[lid]
+        past = {lab: (e.get("files") or {}).get("pl_v") for lab, e in (((sj.get("leagues") or {}).get(lid) or {}).get("seasons") or {}).items()}
+        ver.append([lid, cur.get("pl_file"), cur.get("pl_v"), sorted(past.items())])
+    key = hashlib.sha1(json.dumps([ver, XIB], sort_keys=True).encode()).hexdigest()[:10]
+    old = gh_get_json(hub, XIB_PATH) or {}
+    if not files or old.get("key") == key:
+        return
+    M, pos = xib_load(lambda p: gh_get_json(hub, p), files)
+    if len(M) < 200:
+        return
+    S, mu, t = xib_stream(M, pos)
+    cur_players = set()
+    for lid in XIB_LEAGUES:
+        if lid in have and have[lid].get("pl_file"):
+            P = gh_get_json(hub, "data/" + have[lid]["pl_file"]) or {}
+            ci = (P.get("cols") or []).index("i") if "i" in (P.get("cols") or []) else 1
+            cur_players.update(r[ci] for r in P.get("rows") or [])
+    out = {"t": now.strftime("%Y-%m-%d %H:%M:%S"), "key": key, "params": XIB, "asof": datetime.date.fromordinal(t).isoformat(), "n_matches": len(M),
+           "mu": {"att": {g: round(a[0] / a[1], 4) for g, a in mu["att"].items() if a[1]}, "team": round(mu["f"][0] / mu["f"][1], 4)},
+           "p": {}}
+    for p in sorted(cur_players):
+        if p in S:
+            r = xib_rate(S, mu, p, xib_grp(pos, p), t)
+            out["p"][p] = [round(r[0], 4), round(r[1], 4), round(r[2], 4), round(r[3], 1)]
+    gh_put(hub, XIB_PATH, json.dumps(out, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), "Update XI Battle ratings")
+    log(f"  [معركة التشكيلات] {len(out['p'])} لاعب من {len(M)} مباراة، لين {out['asof']}")
+
+
+_orig_run_pipeline_xib = run_pipeline
+
+
+def run_pipeline(hub, pit_key):
+    out = _orig_run_pipeline_xib(hub, pit_key)
+    try:
+        sync_xib(hub)
+    except Exception as e:      # optional: never stops the sync
+        log(f"  [معركة التشكيلات] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
+    return out
+# ===== XIB END =====
 
 
 if __name__ == "__main__":
