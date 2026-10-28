@@ -12787,11 +12787,11 @@ def sync_tmach(hub, now=None):
     log(f"  [آلة الزمن] {len(out['leagues'])} دوري — اختبار نص الموسم: خطأ Elo {a.get('elo')} نقطة مقابل {a.get('ppg')} لمعدل النقاط ({a.get('n')} فريق)")
 
 
-_orig_run_pipeline_tm = run_pipeline
+_orig_run_pipeline_tmach = run_pipeline
 
 
 def run_pipeline(hub, pit_key):
-    out = _orig_run_pipeline_tm(hub, pit_key)
+    out = _orig_run_pipeline_tmach(hub, pit_key)
     try:
         sync_tmach(hub)
     except Exception as e:      # optional: never stops the sync

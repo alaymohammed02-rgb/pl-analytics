@@ -131,5 +131,7 @@ for lid, L in W['leagues'].items():
                     perr[f].append(abs(now[c][0] / now[c][1] * 2 * (n - 1) - fin[c]))
 good = all(abs(W['test']['all'][str(f)]['elo'] - sum(errs[f]) / len(errs[f])) < 0.011 and abs(W['test']['all'][str(f)]['ppg'] - sum(perr[f]) / len(perr[f])) < 0.011 and W['test']['all'][str(f)]['n'] == len(errs[f]) for f in errs)
 ok(good, 'the test worked again by a second implementation: ' + '; '.join('%s Elo %.2f, points per game %.2f (%d)' % (f, sum(errs[f]) / len(errs[f]), sum(perr[f]) / len(perr[f]), len(errs[f])) for f in errs))
+names = re.findall(r'^(_orig_run_pipeline\w*) = run_pipeline', src, re.M)
+ok(len(names) == len(set(names)), 'every optional sync step keeps the step before it under its own name (%d steps); a reused name would make run_pipeline call itself' % len(names))
 print('done' if not fails else '%d FAILED' % fails)
 sys.exit(1 if fails else 0)

@@ -1,7 +1,7 @@
 const {chromium}=require('playwright');const fs=require('fs');
 let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
 const U='http://127.0.0.1:8773/index.html';
-const SEC={home:['overview','ask','data','settings'],season:['table','sim','timemachine','luck','rare'],matches:['matches','round','whatif','thrill','states','xi'],teams:['teams','tactical','halves','clubtwins','carry','leaguedna','elo'],players:['players','story','rankings','ratings','gems','stability','keepsup','prices','looklike'],compare:['compare','twins','cards','builder','battle'],attack:['shots','reality','passing','heatmaps'],defence:['defense','ppda','height','sbpress','keepers'],models:['lab','reportcard'],fpl:['fantasy','beat','share']};
+const SEC={home:['overview','ask','data','settings'],season:['table','sim','luck','rare','timemachine'],matches:['matches','round','whatif','thrill','states','xi'],teams:['teams','tactical','halves','clubtwins','carry','leaguedna','elo'],players:['players','story','rankings','ratings','gems','stability','keepsup','prices','looklike'],compare:['compare','twins','cards','builder','battle'],attack:['shots','reality','passing','heatmaps'],defence:['defense','ppda','height','sbpress','keepers'],models:['lab','reportcard'],fpl:['fantasy','beat','share']};
 const HUBN={home:'Home',season:'Season',matches:'Matches',teams:'Teams',players:'Players',compare:'Compare',attack:'Attack',defence:'Defence',models:'Models',fpl:'Fantasy'};
 const SENT={flipy:'1',fpl_myxi_cur_v1:'{"keep":1}',gh_repo:'x/y'};
 async function open(b,{vw=1280,lang='en',init=null,league='l_4WFCIZ'}={}){const ctx=await b.newContext({viewport:{width:vw,height:860}});

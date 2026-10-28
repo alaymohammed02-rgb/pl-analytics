@@ -1,4 +1,4 @@
-/* ===== Time machine (#/timemachine, in Season after the simulator): go back to any day of a season and see what the model expected from there =====
+/* ===== Time machine (#/timemachine, at the end of the Season hub): go back to any day of a season and see what the model expected from there =====
    data/results.json (sync.py "TMACH") holds every result of each league's chain of seasons (the Elo chain: Premier League from 2021-22, the others
    from 2024-25), plus a test. On the chosen day the page works out, from the matches BEFORE that day only:
    - the table (points, then goal difference, then goals scored);
@@ -12,7 +12,7 @@
    from Elo against "points per game so far × all games". Not in the model: transfers, injuries, managers; the ratings do not move after the day. */
 (function(){
  if(typeof R!=='object'||typeof INS!=='object'||typeof INS.addPage!=='function')return;
- INS.addPage('timemachine','Time machine','season','sim');
+ INS.addPage('timemachine','Time machine','season','rare');
  const two=(en,ar)=>`<span class="fx-en">${en}</span><span class="fx-ar" dir="rtl">${ar}</span>`;
  const nb=x=>`<bdi dir="ltr">${x}</bdi>`,nm=x=>`<bdi>${esc(x)}</bdi>`;
  const ar=()=>typeof ARL==='object'&&!!ARL.on;
