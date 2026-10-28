@@ -35,7 +35,9 @@ const twins=(Tm,x)=>Tm.filter(y=>y!==x).map(y=>({y,s:sim(x,y)})).filter(o=>o.s!=
   /* the comparison table for the top twin, value by value */
   const y=other[0].y,rows=await pg.$$eval('.ct-t tbody tr',a=>a.map(r=>[...r.cells].slice(1).map(c=>c.textContent.trim())));
   const dec={xgf:2,xga:2,shf:1,sha:1,tilt:1,ppda:1,adx:1,hto:1,brt:1,ps:0,pr:1,bx:1,cr:1,dt:1};
-  const bad=[];KEYS.forEach((k,i)=>{const f=v=>v==null?'–':v.toFixed(dec[k]),g=x.q[k]==null||y.q[k]==null?'–':Math.abs(x.q[k]-y.q[k]).toFixed(0);const e=[f(x.v[k]),f(y.v[k]),g];if(JSON.stringify(e)!==JSON.stringify(rows[i]))bad.push(k+' '+JSON.stringify(e)+' vs '+JSON.stringify(rows[i]))});
+  /* the page adds the same numbers in another order: a value on a rounding boundary (3.365) may round either way, so a shown value is right within half a unit of its last digit */
+  const near=(sh,v,d)=>v==null?sh==='–':sh!=='–'&&Math.abs(+sh-v)<=0.5*10**-d+1e-9;
+  const bad=[];KEYS.forEach((k,i)=>{const g=x.q[k]==null||y.q[k]==null?null:Math.abs(x.q[k]-y.q[k]),r=rows[i]||[];if(!(near(r[0],x.v[k],dec[k])&&near(r[1],y.v[k],dec[k])&&near(r[2],g,0)))bad.push(k+' '+JSON.stringify([x.v[k],y.v[k],g])+' vs '+JSON.stringify(r))});
   ok(rows.length===14&&!bad.length,x.t+' vs '+y.t+': all 14 values and gaps match the raw files '+bad.slice(0,2).join(' | '));
   /* choosing another twin updates the table */
   const second=other[1].y;await pg.click(`.ct-ol button[data-tw="${second.key}"]:not([data-pk])`);await pg.waitForTimeout(200);
