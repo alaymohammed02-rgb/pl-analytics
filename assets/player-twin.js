@@ -45,6 +45,8 @@
   const d=await INS.players();const a=d&&d.A.find(x=>x.id===id);if(a)location.hash=a.href;
  }
  window.twOpen=openPlayer;
+ /* for the Player story page: the same pool, percentiles and similarity */
+ INS.twins={pool,sim,KEYS:TW_KEYS,NEED:TW_NEED,MIN:TW_MIN};
  R.twins=async function(el){
   el.innerHTML='<h2>Player twins</h2><div id="twroot" class="ins tw"><div class="empty skel">Loading the players of six leagues…</div></div>';
   const root=el.querySelector('#twroot'),P=await pool();if(!root.isConnected)return;
