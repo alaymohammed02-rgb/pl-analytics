@@ -9009,11 +9009,11 @@ INDEX = _x_fpx_index(INDEX)
 # الكود في ملفات مستقلة في المستودع: assets/*.js و assets/features.css و manifest.webmanifest و sw.js و assets/icons/.
 # هذا القسم يضيف روابطها للصفحة فقط (بعد السكربت الرئيسي، فتلقى R و PAGES جاهزة). غيّر FEATURES_V لما تتغير الملفات.
 # ============================================================================
-FEATURES_V = "44"
+FEATURES_V = "45"
 FEATURES_JS = ("pla-data", "share-card", "threat-map", "match-whatif", "player-page", "match-centre", "home-extra", "team-round",
                "preview", "club-extra", "rankings-extra", "fantasy-extra", "insights-core", "hidden-gems", "player-dna", "team-dna",
                "reality-check", "matches-board", "match-replay", "match-story", "overview", "press-height",
-               "season-sim", "luck-table", "player-twin", "player-cards", "beat-model", "rare-cases", "attack-share", "drawer", "tap-twice", "line-height", "league-pool", "game-states", "likely-xi", "club-twins", "carry-team", "report-card", "league-dna", "thrill", "defense-card", "press-card", "sb-press", "stat-stability", "keeps-up", "goalkeepers", "xi-builder", "player-prices", "xi-battle", "player-story", "club-elo", "seasons", "liquid-glass")
+               "season-sim", "luck-table", "player-twin", "player-cards", "beat-model", "rare-cases", "attack-share", "drawer", "tap-twice", "line-height", "league-pool", "game-states", "likely-xi", "club-twins", "carry-team", "report-card", "league-dna", "thrill", "defense-card", "press-card", "sb-press", "stat-stability", "keeps-up", "goalkeepers", "xi-builder", "player-prices", "xi-battle", "player-story", "time-machine", "club-elo", "seasons", "liquid-glass")
 
 
 def _x_feat_index(html):
@@ -12669,6 +12669,135 @@ def run_pipeline(hub, pit_key):
         log(f"  [معركة التشكيلات] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
     return out
 # ===== XIB END =====
+
+# ===== TMACH START =====
+# آلة الزمن (data/results.json): كل نتائج الدوريات الستة من سلسلة المواسم المتصلة (نفس سلسلة Elo)، مضغوطة (أسماء الفرق مرة وحدة)، عشان الصفحة تحسب
+# Elo والترتيب في أي يوم بدون ما تحمّل ملفات المواسم الكبيرة. وفيه اختبار: لكل موسم منتهي، بعد ربع ونص وثلاث أرباع المباريات، النقاط المتوقعة في النهاية
+# من Elo (التقييمات مجمّدة في ذاك اليوم) مقابل "معدل نقاطه للحين × كل المباريات"، والخطأ المطلق لكل فريق مقابل نقاطه الحقيقية. يُعاد حسابه فقط إذا تغيّر
+# عدد المباريات. اختياري: الخطأ ما يوقف المزامنة.
+TM_PATH = "data/results.json"
+TM_CHECK = (0.25, 0.5, 0.75)
+
+
+def tmach_points(ms):
+    """points, games, goal difference per team from finished matches [(d, h, a, hg, ag, id)]"""
+    T = {}
+    for d, h, a, g1, g2, mid in ms:
+        for t, f, ag in ((h, g1, g2), (a, g2, g1)):
+            r = T.setdefault(t, [0, 0, 0])
+            r[0] += 3 if f > ag else 1 if f == ag else 0
+            r[1] += 1
+            r[2] += f - ag
+    return T
+
+
+def tmach_ratings(ms, upto, P=EL2):
+    """Elo ratings on day `upto` from the matches strictly before it (a new season's pull to the mean applied if `upto` is in a later season)"""
+    R, _, _ = el2_run([m for m in ms if m[0] < upto], P)
+    before = [m[0] for m in ms if m[0] < upto]
+    if R and before and el2_season(max(before)) != el2_season(upto):
+        mean = sum(R.values()) / len(R)
+        R = {t: mean + (1 - P["reg"]) * (r - mean) for t, r in R.items()}
+    return R
+
+
+def tmach_expect(season_ms, R, upto, P=EL2):
+    """expected final points of every club of the season from day `upto`: points so far + 3·P(win) + P(draw) over every remaining home/away pairing
+    (a double round robin: the pairings not yet played before `upto`), ratings frozen; a club without a rating gets the mean."""
+    done = [m for m in season_ms if m[0] < upto]
+    pts = tmach_points(done)
+    teams = sorted({t for m in season_ms for t in (m[1], m[2])})
+    played = {(m[1], m[2]) for m in done}
+    mean = sum(R.values()) / len(R) if R else 1500.0
+    r = {t: R.get(t, mean) for t in teams}
+    exp = {t: float(pts.get(t, [0])[0]) for t in teams}
+    for h in teams:
+        for a in teams:
+            if h != a and (h, a) not in played:
+                p = el2_probs(r[h] - r[a] + P["H"], P)
+                exp[h] += 3 * p[0] + p[1]
+                exp[a] += 3 * p[2] + p[1]
+    return exp, pts
+
+
+def tmach_test(chains):
+    """chains: {league: [(season label, [matches])]}. For every finished season and checkpoint: per-club absolute error of the final points."""
+    rows = []
+    for lid, seasons in chains.items():
+        allm = sorted([m for _, ms in seasons for m in ms], key=lambda m: (m[0], m[5]))
+        for k, (lab, ms) in enumerate(seasons):
+            n_t = len({t for m in ms for t in (m[1], m[2])})
+            if not ms or len(ms) != n_t * (n_t - 1):
+                continue                   # not finished
+            ms = sorted(ms, key=lambda m: (m[0], m[5]))
+            final = tmach_points(ms)
+            G = 2 * (n_t - 1)
+            for f in TM_CHECK:
+                upto = ms[int(f * len(ms))][0]
+                R = tmach_ratings(allm, upto)
+                exp, pts = tmach_expect(ms, R, upto)
+                for t in final:
+                    p, g = pts.get(t, [0, 0, 0])[:2]
+                    ppg = p / g * G if g else None
+                    rows.append([lid, lab, f, t, final[t][0], round(exp[t], 2), round(ppg, 2) if ppg is not None else None])
+    def agg(rs):
+        rs = [r for r in rs if r[6] is not None]
+        if not rs:
+            return None
+        e = [abs(r[5] - r[4]) for r in rs]
+        q = [abs(r[6] - r[4]) for r in rs]
+        d = [a - b for a, b in zip(e, q)]
+        m = sum(d) / len(d)
+        se = (sum((x - m) ** 2 for x in d) / (len(d) - 1)) ** 0.5 / len(d) ** 0.5 if len(d) > 1 else None
+        return {"n": len(rs), "seasons": len({(r[0], r[1]) for r in rs}), "elo": round(sum(e) / len(e), 2), "ppg": round(sum(q) / len(q), 2), "d": round(m, 2), "se": round(se, 2) if se else None}
+    out = {"all": {str(f): agg([r for r in rows if r[2] == f]) for f in TM_CHECK},
+           "new": {str(f): agg([r for r in rows if r[2] == f and r[1] >= "2025-26"]) for f in TM_CHECK}}
+    return out
+
+
+def sync_tmach(hub, now=None):
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    idx = gh_get_json(hub, "data/index.json") or {}
+    sj = gh_get_json(hub, "data/seasons.json") or {}
+    names = {l["id"]: l.get("name") for l in idx.get("leagues") or []}
+    chains, key_src = {}, {}
+    for lid in MK_LEAGUES:
+        if lid not in names:
+            continue
+        chain, files = el2_files(sj, idx, lid)
+        labs = chain + [(sj.get("leagues") or {}).get(lid, {}).get("cur") or "now"]
+        seasons = [(lab, el2_matches(hub, [f])) for lab, f in zip(labs, files)]
+        if sum(len(ms) for _, ms in seasons) < 50:
+            continue
+        chains[lid] = seasons
+        key_src[lid] = [[lab, len(ms), max((m[0] for m in ms), default="")] for lab, ms in seasons]
+    key = hashlib.sha1(json.dumps([key_src, EL2, TM_CHECK], sort_keys=True).encode()).hexdigest()[:10]
+    old = gh_get_json(hub, TM_PATH) or {}
+    if not chains or old.get("key") == key:
+        return
+    out = {"t": now.strftime("%Y-%m-%d %H:%M:%S"), "key": key, "params": EL2, "source": "PitchAPI results", "leagues": {}}
+    for lid, seasons in chains.items():
+        teams = sorted({t for _, ms in seasons for m in ms for t in (m[1], m[2])})
+        ix = {t: i for i, t in enumerate(teams)}
+        out["leagues"][lid] = {"name": names.get(lid), "teams": teams,
+                               "seasons": [{"s": lab, "m": [[m[0], ix[m[1]], ix[m[2]], m[3], m[4], m[5]] for m in sorted(ms, key=lambda m: (m[0], m[5]))]} for lab, ms in seasons]}
+    out["test"] = tmach_test(chains)
+    gh_put(hub, TM_PATH, json.dumps(out, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), "Update results for the time machine")
+    a = (out["test"]["all"] or {}).get("0.5") or {}
+    log(f"  [آلة الزمن] {len(out['leagues'])} دوري — اختبار نص الموسم: خطأ Elo {a.get('elo')} نقطة مقابل {a.get('ppg')} لمعدل النقاط ({a.get('n')} فريق)")
+
+
+_orig_run_pipeline_tm = run_pipeline
+
+
+def run_pipeline(hub, pit_key):
+    out = _orig_run_pipeline_tm(hub, pit_key)
+    try:
+        sync_tmach(hub)
+    except Exception as e:      # optional: never stops the sync
+        log(f"  [آلة الزمن] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
+    return out
+# ===== TMACH END =====
 
 
 if __name__ == "__main__":
