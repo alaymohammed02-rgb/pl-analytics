@@ -23,6 +23,10 @@ ev = {e['id']: e for e in fpl['events']}
 # GW8 open (deadline in two days), GW9 after it; GW6 and GW7 as in the real data (played)
 ev[8]['dl'] = iso(now + datetime.timedelta(days=2))
 ev[9]['dl'] = iso(now + datetime.timedelta(days=9))
+# once the real GW8 is played the file marks it finished: in this scenario it is not (the Optimal XI tab keeps the real next gameweek)
+for e in fpl['events']:
+    if e['id'] >= 8:
+        e['fin'] = False
 gws = {}
 for g in (6, 7, 8):
     r = copy.deepcopy(base)
