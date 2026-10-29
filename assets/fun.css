@@ -513,3 +513,18 @@ html[dir=rtl] .dl-bars .ph-bn bdi{text-align:right}
 .er-chip i{width:9px;height:9px;border-radius:50%;background:var(--c)}.er-chip b{color:var(--mu);font-weight:600}.er-chip.on{border-color:var(--c);background:var(--th-soft,var(--sf))}
 .er .seg button{min-width:0;padding:6px 14px}
 @media(prefers-reduced-motion:reduce){.er-draw .er-p{animation:none;stroke-dashoffset:0}.er-draw .er-l circle,.er-draw .er-t{animation:none}.er-p{transition:none}}
+
+/* ---- Wrapped (assets/wrapped.js): story slides ---- */
+.wr-pick .ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.wr-pick select{flex:1 1 150px;min-width:0}.wr-pick .seg button{min-width:0;padding:6px 16px}
+.wr-st{position:relative;max-width:440px;margin:6px auto 10px;border-radius:22px;overflow:hidden;background:#000;box-shadow:0 14px 40px rgba(0,0,0,.45);outline-offset:3px;touch-action:pan-y;-webkit-user-select:none;user-select:none;cursor:pointer}
+.wr-sv svg{display:block;width:100%;height:auto}.wr-sv svg .wr-bar+text,.wr-sv svg text{font-variant-numeric:tabular-nums}
+.wr-pg{position:absolute;top:8px;left:10px;right:10px;display:flex;gap:4px;z-index:2;direction:ltr}html[lang=ar] .wr-pg{direction:rtl}
+.wr-seg{flex:1;padding:6px 0;background:none;border:0;cursor:pointer;min-height:0}.wr-seg i{display:block;position:relative;height:4px;border-radius:2px;background:rgba(255,255,255,.32);overflow:hidden}
+.wr-seg.done i{background:#fff}.wr-seg.on i{background:rgba(255,255,255,.9)}.wr-seg.on.run i{background:rgba(255,255,255,.32)}
+.wr-seg.on.run i::after{content:"";position:absolute;inset:0;background:#fff;transform-origin:left;animation:wr-fill var(--wr-t,6s) linear forwards}html[lang=ar] .wr-seg.on.run i::after{transform-origin:right}
+.wr-ctl{display:flex;justify-content:center;gap:10px;align-items:center;margin:6px 0}.wr-ctl button{min-width:44px;min-height:40px}.wr-play{border-radius:999px;border:1px solid var(--th-bd,var(--ln));background:var(--th);color:var(--th-ink);font:inherit;font-weight:700;cursor:pointer;min-width:52px}
+.wr-live{text-align:center;margin:0 0 6px;min-height:1.2em}
+.wr-in{animation:wr-up .7s cubic-bezier(.2,.8,.2,1) both;animation-delay:var(--d,0ms)}
+.wr-bar{transform-box:fill-box;transform-origin:var(--o,left center);animation:wr-grow .9s cubic-bezier(.2,.8,.2,1) both;animation-delay:var(--d,0ms)}
+@keyframes wr-up{from{opacity:0;transform:translateY(26px)}}@keyframes wr-grow{from{transform:scaleX(0)}}@keyframes wr-fill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@media(prefers-reduced-motion:reduce){.wr-in,.wr-bar{animation:none}.wr-seg.on.run i::after{animation:none;transform:scaleX(1)}}
