@@ -42,7 +42,7 @@ const ALLP=SIX.flatMap(league),PLG=IDX.leagues.find(l=>l.id==='l_4WFCIZ');
 (async()=>{const b=await T.launch();
  let {ctx,pg,errs}=await T.open(b,{vw:1280,league:'l_4WFCIZ',hash:'#/defense'});
  await pg.waitForSelector('#dcx svg',{timeout:90000});
- ok(await pg.evaluate(()=>{const s=document.querySelector('#dcx');return s.previousElementSibling&&s.previousElementSibling.tagName==='H2'&&!!document.querySelector('#dout')}),'the card sits at the top of the Defensive page, and the table is still there');
+ ok(await pg.evaluate(()=>{const s=document.querySelector('#dcx');return (()=>{let p=s.previousElementSibling;while(p&&p.matches('.lv-bar,.lv-g'))p=p.previousElementSibling;return p&&p.tagName==='H2'})()&&!!document.querySelector('#dout')}),'the card sits at the top of the Defensive page, and the table is still there');
  ok(await pg.evaluate(()=>{const h=[...document.querySelectorAll('#dout th')].map(t=>t.textContent);return h.includes('Duels won')&&!h.some(t=>/Ground/.test(t))&&/does not include aerial duels/.test(document.querySelector('#app').textContent)}),
   'the table no longer derives "ground duels won" (duels won does not include aerials in PitchAPI\'s data), and says why');
  /* the default player: the outfield player of the league with the most minutes (450+) */

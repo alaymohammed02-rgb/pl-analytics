@@ -28,7 +28,7 @@ const shown=pg=>pg.$eval('#pcx svg',s=>s.getAttribute('aria-label'));
 (async()=>{const b=await T.launch();const nc=b.newContext.bind(b);b.newContext=o=>nc(Object.assign({},o,{acceptDownloads:true}));
  let {ctx,pg,errs}=await T.open(b,{vw:1280,league:'l_4WFCIZ',hash:'#/ppda'});
  await pg.waitForSelector('#pcx svg',{timeout:90000});
- ok(await pg.evaluate(()=>{const s=document.querySelector('#pcx');return s.previousElementSibling&&s.previousElementSibling.tagName==='H2'}),'the card sits at the top of the Pressing page');
+ ok(await pg.evaluate(()=>{const s=document.querySelector('#pcx');return (()=>{let p=s.previousElementSibling;while(p&&p.matches('.lv-bar,.lv-g'))p=p.previousElementSibling;return p&&p.tagName==='H2'})()}),'the card sits at the top of the Pressing page');
  const m0=LIST[0];
  ok(await shown(pg)===label(m0),'latest match with team numbers: '+(await shown(pg)).slice(0,150)+'… (all numbers and ranks recomputed)');
  ok(await pg.$$eval('#pcxm option',a=>a.length)===LIST.length&&await pg.$eval('#pcxm',s=>s.value)===m0.id,'the picker lists the '+LIST.length+' finished matches with team numbers, newest first');
