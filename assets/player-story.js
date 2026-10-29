@@ -55,6 +55,8 @@
   const tw=peers.filter(x=>x.id!==t.id).map(x=>({x,s:INS.twins.sim(t,x,f)})).filter(r=>r.s).sort((a,b)=>b.s.v-a.s.v||a.x.n.localeCompare(b.x.n))[0]||null;
   return {p:t.p,n:peers.length,top:q.slice(0,3),low:q.length>3?q[q.length-1]:null,tw};
  }
+ /* the season, its facts and where he stands, for Wrapped (assets/wrapped.js) */
+ INS.storyKit={season,facts,stand,rtOf,LAB,POS,domestic};
  const f2=v=>(+v).toFixed(2),f1=v=>(+v).toFixed(1),pc=v=>Math.round(v);
  const res=m=>m.gf>m.ga?'W':m.gf<m.ga?'L':'D';
  function timeline(M,F){
