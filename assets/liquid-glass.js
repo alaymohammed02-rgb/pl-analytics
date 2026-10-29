@@ -13,6 +13,11 @@
      Buttons near it grow a little (macOS Dock).
    - Play (Fantasy tabs): press the chosen tab and the glass lifts; drag it anywhere over the tabs and let go to choose the tab
      under it. With a mouse, the glass leans a little towards the tab you point at.
+   Every bar of choice buttons has it, and every bar on a page has its own glass: the Fantasy tabs and the tab bars (.ins-tabs, .labtabs,
+   .sbp-tabs), the bar of pages above every page (#hubbar, both rows of the Tactics hub), the level bar, the day strip of the Overview, the
+   segmented choices (.seg, .hchips) and the home / draw / away choice of the season simulator. Single actions (save, share, example chips)
+   are not groups and keep their own style. A bar whose buttons are other ones now (the pages of another group) shows its glass on the
+   chosen button at once, without a slide.
    A group with fewer than two buttons keeps its normal style. With "reduce motion" the glass moves at once, without lens
    or springs. The buttons are not changed (their text, order and clicks stay as they are): an aria-hidden glass with
    pointer-events off is added on top, and a data attribute (not a class, so className stays as the page set it) marks the
@@ -22,14 +27,31 @@
  const RM=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
  const ARS=/[\u0600-\u06FF]/,MAG=.08,AMAX=.36,LIFT=[1.1,1.2],MOVE={k:420,z:.72},DRAG={k:900,z:.85};
  const key=e=>e.getAttribute('href')||(e.dataset.cap?'cap':'')||e.getAttribute('onclick')||e.textContent;
- const G=[
-  {id:'fp',sel:'#fproot > .ctl',items:c=>[...c.children].filter(e=>e.tagName==='BUTTON'),on:e=>!e.classList.contains('s'),rebuild:true,drag:true},
-  {id:'ins',sel:'.ins-tabs',items:c=>[...c.children].filter(e=>e.tagName==='BUTTON'),on:e=>!e.classList.contains('s'),rebuild:true,drag:true},
-  {id:'lab',sel:'.labtabs',items:c=>[...c.children].filter(e=>e.tagName==='BUTTON'),on:e=>e.classList.contains('on'),rebuild:true,drag:true},
-  {id:'sbp',sel:'.sbp-tabs',items:c=>[...c.children].filter(e=>e.tagName==='BUTTON'),on:e=>!e.classList.contains('s'),rebuild:true,drag:true},
+ /* the kinds of group. Every bar on a page that matches a selector gets its own glass (the n-th match is the n-th instance, so
+    a bar that is drawn again keeps its glass and the glass slides to the new choice). A group is a row of buttons (or links)
+    of which one is the chosen one; single actions (save, share, a chip that asks something) are not groups. */
+ const kids=t=>c=>[...c.children].filter(e=>e.tagName===t);
+ const picked=e=>e.classList.contains('on')||e.getAttribute('aria-pressed')==='true';
+ const SP=[
+  {id:'fp',sel:'#fproot > .ctl',items:kids('BUTTON'),on:e=>!e.classList.contains('s'),rebuild:true,drag:true},
+  {id:'ins',sel:'.ins-tabs',items:kids('BUTTON'),on:e=>!e.classList.contains('s'),rebuild:true,drag:true},
+  {id:'lab',sel:'.labtabs',items:kids('BUTTON'),on:e=>e.classList.contains('on'),rebuild:true,drag:true},
+  {id:'sbp',sel:'.sbp-tabs',items:kids('BUTTON'),on:e=>!e.classList.contains('s'),rebuild:true,drag:true},
+  /* the bar of pages above every page: one row, or the two rows of the Tactics hub (groups, then the pages of the open group) */
+  {id:'hub',sel:'#hubbar:not(.two), #hubbar .hb-g, #hubbar .hb-p',items:kids('A'),on:e=>e.classList.contains('on'),rebuild:true,drag:true},
+  {id:'day',sel:'.mb-days',items:kids('BUTTON'),on:picked,rebuild:true,drag:true},
+  {id:'seg',sel:'.seg:not(.labtabs)',items:kids('BUTTON'),on:picked,rebuild:true,drag:true},
+  {id:'lvl',sel:'.lv-bar',items:kids('BUTTON'),on:picked,rebuild:true,drag:true},
+  {id:'smf',sel:'.sm-fb',items:kids('BUTTON'),on:picked,rebuild:true,drag:true},
   {id:'drw',sel:'#drw .drw-n',items:c=>[...c.querySelectorAll('a[href^="#/"]')],on:e=>e.classList.contains('on'),rebuild:false,deco:c=>[...c.querySelectorAll('.drw-s h3')]}
- ].map(g=>Object.assign(g,{box:null,el:null,wb:null,wt:null,L:[],R:[],S:[],P:[],k:null,s:null,T:null,A:0,raf:0,last:0,ro:null,
-  end:0,sig:'',dirty:true,mv:false,arr:false,d0:0,dir:[1,0],pd:null,lean:[0,0],hv:null,sup:0}));
+ ],MAXN=24;
+ const mk=(sp,n)=>Object.assign({},sp,{n,box:null,el:null,wb:null,wt:null,L:[],R:[],S:[],P:[],k:null,set:'',s:null,T:null,A:0,raf:0,last:0,ro:null,
+  end:0,sig:'',dirty:true,mv:false,arr:false,d0:0,dir:[1,0],pd:null,lean:[0,0],hv:null,sup:0});
+ const G=SP.map(sp=>mk(sp,0));
+ const pick=g=>document.querySelectorAll(g.sel)[g.n]||null;
+ /* one instance for each bar of a kind on the page (the first of each kind always exists) */
+ function grow(){SP.forEach(sp=>{const cnt=Math.min(MAXN,document.querySelectorAll(sp.sel).length);
+  let have=G.filter(g=>g.id===sp.id).length;while(have<cnt){G.push(mk(sp,have));have++}})}
 
  /* position of an item inside the group's box (layout only: the Dock scaling does not move it) */
  function rect(g,e){let x=0,y=0,n=e;while(n&&n!==g.box){x+=n.offsetLeft;y+=n.offsetTop;n=n.offsetParent}
@@ -41,10 +63,11 @@
  function stop(g){cancelAnimationFrame(g.raf);g.raf=0}
  function off(g){stop(g);if(g.el)g.el.remove();g.el=null;g.P=[];g.L=[];
   if(g.box){g.box.classList.remove('lgx','lgx-mv','lgx-d');g.items(g.box).forEach(e=>{['data-lgx-act','data-lgx-i'].forEach(a=>e.removeAttribute(a));e.style.scale=''})}}
- const sigOf=(g,L)=>L.map(e=>e.textContent).join('\u0001')+'|'+g.box.clientWidth;
+ /* what the buttons say: read on every change of the page, so it must not force a layout (a width change is seen by the ResizeObserver) */
+ const sigOf=(g,L)=>L.map(e=>e.textContent).join('\u0001');
  /* the box, its items and the glass; a rebuilt box gets a new glass (the spring keeps its state, so a move goes on) */
  function ensure(g){
-  const box=document.querySelector(g.sel);
+  const box=pick(g);
   if(box!==g.box){if(g.ro)g.ro.disconnect();g.ro=null;stop(g);g.box=box;g.el=null;g.dirty=true}
   if(!box)return null;
   const L=g.items(box);
@@ -53,6 +76,8 @@
    box.classList.add('lgx');box.classList.toggle('lgx-d',!!g.drag);
    const el=document.createElement('div');el.className='lgx-g';el.setAttribute('aria-hidden','true');
    el.innerHTML='<div class="lgx-b"><div class="lgx-w lgx-wb"></div><div class="lgx-tn"></div><div class="lgx-w lgx-wt"></div></div>';
+   /* a bar copied by the page brings the old glass with it: only the glass of this group stays */
+   [...box.children].forEach(x=>{if(x.classList.contains('lgx-g'))x.remove()});
    box.appendChild(el);g.el=el;const b=el.firstChild;g.wb=b.children[0];g.wt=b.children[2];g.dirty=true;g.P=[];
    const c=under(box);if(c)el.style.setProperty('--lgx-base',c);
    if(window.ResizeObserver){if(g.ro)g.ro.disconnect();g.ro=new ResizeObserver(()=>{if(g.box!==box)return;g.dirty=true;if(!g.raf)rest(g)});g.ro.observe(box);L.forEach(e=>g.ro.observe(e))}
@@ -150,12 +175,13 @@
   if(g.dirty||!g.P.length)build(g,L);
   const r=g.R[L.indexOf(a)];g.T={x:r.x+r.w/2,y:r.y+r.h/2,w:r.w,h:r.h};g.s={x:g.T.x,y:g.T.y,w:r.w,h:r.h,vx:0,vy:0,vw:0,vh:0};
   g.A=0;g.lean=[0,0];g.pd=null;g.el.style.borderRadius=getComputedStyle(a).borderRadius;g.el.style.opacity='1';
-  g.mv=false;g.arr=false;g.el.classList.remove('mv','up','drag');g.box.classList.remove('lgx-mv');render(g);g.k=key(a)}
+  g.mv=false;g.arr=false;g.el.classList.remove('mv','up','drag');g.box.classList.remove('lgx-mv');render(g);g.k=key(a);g.set=L.map(key).join('\u0001')}
  /* a new choice in a group: the spring takes the glass from wherever it is (moving or not) to the new item */
  function update(g,animate){
   const L=ensure(g);if(!L)return;const b=L.find(g.on);if(!b){rest(g);return}
-  const k=key(b),moved=g.k!=null&&k!==g.k,busy=g.mv||!!g.pd||g.A>.012||!!(g.s&&g.T&&!close(g.s,goal(g)));
-  if(!animate||RM()||!g.s||!(moved||busy)){rest(g);return}
+  /* a bar whose buttons are other ones now (the pages of another group, another level) is a new bar, not a move */
+  const k=key(b),same=g.set===L.map(key).join('\u0001'),moved=g.k!=null&&k!==g.k&&same,busy=g.mv||!!g.pd||g.A>.012||!!(g.s&&g.T&&!close(g.s,goal(g)));
+  if(!animate||RM()||!g.s||!same||!(moved||busy)){rest(g);return}
   /* a new choice, or the same one in a rebuilt box while the glass is still on its way: draw the copy again and go on */
   if(moved||L.some(e=>(e===b)!==e.hasAttribute('data-lgx-act'))){L.forEach(e=>e.toggleAttribute('data-lgx-act',e===b));g.dirty=true}
   if(g.dirty)build(g,L);
@@ -165,7 +191,7 @@
   if(g.mv){g.el.classList.add('mv');g.box.classList.add('lgx-mv')}
   if(g.pd)g.el.classList.add('up');
   render(g);kick(g)}
- function tick(){G.forEach(g=>{const bx=document.querySelector(g.sel);
+ function tick(){grow();G.forEach(g=>{const bx=pick(g);
   if(!bx){if(g.box){stop(g);if(g.ro)g.ro.disconnect();g.ro=null;g.box=null;g.el=null;g.mv=false;g.pd=null;g.L=[]}return}
   if(bx!==g.box||!g.el||g.el.parentNode!==bx){update(g,g.rebuild&&g.k!=null);return}
   const L=g.items(bx),a=L.find(g.on);if(a?key(a)!==g.k:g.k!=null){update(g,true);return}
@@ -191,6 +217,8 @@
   x=Math.max(Math.min(...C.map(c=>c[0]))-12,Math.min(Math.max(...C.map(c=>c[0]))+12,x));y=Math.max(Math.min(...C.map(c=>c[1]))-8,Math.min(Math.max(...C.map(c=>c[1]))+8,y));
   const r=g.R[nearest(g,x,y)];Object.assign(g.pd,{x,y,w:r.w,h:r.h})}
  const own=e=>{const it=e.target&&e.target.closest&&e.target.closest('[data-lgx-i]');if(!it)return null;const g=G.find(g=>g.drag&&g.box&&g.el&&g.box.contains(it));return g?[g,it]:null};
+ /* a link is dragged by the browser (a ghost of the link, and the pointer events stop): in a bar with the glass it is the glass that is dragged */
+ document.addEventListener('dragstart',e=>{const it=e.target&&e.target.closest&&e.target.closest('.lgx-d [data-lgx-i]');if(it)e.preventDefault()},true);
  document.addEventListener('pointerdown',e=>{if(e.button!==0||RM())return;const h=own(e);if(!h)return;const [g,it]=h;
   if(!it.hasAttribute('data-lgx-act')||!g.s)return;
   g.pd={id:e.pointerId,x0:e.clientX,y0:e.clientY,drag:false,x:0,y:0,w:0,h:0};g.el.classList.add('up');kick(g)},true);

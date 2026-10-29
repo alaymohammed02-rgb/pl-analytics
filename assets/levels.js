@@ -73,6 +73,8 @@
   if(!b){b=document.createElement('div');b.className='lv-bar';b.setAttribute('role','group');b.setAttribute('aria-label','Your level');
    b.innerHTML=`<span class="lv-t">${two('Your level','مستواك')}</span>${LV.map(l=>`<button type="button" data-l="${l}">${two(NAME[l][0],NAME[l][1])}</button>`).join('')}`;
    const h=app.querySelector(':scope > h2');if(h)h.after(b);else app.prepend(b)}
+  /* a page may put its own card right after the title (the player card): the bar stays the first thing under the title */
+  {const h=app.querySelector(':scope > h2');if(h&&h.nextElementSibling!==b)h.after(b)}
   b.querySelectorAll('button').forEach(x=>{const on=x.dataset.l===L;x.classList.toggle('on',on);x.setAttribute('aria-pressed',String(on))});
   return b;
  }
@@ -81,6 +83,7 @@
   if(L==='v'||!en.length){if(g)g.remove();return}
   const html=en.map((p,i)=>`<p>${two(p,ar[i]||p)}</p>`).join('');
   if(!g){g=document.createElement('div');g.className='card lv-g';b.after(g)}
+  if(g.previousElementSibling!==b)b.after(g);
   if(g.dataset.l!==L){g.dataset.l=L;g.innerHTML=html}
  }
  function hideSection(h){const p=h.parentElement;

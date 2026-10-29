@@ -47,7 +47,8 @@ const minus=(a,b)=>a.filter(x=>!b.includes(x));
   ok(JSON.stringify(goneH.sort())===JSON.stringify(W.h3.filter(x=>v.h3.includes(x)).sort()),h+' Beginner: exactly these sections hidden: '+(goneH.join(', ')||'none'));
   ok(JSON.stringify(goneT)===JSON.stringify(W.th.filter(x=>v.th.includes(x)).sort())&&goneT.every(x=>!b_.th.includes(x)),h+' Beginner: exactly these columns hidden in the tables it shows: '+(goneT.join(', ')||'none'));
   if(W.kpi)ok(b_.kpi===W.kpi&&v.kpi>W.kpi&&b_.ctl===W.ctl&&v.ctl>W.ctl,h+' Beginner: '+W.kpi+' of '+v.kpi+' tiles and '+W.ctl+' of '+v.ctl+' filter rows');
-  ok(b_.guide.length>40&&!v.guide,h+' Beginner has a guide, Veteran none')}
+  ok(b_.guide.length>40&&!v.guide,h+' Beginner has a guide, Veteran none');
+  ok(await pg.evaluate(()=>{const b=document.querySelector('#app > .lv-bar'),g=document.querySelector('#app > .lv-g');return !!b&&b.previousElementSibling&&b.previousElementSibling.tagName==='H2'&&(!g||g.previousElementSibling===b)}),h+': the level bar is the first thing under the title (before the page\'s own cards) and the guide follows it')}
  /* kept on reload */
  await pg.reload();await pg.waitForSelector('.lv-bar',{timeout:90000});await pg.waitForTimeout(1500);ok((await view(pg)).lvl==='b','the level is kept after a reload');
  /* pages without levels have no bar */
