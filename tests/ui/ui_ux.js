@@ -1,8 +1,10 @@
 const {chromium}=require('playwright');const fs=require('fs');
 let fails=0;const ok=(c,m)=>{if(!c){fails++;console.log('FAIL',m)}else console.log('ok  ',m)};
 const U='http://127.0.0.1:8773/index.html';
-const SEC={home:['overview','ask','data','settings'],season:['table','sim','luck','rare','timemachine'],matches:['matches','round','whatif','thrill','states','xi'],teams:['teams','tactical','halves','clubtwins','carry','leaguedna','elo'],players:['players','story','rankings','ratings','gems','stability','keepsup','prices','looklike'],compare:['compare','twins','cards','builder','battle'],attack:['shots','reality','passing','heatmaps'],defence:['defense','ppda','height','sbpress','keepers'],models:['lab','reportcard'],fpl:['fantasy','beat','share']};
-const HUBN={home:'Home',season:'Season',matches:'Matches',teams:'Teams',players:'Players',compare:'Compare',attack:'Attack',defence:'Defence',models:'Models',fpl:'Fantasy'};
+const SEC={home:['overview','ask','data','settings'],season:['table','sim','luck','rare','timemachine'],matches:['matches','round','whatif','thrill','states','xi'],teams:['teams','tactical','halves','clubtwins','carry','leaguedna','elo'],players:['players','story','rankings','ratings','gems','stability','keepsup','prices','looklike'],compare:['compare','twins','cards','builder','battle'],tactics:['shots','reality','heatmaps','defense','height','keepers','passing','ppda','sbpress'],models:['lab','reportcard'],fpl:['fantasy','beat','share']};
+const HUBN={home:'Home',season:'Season',matches:'Matches',teams:'Teams',players:'Players',compare:'Compare',tactics:'Tactics',models:'Models',fpl:'Fantasy'};
+/* the groups of the Tactics hub and their pages */
+const GRP={attack:['shots','reality','heatmaps'],defence:['defense','height','keepers'],passing:['passing'],pressing:['ppda','sbpress']};
 const SENT={flipy:'1',fpl_myxi_cur_v1:'{"keep":1}',gh_repo:'x/y'};
 async function open(b,{vw=1280,lang='en',init=null,league='l_4WFCIZ'}={}){const ctx=await b.newContext({viewport:{width:vw,height:860}});
  await ctx.addInitScript(([a,S,init,lg])=>{if(!sessionStorage.getItem('seeded')){sessionStorage.setItem('seeded','1');localStorage.clear();for(const k in S)localStorage.setItem(k,S[k]);localStorage.setItem('league',lg);localStorage.setItem('lang',a);if(init!=null)localStorage.setItem('plx_fav_v1',init)}},[lang,SENT,init,league]);
@@ -14,22 +16,25 @@ const vis=pg=>pg.$$eval('#nav a',a=>a.filter(x=>x.offsetParent).map(x=>x.getAttr
  /* ---- sections ---- */
  {const {ctx,pg,errs}=await open(b);
   const all=await pg.$$eval('#nav a',a=>a.map(x=>x.getAttribute('href').slice(2)));ok(all.length===50&&Object.values(SEC).flat().every(k=>all.includes(k)),'all 50 menu links (Ask the site and Time machine added; XI Battle and Player story added; Club Elo added; Player prices added; XI Builder added; Goalkeepers added; Who keeps it up? added; Stat stability added; Pressing maps added; Comebacks & collapses, Likely line-ups, Thrill index, Club twins, Who carries the team, Model report card and League DNA added; Attack share, Very rare cases, Match What-If, Ratings, Halves, Hidden Gems, Reality Check, This round, Height, Season simulator, Luck table, Player twins, Player cards and Beat the model added) stay in the menu; each belongs to one of 10 hubs');
-  /* the menu drawer: ten hubs, one link each, the open page's hub marked; the pages of the open hub are the tabs above the page */
+  /* the menu drawer: nine hubs (Attack, Defence, Passing and Pressing are the four groups of Tactics), one link each, the open page's hub marked; the pages of the open hub are the tabs above the page */
   const drw=()=>pg.evaluate(()=>{drwOpen(true);const hubs=[...document.querySelectorAll('#drw .drw-s a')].map(a=>[a.dataset.hub,a.textContent.trim(),a.getAttribute('href').slice(2)]);const on=document.querySelector('#drw a.on');const r={hubs,on:on&&on.dataset.hub};drwOpen(false);return r});
-  const tabs=()=>pg.evaluate(()=>{const h=document.getElementById('hubbar');return {hidden:!h||h.hidden,links:h?[...h.querySelectorAll('a')].map(a=>a.getAttribute('href').slice(2)):[],on:h&&h.querySelector('a.on')?h.querySelector('a.on').getAttribute('href').slice(2):null}});
+  const tabs=()=>pg.evaluate(()=>{const h=document.getElementById('hubbar');return {hidden:!h||h.hidden,links:h?[...h.querySelectorAll(h.classList.contains('two')?'.hb-p a':'a')].map(a=>a.getAttribute('href').slice(2)):[],on:h&&h.querySelector('.hb-p a.on,#hubbar:not(.two) a.on')?h.querySelector('.hb-p a.on,#hubbar:not(.two) a.on').getAttribute('href').slice(2):null,
+   grp:h?[...h.querySelectorAll('.hb-g a')].map(a=>[a.dataset.grp,a.classList.contains('on')]):[]}});
   let bad=[],badT=[];for(const [s,ps] of Object.entries(SEC))for(const p of ps){await go(pg,'#/'+p,400);const d=await drw();const t=await tabs();
-   if(d.on!==s||d.hubs.length!==10||JSON.stringify(d.hubs.map(x=>x[0]))!==JSON.stringify(Object.keys(SEC))||JSON.stringify(d.hubs.map(x=>x[1]))!==JSON.stringify(Object.values(HUBN)))bad.push(p+':'+d.on);
-   if(ps.length>1?(t.hidden||JSON.stringify(t.links)!==JSON.stringify(ps)||t.on!==p):!t.hidden)badT.push(p+':'+JSON.stringify(t))}
-  ok(!bad.length,'on every page, the menu lists the 10 hubs in order, one link each, and marks the open page\'s hub '+bad.slice(0,3).join(' ; '));
-  ok(!badT.length,'on every page, the tabs above the page are its hub\'s pages in order with the open one marked (none for a hub of one page) '+badT.slice(0,2).join(' ; '));
+   if(d.on!==s||d.hubs.length!==9||JSON.stringify(d.hubs.map(x=>x[0]))!==JSON.stringify(Object.keys(SEC))||JSON.stringify(d.hubs.map(x=>x[1]))!==JSON.stringify(Object.values(HUBN)))bad.push(p+':'+d.on);
+   if(s==='tactics'){const g=Object.keys(GRP).find(k=>GRP[k].includes(p)),gp=GRP[g];
+    if(t.hidden||JSON.stringify(t.grp.map(x=>x[0]))!==JSON.stringify(Object.keys(GRP))||t.grp.filter(x=>x[1]).map(x=>x[0]).join()!==g||(gp.length>1?JSON.stringify(t.links)!==JSON.stringify(gp)||t.on!==p:t.links.length))badT.push(p+':'+JSON.stringify(t))}
+   else if(ps.length>1?(t.hidden||JSON.stringify(t.links)!==JSON.stringify(ps)||t.on!==p):!t.hidden)badT.push(p+':'+JSON.stringify(t))}
+  ok(!bad.length,'on every page, the menu lists the 9 hubs in order, one link each, and marks the open page\'s hub '+bad.slice(0,3).join(' ; '));
+  ok(!badT.length,'on every page, the tabs above the page are its hub\'s pages in order with the open one marked (none for a hub of one page); in Tactics, the four groups with the open one marked, then that group\'s pages '+badT.slice(0,2).join(' ; '));
   {await go(pg,'#/table',500);await go(pg,'#/luck',500);await go(pg,'#/overview',500);const d=await pg.evaluate(()=>{drwOpen(true);const a=document.querySelector('#drw a[data-hub="season"]').getAttribute('href');drwOpen(false);return a});ok(d==='#/luck','a hub link goes to the page last open in that hub ('+d+')')}
   for(const [h,k] of [['#/club/Arsenal','teams'],['#/player/x||y','players'],['#/match/m_x','matches']]){await go(pg,h,500);ok((await drw()).on===k,h.split('/')[1]+' pages are marked under '+k)}
   ok(await pg.evaluate(()=>['secnav','nav','secbar'].every(i=>{const e=document.getElementById(i);return !e||getComputedStyle(e).display==='none'})),'the old top section buttons, page links and bottom bar are hidden');
   await go(pg,'#/overview',600);await pg.click('#mnubtn');await pg.waitForTimeout(350);
   ok(await pg.evaluate(()=>!document.getElementById('drw').hidden&&document.documentElement.classList.contains('dr-open')&&document.getElementById('mnubtn').getAttribute('aria-expanded')==='true'&&document.activeElement.closest('#drw')!==null),'☰ opens the menu, focus moves into it');
   /* the menu closes once its Liquid Glass has reached the link (assets/liquid-glass.js), at most about a second later */
-  await pg.click('#drw a[data-hub="attack"]');await pg.waitForFunction(()=>!document.documentElement.classList.contains('dr-open'),null,{timeout:2000}).catch(()=>{});await pg.waitForTimeout(250);
-  ok(await pg.evaluate(()=>location.hash==='#/heatmaps'&&!document.documentElement.classList.contains('dr-open')),'a hub link opens the page last open in that hub (Heatmaps, visited last above) and closes the menu');
+  await pg.click('#drw a[data-hub="tactics"]');await pg.waitForFunction(()=>!document.documentElement.classList.contains('dr-open'),null,{timeout:2000}).catch(()=>{});await pg.waitForTimeout(250);
+  ok(await pg.evaluate(()=>location.hash==='#/sbpress'&&!document.documentElement.classList.contains('dr-open')),'a hub link opens the page last open in that hub (Pressing maps, visited last above) and closes the menu');
   await pg.click('#mnubtn');await pg.waitForTimeout(300);await pg.keyboard.press('Escape');await pg.waitForTimeout(350);
   ok(await pg.evaluate(()=>document.getElementById('drw').hidden&&document.activeElement===document.getElementById('mnubtn')),'Escape closes it and focus returns to ☰');
   await pg.click('#mnubtn');await pg.waitForTimeout(300);await pg.mouse.click(1200,500);await pg.waitForTimeout(350);ok(await pg.evaluate(()=>document.getElementById('drw').hidden),'a tap on the dimmed page closes it');
@@ -85,7 +90,7 @@ const vis=pg=>pg.$$eval('#nav a',a=>a.filter(x=>x.offsetParent).map(x=>x.getAttr
   const ph=await pg.evaluate(()=>({bar:getComputedStyle(document.getElementById('secbar')).display,pad:parseFloat(getComputedStyle(document.body).paddingBottom),btn:document.getElementById('mnubtn').getBoundingClientRect().width>0}));
   ok(ph.bar==='none'&&ph.pad<30&&ph.btn,'phone: no bottom bar (and no space kept for it), the ☰ button instead');
   await pg.click('#mnubtn');await pg.waitForTimeout(400);const side=await pg.evaluate(()=>{const r=document.getElementById('drw').getBoundingClientRect();return {r:Math.round(r.right),w:innerWidth,l:Math.round(r.left),labels:[...document.querySelectorAll('#drw .drw-s a')].map(s=>s.textContent.trim())}});
-  ok(side.r===side.w&&side.l>0,'in Arabic the menu opens from the right');ok(side.labels.join('|')==='الرئيسية|الموسم|المباريات|الفرق|اللاعبون|مقارنة|الهجوم|الدفاع|النماذج|الفانتازي','in Arabic: '+side.labels.join(' · '));
+  ok(side.r===side.w&&side.l>0,'in Arabic the menu opens from the right');ok(side.labels.join('|')==='الرئيسية|الموسم|المباريات|الفرق|اللاعبون|مقارنة|التكتيك|النماذج|الفانتازي','in Arabic: '+side.labels.join(' · '));
   await pg.keyboard.press('Escape');await pg.waitForTimeout(350);
   for(const h of ['#/overview','#/table','#/matches','#/players','#/fantasy','#/lab','#/club/Arsenal']){await go(pg,h,1500);const s=await pg.evaluate(()=>document.scrollingElement.scrollWidth-innerWidth);if(s>1)ok(false,'390px '+h+': horizontal scroll '+s)}
   ok(true,'390px Arabic: no horizontal scroll on overview, table, matches, players, fantasy, lab, club (the Shots page was already wider before this change)');

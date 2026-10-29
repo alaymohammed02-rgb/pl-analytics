@@ -7859,10 +7859,13 @@ const UI_SEC=[
  {k:'teams',n:'Teams',p:['teams','tactical','halves','clubtwins','carry','leaguedna'],ic:'<path d="M12 2l8 3v6c0 5-3.4 9.3-8 11-4.6-1.7-8-6-8-11V5z"/>'},
  {k:'players',n:'Players',p:['players','rankings','ratings','gems','looklike'],ic:'<circle cx="12" cy="7.5" r="4"/><path d="M4 21a8 8 0 0 1 16 0z"/>'},
  {k:'compare',n:'Compare',p:['compare','twins','cards'],ic:'<path d="M4 4h7v16H4zM13 8h7v12h-7z"/>'},
- {k:'attack',n:'Attack',p:['shots','reality','passing','heatmaps'],ic:'<path d="M13 2L4 14h6l-1 8 9-12h-6z"/>'},
- {k:'defence',n:'Defence',p:['defense','ppda','height','sbpress'],ic:'<path fill-rule="evenodd" d="M12 2L4 6v6c0 5 3.4 8.6 8 10 4.6-1.4 8-5 8-10V6zm0 3l5 2.3V12c0 3.3-2.1 5.9-5 7-2.9-1.1-5-3.7-5-7V7.3z"/>'},
+ /* one hub for the game itself: four groups (Attack, Defence, Passing, Pressing), each with its own pages; p = all of them, in that order */
+ {k:'tactics',n:'Tactics',g:[{k:'attack',n:'Attack',p:['shots','reality','heatmaps']},{k:'defence',n:'Defence',p:['defense','height']},{k:'passing',n:'Passing',p:['passing']},{k:'pressing',n:'Pressing',p:['ppda','sbpress']}],p:[],ic:'<path d="M4 3h16a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zm1 2v14h14V5zm2 2.5h3v3H7zm7 6h3v3h-3zm-6.3 5.2 7.1-7.1-1.6-.1V8h4v4h-1.5l-.1-1.6-7.1 7.1z"/>'},
  {k:'models',n:'Models',p:['lab','reportcard'],ic:'<path d="M4 19h16v2H4zM6 10h3v7H6zm5-5h3v12h-3zm5 3h3v9h-3z"/>'},
  {k:'fpl',n:'Fantasy',p:['fantasy','beat','share'],ic:'<path d="M12 2l2.9 6.3 6.9.8-5.1 4.7 1.4 6.8L12 17.3 5.9 20.6l1.4-6.8L2.2 9.1l6.9-.8z"/>'}];
+UI_SEC.forEach(s=>{if(s.g)s.p=s.g.flatMap(g=>g.p)});
+/* the group of a hub's page (Tactics: Attack, Defence, Passing, Pressing), or null */
+const uiGrpOf=(sec,pg)=>sec&&sec.g?sec.g.find(g=>g.p.includes(pg))||null:null;
 const UI_ALIAS={club:'teams',player:'players',match:'matches'};
 const uiPage=()=>((location.hash||'#/overview').split('/')[1]||'overview');
 const uiSecOf=pg=>{pg=UI_ALIAS[pg]||pg;return UI_SEC.find(s=>s.p.includes(pg))||UI_SEC[0]};
@@ -7886,7 +7889,13 @@ function uiNav(){
  const app=document.getElementById('app');let hb=document.getElementById('hubbar');
  if(!hb&&app){hb=document.createElement('nav');hb.id='hubbar';hb.setAttribute('aria-label','Pages in this section');app.parentNode.insertBefore(hb,app)}
  if(hb){const name=new Map(PAGES.map(p=>[p[0],p[1]])),items=sec.p.filter(k=>name.has(k)),key=sec.k+'|'+sp+'|'+items.join();
-  if(hb.dataset.k!==key){hb.dataset.k=key;hb.innerHTML=items.length>1?items.map(k=>`<a href="#/${k}"${k===sp?' class="on" aria-current="page"':''}>${esc(name.get(k))}</a>`).join(''):'';hb.hidden=items.length<2;
+  const grp=uiGrpOf(sec,sp);if(grp){UI_LAST[sec.k+':'+grp.k]=sp;try{sessionStorage.setItem('plx_sec_last',JSON.stringify(UI_LAST))}catch(e){}}
+  if(hb.dataset.k!==key){hb.dataset.k=key;
+   if(sec.g){/* a hub of groups: the groups first (each goes to its page last open, else its first), then the pages of the open group */
+    const gs=sec.g.filter(g=>g.p.some(k=>name.has(k))),gp=grp?grp.p.filter(k=>name.has(k)):[];
+    hb.innerHTML=`<div class="hb-g">${gs.map(g=>{const last=UI_LAST[sec.k+':'+g.k],t=last&&g.p.includes(last)&&name.has(last)?last:g.p.find(k=>name.has(k));return `<a href="#/${t}" data-grp="${g.k}"${g===grp?' class="on" aria-current="true"':''}>${esc(g.n)}</a>`}).join('')}</div>`+(gp.length>1?`<div class="hb-p">${gp.map(k=>`<a href="#/${k}"${k===sp?' class="on" aria-current="page"':''}>${esc(name.get(k))}</a>`).join('')}</div>`:'');
+    hb.classList.add('two');hb.hidden=!gs.length}
+   else{hb.classList.remove('two');hb.innerHTML=items.length>1?items.map(k=>`<a href="#/${k}"${k===sp?' class="on" aria-current="page"':''}>${esc(name.get(k))}</a>`).join(''):'';hb.hidden=items.length<2}
    const on=hb.querySelector('a.on');if(on&&hb.scrollWidth>hb.clientWidth)on.scrollIntoView({block:'nearest',inline:'center'})}}
  if(typeof lglKick==='function')lglKick();
 }
@@ -8564,7 +8573,7 @@ _AR_SEASON.update({
     "Attack": "الهجوم",
     "Defence": "الدفاع",
     "Territory": "السيطرة على الملعب",
-    "Pressing": "الضغط",
+    "Pressing": "الضغط", "Tactics": "التكتيك",
     "xG created a match": "الأهداف المتوقعة المصنوعة في المباراة",
     "xG allowed a match": "الأهداف المتوقعة المستقبلة في المباراة",
     "lower is better": "الأقل أفضل",
@@ -9009,7 +9018,7 @@ INDEX = _x_fpx_index(INDEX)
 # الكود في ملفات مستقلة في المستودع: assets/*.js و assets/features.css و manifest.webmanifest و sw.js و assets/icons/.
 # هذا القسم يضيف روابطها للصفحة فقط (بعد السكربت الرئيسي، فتلقى R و PAGES جاهزة). غيّر FEATURES_V لما تتغير الملفات.
 # ============================================================================
-FEATURES_V = "45"
+FEATURES_V = "46"
 FEATURES_JS = ("pla-data", "share-card", "threat-map", "match-whatif", "player-page", "match-centre", "home-extra", "team-round",
                "preview", "club-extra", "rankings-extra", "fantasy-extra", "insights-core", "hidden-gems", "player-dna", "team-dna",
                "reality-check", "matches-board", "match-replay", "match-story", "overview", "press-height",

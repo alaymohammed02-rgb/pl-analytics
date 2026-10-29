@@ -463,3 +463,8 @@ html[dir=rtl] .dl-bars .ph-bn bdi{text-align:right}
 .ak-u{font-size:12.5px;margin:0 0 8px}.ak-b{display:inline-block;padding:1px 8px;border-radius:999px;background:var(--glass-bd);margin:2px 2px 2px 0}
 .ak-t td,.ak-t th{white-space:normal}.ak-t td.n{white-space:nowrap}.ak-p h3,.ak-c h3{margin:4px 0}
 .ak-t .mu bdi{white-space:nowrap}
+/* the Tactics hub: its four groups, then the pages of the open group (uiNav) */
+#hubbar.two{flex-direction:column;align-items:stretch;gap:6px}
+#hubbar.two .hb-g,#hubbar.two .hb-p{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}#hubbar.two .hb-g::-webkit-scrollbar,#hubbar.two .hb-p::-webkit-scrollbar{display:none}
+#hubbar.two .hb-g a{font-weight:700}
+#hubbar.two .hb-p a{min-height:30px;padding:4px 12px;font-size:13px}

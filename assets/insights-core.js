@@ -128,7 +128,11 @@
  INS.wireTabs=(root,id,fn)=>{const t=root.querySelector('#'+id);if(!t)return;t.addEventListener('click',e=>{const b=e.target.closest('button[data-k]');if(!b)return;t.querySelectorAll('button').forEach(x=>{const on=x===b;x.className=on?'':'s';x.setAttribute('aria-selected',on)});fn(b.dataset.k)})};
  /* a page asks for a section (home, league, players, analysis, fpl); the menu has ten hubs, so a page the hubs do not list yet goes to the hub of that name's kind */
  INS.addPage=(k,n,sec,after)=>{if(typeof PAGES==='undefined')return;if(!PAGES.some(p=>p[0]===k)){const i=PAGES.findIndex(p=>p[0]===after);PAGES.splice(i>=0?i+1:PAGES.length,0,[k,n])}
-  if(typeof UI_SEC!=='undefined'&&!UI_SEC.some(x=>x.p.includes(k))){const hub={home:'home',league:'matches',players:'players',analysis:'attack',fpl:'fpl'}[sec]||sec,s=UI_SEC.find(x=>x.k===hub);if(s){const i=s.p.indexOf(after);s.p.splice(i>=0?i+1:s.p.length,0,k)}}};
+  if(typeof UI_SEC!=='undefined'&&!UI_SEC.some(x=>x.p.includes(k))){const hub={home:'home',league:'matches',players:'players',analysis:'attack',fpl:'fpl'}[sec]||sec,s=UI_SEC.find(x=>x.k===hub);
+   /* a hub of groups (Tactics): the page goes into the group of that name (attack, defence, passing, pressing) and the hub's list is rebuilt */
+   const g=!s&&UI_SEC.map(x=>({x,g:(x.g||[]).find(y=>y.k===hub)})).find(o=>o.g);
+   if(s){const i=s.p.indexOf(after);s.p.splice(i>=0?i+1:s.p.length,0,k)}
+   else if(g){const i=g.g.p.indexOf(after);g.g.p.splice(i>=0?i+1:g.g.p.length,0,k);g.x.p=g.x.g.flatMap(y=>y.p)}}};
  INS.ar=o=>{if(typeof AR==='object')Object.entries(o).forEach(([k,v])=>{if(!(k in AR)&&v!==k)AR[k]=v})};
  INS.ar({"No data to plot.":"ما فيه بيانات للرسم.","No data.":"ما فيه بيانات.","Not enough matches for a trend yet.":"المباريات ما تكفي لرسم اتجاه للحين.",
   "Goals":"الأهداف","Shots":"التسديدات","Key passes":"تمريرات مفتاحية","Shot-creating actions":"أفعال صنعت تسديدة","Passes into box":"تمريرات داخل المنطقة",
