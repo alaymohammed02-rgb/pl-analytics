@@ -41,8 +41,10 @@ function clubTexts(E,club,lgn,season){
 const texts=pg=>pg.$$eval('#wrsv svg text',a=>a.map(t=>t.textContent.trim()));
 const titles=pg=>pg.$$eval('#wrpg .wr-seg',a=>a.map(b=>b.getAttribute('aria-label').replace(/^\d+\.\s*/,'')));
 const settle=pg=>pg.waitForTimeout(1300);
-const layout=pg=>pg.evaluate(()=>{const svg=document.querySelector('#wrsv svg'),vb=svg.viewBox.baseVal,T=[...svg.querySelectorAll('text')].map(t=>{const b=t.getBBox();return {x:b.x,y:b.y,w:b.width,h:b.height,t:t.textContent}}).filter(b=>b.w>0);
- const bad=[];T.forEach((a,i)=>{if(a.x<8||a.x+a.w>vb.width-8||a.y<0||a.y+a.h>vb.height)bad.push('outside: '+a.t);T.forEach((b,j)=>{if(j>i&&a.x<b.x+b.w-1&&b.x<a.x+a.w-1&&Math.min(a.y+a.h,b.y+b.h)-Math.max(a.y,b.y)>24)bad.push(a.t+' / '+b.t)})});return bad});
+/* where each line of text sits, from its own baseline and size (the glyph boxes of the browser change with the font, and the runner's Arabic font is taller than ours);
+   the width is the browser's. Two lines of different texts may not share more than 20 units of height, and none may leave the slide. */
+const layout=pg=>pg.evaluate(()=>{const svg=document.querySelector('#wrsv svg'),vb=svg.viewBox.baseVal,T=[...svg.querySelectorAll('text')].map(t=>{const b=t.getBBox(),y=+t.getAttribute('y'),s=+t.getAttribute('font-size');return {x:b.x,w:b.width,y0:y-.85*s,y1:y+.25*s,t:t.textContent}}).filter(b=>b.w>0);
+ const bad=[];T.forEach((a,i)=>{if(a.x<8||a.x+a.w>vb.width-8||a.y0<0||a.y1>vb.height)bad.push('outside: '+a.t);T.forEach((b,j)=>{if(j>i&&a.x<b.x+b.w-1&&b.x<a.x+a.w-1&&Math.min(a.y1,b.y1)-Math.max(a.y0,b.y0)>20)bad.push(a.t+' / '+b.t)})});return bad});
 const goSlide=async(pg,i)=>{await pg.click('#wrpg .wr-seg[data-i="'+i+'"]');await settle(pg)};
 async function open(b,o={}){const r=await T.open(b,{vw:520,league:LG,hash:'#/wrapped',...o});await r.pg.waitForSelector('#wrst svg',{timeout:90000});await r.pg.waitForTimeout(800);return r}
 (async()=>{const b=await T.launch();
