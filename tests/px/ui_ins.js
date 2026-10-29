@@ -22,7 +22,7 @@ const untranslated=sel=>{const o=[];document.querySelectorAll(sel).forEach(r=>{c
 (async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  /* ---------------- Hidden Gems ---------------- */
  {const {ctx,pg,errs,req}=await open(b,{hash:'#/gems'});await pg.waitForSelector('#gmout',{timeout:60000});await pg.waitForTimeout(800);
-  ok(await pg.evaluate(()=>PAGES.some(p=>p[0]==='gems')&&UI_SEC.find(s=>s.k==='players').p.includes('gems')&&PAGES.some(p=>p[0]==='reality')&&UI_SEC.find(s=>s.k==='attack').p.includes('reality')),'Hidden Gems in the Players hub, Reality Check in the Attack hub');
+  ok(await pg.evaluate(()=>PAGES.some(p=>p[0]==='gems')&&UI_SEC.find(s=>s.k==='players').p.includes('gems')&&PAGES.some(p=>p[0]==='reality')&&UI_SEC.find(s=>s.k==='tactics').p.includes('reality')),'Hidden Gems in the Players hub, Reality Check in the Attack hub');
   /* the rule recomputed independently from the raw per-match rows */
   const exp=await pg.evaluate(()=>{const P=PLD,ix=P.ix,g=new Map(),gk=new Set(D.stats.filter(s=>s.xg_faced!=null).map(s=>s.player_id));
    P.rows.forEach(r=>{const mi=r[ix.mi];if(mi==null)return;const id=r[ix.i];let a=g.get(id);if(!a){a={id,n:r[ix.n],mi:0,apps:0,pos:{},xag:0,xagm:0,gl:0,ast:0,glm:0,astm:0};g.set(id,a)}
