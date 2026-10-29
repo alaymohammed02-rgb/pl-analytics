@@ -23,10 +23,10 @@
  const two=(en,ar)=>`<span class="fx-en">${en}</span><span class="fx-ar" dir="rtl">${ar}</span>`;
  const nb=x=>`<bdi dir="ltr">${x}</bdi>`;
  const ar=()=>typeof ARL==='object'&&!!ARL.on;
- const S={lg:'',pid:'',grp:'role',scope:'six',min:450,fam:'def',mets:{},tok:0};
- try{const o=JSON.parse(localStorage.getItem('plx_dc_v1')||'null');if(o){['grp','scope'].forEach(k=>{if(typeof o[k]==='string')S[k]=o[k]});
+ const S={lg:'',pid:'',grp:'role',scope:'six',min:450,fam:'def',style:'bars',mets:{},tok:0};
+ try{const o=JSON.parse(localStorage.getItem('plx_dc_v1')||'null');if(o){['grp','scope'].forEach(k=>{if(typeof o[k]==='string')S[k]=o[k]});if(o.style==='pizza')S.style='pizza';
   if([270,450,900].includes(o.min))S.min=o.min;if(o.mets&&typeof o.mets==='object')S.mets=o.mets}}catch(e){}
- const save=()=>{try{localStorage.setItem('plx_dc_v1',JSON.stringify({grp:S.grp,scope:S.scope,min:S.min,mets:S.mets}))}catch(e){}};
+ const save=()=>{try{localStorage.setItem('plx_dc_v1',JSON.stringify({grp:S.grp,scope:S.scope,min:S.min,style:S.style,mets:S.mets}))}catch(e){}};
  const sum=(a,ks)=>ks.every(k=>a.has(k))?ks.reduce((x,k)=>x+a.p90(k),0):null;
  const p90=k=>a=>a.p90(k),rat=(n,d,lo,x)=>a=>(a.has(n)&&a.has(d)&&a.s[d]>=lo)?a.s[n]/a.s[d]*x:null;
  /* each kind: its name, the measures [key, English, Arabic, value, unit ('p90', '%' or 'r' = a ratio)] and the default six */
@@ -100,9 +100,34 @@
   return 'rgb('+c.map((v,k)=>Math.round(v+(d[k]-v)*t)).join(',')+')'}return 'rgb(63,163,77)'};
  const fmtv=q=>q.v==null?'–':q.m[4]==='%'?Math.round(q.v)+'%':q.v.toFixed(2);
  const fit=(s,size,w)=>Math.min(size,Math.floor(w/(Math.max(4,[...String(s)].length)*.56)));
+ /* the pizza: one slice per measure, as long as its percentile (the same numbers and colours as the bars), the value and name outside it */
+ function pizza(rows,cx,cy,R,o){
+  const {A,W,PX,tx,mu,ln,bg,T,av}=o,N=rows.length,two_pi=2*Math.PI,pt=(a,r)=>[cx+(A?-1:1)*r*Math.cos(a),cy+r*Math.sin(a)],f=v=>v.toFixed(1);
+  let g='';
+  [25,50,75,100].forEach(p=>{g+=`<circle cx="${cx}" cy="${cy}" r="${f(R*p/100)}" fill="none" stroke="${ln}" stroke-width="${p===100?3:1.5}"${p<100?' stroke-dasharray="4 9"':''}/>`});
+  rows.forEach((q,i)=>{
+   const a0=-Math.PI/2+i*two_pi/N,a1=-Math.PI/2+(i+1)*two_pi/N,am=(a0+a1)/2,gap=.014,r=q.p==null?0:Math.max(R*.06,R*q.p/100),pc=q.p==null?null:pcol(q.p);
+   const wedge=rr=>{const [x0,y0]=pt(a0+gap,rr),[x1,y1]=pt(a1-gap,rr);return `M${f(cx)} ${f(cy)} L${f(x0)} ${f(y0)} A${f(rr)} ${f(rr)} 0 0 ${A?0:1} ${f(x1)} ${f(y1)} Z`};
+   g+=`<path d="${wedge(R)}" fill="${ln}" fill-opacity=".35"/>`;
+   if(pc)g+=`<path class="dc-pz" data-k="${q.k}" data-p="${q.p}" data-r="${f(r)}" d="${wedge(r)}" fill="${pc}" stroke="${bg}" stroke-width="2"/>`;
+   /* the percentile in a disc on the slice, never closer to the centre than the middle disc */
+   const dd=Math.max(R*.3,r-34),[bx,by]=pt(am,dd);
+   g+=`<circle cx="${f(bx)}" cy="${f(by)}" r="27" fill="${pc||ln}" stroke="${bg}" stroke-width="3"/><text x="${f(bx)}" y="${f(by+9)}" font-size="25" font-weight="800" fill="#fff" text-anchor="middle" class="dc-pn">${q.p==null?'–':q.p}</text>`;
+   /* the name and the value outside the circle, on the side of the page the slice points to: a long name takes two lines */
+   const [lx,ly]=pt(am,R+26),c=Math.cos(am)*(A?-1:1),sn=Math.sin(am),lab=T(q.m[1],q.m[2]),val=fmtv(q),unit=q.v==null||q.m[4]!=='p90'?'':' /90',
+    side=c>.3?'r':c<-.3?'l':'m',room=side==='r'?W-PX-lx:side==='l'?lx-PX:W-2*PX,
+    anc=side==='m'?'middle':(side==='r')!==A?'start':'end',
+    words=lab.split(' '),half=Math.ceil(words.length/2),nl=lab.length*.56*25>room&&words.length>1?[words.slice(0,half).join(' '),words.slice(half).join(' ')]:[lab],
+    n=nl.length+1,y0=sn<-.3?ly-6-(n-1)*30:sn>.3?ly+26:ly-(n-1)*15+5;
+   nl.forEach((t,k)=>{g+=`<text x="${f(lx)}" y="${f(y0+k*30)}" font-size="${Math.max(17,fit(t,25,room))}" fill="${tx}" text-anchor="${anc}" class="dc-pl"${A?' direction="rtl"':''}>${x_(t)}</text>`});
+   g+=`<text x="${f(lx)}" y="${f(y0+(n-1)*30)}" font-size="${Math.max(17,fit(val+unit,27,room))}" font-weight="800" fill="${tx}" text-anchor="${side==='m'?'middle':side==='r'?'start':'end'}" class="dc-pl dc-pv">${x_(val)}<tspan font-weight="400" fill="${mu}">${unit}</tspan></text>`});
+  /* the middle: the average percentile */
+  g+=`<circle cx="${cx}" cy="${cy}" r="${f(R*.2)}" fill="${bg}" stroke="${ln}" stroke-width="3"/><text x="${cx}" y="${f(cy+14)}" font-size="46" font-weight="800" fill="${av==null?mu:pcol(av)}" text-anchor="middle" class="dc-pa">${av==null?'–':av}</text>`;
+  return g;
+ }
  function card(me,cmp,heat,meta){
   const A=ar(),W=1080,PX=70,PW=W-2*PX,PH=Math.round(PW*68/105),rows=cmp.rows,NR=rows.length,TH=100;
-  const top=290,pt=top+22,mt=pt+PH+96,H=mt+NR*TH+176;
+  const top=290,pt=top+22,mt=pt+PH+96,RH=S.style==='pizza'?840:NR*TH,H=mt+RH+176;
   const bg=css('--sf','#152130'),bg2=css('--bg','#0d1520'),tx=css('--tx','#e8eef5'),mu=css('--mu','#8fa3b8'),th=css('--th','#4cc38a'),ln=css('--ln','rgba(255,255,255,.12)');
   /* mirrored for Arabic: x positions flip; text set right to left anchors 'start' on its right already, numbers (left to right) swap */
   const X=x=>A?W-x:x,anc=a=>A?(a==='start'?'end':a==='end'?'start':a):a,T=(en,ar_)=>A?ar_:en;
@@ -137,6 +162,8 @@
   /* the measures: one row each, the value per 90 beside its name, and a bar as long as the percentile, red (low) to green (high),
      so the colour and length say good or poor before the number is read */
   g+=t(PX,mt-6,T(FAM[S.fam].en,FAM[S.fam].ar)+' · '+T('percentile among ','المئين بين ')+meta.who,{size:fit(meta.who,26,PW*1.7),fill:mu});
+  if(S.style==='pizza')g+=pizza(rows,W/2,mt+438,262,{A,W,PX,tx,mu,ln,bg,T,X,av});
+  else{
   const BW=PW-84;
   rows.forEach((q,i)=>{const y0=mt+18+i*TH,lab=T(q.m[1],q.m[2]),pc=q.p==null?null:pcol(q.p);
    const val=fmtv(q),unit=q.v==null||q.m[4]!=='p90'?'':A?' لكل 90':' /90';
@@ -146,8 +173,9 @@
    if(pc)g+=`<rect class="dc-on" x="${fx.toFixed(1)}" y="${y0+46}" width="${w.toFixed(1)}" height="28" rx="14" fill="${pc}"/>`;
    const cx=X(W-PX-30);
    g+=`<circle cx="${cx}" cy="${y0+60}" r="30" fill="${pc||ln}"/><text x="${cx}" y="${y0+70}" font-size="27" font-weight="800" fill="#fff" text-anchor="middle">${q.p==null?'–':q.p}</text>`});
+  }
   /* what the card is and is not */
-  const fy=mt+18+NR*TH+20;
+  const fy=mt+18+RH+20;
   g+=t(PX,fy,T('Per 90 minutes · not possession-adjusted (PitchAPI gives no possession per match)','لكل 90 دقيقة · بدون تعديل حسب الاستحواذ (PitchAPI ما يعطي الاستحواذ لكل مباراة)'),{size:21,fill:mu});
   g+=t(PX,fy+32,S.fam==='def'?T('PitchAPI has no pressing events per player: the heat map is every action, not pressing','PitchAPI ما عنده أحداث ضغط لكل لاعب: الخريطة كل لمساته، مو ضغطه')
    :T('The heat map is every action he made (PitchAPI heat counts)','الخريطة الحرارية كل لمساته (من عدّادات PitchAPI)'),{size:21,fill:mu});
@@ -214,7 +242,8 @@
    ${sel('dcxt',Object.entries(FAM).map(([k,f])=>[k,f.en,{t:f.ar}]),S.fam,two('Card','البطاقة'))}
    ${sel('dcxg',[['role','Same role (from line-ups)',{t:'نفس الدور (من التشكيلات)'}],['pos','Same position',{t:'نفس المركز'}],['all','All outfield players',{t:'كل اللاعبين ما عدا الحراس'}]],S.grp,two('Compared with','المقارنة مع'))}
    ${sel('dcxs',[['six','Six leagues',{t:'الدوريات الست',dis:past}],['lg','This league',{t:'هذا الدوري'}]],past?'lg':S.scope,two('Where','وين'))}
-   ${sel('dcxm',[[270,'270+ minutes',{t:'270+ دقيقة'}],[450,'450+ minutes',{t:'450+ دقيقة'}],[900,'900+ minutes',{t:'900+ دقيقة'}]],S.min,two('Minutes','الدقائق'))}</div>
+   ${sel('dcxm',[[270,'270+ minutes',{t:'270+ دقيقة'}],[450,'450+ minutes',{t:'450+ دقيقة'}],[900,'900+ minutes',{t:'900+ دقيقة'}]],S.min,two('Minutes','الدقائق'))}
+   ${sel('dcxy',[['bars','Bars',{t:'أشرطة'}],['pizza','Pizza',{t:'بيتزا'}]],S.style,two('Chart','الرسم'))}</div>
    ${past?`<p class="mu dcx-i">${two('A past season is compared within its own league only.','الموسم السابق يُقارن داخل دوريه بس.')}</p>`:''}
    <div class="dcx-mt" role="group" aria-label="${ar()?'المقاييس':'Measures'}">${FAM[S.fam].met.map(m=>`<label class="dcx-k"><input type="checkbox" value="${m[0]}"${met().includes(m[0])?' checked':''}>${two(esc(m[1])+(m[4]==='p90'?' /90':''),esc(m[2]))}</label>`).join('')}</div>
    <p class="mu dcx-i">${two('3 to 8 measures.','من 3 إلى 8 مقاييس.')}</p>`;
@@ -226,6 +255,7 @@
   const g=root.querySelector('#dcxg');if(g)g.onchange=()=>{S.grp=g.value;redraw()};
   const s=root.querySelector('#dcxs');if(s)s.onchange=()=>{if(!past){S.scope=s.value;redraw()}};
   const m=root.querySelector('#dcxm');if(m)m.onchange=()=>{S.min=+m.value;redraw()};
+  const y=root.querySelector('#dcxy');if(y)y.onchange=()=>{S.style=y.value==='pizza'?'pizza':'bars';redraw()};
   const B=[...root.querySelectorAll('.dcx-mt input')],lim=()=>{const n=B.filter(b=>b.checked).length;B.forEach(b=>{b.disabled=(b.checked&&n<=3)||(!b.checked&&n>=8)})};lim();
   B.forEach(b=>b.onchange=()=>{const on=B.filter(x=>x.checked).map(x=>x.value);if(on.length<3||on.length>8){b.checked=!b.checked;return}S.mets[S.fam]=FAM[S.fam].met.map(m=>m[0]).filter(k=>on.includes(k));lim();redraw()});
  }

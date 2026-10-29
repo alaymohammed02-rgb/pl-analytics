@@ -18,6 +18,8 @@
  R.player=async function(el,arg){
   await op.apply(this,arguments);
   const [key,club]=decodeURIComponent(arg||'').split('||');
+  /* the page wears his club's colours, as a club's own page does (the next page's route() puts the league's colours back) */
+  if(club&&el.isConnected&&typeof applyTheme==='function'){try{if(typeof crestFor==='function')await crestFor(club);if(el.isConnected&&/^#\/player\//.test(location.hash))applyTheme(club)}catch(e){}}
   const st=(D.stats||[]).filter(s=>s.key===key&&s.club===club),pid=(st.find(s=>s.player_id)||{}).player_id;
   const h2=el.querySelector('h2');if(!pid||!h2)return;
   const mu=h2.nextElementSibling&&h2.nextElementSibling.classList.contains('mu')?h2.nextElementSibling:h2;
