@@ -25,7 +25,7 @@ const pv=s=>s==='>99%'?99.75:s==='<1%'?.25:parseFloat(s);
 (async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  for(const lid of ['l_4WFCIZ','l_0ErfuF','l_3FJFUl']){const X=model(lid),nT=X.teams.length;
   const {ctx,pg,errs}=await open(b,{league:lid});await pg.waitForSelector('.sm-t',{timeout:120000});
-  const nav=await pg.$$eval('#nav a',a=>a.map(x=>x.getAttribute('href')));ok(nav.indexOf('#/sim')===nav.indexOf('#/table')+2&&nav.indexOf('#/race')===nav.indexOf('#/table')+1,lid+': in the Season hub, after the table and the Title race');
+  const nav=await pg.$$eval('#nav a',a=>a.map(x=>x.getAttribute('href')));ok(nav.indexOf('#/sim')===nav.indexOf('#/table')+3&&nav.indexOf('#/race')===nav.indexOf('#/table')+1&&nav.indexOf('#/runin')===nav.indexOf('#/table')+2,lid+': in the Season hub, after the table, the Title race and the Run-in');
   const intro=await pg.textContent('.sm-intro');ok(intro.includes(X.left.length+' matches are left')&&X.left.length+X.played.length===nT*(nT-1),`${lid}: ${X.left.length} matches left = ${nT}×${nT-1} home-and-away pairs − ${X.played.length} played`);
   const rows=await read(pg);
   ok(rows.length===nT&&rows.every(r=>r.now===X.now.get(r.t)),'points now = the results in the league file, every club');
