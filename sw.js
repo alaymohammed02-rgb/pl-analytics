@@ -29,3 +29,22 @@ self.addEventListener('fetch',e=>{
   return res;
  }).catch(()=>caches.match(key).then(m=>m||caches.match(r,{ignoreSearch:true})).then(m=>m||(r.mode==='navigate'?caches.match('index.html'):undefined)).then(m=>m||Response.error())));
 });
+
+/* ---- notifications (Web Push): the sync sends {title, body, url, tag}; the page's "Turn on notifications" button subscribes this worker ---- */
+self.addEventListener('push',e=>{
+ let d={};
+ try{d=e.data?e.data.json():{}}catch(x){d={}}
+ const title=String(d.title||'PL Analytics').slice(0,120),body=String(d.body||'').slice(0,240);
+ /* the link is kept only if it is inside this site: a message cannot send the tap anywhere else */
+ let url=self.registration.scope;try{const u=new URL(String(d.url||url),self.registration.scope);if(u.href.startsWith(self.registration.scope))url=u.href}catch(x){}
+ e.waitUntil(self.registration.showNotification(title,{body,icon:'assets/icons/icon-192.png',badge:'assets/icons/favicon-32.png',tag:d.tag?String(d.tag).slice(0,120):undefined,lang:/[؀-ۿ]/.test(title+body)?'ar':'en',data:{url}}));
+});
+self.addEventListener('notificationclick',e=>{
+ e.notification.close();
+ const url=(e.notification.data&&e.notification.data.url)||self.registration.scope;
+ e.waitUntil(self.clients.matchAll({type:'window',includeUncontrolled:true}).then(async cs=>{
+  const mine=cs.find(c=>c.url.startsWith(self.registration.scope));
+  if(mine){try{await mine.navigate(url)}catch(x){}return mine.focus()}
+  return self.clients.openWindow(url);
+ }));
+});

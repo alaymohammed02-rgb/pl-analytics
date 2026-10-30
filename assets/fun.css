@@ -580,3 +580,7 @@ html[dir=rtl] .dl-bars .ph-bn bdi{text-align:right}
 .ntf-a{border-color:var(--th-hi,var(--ln))}.ntf-st:hover,.ntf-a:hover,.ntf-w:hover{background:rgba(255,255,255,.1)}
 .ntf-l{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:8px}.ntf-r{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border:1px solid var(--ln);border-radius:12px}
 .ntf-n{font-weight:600;min-width:0}.ntf-b{display:flex;flex-wrap:wrap;gap:6px}.ntf-c{min-height:32px;padding:3px 12px;border-radius:999px;font-size:13px}
+/* ---- Notifications: this device's button, and the ntfy alternative folded under it ---- */
+.ntf-p{margin:10px 0;padding:10px 12px;border:1px solid var(--ln);border-radius:12px;background:rgba(255,255,255,.03)}.ntf-p h4{margin:0 0 4px;font-size:14px}.ntf-m{margin:4px 0 8px}
+.ntf-go,.ntf-off{min-height:40px;padding:6px 18px;border-radius:999px;font-weight:700}.ntf-on b{color:var(--th-hi,var(--g))}.ntf-err{color:var(--r)}
+.ntf-alt{margin-top:10px}.ntf-alt>summary{cursor:pointer;color:var(--mu);padding:6px 0;font-size:13.5px}
