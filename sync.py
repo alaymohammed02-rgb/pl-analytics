@@ -9018,7 +9018,7 @@ INDEX = _x_fpx_index(INDEX)
 # الكود في ملفات مستقلة في المستودع: assets/*.js و assets/features.css و manifest.webmanifest و sw.js و assets/icons/.
 # هذا القسم يضيف روابطها للصفحة فقط (بعد السكربت الرئيسي، فتلقى R و PAGES جاهزة). غيّر FEATURES_V لما تتغير الملفات.
 # ============================================================================
-FEATURES_V = "52"
+FEATURES_V = "53"
 FEATURES_JS = ("pla-data", "share-card", "threat-map", "match-whatif", "player-page", "match-centre", "home-extra", "team-round",
                "preview", "club-extra", "rankings-extra", "fantasy-extra", "insights-core", "hidden-gems", "player-dna", "team-dna",
                "reality-check", "matches-board", "match-replay", "match-story", "overview", "press-height",
@@ -9044,13 +9044,15 @@ def _x_feat_index(html):
                                   '<link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png">'
                                   '<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">'
                                   '<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">'
-                                  '<meta name="apple-mobile-web-app-title" content="PL Analytics">', 1)
+                                  '<meta name="apple-mobile-web-app-title" content="PL Analytics">'
+                                  '<link rel="preload" as="font" type="font/woff2" href="assets/fonts/plex-sans-latin-400.woff2" crossorigin>'
+                                  '<link rel="preload" as="font" type="font/woff2" href="assets/fonts/plex-sans-latin-600.woff2" crossorigin>', 1)
     else:
         log("  تنبيه (ملفات الميزات): ما لقيت عنوان الصفحة، تخطيت ملف التطبيق")
     js = "".join(f'<script src="assets/{n}.js?v={v}"></script>' for n in FEATURES_JS)
     sw = ("<script>if('serviceWorker' in navigator&&location.protocol==='https:')addEventListener('load',()=>"
           "navigator.serviceWorker.register('sw.js').catch(()=>null))</script>")
-    return html.replace(old, f'</script><link rel="stylesheet" href="assets/features.css?v={v}"><link rel="stylesheet" href="assets/insights.css?v={v}"><link rel="stylesheet" href="assets/replay.css?v={v}"><link rel="stylesheet" href="assets/overview.css?v={v}"><link rel="stylesheet" href="assets/press-height.css?v={v}"><link rel="stylesheet" href="assets/fun.css?v={v}">{js}{sw}</body></html>')
+    return html.replace(old, f'</script><link rel="stylesheet" href="assets/features.css?v={v}"><link rel="stylesheet" href="assets/insights.css?v={v}"><link rel="stylesheet" href="assets/replay.css?v={v}"><link rel="stylesheet" href="assets/overview.css?v={v}"><link rel="stylesheet" href="assets/press-height.css?v={v}"><link rel="stylesheet" href="assets/fun.css?v={v}"><link rel="stylesheet" href="assets/identity.css?v={v}">{js}{sw}</body></html>')
 
 
 INDEX = _x_feat_index(INDEX)

@@ -48,7 +48,7 @@ jobs:
           - shard: 2
             tests: "shape/ui_shape.js holo/ui_holo.js river/ui_river.js lab/ui_lab.js lab/ui_lab2.js theme/ui_theme.js logo/ui_logo.js eng/ui_eng.js ui_test.js"
           - shard: 3
-            tests: "ui_ar.js ui_season.js ui_review.js trk/ui_track.js cmp/ui_cmp.js fort/ui_fort.js late/ui_late.js"
+            tests: "ui_ar.js ui_season.js ui_review.js trk/ui_track.js cmp/ui_cmp.js fort/ui_fort.js late/ui_late.js idn/ui_idn.js"
           - shard: 4
             tests: "pizza/ui_pizza.js fpx/ui_fpx.js feat/ui_feat.js px/ui_px.js px/ui_px2.js px/ui_ins.js ask/ui_ask.js wrapped/ui_wr.js"
           - shard: 5
