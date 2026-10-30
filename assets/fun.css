@@ -584,3 +584,24 @@ html[dir=rtl] .dl-bars .ph-bn bdi{text-align:right}
 .ntf-p{margin:10px 0;padding:10px 12px;border:1px solid var(--ln);border-radius:12px;background:rgba(255,255,255,.03)}.ntf-p h4{margin:0 0 4px;font-size:14px}.ntf-m{margin:4px 0 8px}
 .ntf-go,.ntf-off{min-height:40px;padding:6px 18px;border-radius:999px;font-weight:700}.ntf-on b{color:var(--th-hi,var(--g))}.ntf-err{color:var(--r)}
 .ntf-alt{margin-top:10px}.ntf-alt>summary{cursor:pointer;color:var(--mu);padding:6px 0;font-size:13.5px}
+
+/* Run-in (#/runin) */
+.ri-k{grid-template-columns:repeat(3,minmax(0,1fr))}.ri-cd{padding:10px 10px 8px}
+.ri-hd,.ri-row{display:grid;grid-template-columns:minmax(0,9.5em) 4.6em 3.4em minmax(0,1fr) 4.2em 5.2em;gap:8px;align-items:center}.ri-hd{padding:0 8px 6px;font-size:12px;color:var(--mu)}.ri-hl,.ri-bh{text-align:center}
+.ri-list{display:grid;gap:2px}.ri-row{all:unset;box-sizing:border-box;width:100%;display:grid;grid-template-columns:minmax(0,9.5em) 4.6em 3.4em minmax(0,1fr) 4.2em 5.2em;gap:8px;align-items:center;padding:6px 8px;border-radius:10px;border:1px solid transparent;cursor:pointer;font-size:13.5px}
+.ri-row:focus-visible{outline:2px solid var(--th-hi);outline-offset:1px}.ri-row.on{border-color:var(--th-hi);background:rgba(255,255,255,.07)}.ri-nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.ri-l,.ri-q{text-align:center}
+.ri-b{position:relative;display:block;height:20px;direction:ltr;background:linear-gradient(90deg,transparent calc(50% - .5px),var(--ln) calc(50% - .5px) calc(50% + .5px),transparent calc(50% + .5px))}.ri-b i{position:absolute;top:3px;bottom:3px;border-radius:4px}.ri-b i.p{background:rgba(76,195,138,.7)}.ri-b i.m{background:rgba(255,123,114,.7)}
+.ri-b b{position:absolute;top:50%;transform:translateY(-50%);left:50%;margin-left:6px;font-size:12.5px}
+.ri-pj{display:flex;flex-direction:column;align-items:center;line-height:1.15}.ri-pj small{font-size:11px;color:var(--mu)}
+.ri-n5{display:flex;gap:3px;justify-content:center;direction:ltr}.ri-c{width:9px;height:9px;border-radius:2px;display:inline-block}.ri-c.g{background:#4cc38a}.ri-c.a{background:#e8b84a}.ri-c.r{background:#ff7b72}
+.ri-s,.ri-t{padding:12px 14px}.ri-s h4{margin:12px 0 4px;font-size:14px}.ri-r{margin:4px 0 10px}.ri-w{overflow-x:auto}
+.ri-nx,.ri-ml{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:4px}.ri-nx li,.ri-ml li{display:grid;grid-template-columns:minmax(0,1fr) 9.5em 2.6em;gap:8px;align-items:baseline;padding:6px 4px;border-bottom:1px solid var(--ln);font-size:13px}.ri-nx li{grid-template-columns:6.6em minmax(0,1fr) 9.5em 2.6em}
+.ri-p{text-align:center;color:var(--mu);font-size:12px}.ri-e{text-align:end}.ri-e.g{color:#4cc38a}.ri-e.a{color:#e8b84a}.ri-e.r{color:#ff7b72}
+.ri-cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+@media(max-width:560px){.ri-hd,.ri-row{grid-template-columns:minmax(0,6.4em) 2.6em minmax(0,1fr) 2.6em 4.4em;gap:4px}.ri-qh,.ri-q{display:none}.ri-row{font-size:12.5px;padding:6px 4px}.ri-c{width:7px;height:7px}.ri-n5{gap:2px}.ri-cols{grid-template-columns:minmax(0,1fr)}
+ .ri .seg{width:100%}.ri .seg button{flex:1;min-width:0;padding:6px 4px;font-size:12.5px}
+ .ri-nx li,.ri-ml li{grid-template-columns:minmax(0,1fr) 7.6em 2.4em}.ri-nx li .mu{display:none}.ri-k{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Team of the season (#/toty): the pitch and list of the Team of the round, with its own header and the club line */
+.ts-c{padding:12px 14px}.ts-c .hhd{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;justify-content:space-between;margin-bottom:10px}.ts-c .hhd h3{margin:0}
+.ts-l li>span.mu{grid-column:3;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
