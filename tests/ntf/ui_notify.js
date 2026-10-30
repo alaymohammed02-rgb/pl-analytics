@@ -5,6 +5,9 @@
    fails or has no namespace; leaving before it arrives; Arabic and 390 px. */
 const T=require('../nf/lib.js');const {ok,J}=T;const {execFileSync}=require('child_process');const fs=require('fs'),path=require('path');
 const ROOT=path.join(__dirname,'..','..');
+/* the ntfy list is folded under the browser button once data/push_status.json says ready (it does on the real site since the secret was added), so these checks run with
+   "not ready" answered here: the list is then open, whatever the real file says. The page is opened on another hash first, so the file is asked for after the route exists. */
+const open=async(b,o)=>{const r=await T.open(b,{...o,hash:'#/table'});await r.ctx.route(/push_status\.json/,x=>x.fulfill({status:200,contentType:'application/json',body:'{"v":1,"ready":false}'}));await r.pg.waitForSelector('#app h2',{timeout:60000});await r.pg.evaluate(h=>{location.hash=h},o.hash);return r};
 const CFG=J('notify.json');
 const py=names=>JSON.parse(execFileSync('python3',['-c',`import re,json,sys,unicodedata,datetime,os
 src=open(${JSON.stringify(path.join(ROOT,'sync.py'))},encoding='utf-8').read()
@@ -21,7 +24,7 @@ const rows=pg=>pg.$$eval('.ntf-r',a=>a.map(r=>({t:r.dataset.t,topic:r.dataset.to
  ok(/^[0-9a-f]{12}$/.test(CFG.ns)&&CFG.server==='https://ntfy.sh','data/notify.json: namespace '+CFG.ns+' on '+CFG.server);
  /* a team of every league: topic = pla-<ns>-<slug from Python> */
  const picks=[[LG,'Arsenal'],[LL,'Atlético Madrid'],[LG,'Brighton & Hove Albion']];
- let {ctx,pg,errs}=await T.open(b,{vw:1100,lang:'en',league:LG,hash:'#/overview',init:FAV(...picks)});await pg.waitForSelector('#ntfcard .ntf-r',{timeout:90000});await pg.waitForTimeout(400);
+ let {ctx,pg,errs}=await open(b,{vw:1100,lang:'en',league:LG,hash:'#/overview',init:FAV(...picks)});await pg.waitForSelector('#ntfcard .ntf-r',{timeout:90000});await pg.waitForTimeout(400);
  const want=py(picks.map(p=>p[1])),got=await rows(pg);
  ok(got.length===3&&picks.every(([,n],i)=>got[i].t===n&&got[i].topic==='pla-'+CFG.ns+'-'+want[n]),'a row for each starred team, in order, with the topic pla-<namespace>-<slug>: '+got.map(g=>g.topic.slice(4+CFG.ns.length)).join(', '));
  ok(got.every(g=>g.app==='ntfy://ntfy.sh/'+g.topic&&g.web==='https://ntfy.sh/'+g.topic&&g.copy===g.topic),'each row has the ntfy:// link, the ntfy.sh page and the topic to copy, all the same topic');
@@ -43,10 +46,10 @@ const rows=pg=>pg.$$eval('.ntf-r',a=>a.map(r=>({t:r.dataset.t,topic:r.dataset.to
  ok(!(await pg.$('#ntfcard')),'with no starred team there is no card');
  ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await ctx.close();
  /* the same club in two leagues is one row */
- ({ctx,pg,errs}=await T.open(b,{vw:1100,lang:'en',league:LG,hash:'#/overview',init:FAV([LG,'Arsenal'],[LL,'Arsenal'])}));await pg.waitForSelector('#ntfcard .ntf-r',{timeout:90000});
+ ({ctx,pg,errs}=await open(b,{vw:1100,lang:'en',league:LG,hash:'#/overview',init:FAV([LG,'Arsenal'],[LL,'Arsenal'])}));await pg.waitForSelector('#ntfcard .ntf-r',{timeout:90000});
  ok((await rows(pg)).length===1,'a club starred twice (or in two competitions) has one row');await ctx.close();
  /* the page and the sync name every team the same way */
- {({ctx,pg}=await T.open(b,{vw:1100,lang:'en',league:LG,hash:'#/overview'}));await pg.waitForSelector('#app h2',{timeout:60000});await pg.waitForFunction(()=>typeof INS==='object'&&typeof INS.notifySlug==='function',null,{timeout:60000});
+ {({ctx,pg}=await open(b,{vw:1100,lang:'en',league:LG,hash:'#/overview'}));await pg.waitForSelector('#app h2',{timeout:60000});await pg.waitForFunction(()=>typeof INS==='object'&&typeof INS.notifySlug==='function',null,{timeout:60000});
   const all=[...names],want=py(all),mine=await pg.evaluate(a=>a.map(n=>INS.notifySlug(n)),all);const bad=all.filter((n,i)=>mine[i]!==want[n]);
   ok(all.length>100&&!bad.length,'the slug in the page equals sync.py\'s for all '+all.length+' teams of every league in the data'+(bad.length?' — differs for '+bad.slice(0,5).join(', '):''));await ctx.close()}
  /* the file is missing, fails, or has no namespace: no card, no error */
@@ -59,7 +62,7 @@ const rows=pg=>pg.$$eval('.ntf-r',a=>a.map(r=>({t:r.dataset.t,topic:r.dataset.to
   await c.route(/notify\.json/,async r=>{await new Promise(z=>setTimeout(z,2500));r.continue()});const p=await c.newPage(),e=[];p.on('pageerror',x=>e.push(x.message));await p.goto('http://127.0.0.1:8765/index.html#/overview');await p.waitForSelector('.ovt',{timeout:90000});
   await p.evaluate(()=>location.hash='#/table');await p.waitForSelector('.lt',{timeout:60000});await p.waitForTimeout(3500);ok(!(await p.$('#ntfcard'))&&await p.$('.lt')&&!e.length,'leaving before notify.json arrives: no card on the next page, no error');await c.close()}
  /* Arabic and a phone */
- for(const lang of ['ar','en']){({ctx,pg,errs}=await T.open(b,{vw:390,lang,league:LG,hash:'#/overview',init:FAV(...picks)}));await pg.waitForSelector('#ntfcard .ntf-r',{timeout:90000});await pg.waitForTimeout(500);
+ for(const lang of ['ar','en']){({ctx,pg,errs}=await open(b,{vw:390,lang,league:LG,hash:'#/overview',init:FAV(...picks)}));await pg.waitForSelector('#ntfcard .ntf-r',{timeout:90000});await pg.waitForTimeout(500);
   ok(await T.noscroll(pg),lang+' phone: no horizontal scroll');
   ok(await pg.$$eval('.ntf-r',a=>a.every(r=>r.scrollWidth<=r.clientWidth+1&&[...r.querySelectorAll('a,button')].every(x=>x.getBoundingClientRect().right<=innerWidth+1&&x.getBoundingClientRect().left>=-1))),lang+' phone: the three buttons of each team fit the screen');
   ok((await rows(pg)).length===3,lang+' phone: three rows');

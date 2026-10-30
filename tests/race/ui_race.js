@@ -63,7 +63,7 @@ const setWeek=async(pg,i)=>{await pg.$eval('#rcw',(e,v)=>{e.value=String(v);e.di
  const L2='l_0ErfuF',c2=F.leagues[L2].seasons[F.leagues[L2].seasons.length-1].s;await pg.selectOption('#rcg',L2);await pg.waitForTimeout(700);
  const Q2=season(L2,c2);got=(await shown(pg)).map(slim);exp=want(Q2,Q2.weeks.length-1);ok(JSON.stringify(got)===JSON.stringify(exp),'LaLiga '+c2+': all '+exp.length+' rows match');
  ok(JSON.stringify(await pg.$$eval('#rcs option',a=>a.map(o=>o.textContent)))===JSON.stringify(F.leagues[L2].seasons.map(s=>s.s)),'LaLiga\'s seasons: '+F.leagues[L2].seasons.map(s=>s.s).join(', '));
- ok(await pg.evaluate(()=>{const a=[...document.querySelectorAll('#hubbar a')].map(x=>x.getAttribute('href'));return a.indexOf('#/race')===a.indexOf('#/table')+1&&a.indexOf('#/sim')===a.indexOf('#/race')+1&&document.querySelector('#hubbar a.on').getAttribute('href')==='#/race'}),'the page is the tab after the League table in the Season hub, marked open');
+ ok(await pg.evaluate(()=>{const a=[...document.querySelectorAll('#hubbar a')].map(x=>x.getAttribute('href'));return a.indexOf('#/race')===a.indexOf('#/table')+1&&a.indexOf('#/runin')===a.indexOf('#/race')+1&&a.indexOf('#/sim')===a.indexOf('#/runin')+1&&document.querySelector('#hubbar a.on').getAttribute('href')==='#/race'}),'the page is the tab after the League table in the Season hub, marked open');
  ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await ctx.close();
  /* leaving while it plays stops the clock */
  ({ctx,pg,errs}=await T.open(b,{vw:1000,league:LG,hash:'#/race'}));await pg.waitForSelector('.rc-row',{timeout:90000});await pg.click('#rcr');await pg.click('#rcspd button[data-s="4"]');await pg.click('#rcp');await pg.waitForTimeout(500);

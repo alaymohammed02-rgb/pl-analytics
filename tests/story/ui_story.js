@@ -79,8 +79,10 @@ const wait=pg=>pg.waitForSelector('#psbody .ps-head,#psbody .empty:not(.skel)',{
  check('a defender ('+dfn.name+')',await text(pg),expect(LG,dfn.id,dfn.p,rt,TP),dfn.name);
  /* another league */
  const L2='l_1Isor4',P2=pool(L2),rt2=J(IDX(L2).rt_file);await pg.selectOption('#psl',L2);
- const top2=P2.slice().sort((a,c)=>c.mi-a.mi)[0];await pg.waitForFunction(n=>(document.querySelector('.ps-who h3')||{}).textContent===n,top2.name,{timeout:60000});
- check('another league: its most-used player ('+top2.name+')',await text(pg),expect(L2,top2.id,top2.p,rt2,TP),top2.name);
+ /* players tied on the most minutes (three Bundesliga players had 757 at one point): the page shows one of them, whichever its own order picks */
+ const mx2=Math.max(...P2.map(x=>x.mi)),tied=P2.filter(x=>x.mi===mx2);await pg.waitForFunction(ns=>ns.includes((document.querySelector('.ps-who h3')||{}).textContent),tied.map(x=>x.name),{timeout:60000});
+ const shown=await pg.textContent('.ps-who h3'),top2=tied.find(x=>x.name===shown)||tied[0];
+ check('another league: its most-used player ('+top2.name+(tied.length>1?', one of '+tied.length+' tied on '+mx2+' minutes':'')+')',await text(pg),expect(L2,top2.id,top2.p,rt2,TP),top2.name);
  ok(await pg.evaluate(()=>{const a=[...document.querySelectorAll('#hubbar a')].map(x=>x.getAttribute('href'));return a[0]==='#/players'&&a[1]==='#/story'&&document.querySelector('#hubbar a.on').getAttribute('href')==='#/story'}),'the page is the second tab of the Players hub, marked open');
  ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await ctx.close();
  /* opened by a link; a forward who is on a run without a goal or an assist, if there is one */
