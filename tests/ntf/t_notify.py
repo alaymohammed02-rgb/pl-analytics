@@ -55,7 +55,7 @@ ok(f3['delay'] == str(int((ko3 - datetime.timedelta(minutes=60)).timestamp())) a
 ok(all(k[2] == '2026-10-30' for _, k in r1) and all(k[0] == 'r' for _, k in r1), 'each message names the key it settles (match | team) and its date')
 # a second run with that state: nothing again
 S2 = st
-for p, (kind, key, day) in M: S2['r' if kind == 'r' else 'm'][key] = day
+for p, k in M: S2['r' if k[0] == 'r' else 'm'][k[1]] = k[2]
 M2, _ = plan(L, FX, S2, NOW, BASE, NS)
 ok(M2 == [], 'a second run with the state: nothing is sent twice')
 FX2 = {'l1': [dict(FX['l1'][2], k='2026-10-31T14:00:00Z')]}

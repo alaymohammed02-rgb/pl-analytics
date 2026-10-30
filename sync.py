@@ -9018,7 +9018,7 @@ INDEX = _x_fpx_index(INDEX)
 # الكود في ملفات مستقلة في المستودع: assets/*.js و assets/features.css و manifest.webmanifest و sw.js و assets/icons/.
 # هذا القسم يضيف روابطها للصفحة فقط (بعد السكربت الرئيسي، فتلقى R و PAGES جاهزة). غيّر FEATURES_V لما تتغير الملفات.
 # ============================================================================
-FEATURES_V = "54"
+FEATURES_V = "55"
 FEATURES_JS = ("pla-data", "share-card", "threat-map", "match-whatif", "player-page", "match-centre", "home-extra", "team-round",
                "preview", "club-extra", "rankings-extra", "fantasy-extra", "insights-core", "hidden-gems", "player-dna", "team-dna",
                "reality-check", "matches-board", "match-replay", "match-story", "overview", "press-height",
@@ -12812,21 +12812,31 @@ def run_pipeline(hub, pit_key):
 
 
 # ===== NOTIFY START =====
-# Notifications for the teams you star (owner asked 30 Oct 2026; channel chosen: the free ntfy app). The site is static, so it cannot push; instead this step
-# publishes to ntfy.sh, one public topic per team: pla-<namespace>-<slug of the team's name> (the namespace is in data/notify.json so that other people's topics
-# do not collide with ours). The page (assets/notify.js) shows, for each starred team, the topic to follow in the ntfy app. Two kinds of message, each sent to
-# the topic of both teams:
+# Notifications for the teams you star (owner asked 30 Oct 2026). The site is static, so it cannot push by itself; this step is the sender, and it has two doors:
+#   1. the free ntfy app: one public ntfy.sh topic per team, pla-<namespace>-<slug of the team's name> (the namespace is in data/notify.json so that other people's
+#      topics do not collide with ours); the page lists, for each starred team, the topic to follow in the app (assets/notify.js);
+#   2. the browser itself (Web Push, the owner's preference: a button, no app): a device that pressed "Turn on" has a subscription; the page seals it (and the
+#      names of the teams it follows) with the public key `box` of data/push.json (ECDH P-256 + HKDF-SHA256 + AES-GCM) and drops it in the ntfy topic
+#      pla-<namespace>_inbox, which only this step can open (the private key is in the repository secret PUSH_KEYS, with the VAPID key that signs the pushes).
+#      Every sync reads that inbox (messages stay 12 hours on ntfy), keeps each sealed subscription in data/push_subs.json (unreadable without the secret, so a
+#      public repository is fine), and sends with pywebpush; a subscription the push service says is gone (404 / 410) is dropped. data/push_status.json says
+#      "ready" only when the secret is there, matches data/push.json and pywebpush is installed: the page shows the button only then.
+# Two kinds of message, to the teams of the match:
 #   - the final score, when the match appears in the league file (a match whose date is in the last 2 days and that was not announced yet);
-#   - a reminder an hour before kick-off, queued with ntfy's own delay (so it arrives on time whatever the sync's schedule) as soon as the fixture is known to be
-#     less than 48 hours away and more than 15 minutes away. A fixture whose kick-off moves later is reminded again at the new time; the old reminder cannot
-#     be taken back.
-# data/notify_state.json remembers what was sent (match | team, and match | kick-off | team for reminders; entries older than 10 days are dropped), so nothing
-# is sent twice. The first run has no state: the results already there are marked as announced and not sent. At most 80 messages per run; three failures in a
-# row stop the run (the host is down) and the rest is tried at the next sync. The step never stops the sync, and PLA_NOTIFY=0 turns it off.
-import unicodedata, urllib.request
+#   - a reminder before kick-off: through ntfy, queued with ntfy's own delay an hour before (exact); through the browser, sent by the sync when the kick-off is
+#     15 to 95 minutes away (Web Push cannot be queued, so it arrives between 15 and 95 minutes before, whatever the sync's rhythm). A fixture whose kick-off moves
+#     is reminded again; the old reminder cannot be taken back.
+# data/notify_state.json remembers what was sent (ntfy: r / m; browser: pr / pm; keys match | team and match | kick-off | team; entries older than 10 days
+# are dropped), so nothing is sent twice. The first run of each door has no history: the results already there are marked as announced and not sent. At most
+# 80 messages per run per door; three failures in a row stop the ntfy door (the host is down) and the rest is tried at the next sync. The step never stops
+# the sync, and PLA_NOTIFY=0 turns it off.
+import unicodedata, urllib.request, base64, hashlib
 
 NOTIFY_PATH = "data/notify.json"
 NOTIFY_STATE = "data/notify_state.json"
+PUSH_PATH = "data/push.json"
+PUSH_STATUS = "data/push_status.json"
+PUSH_SUBS = "data/push_subs.json"
 NOTIFY_MAX_POSTS = 80
 NOTIFY_STOP_AFTER = 3
 NOTIFY_KEEP_DAYS = 10
@@ -12834,6 +12844,10 @@ NOTIFY_RESULT_DAYS = 2
 NOTIFY_AHEAD_H = 48
 NOTIFY_BEFORE_MIN = 60
 NOTIFY_MIN_LEAD_MIN = 15
+PUSH_REMIND_MAX_MIN = 95
+PUSH_MAX_SUBS = 200
+PUSH_MAX_TEAMS = 30
+PUSH_INBOX_LINES = 300
 NOTIFY_FOLD = {"ø": "o", "ł": "l", "đ": "d", "ð": "d", "ß": "ss", "æ": "ae", "œ": "oe", "þ": "th", "ı": "i"}
 
 
@@ -12850,14 +12864,20 @@ def notify_topic(ns, team):
     return f"pla-{ns}-{notify_slug(team)}"
 
 
-def notify_plan(leagues, fixtures, state, now, base_url, ns):
-    """-> (messages, state'); each message carries the key it settles. `state` None = first run: results are marked as announced, not sent."""
-    first = state is None
-    st = {"v": 1, "r": dict((state or {}).get("r") or {}), "m": dict((state or {}).get("m") or {})}
+def notify_plan(leagues, fixtures, state, now, base_url, ns, channel="ntfy"):
+    """-> (messages, state'). A message is (payload, key) with key = (kind, state key, day, league name, kick-off "HH:MM" or None).
+    channel "ntfy": reminders are queued with ntfy's delay; state keys r / m; the first run is a missing state.
+    channel "push": reminders go out when the kick-off is 15 to 95 minutes away; state keys pr / pm; the first run is a state without "pv"."""
+    push = channel == "push"
+    rk, mk = ("pr", "pm") if push else ("r", "m")
+    first = (not (state or {}).get("pv")) if push else state is None
+    st = {"v": 1, "pv": 1 if push else (state or {}).get("pv", 0)}
+    for k in ("r", "m", "pr", "pm"):
+        st[k] = dict((state or {}).get(k) or {})
     today = now.date()
     keep = (today - datetime.timedelta(days=NOTIFY_KEEP_DAYS)).isoformat()
-    st["r"] = {k: v for k, v in st["r"].items() if v >= keep}
-    st["m"] = {k: v for k, v in st["m"].items() if v >= keep}
+    for k in ("r", "m", "pr", "pm"):
+        st[k] = {a: b for a, b in st[k].items() if b >= keep}
     cutoff = (today - datetime.timedelta(days=NOTIFY_RESULT_DAYS)).isoformat()
     res, rem = [], []
     for lid, lname, matches in leagues:
@@ -12868,14 +12888,14 @@ def notify_plan(leagues, fixtures, state, now, base_url, ns):
                 continue
             for team in (m["h"], m["a"]):
                 key = f"{m['i']}|{notify_slug(team)}"
-                if key in st["r"]:
+                if key in st[rk]:
                     continue
                 if first:
-                    st["r"][key] = d
+                    st[rk][key] = d
                     continue
                 res.append((d, str(m["i"]), {"topic": notify_topic(ns, team), "title": f"{m['h']} {sc.group(1)}\u2013{sc.group(2)} {m['a']}",
                                            "message": f"Full time \u00b7 \u0627\u0646\u062a\u0647\u062a \u0627\u0644\u0645\u0628\u0627\u0631\u0627\u0629\n{lname}",
-                                           "tags": ["soccer"], "click": f"{base_url}#/match/{m['i']}"}, ("r", key, d)))
+                                           "tags": ["soccer"], "click": f"{base_url}#/match/{m['i']}"}, (rk[-1], key, d, lname, None)))
     for lid, lname, _ in leagues:
         for f in (fixtures.get(lid) or []):
             try:
@@ -12883,20 +12903,21 @@ def notify_plan(leagues, fixtures, state, now, base_url, ns):
             except Exception:
                 continue
             lead = ko - now
-            if lead < datetime.timedelta(minutes=NOTIFY_MIN_LEAD_MIN) or lead > datetime.timedelta(hours=NOTIFY_AHEAD_H):
+            far = datetime.timedelta(minutes=PUSH_REMIND_MAX_MIN) if push else datetime.timedelta(hours=NOTIFY_AHEAD_H)
+            if lead < datetime.timedelta(minutes=NOTIFY_MIN_LEAD_MIN) or lead > far:
                 continue
             send_at = ko - datetime.timedelta(minutes=NOTIFY_BEFORE_MIN)
             for team in (f["h"], f["a"]):
                 key = f"{f['i']}|{f['k']}|{notify_slug(team)}"
-                if key in st["m"]:
+                if key in st[mk]:
                     continue
                 hh = ko.strftime("%H:%M")
                 msg = {"topic": notify_topic(ns, team), "title": f"{f['h']} v {f['a']}",
                        "message": f"Kick-off {hh} UTC \u00b7 \u062a\u0646\u0637\u0644\u0642 {hh} \u0628\u062a\u0648\u0642\u064a\u062a \u063a\u0631\u064a\u0646\u062a\u0634\n{lname}",
                        "tags": ["alarm_clock"], "click": f"{base_url}#/preview/{f['i']}"}
-                if send_at - now > datetime.timedelta(seconds=60):
+                if not push and send_at - now > datetime.timedelta(seconds=60):
                     msg["delay"] = str(int(send_at.timestamp()))
-                rem.append((f["k"], str(f["i"]), msg, ("m", key, ko.date().isoformat())))
+                rem.append((f["k"], str(f["i"]), msg, (mk[-1], key, ko.date().isoformat(), lname, hh)))
     res.sort(key=lambda x: (x[0], x[1], x[2]["topic"]))
     rem.sort(key=lambda x: (x[0], x[1], x[2]["topic"]))
     return [(x[2], x[3]) for x in res + rem], st
@@ -12909,7 +12930,179 @@ def notify_post(server, payload, timeout=8):
         return 200 <= r.status < 300
 
 
-def sync_notify(hub, now=None, post=None):
+# ---- the browser door (Web Push)
+def _b64u(b):
+    return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+
+
+def _unb64u(s):
+    s = str(s)
+    return base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))
+
+
+def push_public(raw_private):
+    """The public key (65 bytes, base64url) of a raw 32-byte private key."""
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.hazmat.primitives import serialization
+    k = ec.derive_private_key(int.from_bytes(_unb64u(raw_private), "big"), ec.SECP256R1())
+    return _b64u(k.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint))
+
+
+def push_open(box_raw, sealed):
+    """Opens what the page sealed: {"v":1,"e":ephemeral public key,"i":iv,"c":ciphertext+tag} -> the JSON inside, or None."""
+    try:
+        from cryptography.hazmat.primitives.asymmetric import ec
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+        if not isinstance(sealed, dict) or sealed.get("v") != 1:
+            return None
+        priv = ec.derive_private_key(int.from_bytes(_unb64u(box_raw), "big"), ec.SECP256R1())
+        epk = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256R1(), _unb64u(sealed["e"]))
+        key = HKDF(algorithm=hashes.SHA256(), length=32, salt=None, info=b"pla-push-v1").derive(priv.exchange(ec.ECDH(), epk))
+        return json.loads(AESGCM(key).decrypt(_unb64u(sealed["i"]), _unb64u(sealed["c"]), None).decode("utf-8"))
+    except Exception:
+        return None
+
+
+def push_inbox(server, ns, timeout=10):
+    """The sealed messages in the inbox topic, oldest first (ntfy keeps them 12 hours)."""
+    url = f"{server.rstrip('/')}/pla-{ns}_inbox/json?poll=1&since=12h"
+    with urllib.request.urlopen(url, timeout=timeout) as r:
+        lines = r.read().decode("utf-8", "replace").splitlines()
+    out = []
+    for ln in lines[:PUSH_INBOX_LINES]:
+        try:
+            e = json.loads(ln)
+            if e.get("event") == "message":
+                out.append((e.get("time", 0), json.loads(e.get("message", ""))))
+        except Exception:
+            continue
+    return [m for _, m in sorted(out, key=lambda x: x[0])]
+
+
+def push_sub_id(endpoint):
+    return hashlib.sha256(str(endpoint).encode("utf-8")).hexdigest()[:16]
+
+
+def push_clean(obj):
+    """A subscription message from a page -> (id, subscription, team slugs, language) or None. Anything odd is dropped."""
+    try:
+        sub = obj["sub"]
+        ep, keys = str(sub["endpoint"]), sub["keys"]
+        if not ep.startswith(("https://", "http://127.0.0.1", "http://localhost")) or len(ep) > 700:
+            return None
+        if not (isinstance(keys.get("p256dh"), str) and isinstance(keys.get("auth"), str)) or len(keys["p256dh"]) > 120 or len(keys["auth"]) > 60:
+            return None
+        teams = [str(t) for t in (obj.get("teams") or [])][:PUSH_MAX_TEAMS]
+        return push_sub_id(ep), {"endpoint": ep, "keys": {"p256dh": keys["p256dh"], "auth": keys["auth"]}}, {notify_slug(t) for t in teams}, ("ar" if obj.get("lang") == "ar" else "en")
+    except Exception:
+        return None
+
+
+def push_text(payload, key, lang):
+    """The title and body of a push in the device's language; the team names stay as they are."""
+    kind, lname, hh = key[0], key[3], key[4]
+    if kind == "r":
+        body = f"\u0627\u0646\u062a\u0647\u062a \u0627\u0644\u0645\u0628\u0627\u0631\u0627\u0629 \u00b7 {lname}" if lang == "ar" else f"Full time \u00b7 {lname}"
+    else:
+        body = f"\u062a\u0646\u0637\u0644\u0642 \u0627\u0644\u0633\u0627\u0639\u0629 {hh} \u0628\u062a\u0648\u0642\u064a\u062a \u063a\u0631\u064a\u0646\u062a\u0634 \u00b7 {lname}" if lang == "ar" else f"Kick-off {hh} UTC \u00b7 {lname}"
+    return {"title": payload["title"], "body": body, "url": payload["click"], "tag": key[1]}
+
+
+def push_send(sub, data, vapid_raw, sub_claim, timeout=15):
+    """One Web Push with pywebpush -> "ok", "gone" (the push service says this subscription no longer exists) or "fail"."""
+    try:
+        from pywebpush import webpush, WebPushException
+        from py_vapid import Vapid
+        v = Vapid.from_raw(str(vapid_raw).encode("ascii"))   # py_vapid decodes the base64url text itself
+        try:
+            webpush(subscription_info=sub, data=json.dumps(data, ensure_ascii=False), vapid_private_key=v, vapid_claims={"sub": sub_claim}, ttl=86400, timeout=timeout)
+            return "ok"
+        except WebPushException as e:
+            code = getattr(getattr(e, "response", None), "status_code", None)
+            return "gone" if code in (404, 410) else "fail"
+    except Exception:
+        return "fail"
+
+
+def push_run(hub, cfg, leagues, fixtures, st, now, base, send=None, inbox=None):
+    """The browser door. Returns the state (a new dict) and writes data/push_status.json and data/push_subs.json. Does nothing without the secret."""
+    send = send or push_send
+    pub = gh_get_json(hub, PUSH_PATH) or {}
+    status = {"v": 1, "ready": False}
+    keys = None
+    try:
+        keys = json.loads(os.environ.get("PUSH_KEYS") or "null")
+        if not (keys and push_public(keys["vapid"]) == pub.get("vapid") and push_public(keys["box"]) == pub.get("box")):
+            keys = None
+    except Exception:
+        keys = None
+    why = "no PUSH_KEYS secret, or it does not match data/push.json" if not keys else ""
+    if keys and send is push_send:
+        try:
+            import pywebpush, py_vapid
+        except Exception:
+            keys, why = None, "pywebpush is not installed"
+    if keys:
+        status = {"v": 1, "ready": True}
+    gh_put(hub, PUSH_STATUS, json.dumps(status, separators=(",", ":")).encode("utf-8"), "Update push status")
+    if not keys:
+        log(f"  [إشعارات المتصفح] مو جاهزة: {why}")
+        return st
+    ns, server = cfg["ns"], cfg["server"]
+    held = ((gh_get_json(hub, PUSH_SUBS) or {}).get("subs")) or {}
+    subs = {k: v for k, v in held.items() if isinstance(v, dict) and push_clean(push_open(keys["box"], v.get("s"))) is not None}
+    got = rem = 0
+    try:
+        for sealed in (inbox or push_inbox)(server, ns):
+            obj = push_open(keys["box"], sealed)
+            if not obj:
+                continue
+            if obj.get("remove"):
+                if subs.pop(push_sub_id(obj["remove"]), None) is not None:
+                    rem += 1
+                continue
+            c = push_clean(obj)
+            if c:
+                subs[c[0]] = {"s": sealed, "t": now.date().isoformat()}
+                got += 1
+    except Exception as e:
+        log(f"  [إشعارات المتصفح] ما قدرت أقرأ صندوق الوارد ({type(e).__name__}) — أكمل بالاشتراكات اللي عندي")
+    if len(subs) > PUSH_MAX_SUBS:
+        subs = dict(sorted(subs.items(), key=lambda kv: kv[1].get("t", ""))[-PUSH_MAX_SUBS:])
+    live = {}
+    for k, v in subs.items():
+        c = push_clean(push_open(keys["box"], v["s"]))
+        if c:
+            live[k] = c
+    msgs, st2 = notify_plan(leagues, fixtures, st, now, base, ns, channel="push")
+    claim = (re.match(r"https://[\w.-]+", base or "") or [None])[0]   # the VAPID subject: the site's own origin (py_vapid accepts https://host without a path)
+    if not claim:
+        log("  [إشعارات المتصفح] ما عندي عنوان الموقع — تخطيت")
+        return st
+    sent = fails = gone = 0
+    for payload, key in msgs[:NOTIFY_MAX_POSTS]:
+        slug = key[1].split("|")[-1]
+        targets = [(k, c) for k, c in live.items() if slug in c[2]]
+        ok_any = not targets
+        all_gone = bool(targets)
+        for k, c in targets:
+            r = send(c[1], push_text(payload, key, c[3]), keys["vapid"], claim)
+            if r == "ok":
+                sent += 1; ok_any = True; all_gone = False
+            elif r == "gone":
+                gone += 1; subs.pop(k, None); live.pop(k, None)
+            else:
+                fails += 1; all_gone = False
+        if ok_any or all_gone:
+            st2["pr" if key[0] == "r" else "pm"][key[1]] = key[2]
+    gh_put(hub, PUSH_SUBS, json.dumps({"v": 1, "subs": subs}, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8"), "Update push subscriptions")
+    log(f"  [إشعارات المتصفح] {len(subs)} جهاز، وصل صندوق الوارد {got}" + (f" وإلغاء {rem}" if rem else "") + f"، أُرسل {sent}" + (f"، فشل {fails}" if fails else "") + (f"، اشتراك انتهى {gone}" if gone else ""))
+    return st2
+
+
+def sync_notify(hub, now=None, post=None, send=None, inbox=None):
     if os.environ.get("PLA_NOTIFY") == "0":
         return
     cfg = gh_get_json(hub, NOTIFY_PATH) or {}
@@ -12929,13 +13122,13 @@ def sync_notify(hub, now=None, post=None):
     base = hub.get("url") or (f"https://{hub['repo'].split('/')[0]}.github.io/{hub['repo'].split('/')[1]}/" if "/" in str(hub.get("repo")) else "")
     msgs, st = notify_plan(leagues, fixtures, old, now, base, ns)
     sent = fails = streak = 0
-    for payload, (kind, key, day) in msgs[:NOTIFY_MAX_POSTS]:
+    for payload, key in msgs[:NOTIFY_MAX_POSTS]:
         try:
             ok_ = post(server, payload)
         except Exception:
             ok_ = False
         if ok_:
-            st["r" if kind == "r" else "m"][key] = day
+            st[key[0]][key[1]] = key[2]
             sent += 1
             streak = 0
         else:
@@ -12943,9 +13136,13 @@ def sync_notify(hub, now=None, post=None):
             streak += 1
             if streak >= NOTIFY_STOP_AFTER:
                 break
-    gh_put(hub, NOTIFY_STATE, json.dumps(st, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8"), "Update notification state")
     log(f"  [إشعارات] أُرسل {sent} إشعار" + (f"، فشل {fails}" if fails else "") + ("، أول تشغيل: النتائج الحالية اتعلّمت بدون إرسال" if old is None else "")
         + (f"، تبقّى {len(msgs) - sent - fails} للمرة الجاية" if len(msgs) > sent + fails else ""))
+    try:
+        st = push_run(hub, {"ns": ns, "server": server}, leagues, fixtures, st, now, base, send=send, inbox=inbox)
+    except Exception as e:      # the browser door never stops the ntfy door's state from being saved
+        log(f"  [إشعارات المتصفح] خطأ ({type(e).__name__}: {e})")
+    gh_put(hub, NOTIFY_STATE, json.dumps(st, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8"), "Update notification state")
 
 
 _orig_run_pipeline_notify = run_pipeline
