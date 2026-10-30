@@ -9018,11 +9018,11 @@ INDEX = _x_fpx_index(INDEX)
 # الكود في ملفات مستقلة في المستودع: assets/*.js و assets/features.css و manifest.webmanifest و sw.js و assets/icons/.
 # هذا القسم يضيف روابطها للصفحة فقط (بعد السكربت الرئيسي، فتلقى R و PAGES جاهزة). غيّر FEATURES_V لما تتغير الملفات.
 # ============================================================================
-FEATURES_V = "53"
+FEATURES_V = "54"
 FEATURES_JS = ("pla-data", "share-card", "threat-map", "match-whatif", "player-page", "match-centre", "home-extra", "team-round",
                "preview", "club-extra", "rankings-extra", "fantasy-extra", "insights-core", "hidden-gems", "player-dna", "team-dna",
                "reality-check", "matches-board", "match-replay", "match-story", "overview", "press-height",
-               "season-sim", "luck-table", "player-twin", "player-cards", "beat-model", "rare-cases", "attack-share", "drawer", "tap-twice", "line-height", "league-pool", "game-states", "likely-xi", "club-twins", "carry-team", "report-card", "league-dna", "thrill", "defense-card", "press-card", "sb-press", "stat-stability", "keeps-up", "goalkeepers", "xi-builder", "player-prices", "xi-battle", "player-story", "time-machine", "ask", "wrapped", "levels", "club-elo", "title-race", "elo-river", "heartbeat", "club-shape", "fortress", "late-show", "holo", "seasons", "liquid-glass")
+               "season-sim", "luck-table", "player-twin", "player-cards", "beat-model", "rare-cases", "attack-share", "drawer", "tap-twice", "line-height", "league-pool", "game-states", "likely-xi", "club-twins", "carry-team", "report-card", "league-dna", "thrill", "defense-card", "press-card", "sb-press", "stat-stability", "keeps-up", "goalkeepers", "xi-builder", "player-prices", "xi-battle", "player-story", "time-machine", "ask", "wrapped", "levels", "club-elo", "title-race", "elo-river", "heartbeat", "club-shape", "fortress", "late-show", "notify", "holo", "seasons", "liquid-glass")
 
 
 def _x_feat_index(html):
@@ -12810,6 +12810,155 @@ def run_pipeline(hub, pit_key):
     return out
 # ===== TMACH END =====
 
+
+# ===== NOTIFY START =====
+# Notifications for the teams you star (owner asked 30 Oct 2026; channel chosen: the free ntfy app). The site is static, so it cannot push; instead this step
+# publishes to ntfy.sh, one public topic per team: pla-<namespace>-<slug of the team's name> (the namespace is in data/notify.json so that other people's topics
+# do not collide with ours). The page (assets/notify.js) shows, for each starred team, the topic to follow in the ntfy app. Two kinds of message, each sent to
+# the topic of both teams:
+#   - the final score, when the match appears in the league file (a match whose date is in the last 2 days and that was not announced yet);
+#   - a reminder an hour before kick-off, queued with ntfy's own delay (so it arrives on time whatever the sync's schedule) as soon as the fixture is known to be
+#     less than 48 hours away and more than 15 minutes away. A fixture whose kick-off moves later is reminded again at the new time; the old reminder cannot
+#     be taken back.
+# data/notify_state.json remembers what was sent (match | team, and match | kick-off | team for reminders; entries older than 10 days are dropped), so nothing
+# is sent twice. The first run has no state: the results already there are marked as announced and not sent. At most 80 messages per run; three failures in a
+# row stop the run (the host is down) and the rest is tried at the next sync. The step never stops the sync, and PLA_NOTIFY=0 turns it off.
+import unicodedata, urllib.request
+
+NOTIFY_PATH = "data/notify.json"
+NOTIFY_STATE = "data/notify_state.json"
+NOTIFY_MAX_POSTS = 80
+NOTIFY_STOP_AFTER = 3
+NOTIFY_KEEP_DAYS = 10
+NOTIFY_RESULT_DAYS = 2
+NOTIFY_AHEAD_H = 48
+NOTIFY_BEFORE_MIN = 60
+NOTIFY_MIN_LEAD_MIN = 15
+NOTIFY_FOLD = {"ø": "o", "ł": "l", "đ": "d", "ð": "d", "ß": "ss", "æ": "ae", "œ": "oe", "þ": "th", "ı": "i"}
+
+
+def notify_slug(name):
+    s = str(name).lower()
+    for a, b in NOTIFY_FOLD.items():
+        s = s.replace(a, b)
+    s = "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c))
+    s = re.sub(r"[^a-z0-9]+", "-", s).strip("-")[:47].strip("-")
+    return s or "team"
+
+
+def notify_topic(ns, team):
+    return f"pla-{ns}-{notify_slug(team)}"
+
+
+def notify_plan(leagues, fixtures, state, now, base_url, ns):
+    """-> (messages, state'); each message carries the key it settles. `state` None = first run: results are marked as announced, not sent."""
+    first = state is None
+    st = {"v": 1, "r": dict((state or {}).get("r") or {}), "m": dict((state or {}).get("m") or {})}
+    today = now.date()
+    keep = (today - datetime.timedelta(days=NOTIFY_KEEP_DAYS)).isoformat()
+    st["r"] = {k: v for k, v in st["r"].items() if v >= keep}
+    st["m"] = {k: v for k, v in st["m"].items() if v >= keep}
+    cutoff = (today - datetime.timedelta(days=NOTIFY_RESULT_DAYS)).isoformat()
+    res, rem = [], []
+    for lid, lname, matches in leagues:
+        for m in matches:
+            sc = re.fullmatch(r"(\d+)-(\d+)", str(m.get("s") or "").strip())
+            d = str(m.get("d") or "")[:10]
+            if not sc or not d or d < cutoff:
+                continue
+            for team in (m["h"], m["a"]):
+                key = f"{m['i']}|{notify_slug(team)}"
+                if key in st["r"]:
+                    continue
+                if first:
+                    st["r"][key] = d
+                    continue
+                res.append((d, str(m["i"]), {"topic": notify_topic(ns, team), "title": f"{m['h']} {sc.group(1)}\u2013{sc.group(2)} {m['a']}",
+                                           "message": f"Full time \u00b7 \u0627\u0646\u062a\u0647\u062a \u0627\u0644\u0645\u0628\u0627\u0631\u0627\u0629\n{lname}",
+                                           "tags": ["soccer"], "click": f"{base_url}#/match/{m['i']}"}, ("r", key, d)))
+    for lid, lname, _ in leagues:
+        for f in (fixtures.get(lid) or []):
+            try:
+                ko = datetime.datetime.strptime(str(f["k"]), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc)
+            except Exception:
+                continue
+            lead = ko - now
+            if lead < datetime.timedelta(minutes=NOTIFY_MIN_LEAD_MIN) or lead > datetime.timedelta(hours=NOTIFY_AHEAD_H):
+                continue
+            send_at = ko - datetime.timedelta(minutes=NOTIFY_BEFORE_MIN)
+            for team in (f["h"], f["a"]):
+                key = f"{f['i']}|{f['k']}|{notify_slug(team)}"
+                if key in st["m"]:
+                    continue
+                hh = ko.strftime("%H:%M")
+                msg = {"topic": notify_topic(ns, team), "title": f"{f['h']} v {f['a']}",
+                       "message": f"Kick-off {hh} UTC \u00b7 \u062a\u0646\u0637\u0644\u0642 {hh} \u0628\u062a\u0648\u0642\u064a\u062a \u063a\u0631\u064a\u0646\u062a\u0634\n{lname}",
+                       "tags": ["alarm_clock"], "click": f"{base_url}#/preview/{f['i']}"}
+                if send_at - now > datetime.timedelta(seconds=60):
+                    msg["delay"] = str(int(send_at.timestamp()))
+                rem.append((f["k"], str(f["i"]), msg, ("m", key, ko.date().isoformat())))
+    res.sort(key=lambda x: (x[0], x[1], x[2]["topic"]))
+    rem.sort(key=lambda x: (x[0], x[1], x[2]["topic"]))
+    return [(x[2], x[3]) for x in res + rem], st
+
+
+def notify_post(server, payload, timeout=8):
+    req = urllib.request.Request(server.rstrip("/") + "/", data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+                                 headers={"Content-Type": "application/json; charset=utf-8"}, method="POST")
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return 200 <= r.status < 300
+
+
+def sync_notify(hub, now=None, post=None):
+    if os.environ.get("PLA_NOTIFY") == "0":
+        return
+    cfg = gh_get_json(hub, NOTIFY_PATH) or {}
+    ns, server = cfg.get("ns"), cfg.get("server")
+    if not ns or not server:
+        log("  [إشعارات] ما فيه data/notify.json — تخطيت")
+        return
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    post = post or notify_post
+    idx = gh_get_json(hub, "data/index.json") or {}
+    leagues = []
+    for l in idx.get("leagues") or []:
+        if l.get("file"):
+            leagues.append((l["id"], l.get("name") or l["id"], ((gh_get_json(hub, "data/" + l["file"]) or {}).get("matches") or [])))
+    fixtures = (gh_get_json(hub, "data/fixtures.json") or {}).get("leagues") or {}
+    old = gh_get_json(hub, NOTIFY_STATE)
+    base = hub.get("url") or (f"https://{hub['repo'].split('/')[0]}.github.io/{hub['repo'].split('/')[1]}/" if "/" in str(hub.get("repo")) else "")
+    msgs, st = notify_plan(leagues, fixtures, old, now, base, ns)
+    sent = fails = streak = 0
+    for payload, (kind, key, day) in msgs[:NOTIFY_MAX_POSTS]:
+        try:
+            ok_ = post(server, payload)
+        except Exception:
+            ok_ = False
+        if ok_:
+            st["r" if kind == "r" else "m"][key] = day
+            sent += 1
+            streak = 0
+        else:
+            fails += 1
+            streak += 1
+            if streak >= NOTIFY_STOP_AFTER:
+                break
+    gh_put(hub, NOTIFY_STATE, json.dumps(st, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8"), "Update notification state")
+    log(f"  [إشعارات] أُرسل {sent} إشعار" + (f"، فشل {fails}" if fails else "") + ("، أول تشغيل: النتائج الحالية اتعلّمت بدون إرسال" if old is None else "")
+        + (f"، تبقّى {len(msgs) - sent - fails} للمرة الجاية" if len(msgs) > sent + fails else ""))
+
+
+_orig_run_pipeline_notify = run_pipeline
+
+
+def run_pipeline(hub, pit_key):
+    out = _orig_run_pipeline_notify(hub, pit_key)
+    try:
+        sync_notify(hub)
+    except Exception as e:      # optional: never stops the sync
+        log(f"  [إشعارات] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
+    return out
+# ===== NOTIFY END =====
 
 if __name__ == "__main__":
     main()

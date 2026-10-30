@@ -574,3 +574,9 @@ html[dir=rtl] .dl-bars .ph-bn bdi{text-align:right}
 .ls-b b{position:absolute;top:50%;transform:translateY(-50%);left:50%;margin-left:6px;font-size:12.5px}
 .ls-s{padding:12px 14px}.ls-ml{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:4px}.ls-ml li{display:grid;grid-template-columns:6.6em minmax(0,1fr) auto 2.4em;gap:8px;align-items:baseline;padding:6px 4px;border-bottom:1px solid var(--ln);font-size:13px}.ls-ml b{text-align:end}.ls-ml b.p{color:#4cc38a}.ls-ml b.m{color:#ff7b72}
 @media(max-width:560px){.ls-hd,.ls-row{grid-template-columns:minmax(0,6.8em) 3.6em 2.2em 2.2em minmax(0,1fr);gap:4px}.ls-row{font-size:12.5px;padding:6px 4px}.ls-ml li{grid-template-columns:minmax(0,1fr) auto 2.2em}.ls-ml li .mu{display:none}}
+/* ---- Notifications card (assets/notify.js, under "Your teams") ---- */
+.ntf{margin-top:12px;padding:14px}.ntf h3{margin:0 0 6px;font-size:15px;color:var(--tx)}.ntf p{margin:6px 0}.ntf-s{margin:8px 0;padding-inline-start:22px;display:grid;gap:12px}
+.ntf-st,.ntf-a,.ntf-w{display:inline-flex;align-items:center;min-height:32px;padding:3px 12px;border-radius:999px;border:1px solid var(--id-edge,var(--ln));background:rgba(255,255,255,.05);color:var(--tx);text-decoration:none;font-size:13px}
+.ntf-a{border-color:var(--th-hi,var(--ln))}.ntf-st:hover,.ntf-a:hover,.ntf-w:hover{background:rgba(255,255,255,.1)}
+.ntf-l{list-style:none;margin:8px 0 0;padding:0;display:grid;gap:8px}.ntf-r{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border:1px solid var(--ln);border-radius:12px}
+.ntf-n{font-weight:600;min-width:0}.ntf-b{display:flex;flex-wrap:wrap;gap:6px}.ntf-c{min-height:32px;padding:3px 12px;border-radius:999px;font-size:13px}
