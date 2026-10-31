@@ -45,10 +45,11 @@ const twins=(Tm,x)=>Tm.filter(y=>y!==x).map(y=>({y,s:sim(x,y)})).filter(o=>o.s!=
  /* unique clubs and closest pairs */
  const best=Tm.map(x=>({x,s:(twins(Tm,x)[0]||{s:null}).s})).filter(o=>o.s!=null).sort((a,b)=>a.s-b.s||a.x.t.localeCompare(b.x.t)).slice(0,5);
  const uni=await pg.evaluate(()=>[...document.querySelectorAll('.lk-two')[1].querySelectorAll('.card')[0].querySelectorAll('button')].map(b=>[b.dataset.pk,b.querySelector('b').textContent.trim()]));
- /* two clubs can tie to the last digit (their order is then arbitrary: floating-point noise of 1e-14), so the same five clubs with the same
-    scores, shown from the lowest score up, is what is checked, not the order inside a tie */
- const same=(u,v)=>JSON.stringify(u.map(x=>x.join(':')).sort())===JSON.stringify(v.map(x=>x.join(':')).sort());
- ok(same(uni,best.map(o=>[o.x.key,o.s.toFixed(0)]))&&uni.every((u,i)=>!i||+uni[i-1][1]<=+u[1]),'most unique clubs: '+best.map(o=>o.x.t+' '+o.s.toFixed(0)).join(', '));
+ /* the page shows scores rounded to whole numbers and puts clubs with the same rounded score in name order, so two clubs whose scores differ in the decimals
+    (Nice 81.9 and 1. FC Köln 82.3 are both "82") can swap places at the edge of the five, and two clubs can even tie to the last digit (floating-point noise of 1e-14).
+    So the check is: every club shown has its own rounded score, the shown scores are the five lowest rounded scores of all clubs, from the lowest up. */
+ const rnd=new Map(Tm.map(x=>[x.key,(twins(Tm,x)[0]||{s:null}).s]).filter(r=>r[1]!=null).map(([k,v])=>[k,v.toFixed(0)])),low=[...rnd.values()].map(Number).sort((a,b)=>a-b).slice(0,5);
+ ok(uni.length===5&&uni.every(u=>rnd.get(u[0])===u[1])&&JSON.stringify(uni.map(u=>+u[1]))===JSON.stringify(low),'most unique clubs: '+uni.map(u=>u[0].split('|')[1]+' '+u[1]).join(', ')+' (the five lowest rounded scores: '+low.join(', ')+'; exact order at the edge: '+best.map(o=>o.x.t+' '+o.s.toFixed(1)).join(', ')+')');
  const pairs=[];for(let i=0;i<Tm.length;i++)for(let j=i+1;j<Tm.length;j++){const s=sim(Tm[i],Tm[j]);if(s!=null)pairs.push({a:Tm[i],b:Tm[j],s})}
  pairs.sort((p,q)=>q.s-p.s||p.a.t.localeCompare(q.a.t)||p.b.t.localeCompare(q.b.t));const used=new Set(),cl=[];for(const p of pairs){if(cl.length>=5)break;if(used.has(p.a.key)||used.has(p.b.key))continue;used.add(p.a.key);used.add(p.b.key);cl.push(p)}
  const prs=await pg.evaluate(()=>[...document.querySelectorAll('.lk-two')[1].querySelectorAll('.card')[1].querySelectorAll('button')].map(b=>[b.dataset.pk,b.dataset.tw,b.querySelector('b').textContent.trim()]));
