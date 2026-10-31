@@ -49,7 +49,7 @@
    const fav=new Set(typeof favList==='function'?favList().map(f=>f.t):[]),mine=L.filter(x=>fav.has(x.h)||fav.has(x.a));
    if(mine.length){by.set('★',mine);lids.unshift('★')}
    const allF=lids.length&&lids.every(l=>F.has(l));
-   sec.innerHTML=`<h2 class="mb-h">Matches</h2><div class="mb-days" role="tablist">${days.map(d=>`<button type="button" role="tab" aria-selected="${d===DAY}" class="${d===DAY?'on':''}" data-d="${d}">${esc(lab(d))}</button>`).join('')}</div>
+   sec.innerHTML=`<h2 class="mb-h">Matches</h2><div class="mb-days" role="tablist">${days.map(d=>`<button type="button" role="tab" aria-selected="${d===DAY}" class="${d===DAY?'on':''}" data-d="${d}">${esc(lab(d))}</button>`).join('')}</div><div class="mb-pg">
     ${lids.length?lids.map(lid=>{const img=lid==='★'?null:lgImg(R_.s,lid),f=F.has(lid);return `<div class="mb-g${f?' f':''}${lid==='★'?' mb-fav':''}"><button type="button" class="mb-lh" data-l="${esc(lid)}" aria-expanded="${!f}">${lid==='★'?'<span class="mb-star" aria-hidden="true">★</span>':img?`<img src="${esc(img)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">`:'<span class="mb-cr mb-nd"></span>'}<b>${lid==='★'?'Your teams':esc(lgName(R_.s,lid))}</b><span class="mb-n mu">${by.get(lid).length}</span><span class="mb-ch" aria-hidden="true"></span></button>
      <div class="mb-rows">${by.get(lid).map(x=>{const st=state(x),tm=x.t?new Date(x.t).toLocaleTimeString(lc(),{hour:'numeric',minute:'2-digit'}):'',L_=st==='ft'||st==='off'?{e:null,s:'',xi:''}:live(x),e=L_.e,mn=e&&typeof lvMinute==='function'?lvMinute(e):null;
       /* a missing score is shown as –, never as 0 */
@@ -61,7 +61,7 @@
      :(()=>{const prev=days.filter(d=>d<DAY&&R_.list.some(x=>x.day===d)).pop(),next=days.find(d=>d>DAY&&R_.list.some(x=>x.day===d));
        return `<div class="empty mb-empty"><span>No matches in the site's leagues on this day.</span>${prev||next?`<span class="mb-jump">${prev?`<button type="button" class="s" data-d="${prev}">← <span>${esc(lab(prev))}</span></button>`:''}${next?`<button type="button" class="s" data-d="${next}"><span>${esc(lab(next))}</span> →</button>`:''}</span>`:''}</div>`})()}
     ${lids.length?`<div class="mb-all"><button type="button" class="s" data-all="${allF?'show':'hide'}">${allF?'Show all':'Hide all'} <span aria-hidden="true">${allF?'⌄':'⌃'}</span></button></div>`:''}
-    <p class="mu mb-note"><span>Times in your time zone.</span> <span>PitchAPI publishes a result after the match has ended, so there are no live scores here.</span></p>`;
+    <p class="mu mb-note"><span>Times in your time zone.</span> <span>PitchAPI publishes a result after the match has ended, so there are no live scores here.</span></p></div>`;
    const on=sec.querySelector('.mb-days .on');if(scroll&&on&&on.scrollIntoView)on.scrollIntoView({block:'nearest',inline:'center'});
   };
   sec.addEventListener('click',async e=>{
@@ -73,18 +73,46 @@
     e.preventDefault();const h=r.getAttribute('href');$('#app').innerHTML='<div class="empty">Loading league…</div>';
     try{await setLeague(r.dataset.lid);if(typeof CMP!=='undefined')CMP=[];if(typeof head==='function')head();if(location.hash===h)route();else location.hash=h}catch(err){route()}}
   });
-  /* swipe the list sideways with a finger to the next or the previous day, like a scores app: a mostly horizontal, quick, long enough move that does not start on the
-     day strip (the strip scrolls by itself); the way is mirrored in Arabic (right to left: a swipe to the right goes to the next day). The new day slides in from that side. */
-  let sx=0,sy=0,sT=0,sw=false;
-  sec.addEventListener('touchstart',e=>{const t=e.touches[0];sw=e.touches.length===1&&!e.target.closest('.mb-days');sx=t.clientX;sy=t.clientY;sT=Date.now()},{passive:true});
-  sec.addEventListener('touchcancel',()=>{sw=false},{passive:true});
-  sec.addEventListener('touchend',e=>{
-   if(!sw)return;sw=false;const t=e.changedTouches[0],dx=t.clientX-sx,dy=t.clientY-sy;
-   if(Math.abs(dx)<60||Math.abs(dx)<1.6*Math.abs(dy)||Date.now()-sT>700)return;
-   const rtl=document.documentElement.dir==='rtl',next=rtl?dx>0:dx<0,j=days.indexOf(DAY)+(next?1:-1);
-   if(j<0||j>=days.length)return;
-   DAY=days[j];sec.style.setProperty('--sl',(next?1:-1)*(rtl?-1:1)*28+'px');sec.dataset.slide='1';draw();setTimeout(()=>{delete sec.dataset.slide},320);
+  /* swipe the list with a finger, like a pager: the list follows the finger while it moves (a little, with resistance, beyond the first and the last day) and the
+     page fades a little; on release it slides away in the way of the move and the next or the previous day slides in from the other side, or, if the move was
+     short, slow and small, it springs back. Mostly horizontal moves only (a vertical one scrolls the page) and never from the day strip (it scrolls by itself).
+     The way is mirrored in Arabic (right to left: a move to the right goes to the next day). With reduced motion the day changes at once, nothing follows the finger. */
+  const RM=()=>!!(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const pgEl=()=>sec.querySelector('.mb-pg');
+  const isNext=dx=>document.documentElement.dir==='rtl'?dx>0:dx<0;
+  const hasNb=next=>{const j=days.indexOf(DAY)+(next?1:-1);return j>=0&&j<days.length};
+  const clear=pg=>{pg.style.transition='';pg.style.transform='';pg.style.opacity=''};
+  const back=pg=>{pg.style.transition='transform .2s ease,opacity .2s ease';pg.style.transform='translateX(0)';pg.style.opacity='1';setTimeout(()=>clear(pg),240)};
+  let g=null;   /* the move in progress: {x,y,t,mode,pg,w,busy} */
+  sec.addEventListener('touchstart',e=>{
+   if(g&&g.busy)return;const pg=pgEl(),t=e.touches[0];
+   g=e.touches.length===1&&pg&&!e.target.closest('.mb-days')?{x:t.clientX,y:t.clientY,t:Date.now(),mode:'',pg,w:Math.max(200,pg.getBoundingClientRect().width)}:null;
   },{passive:true});
+  sec.addEventListener('touchmove',e=>{
+   if(!g||g.busy)return;const t=e.touches[0],dx=t.clientX-g.x,dy=t.clientY-g.y;
+   if(!g.mode){if(Math.abs(dx)<10&&Math.abs(dy)<10)return;g.mode=Math.abs(dx)>1.2*Math.abs(dy)?'h':'v'}
+   if(g.mode!=='h'||RM())return;
+   const k=hasNb(isNext(dx))?1:.25,x=dx*k;
+   g.pg.style.transition='none';g.pg.style.transform='translateX('+x.toFixed(1)+'px)';g.pg.style.opacity=String(1-Math.min(.45,Math.abs(x)/g.w*.6));
+  },{passive:true});
+  const go=(m,next,dx)=>{
+   m.busy=true;const sign=dx<0?-1:1,pg=m.pg;
+   const swap=()=>{
+    DAY=days[days.indexOf(DAY)+(next?1:-1)];draw();g=null;const np=pgEl();if(!np||RM())return;
+    np.style.transition='none';np.style.transform='translateX('+(-sign*m.w*.3).toFixed(0)+'px)';np.style.opacity='0';
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{np.style.transition='transform .24s cubic-bezier(.2,.8,.2,1),opacity .24s ease';np.style.transform='translateX(0)';np.style.opacity='1';setTimeout(()=>clear(np),280)}));
+   };
+   if(RM()){swap();return}
+   pg.style.transition='transform .16s ease-in,opacity .16s ease-in';pg.style.transform='translateX('+(sign*m.w*.6).toFixed(0)+'px)';pg.style.opacity='0';setTimeout(swap,160);
+  };
+  sec.addEventListener('touchend',e=>{
+   const m=g;if(!m||m.busy)return;const t=e.changedTouches[0],dx=t.clientX-m.x,dy=t.clientY-m.y,dt=Math.max(1,Date.now()-m.t),ax=Math.abs(dx),next=isNext(dx);
+   /* far enough (a fifth of the list, 60 px at least) or a quick flick (30 px and 0.45 px/ms), and mostly horizontal */
+   const ok=m.mode==='h'&&hasNb(next)&&ax>=1.6*Math.abs(dy)&&(ax>=Math.max(60,m.w*.2)||(ax>=30&&ax/dt>=.45));
+   if(!ok){g=null;if(m.mode==='h'&&!RM())back(m.pg);return}
+   go(m,next,dx);
+  },{passive:true});
+  sec.addEventListener('touchcancel',()=>{const m=g;if(!m||m.busy)return;g=null;if(m.mode==='h'&&!RM())back(m.pg)},{passive:true});
   draw();
   home.insertBefore(sec,home.firstElementChild);
   sec.addEventListener('mb-redraw',()=>draw(false));   /* your teams changed */
