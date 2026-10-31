@@ -73,6 +73,18 @@
     e.preventDefault();const h=r.getAttribute('href');$('#app').innerHTML='<div class="empty">Loading league…</div>';
     try{await setLeague(r.dataset.lid);if(typeof CMP!=='undefined')CMP=[];if(typeof head==='function')head();if(location.hash===h)route();else location.hash=h}catch(err){route()}}
   });
+  /* swipe the list sideways with a finger to the next or the previous day, like a scores app: a mostly horizontal, quick, long enough move that does not start on the
+     day strip (the strip scrolls by itself); the way is mirrored in Arabic (right to left: a swipe to the right goes to the next day). The new day slides in from that side. */
+  let sx=0,sy=0,sT=0,sw=false;
+  sec.addEventListener('touchstart',e=>{const t=e.touches[0];sw=e.touches.length===1&&!e.target.closest('.mb-days');sx=t.clientX;sy=t.clientY;sT=Date.now()},{passive:true});
+  sec.addEventListener('touchcancel',()=>{sw=false},{passive:true});
+  sec.addEventListener('touchend',e=>{
+   if(!sw)return;sw=false;const t=e.changedTouches[0],dx=t.clientX-sx,dy=t.clientY-sy;
+   if(Math.abs(dx)<60||Math.abs(dx)<1.6*Math.abs(dy)||Date.now()-sT>700)return;
+   const rtl=document.documentElement.dir==='rtl',next=rtl?dx>0:dx<0,j=days.indexOf(DAY)+(next?1:-1);
+   if(j<0||j>=days.length)return;
+   DAY=days[j];sec.style.setProperty('--sl',(next?1:-1)*(rtl?-1:1)*28+'px');sec.dataset.slide='1';draw();setTimeout(()=>{delete sec.dataset.slide},320);
+  },{passive:true});
   draw();
   home.insertBefore(sec,home.firstElementChild);
   sec.addEventListener('mb-redraw',()=>draw(false));   /* your teams changed */
