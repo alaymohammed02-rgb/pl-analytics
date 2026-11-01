@@ -119,5 +119,85 @@ for m in ('30', '60', '75'):
             good = False; print('   bin', m, lo, hi, n, pm, obs)
 ok(good, 'curve: calibrated against its own world at minutes 30, 60 and 75 (6,000 synthetic matches, every bin with 300+ matches within 3 standard errors)')
 ok(sa['curve']['75']['brier'] < sa['curve']['60']['brier'] < sa['curve']['30']['brier'] < sa['curve']['30']['base'] + 1e-9, 'curve: later minutes are sharper (Brier falls from the pre-match chances at 30, 60, 75)')
+
+# ---- the sync step, GitHub stubbed
+def shots(mid, rows):
+    return [[mid, r['c'], r['ev'], r.get('og', 0), r['mn'], r.get('ma'), r.get('xg')] for r in rows]
+SCOLS = ['m', 'c', 'ev', 'og', 'mn', 'ma', 'xg']
+def fixture():
+    STORE.clear(); PUT.clear(); LOG.clear()
+    STORE['data/index.json'] = {'leagues': [{'id': 'l1', 'name': 'League One', 'file': 'l1.json', 'sh_file': 'l1_sh.json'}]}
+    STORE['data/seasons.json'] = {'leagues': {'l1': {'cur': '2026-27', 'seasons': {}}}}
+    STORE['data/l1.json'] = {'matches': [
+        {'i': 'm1', 'd': '2026-10-01', 'h': 'A', 'a': 'B', 's': '2-1'},
+        {'i': 'm2', 'd': '2026-10-02', 'h': 'C', 'a': 'D', 's': '0-0'},      # no shots at all
+        {'i': 'm3', 'd': '2026-10-03', 'h': 'E', 'a': 'F', 's': '1-0'},      # shots say 1-1: does not add up
+        {'i': 'm4', 'd': '2026-10-04', 'h': 'G', 'a': 'H', 's': '1-0'},      # no Elo prediction
+        {'i': 'm5', 'd': '2026-10-05', 'h': 'I', 'a': 'J', 's': ''}]}        # not played
+    STORE['data/l1_sh.json'] = {'cols': SCOLS, 'rows':
+        shots('m1', [dict(row('Goal', 'A', 10, xg=0.6), xg=0.6), row('Goal', 'A', 55, xg=0.7), row('Goal', 'B', 80, xg=0.2), row('Miss', 'B', 85, xg=0.3)]) +
+        shots('m3', [row('Goal', 'E', 10, xg=0.3), row('Goal', 'F', 20, xg=0.3)]) +
+        shots('m4', [row('Goal', 'G', 70, xg=0.4), row('Miss', 'H', 20, xg=1.2)])}
+    STORE['data/elo_own.json'] = {'key': 'k1', 'leagues': {'l1': {'pred': {'m1': [0.5, 0.25, 0.25], 'm3': [0.4, 0.3, 0.3]}}}}
+fixture()
+G['sync_story']({'repo': 'x/y'}, now=datetime.datetime(2026, 11, 1, 12, 0, tzinfo=datetime.timezone.utc))
+st = PUT.get('data/story.json')
+ok(st is not None and set(st['m']) == {'m1', 'm4'}, 'step: one entry per finished match whose shots add up to the score (m2 has no shots, m3 does not add up, m5 is unplayed)')
+e1, e4 = st['m']['m1'], st['m']['m4']
+ok(e1['lg'] == 'l1' and e1['s'] == '2-1' and e1['x'] == [1.3, 0.5] and e1['vs'] == 'h' and e1['vd'] in ('deserved', 'close', 'lucky'), 'step: entry fields (league, score, xG home/away rounded to 2 decimals, result side, verdict)')
+ok(e1['c'] is not None and e1['c'][-1] == [90, 1.0, 0.0] and e1['tp'] is not None and e1['tx']['en'][1] and e1['tx']['ar'][1], 'step: a match with an Elo prediction has a curve ending on the result, a turning point and both sentences')
+ok(e4['c'] is None and e4['tp'] is None and e4['tx']['en'][1] is None and e4['tx']['en'][0] and e4['tx']['ar'][0], 'step: no Elo prediction -> verdict only (no curve, no turning point)')
+ok(st['acc']['n'] == 2 and st['acc']['curve']['60']['n'] == 1 and st['v'] == 1 and len(st['key']) == 10 and st['acc25'] is None, 'step: accuracy over the 2 matches, the curve scored on the 1 with a prediction, acc25 None without a 2025-26 file')
+PUT.clear()
+G['sync_story']({'repo': 'x/y'})
+ok('data/story.json' not in PUT, 'step: unchanged inputs write nothing')
+STORE['data/l1.json']['matches'].append({'i': 'm6', 'd': '2026-10-06', 'h': 'K', 'a': 'L', 's': '1-0'})
+STORE['data/l1_sh.json']['rows'] += shots('m6', [row('Goal', 'K', 40, xg=0.3)])
+G['sync_story']({'repo': 'x/y'})
+ok('m6' in PUT['data/story.json']['m'], 'step: a new finished match is picked up')
+STORE['data/seasons.json'] = None
+STORE['data/index.json'] = 'broken'
+try:
+    G['run_pipeline']({'repo': 'x/y'}, None)
+    ok(any('القصة' in l for l in LOG), 'wrapper: a failure is logged and not raised')
+except Exception as ex:
+    ok(False, 'wrapper: raised %r' % ex)
+
+# ---- the real data/story.json (the placeholder before the first sync): every entry recomputed from the shot files with a loop of its own
+SP = os.environ.get('STORY_FILE') or os.path.join(REPO, 'data', 'story.json')
+real = json.load(open(SP, encoding='utf-8'))
+idx = json.load(open(os.path.join(REPO, 'data', 'index.json'), encoding='utf-8'))
+if not real.get('m'):
+    ok(real.get('m') == {}, 'real file: the placeholder (no stories yet)')
+else:
+    bad = []; n = 0
+    for l in idx['leagues']:
+        if not l.get('sh_file'): continue
+        ms = {m['i']: m for m in json.load(open(os.path.join(REPO, 'data', l['file']), encoding='utf-8'))['matches']}
+        sh = json.load(open(os.path.join(REPO, 'data', l['sh_file']), encoding='utf-8')); c = {k: i for i, k in enumerate(sh['cols'])}
+        xs = {}; gs = {}
+        for r in sh['rows']:
+            mid = r[c['m']]
+            if mid not in real['m']: continue
+            m = ms[mid]; side = 0 if r[c['c']] == m['h'] else 1
+            if not r[c['og']] and r[c['xg']] is not None:
+                xs.setdefault(mid, [0.0, 0.0])[side] += r[c['xg']]
+            if r[c['ev']] == 'Goal':
+                gs.setdefault(mid, [0, 0])[side if not r[c['og']] else 1 - side] += 1
+        for mid, e in real['m'].items():
+            if e['lg'] != l['id']: continue
+            n += 1; h, a = map(int, e['s'].split('-')); x = xs.get(mid, [0.0, 0.0])
+            if ms[mid]['s'] != e['s'] or gs.get(mid, [0, 0]) != [h, a]: bad.append((mid, 'score'))
+            if abs(x[0] - e['x'][0]) > 0.006 or abs(x[1] - e['x'][1]) > 0.006: bad.append((mid, 'xg', x, e['x']))
+            if e['vd'] not in ('deserved', 'close', 'lucky', 'fair', 'saved') or (e['vs'] == 'd') != (h == a): bad.append((mid, 'verdict'))
+            if not (e['tx']['en'][0] and e['tx']['ar'][0]) or abs(sum(e['pv']) - 1) > 0.004: bad.append((mid, 'text/pv'))
+            if e['c']:
+                last = e['c'][-1]
+                if last != [90, 1.0 if h > a else 0.0, 1.0 if h == a else 0.0]: bad.append((mid, 'curve end', last))
+                if [p[0] for p in e['c']] != sorted(p[0] for p in e['c']): bad.append((mid, 'curve order'))
+            elif e['tp'] is not None: bad.append((mid, 'tp without curve'))
+    ok(n == len(real['m']) and not bad, 'real file: %d stories recomputed from the shot files (score, xG, verdict side, text, curve end): %s' % (n, bad[:3]))
+    a = real['acc']
+    ok(a['brier_chances'] < a['brier_rates'] and a['n'] == len(real['m']), 'real file: the shot-based chances beat the league rates (Brier %s against %s)' % (a['brier_chances'], a['brier_rates']))
 print('FAILED' if fails else 'ALL OK', fails)
 sys.exit(1 if fails else 0)

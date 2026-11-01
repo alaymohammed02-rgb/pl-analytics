@@ -13041,6 +13041,102 @@ def story_accuracy(items):
         out["curve"][str(m)] = {"n": k, "brier": round(c["b"] / k, 4) if k else None, "base": round(c["base"] / k, 4) if k else None,
                                 "bins": [[i / 10, (i + 1) / 10, b[0], round(b[1] / b[0], 3), round(b[2] / b[0], 3)] for i, b in enumerate(c["bins"]) if b[0]]}
     return out
+def story_shot_rows(sh):
+    """{match id: [row dicts]} from a *_sh.json ({"cols","rows"}); only the fields the engine reads"""
+    cols = (sh or {}).get("cols") or []
+    ix = {c: cols.index(c) for c in ("m", "c", "ev", "og", "mn", "ma", "xg") if c in cols}
+    out = {}
+    if "m" not in ix or "c" not in ix or "ev" not in ix:
+        return out
+    for r in (sh or {}).get("rows") or []:
+        out.setdefault(r[ix["m"]], []).append({k: r[i] for k, i in ix.items()})
+    return out
+
+
+def story_items(matches, rows_by, pre_by, seed=None):
+    """items for story_accuracy / entries, in date order: finished matches whose shots exist and whose goals add up to the score.
+    matches: league-file match dicts; pre_by: {match id: [pH, pD, pA]}; seed: earlier (home, away) scores for the league's goals-per-match mean."""
+    prev = list(seed or [])
+    out = []
+    for m in sorted(matches, key=lambda m: (str(m.get("d")), str(m.get("i")))):
+        sc = re.fullmatch(r"(\d+)-(\d+)", str(m.get("s") or "").strip())
+        if not sc:
+            continue
+        h, a = int(sc.group(1)), int(sc.group(2))
+        total = story_total(prev)
+        prev.append((h, a))
+        rows = rows_by.get(m.get("i"))
+        goals = story_goals(rows, m["h"], m["a"]) if rows else None
+        if goals is None:
+            continue
+        if sum(1 for g in goals if g[2] == "h") != h or sum(1 for g in goals if g[2] == "a") != a:
+            continue
+        out.append({"id": m["i"], "score": (h, a), "rows": rows, "home": m["h"], "away": m["a"], "pre": pre_by.get(m["i"]), "total": total, "goals": goals})
+    return out
+
+
+def story_entry(it, lid):
+    xh, xa, ph = story_chances(it["rows"], it["home"], it["away"])
+    v = story_verdict(it["score"], xh, xa, ph)
+    e = {"lg": lid, "s": f"{it['score'][0]}-{it['score'][1]}", "x": [round(xh, 2), round(xa, 2)], "pv": [round(p, 3) for p in ph], "vs": v["vs"], "vd": v["vd"], "c": None, "tp": None}
+    if it["pre"]:
+        e["c"] = story_curve(it["goals"], it["pre"], it["total"])
+        e["tp"] = story_turn(it["goals"], it["pre"], it["total"], v["vs"])
+    e["tx"] = story_text(e, it["home"], it["away"])
+    return e
+
+
+def sync_story(hub, now=None):
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    idx = gh_get_json(hub, "data/index.json") or {}
+    sj = gh_get_json(hub, "data/seasons.json") or {}
+    elo = gh_get_json(hub, "data/elo_own.json") or {}
+    cur, past = {}, {}
+    for l in idx.get("leagues") or []:
+        lid = l.get("id")
+        if not (lid and l.get("file") and l.get("sh_file")):
+            continue
+        ms = (gh_get_json(hub, "data/" + l["file"]) or {}).get("matches") or []
+        sh = story_shot_rows(gh_get_json(hub, "data/" + l["sh_file"]))
+        pre = ((elo.get("leagues") or {}).get(lid) or {}).get("pred") or {}
+        f = (((sj.get("leagues") or {}).get(lid) or {}).get("seasons") or {}).get("2025-26") or {}
+        fl = f.get("files") or {}
+        seed, pitems = [], []
+        if f.get("complete") and fl.get("file") and fl.get("sh_file"):
+            pms = (gh_get_json(hub, "data/" + fl["file"]) or {}).get("matches") or []
+            seed = [(int(a), int(b)) for a, b in (re.fullmatch(r"(\d+)-(\d+)", str(m.get("s") or "").strip()).groups() for m in pms if re.fullmatch(r"(\d+)-(\d+)", str(m.get("s") or "").strip()))]
+            pitems = story_items(pms, story_shot_rows(gh_get_json(hub, "data/" + fl["sh_file"])), {})
+        cur[lid] = (story_items(ms, sh, pre, seed), sum(1 for m in ms if re.fullmatch(r"\d+-\d+", str(m.get("s") or "").strip())))
+        past[lid] = (pitems, fl.get("sh_v"))
+    key = hashlib.sha1(json.dumps([[lid, n] for lid, (_, n) in sorted(cur.items())] + [elo.get("key"), [[lid, v] for lid, (_, v) in sorted(past.items())], 1], sort_keys=True).encode()).hexdigest()[:10]
+    old = gh_get_json(hub, STORY_PATH) or {}
+    if not cur or (old.get("key") == key and old.get("v") == 1):
+        return
+    out = {"t": now.strftime("%Y-%m-%d %H:%M:%S"), "v": 1, "key": key, "m": {}}
+    allc, allp = [], []
+    for lid, (items, _) in sorted(cur.items()):
+        allc += items
+        for it in items:
+            out["m"][it["id"]] = story_entry(it, lid)
+    for lid, (items, _) in sorted(past.items()):
+        allp += items
+    out["acc"] = story_accuracy(allc)
+    out["acc25"] = story_accuracy(allp) if allp else None
+    gh_put(hub, STORY_PATH, json.dumps(out, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), "Update match stories")
+    a = out["acc"]
+    log(f"  [القصة] {len(out['m'])} مباراة — خطأ Brier للفرص {a['brier_chances']} مقابل {a['brier_rates']} لمعدلات الدوري ({a['n']} مباراة)")
+
+
+_orig_run_pipeline_story = run_pipeline
+
+
+def run_pipeline(hub, pit_key):
+    out = _orig_run_pipeline_story(hub, pit_key)
+    try:
+        sync_story(hub)
+    except Exception as e:      # optional: never stops the sync
+        log(f"  [القصة] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
+    return out
 # ===== STORY END =====
 
 # ===== NOTIFY START =====
