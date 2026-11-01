@@ -37,6 +37,9 @@ ok(V((1, 0), 1.1, 1.0, [0.40, 0.3, 0.30])['vd'] == 'close', 'verdict: 1-0 on 1.1
 ok(V((0, 1), 1.0, 1.1, [0.30, 0.3, 0.40]) == {'vs': 'a', 'vd': 'close'}, 'verdict: away win mirrors')
 ok(V((1, 0), 1.5, 1.2, [0.10, 0.3, 0.60])['vd'] == 'close', 'verdict: low win chance but the winner had more xG -> close, not lucky')
 ok(V((1, 1), 1.2, 1.1, [0.36, 0.3, 0.34]) == {'vs': 'd', 'vd': 'fair'}, 'verdict: 1-1 level chances -> fair')
+ok(V((1, 0), 0.43, 0.64, [0.20, 0.45, 0.35])['vd'] == 'close', 'verdict: low win chance and less xG but the other side was only 0.15 more likely to win -> close, not stolen')
+ok(V((1, 0), 0.4, 1.9, [0.05, 0.2, 0.75])['vd'] == 'lucky' and V((1, 0), 0.43, 0.64, [0.10, 0.43, 0.47])['vd'] == 'lucky', 'verdict: a gap of 0.20 or more is stolen')
+ok(V((3, 3), 2.2, 2.5, [0.36, 0.13, 0.51])['vd'] == 'fair', 'verdict: 3-3 on 2.2 v 2.5 (0.15 apart) -> fair, not an unearned point')
 ok(V((0, 0), 0.2, 2.1, [0.02, 0.1, 0.88]) == {'vs': 'd', 'vd': 'saved'}, 'verdict: 0-0 against a side with the chances -> saved')
 # ---- goal rates and probabilities
 lh, la = G['story_rates']([0.5, 0.25, 0.25], 2.6)
@@ -56,6 +59,14 @@ i = [c[0] for c in C1].index(11)
 ok(C1[i][1] > C1[i - 1][1] + 0.1, 'curve: a home goal lifts the home chance')
 C2 = G['story_curve']([(90, 4, 'a')], pre, 2.6)
 ok(C2[-1] == [90, 0.0, 0.0] and all(0 <= c[1] <= 1 and 0 <= c[2] <= 1 for c in C2), 'curve: added-time goal never gives a negative time left (away win -> 0, 0 at 90)')
+# ---- goals in stoppage time: 3 minutes are assumed to be left, the sentence says 90+3
+tp = G['story_turn']([(90, 3, 'h')], pre, 2.6, 'h')
+ok(tp is not None and tp['m'] == 90 and tp['x'] == 3 and 0 < tp['a'] and tp['b'] < 100 and tp['b'] > tp['a'], 'turning: a goal in 90+3 does not claim 0%% to 100%% (%s)' % tp)
+C3 = G['story_curve']([(90, 3, 'h')], pre, 2.6)
+ok(0 < C3[-2][1] < 1 and C3[-2][0] == 90 and C3[-1] == [90, 1.0, 0.0], 'curve: the stoppage-time goal point is not certain, the final point is')
+C4 = G['story_curve']([(10, 0, 'h'), (10, 0, 'h')], pre, 2.6)
+at10 = [c for c in C4 if c[0] == 10]
+ok(len(at10) == 2 and at10[1][1] > at10[0][1], 'curve: two goals in the same minute give two points, the second after both')
 # ---- turning point
 T = G['story_turn']
 tp = T([(11, 0, 'h'), (60, 0, 'a'), (80, 0, 'a')], pre, 2.6, 'a')
@@ -64,6 +75,9 @@ ok(T([], pre, 2.6, 'd') is None, 'turning: no goals -> None')
 tp = T([(20, 0, 'h'), (70, 0, 'a')], pre, 2.6, 'd')
 ok(tp['m'] == 70 and tp['side'] is None and tp['b'] > tp['a'], 'turning: a draw settles with the equaliser')
 # ---- text
+E3 = {'s': '2-1', 'x': [2.4, 0.9], 'pv': [0.86, 0.1, 0.04], 'vs': 'h', 'vd': 'deserved', 'tp': {'m': 90, 'x': 3, 'side': 'h', 'a': 12, 'b': 93}}
+t3 = G['story_text'](E3, 'Barcelona', 'Real Madrid')
+ok('minute 90+3' in t3['en'][1] and 'الدقيقة 90+3' in t3['ar'][1], 'text: a stoppage-time goal is "minute 90+3"')
 E = {'s': '2-1', 'x': [2.4, 0.9], 'pv': [0.86, 0.1, 0.04], 'vs': 'h', 'vd': 'deserved', 'tp': {'m': 78, 'side': 'h', 'a': 31, 'b': 78}}
 t = G['story_text'](E, 'Barcelona', 'Real Madrid')
 ok(t['en'] == ['Barcelona deserved it: their chances were worth 2.4 goals to 0.9.', 'The match turned in minute 78, when Barcelona\'s chance of winning went from 31% to 78%.'], 'text: deserved + turning (English)')
@@ -79,7 +93,7 @@ t = G['story_text']({'s': '0-0', 'x': [0.2, 2.1], 'pv': [0.02, 0.1, 0.88], 'vs':
 ok(t['en'][0] == "A took a point they did not earn: B's chances were worth 2.1 goals to 0.2." and t['ar'][0] == 'A أخذ نقطة ما استحقها: فرص B تساوي 2.1 هدف مقابل 0.2.', 'text: saved')
 
 # ---- accuracy
-ok(G['story_total']([]) == 2.6 and G['story_total']([(1, 1)] * 29) == 2.6 and near(G['story_total']([(2, 1)] * 20 + [(1, 0)] * 10), 2.333333333), 'total: 2.6 until 30 matches, then the mean total goals')
+ok(G['story_total'](0, 0) == 2.6 and G['story_total'](29, 58) == 2.6 and near(G['story_total'](30, 70), 2.333333333), 'total: 2.6 until 30 matches, then the mean total goals')
 def item(sc, rows, pre=[0.5, 0.25, 0.25]):
     return {'score': sc, 'rows': rows, 'home': 'A', 'away': 'B', 'pre': pre, 'total': 2.6}
 IT = [item((1, 0), [row('Goal', 'A', 11, xg=0.4), row('Miss', 'B', 20, xg=0.9)]),
@@ -124,8 +138,10 @@ ok(sa['curve']['75']['brier'] < sa['curve']['60']['brier'] < sa['curve']['30']['
 def shots(mid, rows):
     return [[mid, r['c'], r['ev'], r.get('og', 0), r['mn'], r.get('ma'), r.get('xg')] for r in rows]
 SCOLS = ['m', 'c', 'ev', 'og', 'mn', 'ma', 'xg']
+CALLED = []
+G['gh_get_json'] = lambda hub, p: (CALLED.append(p), STORE.get(p))[1]
 def fixture():
-    STORE.clear(); PUT.clear(); LOG.clear()
+    STORE.clear(); PUT.clear(); LOG.clear(); CALLED.clear()
     STORE['data/index.json'] = {'leagues': [{'id': 'l1', 'name': 'League One', 'file': 'l1.json', 'sh_file': 'l1_sh.json'}]}
     STORE['data/seasons.json'] = {'leagues': {'l1': {'cur': '2026-27', 'seasons': {}}}}
     STORE['data/l1.json'] = {'matches': [
@@ -133,25 +149,41 @@ def fixture():
         {'i': 'm2', 'd': '2026-10-02', 'h': 'C', 'a': 'D', 's': '0-0'},      # no shots at all
         {'i': 'm3', 'd': '2026-10-03', 'h': 'E', 'a': 'F', 's': '1-0'},      # shots say 1-1: does not add up
         {'i': 'm4', 'd': '2026-10-04', 'h': 'G', 'a': 'H', 's': '1-0'},      # no Elo prediction
-        {'i': 'm5', 'd': '2026-10-05', 'h': 'I', 'a': 'J', 's': ''}]}        # not played
+        {'i': 'm5', 'd': '2026-10-05', 'h': 'I', 'a': 'J', 's': ''},        # not played
+        {'i': 'm7', 'd': '2026-10-07', 'h': 'M', 'a': 'N', 's': '1-0'}]}     # a goal in 90+2
     STORE['data/l1_sh.json'] = {'cols': SCOLS, 'rows':
         shots('m1', [dict(row('Goal', 'A', 10, xg=0.6), xg=0.6), row('Goal', 'A', 55, xg=0.7), row('Goal', 'B', 80, xg=0.2), row('Miss', 'B', 85, xg=0.3)]) +
         shots('m3', [row('Goal', 'E', 10, xg=0.3), row('Goal', 'F', 20, xg=0.3)]) +
-        shots('m4', [row('Goal', 'G', 70, xg=0.4), row('Miss', 'H', 20, xg=1.2)])}
-    STORE['data/elo_own.json'] = {'key': 'k1', 'leagues': {'l1': {'pred': {'m1': [0.5, 0.25, 0.25], 'm3': [0.4, 0.3, 0.3]}}}}
+        shots('m4', [row('Goal', 'G', 70, xg=0.4), row('Miss', 'H', 20, xg=1.2)]) +
+        shots('m7', [row('Goal', 'M', 90, ma=2, xg=0.3), row('Miss', 'N', 20, xg=0.2)])}
+    STORE['data/elo_own.json'] = {'key': 'k1', 'leagues': {'l1': {'pred': {'m1': [0.5, 0.25, 0.25], 'm3': [0.4, 0.3, 0.3], 'm7': [0.4, 0.3, 0.3]}}}}
 fixture()
+STORE['data/seasons.json'] = {'leagues': {'l1': {'cur': '2026-27', 'seasons': {'2025-26': {'complete': True, 'files': {'file': 'l1_25.json', 'sh_file': 'l1_25_sh.json', 'sh_v': 'abc'}}}}}}
+STORE['data/l1_25.json'] = {'matches': [{'i': 'p1', 'd': '2026-05-01', 'h': 'A', 'a': 'B', 's': '1-0'}, {'i': 'p2', 'd': '2026-05-02', 'h': 'B', 'a': 'A', 's': '0-0'}]}
+STORE['data/l1_25_sh.json'] = {'cols': SCOLS, 'rows': shots('p1', [row('Goal', 'A', 30, xg=0.3)]) + shots('p2', [row('Miss', 'B', 30, xg=0.2)])}
 G['sync_story']({'repo': 'x/y'}, now=datetime.datetime(2026, 11, 1, 12, 0, tzinfo=datetime.timezone.utc))
 st = PUT.get('data/story.json')
-ok(st is not None and set(st['m']) == {'m1', 'm4'}, 'step: one entry per finished match whose shots add up to the score (m2 has no shots, m3 does not add up, m5 is unplayed)')
+ok(st is not None and set(st['m']) == {'m1', 'm4', 'm7'}, 'step: one entry per finished match whose shots add up to the score (m2 has no shots, m3 does not add up, m5 is unplayed)')
 e1, e4 = st['m']['m1'], st['m']['m4']
 ok(e1['lg'] == 'l1' and e1['s'] == '2-1' and e1['x'] == [1.3, 0.5] and e1['vs'] == 'h' and e1['vd'] in ('deserved', 'close', 'lucky'), 'step: entry fields (league, score, xG home/away rounded to 2 decimals, result side, verdict)')
 ok(e1['g'] == [[10, 'h'], [55, 'h'], [80, 'a']] and e4['g'] == [[70, 'h']], 'step: the goals (minute, side) are in the entry for the card')
+e7 = st['m']['m7']
+ok(e7['g'] == [[90, 'h', 2]] and e7['tp']['x'] == 2 and 'minute 90+2' in e7['tx']['en'][1] and 'from 0% to 100%' not in e7['tx']['en'][1], 'step: a goal in 90+2 keeps its added minute and the sentence says so')
 ok(e1['c'] is not None and e1['c'][-1] == [90, 1.0, 0.0] and e1['tp'] is not None and e1['tx']['en'][1] and e1['tx']['ar'][1], 'step: a match with an Elo prediction has a curve ending on the result, a turning point and both sentences')
 ok(e4['c'] is None and e4['tp'] is None and e4['tx']['en'][1] is None and e4['tx']['en'][0] and e4['tx']['ar'][0], 'step: no Elo prediction -> verdict only (no curve, no turning point)')
-ok(st['acc']['n'] == 2 and st['acc']['curve']['60']['n'] == 1 and st['v'] == 1 and len(st['key']) == 10 and st['acc25'] is None, 'step: accuracy over the 2 matches, the curve scored on the 1 with a prediction, acc25 None without a 2025-26 file')
-PUT.clear()
+ok(st['acc']['n'] == 3 and st['acc']['curve']['60']['n'] == 2 and st['v'] == 1 and len(st['key']) == 10, 'step: accuracy over the 3 matches, the curve scored on the 2 with a prediction')
+ok(st['acc25'] is not None and st['acc25']['n'] == 2, 'step: the finished 2025-26 season is measured too (acc25: 2 matches)')
+PUT.clear(); CALLED.clear()
 G['sync_story']({'repo': 'x/y'})
 ok('data/story.json' not in PUT, 'step: unchanged inputs write nothing')
+ok('l1_25.json' not in CALLED and 'l1_25_sh.json' not in CALLED, 'step: the finished season\'s big files are not downloaded again while their version is the same')
+STORE['data/l1_sh.json']['rows'] = [r for r in STORE['data/l1_sh.json']['rows'] if r[0] != 'm4'] + shots('m4', [row('Goal', 'G', 70, xg=0.4), row('Miss', 'H', 20, xg=0.1)])
+PUT.clear(); G['sync_story']({'repo': 'x/y'})
+ok('data/story.json' in PUT and PUT['data/story.json']['m']['m4']['x'] == [0.4, 0.1], 'step: only the shots changed (same scores, same counts): the story is rewritten with the new xG')
+STORE['data/l1.json']['matches'][0]['s'] = '3-1'
+PUT.clear(); G['sync_story']({'repo': 'x/y'})
+ok(('m1' not in PUT['data/story.json']['m']) if 'data/story.json' in PUT else False, 'step: a score changed to one the shots do not support: the story for it is dropped')
+STORE['data/l1.json']['matches'][0]['s'] = '2-1'
 STORE['data/l1.json']['matches'].append({'i': 'm6', 'd': '2026-10-06', 'h': 'K', 'a': 'L', 's': '1-0'})
 STORE['data/l1_sh.json']['rows'] += shots('m6', [row('Goal', 'K', 40, xg=0.3)])
 G['sync_story']({'repo': 'x/y'})

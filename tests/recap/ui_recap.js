@@ -47,6 +47,29 @@ async function page(pg){await pg.waitForSelector('.rc-sc, #rc .empty:not(.skel)'
    const hrefs=await pg.$$eval('.rc-sv a',a=>a.map(x=>x.getAttribute('href')));ok(hrefs.includes('#/match/'+id),'a link back to the Match centre');
    const notes=await pg.innerText('.rc-ac');ok(notes.includes(String(S.acc.n))&&notes.includes(S.acc.brier_chances.toFixed(3))&&notes.includes(S.acc.brier_rates.toFixed(3)),'the note prints the file\'s numbers (n '+S.acc.n+', Brier '+S.acc.brier_chances.toFixed(3)+' against '+S.acc.brier_rates.toFixed(3)+')')}
   ok(!errs.length,name+': no page errors '+errs.slice(0,2).join(' ; '));await ctx.close()}
+ /* the saved picture: the score is the right way round in both languages, the names sit on their own side, and a story with no curve can still be saved */
+ {const id=picks.win,e=S.m[id],[a,z]=e.s.split('-');const {ctx,pg,errs}=await T.open(b,{vw:1100,league:LG,hash:'#/recap/'+id});await page(pg);
+  for(const A of [false,true]){
+   const r=await pg.evaluate(([id,e,A])=>{const m=D.matches.find(x=>x.match_id===id),c=INS.recap.card(m,e,A),d=new DOMParser().parseFromString(c.svg,'image/svg+xml'),t=[...d.querySelectorAll('text')].map(x=>({s:x.textContent,x:+x.getAttribute('x'),dir:x.getAttribute('direction'),an:x.getAttribute('text-anchor')}));return {home:m.home,away:m.away,t,err:!!d.querySelector('parsererror')}},[id,e,A]);
+   const h=r.t.find(x=>x.s===r.home),w=r.t.find(x=>x.s===r.away),sc=r.t.find(x=>/^\d+ – \d+$/.test(x.s));
+   ok(!r.err&&h&&w&&sc,(A?'Arabic':'English')+' picture: home name, away name and the score are separate texts');
+   ok(A?(h.x>540&&w.x<540):(h.x<540&&w.x>540),(A?'Arabic':'English')+' picture: the home team is on the '+(A?'right':'left'));
+   ok(sc.s===(A?z+' – '+a:a+' – '+z)&&sc.dir==='ltr',(A?'Arabic':'English')+' picture: the score reads "'+sc.s+'" left to right, so the home goals ('+a+') sit next to the home name');
+  }
+  const nc=await pg.evaluate(([id,e])=>{try{const m=D.matches.find(x=>x.match_id===id),c=INS.recap.card(m,{...e,c:null,tp:null},false);return c.svg.length>2000&&/<svg/.test(c.svg)}catch(x){return String(x)}},[id,e]);
+  ok(nc===true,'a picture can be drawn for a story with no curve');ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await ctx.close()}
+ {const id=picks.win,mod=JSON.parse(JSON.stringify(S));mod.m[id].c=null;mod.m[id].tp=null;mod.m[id].tx.en[1]=null;mod.m[id].tx.ar[1]=null;
+  const {ctx,pg,errs}=await T.open(b,{vw:1100,league:LG,hash:''});await ctx.route(/\/story\.json/,r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(mod)}));await pg.goto(pg.url().split('#')[0]+'#/recap/'+id);await page(pg);
+  const [dl]=await Promise.all([pg.waitForEvent('download',{timeout:60000}),pg.click('#rcsave')]);const buf=require('fs').readFileSync(await dl.path());
+  ok(buf.slice(0,8).toString('hex')==='89504e470d0a1a0a'&&buf.length>10000,'Save works for a story with no curve (a real PNG, '+Math.round(buf.length/1024)+' KB)');ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await ctx.close()}
+ /* a notification can point at a match of another league: the page switches league */
+ {const lgs=new Set(J('index.json').leagues.map(l=>l.id));const oid=Object.keys(S.m).find(k=>S.m[k].lg!==LG&&lgs.has(S.m[k].lg));
+  if(oid){const {ctx,pg,errs}=await T.open(b,{vw:1100,league:LG,hash:'#/recap/'+oid});await pg.waitForSelector('.rc-sc',{timeout:60000});
+   ok((await pg.innerText('.rc-sc')).replace(/\s+/g,'')===S.m[oid].s.replace('-','–')&&await pg.evaluate(l=>D.id===l,S.m[oid].lg),'a match of another league ('+S.m[oid].lg+'): the page switches to it and shows the story, not "not in the open league"');
+   ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await ctx.close()}
+  else ok(false,'a story of another league exists')}
+ {const bad=Object.entries(S.m).filter(([k,v])=>v.tx.en[1]&&/from 0% to 100%/.test(v.tx.en[1])).length;ok(bad===0,'no turning sentence claims a jump from 0% to 100%');
+  const ad=Object.entries(S.m).filter(([k,v])=>v.tp&&v.tp.x>0);ok(ad.every(([k,v])=>v.tx.en[1].includes('minute '+v.tp.m+'+'+v.tp.x)),ad.length+' turning points in added time say "minute 90+x"')}
  /* a match with no curve (no Elo prediction) shows the verdict and says so */
  {const nc=Object.keys(S.m).find(k=>S.m[k].lg===LG&&!S.m[k].c);
   if(nc){const {ctx,pg,errs}=await T.open(b,{vw:1100,league:LG,hash:'#/recap/'+nc});await page(pg);ok(!(await pg.$('#rcsvg'))&&/no pre-match prediction/.test(await pg.innerText('.rc-cv .empty'))&&!!(await pg.$('.rc-v')),'no Elo prediction: the verdict is there, the curve says why it is missing');ok(!errs.length,'no page errors');await ctx.close()}

@@ -85,7 +85,7 @@ ok(len(S['r']) == 4 and len(S['m']) == 4, 'and writes the state with what it sen
 SENT.clear(); G['sync_notify'](HUB, NOW, post=lambda srv, pl: (SENT.append(pl), True)[1])
 ok(SENT == [], 'run again: nothing is sent')
 # the step reads data/story.json: a result with a story goes out as the verdict
-setup({'v': 1, 'r': {}, 'm': {}}); STORE['data/story.json'] = {'m': {'m1': {'tx': {'en': ['E1', None], 'ar': ['A1', None]}}}}; SENT.clear()
+setup({'v': 1, 'r': {}, 'm': {}}); STORE['data/story.json'] = {'m': {'m1': {'s': '2-1', 'tx': {'en': ['E1', None], 'ar': ['A1', None]}}}}; SENT.clear()
 G['sync_notify'](HUB, NOW, post=lambda srv, pl: (SENT.append(pl), True)[1])
 sm1 = [pl for pl in SENT if pl['click'].endswith('#/recap/m1')]
 ok(len(sm1) == 2 and all(pl['message'] == 'E1\nA1\nPremier League' for pl in sm1) and len(SENT) == 8, 'the step reads data/story.json: the result of m1 goes out as the verdict to both teams, the other messages are unchanged')
@@ -129,7 +129,7 @@ ok(len(names) == len(set(names)) and 'notify' in names, 'the wrapped pipeline ha
 # ---- with a story (data/story.json["m"]): the verdict replaces "Full time", the link opens the recap
 TX = {'en': ['Arsenal deserved it: their chances were worth 2.4 goals to 0.9.', "The match turned in minute 78, when Arsenal's chance of winning went from 31% to 78%."],
       'ar': ['Arsenal يستاهل الفوز: فرصه تساوي 2.4 هدف مقابل 0.9.', 'انقلبت المباراة في الدقيقة 78 لما ارتفعت فرصة فوز Arsenal من 31% إلى 78%.']}
-STORY = {'m1': {'tx': TX}, 'm4': {'tx': {'en': ['', None], 'ar': ['', None]}}}
+STORY = {'m1': {'s': '2-1', 'tx': TX}, 'm4': {'s': '3-3', 'tx': {'en': ['', None], 'ar': ['', None]}}}
 Ms, _ = plan(L, FX, {'v': 1, 'r': {}, 'm': {}}, NOW, BASE, NS, story=STORY)
 r1s = [(p, k) for p, k in Ms if k[0] == 'r' and k[1].startswith('m1|')]
 ok(len(r1s) == 2 and all(p['message'] == TX['en'][0] + '\n' + TX['ar'][0] + '\nPremier League' and p['click'] == BASE + '#/recap/m1' and k[4] == TX for p, k in r1s), 'a result with a story: the English and Arabic verdict sentences and the league, the link to the recap, the sentences in the key')
@@ -137,6 +137,10 @@ ok(all(p['title'] == 'Arsenal 2–1 Chelsea' and p['tags'] == ['soccer'] and 'de
 r4s = [(p, k) for p, k in Ms if k[0] == 'r' and k[1].startswith('m4|')]
 ok(len(r4s) == 2 and all('Full time' in p['message'] and p['click'] == BASE + '#/match/m4' and k[4] is None for p, k in r4s), 'a result whose story has an empty sentence is announced as before (no verdict, match link)')
 ok([k for _, k in Ms if k[0] == 'm'] == [k for _, k in M if k[0] == 'm'], 'reminders are the same with or without stories')
+Mx, _ = plan(L, FX, {'v': 1, 'r': {}, 'm': {}}, NOW, BASE, NS, story={'m1': {'s': '1-1', 'tx': TX}})
+ok(all('Full time' in p['message'] and k[4] is None for p, k in Mx if k[1].startswith('m1|')), 'a story for another score than the match has (stale) is ignored: announced as before')
+Mb, _ = plan(L, FX, {'v': 1, 'r': {}, 'm': {}}, NOW, BASE, NS, story={'m1': {'s': '2-1', 'tx': {'en': ['ok', 5], 'ar': ['ok', None]}}})
+ok(all('Full time' in p['message'] for p, k in Mb if k[1].startswith('m1|')), 'a story whose second sentence is not text is not used (it could break a push)')
 done = {'v': 1, 'r': {'m1|arsenal': '2026-10-30', 'm1|chelsea': '2026-10-30'}, 'm': {}}
 Md, _ = plan(L, FX, done, NOW, BASE, NS, story=STORY)
 ok(not [1 for _, k in Md if k[1].startswith('m1|')], 'a result already announced plainly is not announced again when its story shows up')

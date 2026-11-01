@@ -12821,6 +12821,9 @@ import math
 VD_DESERVED = 0.50      # a win: the winner's chance-based chance of winning at least this -> "deserved"
 VD_LUCKY = 0.25         # below this (and the loser had more xG) -> "lucky"; in between "close"
 VD_DRAW_FAIR = 0.45     # a draw: neither side's chance-based chance of winning reaches this -> "fair", else "saved"
+VD_GAP_WIN = 0.20       # "lucky" also needs the loser's chance-based chance of winning to be this much higher than the winner's (added after review: a borderline gap is "close")
+VD_GAP_DRAW = 0.25      # "saved" also needs the two sides' chance-based chances of winning to be this far apart, else "fair"
+ST_ADDED_LEFT = 3 / 90.0   # a goal at minute 90 (or 45) in added time: the data has no clock, so 3 minutes are assumed to be left
 ST_GRID = (0, 15, 30, 45, 60, 75)
 ST_MAXG = 12
 ST_TOTAL0 = 2.6         # league goals per match until 30 matches are known
@@ -12876,11 +12879,11 @@ def story_verdict(score, xh, xa, ph):
     """-> {"vs": 'h'|'a'|'d', "vd": 'deserved'|'close'|'lucky'|'fair'|'saved'} with the fixed cut-offs above"""
     h, a = score
     if h == a:
-        return {"vs": "d", "vd": "fair" if max(ph[0], ph[2]) < VD_DRAW_FAIR else "saved"}
+        return {"vs": "d", "vd": "fair" if max(ph[0], ph[2]) < VD_DRAW_FAIR or abs(ph[0] - ph[2]) < VD_GAP_DRAW else "saved"}
     w = "h" if h > a else "a"
-    q = ph[0] if w == "h" else ph[2]
+    q, ql = (ph[0], ph[2]) if w == "h" else (ph[2], ph[0])
     xw, xl = (xh, xa) if w == "h" else (xa, xh)
-    return {"vs": w, "vd": "deserved" if q >= VD_DESERVED else "lucky" if (q < VD_LUCKY and xl > xw) else "close"}
+    return {"vs": w, "vd": "deserved" if q >= VD_DESERVED else "lucky" if (q < VD_LUCKY and xl > xw and ql - q >= VD_GAP_WIN - 1e-9) else "close"}
 
 
 def _pois(l, n=ST_MAXG):
@@ -12925,24 +12928,30 @@ def _left(minute):
     return (90 - min(90, minute)) / 90.0
 
 
+def _left_goal(minute):
+    """time left when a goal is scored at `minute`: a goal at 90 or later is in added time"""
+    return ST_ADDED_LEFT if minute >= 90 else _left(minute)
+
+
 def story_curve(goals, pre, total):
     """[[minute, P(home wins), P(draw)]]: minutes 0, 15 ... 75, every goal (after it) and 90; away = 1 - home - draw"""
     lh, la = story_rates(pre, total)
-    pts, diff = [], 0
+    pts = []
     gm = {g[0] for g in goals}
-    marks = [(m, None) for m in ST_GRID if m not in gm]
-    marks += [(g[0], g) for g in goals] + [(90, "end")]
-    marks.sort(key=lambda x: (x[0], 1 if x[1] == "end" else 0))
-    seen = 0
-    for m, g in marks:
+    marks = [(m, 0, None, -1) for m in ST_GRID if m not in gm]
+    marks += [(g[0], 1, g, i) for i, g in enumerate(goals)] + [(90, 2, "end", -1)]
+    marks.sort(key=lambda x: (x[0], x[1], x[3]))
+    for m, _, g, i in marks:
         if g == "end":
             diff = sum(1 if x[2] == "h" else -1 for x in goals)
+            frac = 0.0
         elif g is None:
             diff = sum(1 if x[2] == "h" else -1 for x in goals if x[0] < m)
+            frac = _left(m)
         else:
-            seen += 1
-            diff = sum(1 if x[2] == "h" else -1 for x in goals[:goals.index(g) + 1])
-        w, d, _ = story_p(diff, _left(m), lh, la)
+            diff = sum(1 if x[2] == "h" else -1 for x in goals[:i + 1])
+            frac = _left_goal(m)
+        w, d, _ = story_p(diff, frac, lh, la)
         pts.append([m, round(w, 3), round(d, 3)])
     return pts
 
@@ -12955,15 +12964,15 @@ def story_turn(goals, pre, total, vs):
     k = {"h": 0, "a": 2, "d": 1}[vs]
     best, diff = None, 0
     for g in goals:
-        left = _left(g[0])
+        left = _left_goal(g[0])
         before = story_p(diff, left, lh, la)[k]
         diff += 1 if g[2] == "h" else -1
         after = story_p(diff, left, lh, la)[k]
         if best is None or after - before > best[0] + 1e-12:
-            best = (after - before, g[0], before, after)
+            best = (after - before, g[0], before, after, g[1])
     if best[0] <= 0:
         return None
-    return {"m": best[1], "side": vs if vs in ("h", "a") else None, "a": int(round(best[2] * 100)), "b": int(round(best[3] * 100))}
+    return {"m": best[1], "x": best[4], "side": vs if vs in ("h", "a") else None, "a": int(round(best[2] * 100)), "b": int(round(best[3] * 100))}
 
 
 def story_text(e, home, away):
@@ -12986,6 +12995,8 @@ def story_text(e, home, away):
         S, O, xs, xo = (home, away, xh, xa) if pv[0] < pv[2] else (away, home, xa, xh)
         v = (f"{S} took a point they did not earn: {O}'s chances were worth {f(xo)} goals to {f(xs)}.", f"{S} أخذ نقطة ما استحقها: فرص {O} تساوي {f(xo)} هدف مقابل {f(xs)}.")
     t = e.get("tp")
+    if t:
+        t = dict(t, m=f"{t['m']}+{t['x']}" if t.get("x") else t["m"])
     if not t:
         tt = (None, None)
     elif vs == "d":
@@ -12993,9 +13004,9 @@ def story_text(e, home, away):
     else:
         tt = (f"The match turned in minute {t['m']}, when {W}'s chance of winning went from {t['a']}% to {t['b']}%.", f"انقلبت المباراة في الدقيقة {t['m']} لما ارتفعت فرصة فوز {W} من {t['a']}% إلى {t['b']}%.")
     return {"en": [v[0], tt[0]], "ar": [v[1], tt[1]]}
-def story_total(prev):
-    """league goals per match from the matches before this one [(home goals, away goals)]: ST_TOTAL0 until 30 are known"""
-    return ST_TOTAL0 if len(prev) < 30 else sum(h + a for h, a in prev) / len(prev)
+def story_total(n, goals):
+    """league goals per match from the n matches before this one with `goals` goals in all: ST_TOTAL0 until 30 are known"""
+    return ST_TOTAL0 if n < 30 else goals / n
 
 
 def _brier(p, o):
@@ -13055,16 +13066,16 @@ def story_shot_rows(sh):
 
 def story_items(matches, rows_by, pre_by, seed=None):
     """items for story_accuracy / entries, in date order: finished matches whose shots exist and whose goals add up to the score.
-    matches: league-file match dicts; pre_by: {match id: [pH, pD, pA]}; seed: earlier (home, away) scores for the league's goals-per-match mean."""
-    prev = list(seed or [])
+    matches: league-file match dicts; pre_by: {match id: [pH, pD, pA]}; seed: (number of matches, goals) before the first one, for the league's goals-per-match mean."""
+    n, gsum = seed or (0, 0)
     out = []
     for m in sorted(matches, key=lambda m: (str(m.get("d")), str(m.get("i")))):
         sc = re.fullmatch(r"(\d+)-(\d+)", str(m.get("s") or "").strip())
         if not sc:
             continue
         h, a = int(sc.group(1)), int(sc.group(2))
-        total = story_total(prev)
-        prev.append((h, a))
+        total = story_total(n, gsum)
+        n, gsum = n + 1, gsum + h + a
         rows = rows_by.get(m.get("i"))
         goals = story_goals(rows, m["h"], m["a"]) if rows else None
         if goals is None:
@@ -13078,7 +13089,7 @@ def story_items(matches, rows_by, pre_by, seed=None):
 def story_entry(it, lid):
     xh, xa, ph = story_chances(it["rows"], it["home"], it["away"])
     v = story_verdict(it["score"], xh, xa, ph)
-    e = {"lg": lid, "s": f"{it['score'][0]}-{it['score'][1]}", "x": [round(xh, 2), round(xa, 2)], "pv": [round(p, 3) for p in ph], "vs": v["vs"], "vd": v["vd"], "g": [[g[0], g[2]] for g in it["goals"]], "c": None, "tp": None}
+    e = {"lg": lid, "s": f"{it['score'][0]}-{it['score'][1]}", "x": [round(xh, 2), round(xa, 2)], "pv": [round(p, 3) for p in ph], "vs": v["vs"], "vd": v["vd"], "g": [[g[0], g[2]] + ([g[1]] if g[1] else []) for g in it["goals"]], "c": None, "tp": None}
     if it["pre"]:
         e["c"] = story_curve(it["goals"], it["pre"], it["total"])
         e["tp"] = story_turn(it["goals"], it["pre"], it["total"], v["vs"])
@@ -13087,41 +13098,55 @@ def story_entry(it, lid):
 
 
 def sync_story(hub, now=None):
+    """Writes data/story.json. The current season is recomputed every run from the (small) current files, so a corrected score or xG is picked up; the finished
+    2025-26 season's big files are downloaded only when their version changes (their goals-per-match seed and accuracy are kept in the file); nothing is written
+    when the result is the same as the file's."""
     now = now or datetime.datetime.now(datetime.timezone.utc)
     idx = gh_get_json(hub, "data/index.json") or {}
     sj = gh_get_json(hub, "data/seasons.json") or {}
     elo = gh_get_json(hub, "data/elo_own.json") or {}
-    cur, past = {}, {}
-    for l in idx.get("leagues") or []:
-        lid = l.get("id")
-        if not (lid and l.get("file") and l.get("sh_file")):
-            continue
+    old = gh_get_json(hub, STORY_PATH)
+    old = old if isinstance(old, dict) else {}
+    lgs = [l for l in (idx.get("leagues") or []) if l.get("id") and l.get("file") and l.get("sh_file")]
+    pf = {}
+    for l in lgs:
+        f = (((sj.get("leagues") or {}).get(l["id"]) or {}).get("seasons") or {}).get("2025-26") or {}
+        fl = f.get("files") or {}
+        pf[l["id"]] = fl if f.get("complete") and fl.get("file") and fl.get("sh_file") else None
+    k25 = hashlib.sha1(json.dumps([[lid, (fl or {}).get("v"), (fl or {}).get("sh_v")] for lid, fl in sorted(pf.items())]).encode()).hexdigest()[:10]
+    reuse = old.get("k25") == k25 and isinstance(old.get("seed"), dict) and "acc25" in old
+    seeds, allp, cur = {}, [], {}
+    for l in lgs:
+        lid, fl = l["id"], pf[l["id"]]
+        if reuse:
+            seeds[lid] = tuple(old["seed"].get(lid) or (0, 0))
+        elif fl:
+            pms = (gh_get_json(hub, "data/" + fl["file"]) or {}).get("matches") or []
+            sc = [re.fullmatch(r"(\d+)-(\d+)", str(m.get("s") or "").strip()) for m in pms]
+            seeds[lid] = (sum(1 for x in sc if x), sum(int(x.group(1)) + int(x.group(2)) for x in sc if x))
+            allp += story_items(pms, story_shot_rows(gh_get_json(hub, "data/" + fl["sh_file"])), {})
+        else:
+            seeds[lid] = (0, 0)
         ms = (gh_get_json(hub, "data/" + l["file"]) or {}).get("matches") or []
         sh = story_shot_rows(gh_get_json(hub, "data/" + l["sh_file"]))
         pre = ((elo.get("leagues") or {}).get(lid) or {}).get("pred") or {}
-        f = (((sj.get("leagues") or {}).get(lid) or {}).get("seasons") or {}).get("2025-26") or {}
-        fl = f.get("files") or {}
-        seed, pitems = [], []
-        if f.get("complete") and fl.get("file") and fl.get("sh_file"):
-            pms = (gh_get_json(hub, "data/" + fl["file"]) or {}).get("matches") or []
-            seed = [(int(a), int(b)) for a, b in (re.fullmatch(r"(\d+)-(\d+)", str(m.get("s") or "").strip()).groups() for m in pms if re.fullmatch(r"(\d+)-(\d+)", str(m.get("s") or "").strip()))]
-            pitems = story_items(pms, story_shot_rows(gh_get_json(hub, "data/" + fl["sh_file"])), {})
-        cur[lid] = (story_items(ms, sh, pre, seed), sum(1 for m in ms if re.fullmatch(r"\d+-\d+", str(m.get("s") or "").strip())))
-        past[lid] = (pitems, fl.get("sh_v"))
-    key = hashlib.sha1(json.dumps([[lid, n] for lid, (_, n) in sorted(cur.items())] + [elo.get("key"), [[lid, v] for lid, (_, v) in sorted(past.items())], 1], sort_keys=True).encode()).hexdigest()[:10]
-    old = gh_get_json(hub, STORY_PATH) or {}
-    if not cur or (old.get("key") == key and old.get("v") == 1):
+        cur[lid] = story_items(ms, sh, pre, seeds[lid])
+    if not cur:
         return
-    out = {"t": now.strftime("%Y-%m-%d %H:%M:%S"), "v": 1, "key": key, "m": {}}
-    allc, allp = [], []
-    for lid, (items, _) in sorted(cur.items()):
+    out = {"v": 1, "m": {}}
+    allc = []
+    for lid, items in sorted(cur.items()):
         allc += items
         for it in items:
             out["m"][it["id"]] = story_entry(it, lid)
-    for lid, (items, _) in sorted(past.items()):
-        allp += items
     out["acc"] = story_accuracy(allc)
-    out["acc25"] = story_accuracy(allp) if allp else None
+    out["acc25"] = old.get("acc25") if reuse else (story_accuracy(allp) if allp else None)
+    out["seed"] = {lid: list(v) for lid, v in sorted(seeds.items())}
+    out["k25"] = k25
+    out["key"] = hashlib.sha1(json.dumps(out, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:10]
+    if old.get("key") == out["key"] and old.get("v") == 1:
+        return
+    out["t"] = now.strftime("%Y-%m-%d %H:%M:%S")
     gh_put(hub, STORY_PATH, json.dumps(out, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), "Update match stories")
     a = out["acc"]
     log(f"  [القصة] {len(out['m'])} مباراة — خطأ Brier للفرص {a['brier_chances']} مقابل {a['brier_rates']} لمعدلات الدوري ({a['n']} مباراة)")
@@ -13192,11 +13217,11 @@ def notify_topic(ns, team):
     return f"pla-{ns}-{notify_slug(team)}"
 
 
-def story_notice(e):
-    """the sentences of a story entry ({"en": [verdict, turning|None], "ar": [...]}) if the entry is usable in a notification, else None"""
+def story_notice(e, score):
+    """the sentences of a story entry ({"en": [verdict, turning|None], "ar": [...]}) if it is usable in a notification for a match with this score ("2-1"), else None"""
     try:
         tx = e["tx"]
-        if all(isinstance(tx[l][0], str) and tx[l][0] for l in ("en", "ar")):
+        if e["s"] == score and all(isinstance(tx[l][0], str) and tx[l][0] and all(x is None or isinstance(x, str) for x in tx[l]) for l in ("en", "ar")):
             return {"en": list(tx["en"]), "ar": list(tx["ar"])}
     except Exception:
         pass
@@ -13234,7 +13259,7 @@ def notify_plan(leagues, fixtures, state, now, base_url, ns, channel="ntfy", sto
                 if first:
                     st[rk][key] = d
                     continue
-                tx = story_notice((story or {}).get(str(m["i"])))
+                tx = story_notice((story or {}).get(str(m["i"])), f"{sc.group(1)}-{sc.group(2)}")
                 res.append((d, str(m["i"]), {"topic": notify_topic(ns, team), "title": f"{m['h']} {sc.group(1)}\u2013{sc.group(2)} {m['a']}",
                                            "message": (f"{tx['en'][0]}\n{tx['ar'][0]}\n{lname}" if tx else f"Full time \u00b7 \u0627\u0646\u062a\u0647\u062a \u0627\u0644\u0645\u0628\u0627\u0631\u0627\u0629\n{lname}"),
                                            "tags": ["soccer"], "click": f"{base_url}#/{'recap' if tx else 'match'}/{m['i']}"}, (rk[-1], key, d, lname, tx)))

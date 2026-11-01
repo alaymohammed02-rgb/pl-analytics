@@ -14,7 +14,7 @@
  const ar=()=>typeof ARL==='object'&&!!ARL.on;
  const x_=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
  const VW={deserved:['Deserved','مستحق'],close:['A close call','مباراة متقاربة'],lucky:['A stolen win','فوز مسروق'],fair:['A fair draw','تعادل عادل'],saved:['An unearned point','نقطة غير مستحقة']};
- let CF=null,CK='';
+ let CF=null,CK='';const SWITCHED=new Set();
  function loadStory(){const k=typeof INS.poolKey==='function'?INS.poolKey():'';if(CF&&CK===k)return CF;CK=k;
   const p=loadJson('story.json',ALL.generated).then(d=>{if(!d||typeof d!=='object'||!d.m||typeof d.m!=='object')throw new Error('story');return d}).catch(e=>{if(CF===p)CF=null;throw e});return CF=p}
  /* the team names inside a sentence from the file, kept as they are in right-to-left text */
@@ -41,18 +41,23 @@
  function card(m,e,A){
   const W=1080,H=1350,PX=64,T=(en,a)=>A?a:en,tx='#fff',mu='#9fb0c4',FONT=INS.cardKit&&INS.cardKit.FONT||'system-ui,sans-serif';
   const fit=(s,max,w)=>INS.cardKit&&INS.cardKit.fit?INS.cardKit.fit(s,max,w):max;
-  const t=(x,y,s,o)=>{o=o||{};return `<text x="${x}" y="${y}" font-size="${o.size||30}" font-weight="${o.w||600}" fill="${o.fill||tx}" text-anchor="${o.a||'start'}"${A?' direction="rtl"':''}>${x_(s)}</text>`};
+  const t=(x,y,s,o)=>{o=o||{};const d=o.dir||(A?'rtl':'');return `<text x="${x}" y="${y}" font-size="${o.size||30}" font-weight="${o.w||600}" fill="${o.fill||tx}" text-anchor="${o.a||'start'}"${d?` direction="${d}"`:''}>${x_(s)}</text>`};
   const ax=A?W-PX:PX,an=A?'end':'start',ds=(e.s||'').split('-');
   let g=`<rect width="${W}" height="${H}" fill="#0d1520"/>`;
-  g+=t(W/2,120,m.home+'  '+(A?ds[1]+' – '+ds[0]:ds[0]+' – '+ds[1])+'  '+m.away,{size:fit(m.home+m.away,50,W-2*PX),w:800,a:'middle'});
+  /* the names sit on their own sides (home on the right in Arabic) and the score is its own left-to-right text, so the home goals are always next to the home name */
+  const nsz=Math.min(fit(m.home,46,W/2-190),fit(m.away,46,W/2-190));
+  g+=t(A?W-PX:PX,128,m.home,{size:nsz,w:800,a:A?'end':'start'})+t(A?PX:W-PX,128,m.away,{size:nsz,w:800,a:A?'start':'end'});
+  g+=t(W/2,134,A?ds[1]+' – '+ds[0]:ds[0]+' – '+ds[1],{size:64,w:800,a:'middle',dir:'ltr'});
   g+=t(W/2,168,(D.name||'')+' · '+String(m.date||'').slice(0,10),{size:26,fill:mu,a:'middle'});
   const vw=VW[e.vd]||['',''];
   g+=t(W/2,250,T(vw[0],vw[1]),{size:54,w:800,a:'middle',fill:'#f2c14e'});
   const lines=(e.tx&&e.tx[A?'ar':'en']||[]).filter(Boolean);
   lines.forEach((s,i)=>{const parts=wrap(s,A?34:44);parts.forEach((p,j)=>{g+=t(W/2,320+i*130+j*40,p,{size:30,a:'middle'})})});
-  g+=curve(e,{l:110,t:560,w:W-110-PX,h:420,fs:24,sw:2,r:9,pal:PNG_PAL});
-  g+=t(W/2,1040,T('Chance of a result, minute by minute','فرصة كل نتيجة دقيقة بدقيقة'),{size:24,fill:mu,a:'middle'});
-  g+=`<rect x="${PX+10}" y="1066" width="26" height="26" fill="${PNG_PAL.h}"/>`+t(PX+46,1088,m.home,{size:24})+`<rect x="${W/2-40}" y="1066" width="26" height="26" fill="${PNG_PAL.d}"/>`+t(W/2,1088,T('Draw','تعادل'),{size:24})+`<rect x="${W-PX-250}" y="1066" width="26" height="26" fill="${PNG_PAL.a}"/>`+t(W-PX-212,1088,m.away,{size:24});
+  if(e.c&&e.c.length){
+   g+=curve(e,{l:110,t:560,w:W-110-PX,h:420,fs:24,sw:2,r:9,pal:PNG_PAL});
+   g+=t(W/2,1040,T('Chance of a result, minute by minute','فرصة كل نتيجة دقيقة بدقيقة'),{size:24,fill:mu,a:'middle'});
+   g+=`<rect x="${PX+10}" y="1066" width="26" height="26" fill="${PNG_PAL.h}"/>`+t(PX+46,1088,m.home,{size:24})+`<rect x="${W/2-40}" y="1066" width="26" height="26" fill="${PNG_PAL.d}"/>`+t(W/2,1088,T('Draw','تعادل'),{size:24})+`<rect x="${W-PX-250}" y="1066" width="26" height="26" fill="${PNG_PAL.a}"/>`+t(W-PX-212,1088,m.away,{size:24});
+  }else g+=t(W/2,760,T('No curve for this match: Elo had no pre-match prediction.','ما فيه منحنى لهذي المباراة: Elo ما عنده توقع قبلها.'),{size:26,fill:mu,a:'middle'});
   g+=t(W/2,1170,T(`Chances: ${m.home} ${e.x[0].toFixed(1)} xG, ${m.away} ${e.x[1].toFixed(1)} xG`,`الفرص: ${m.home} ${e.x[0].toFixed(1)} xG، ${m.away} ${e.x[1].toFixed(1)} xG`),{size:28,a:'middle'});
   g+=t(W/2,1214,T('The curve ignores red cards. The verdict follows the shots, the curve follows the score.','المنحنى يتجاهل الكروت الحمراء. الحكم تابع للفرص، والمنحنى تابع للنتيجة.'),{size:21,fill:mu,a:'middle'});
   g+=t(PX,1290,'PL Analytics',{size:28,w:800})+t(W-PX,1290,T('Data: PitchAPI','البيانات: PitchAPI'),{size:22,fill:mu,a:'end'});
@@ -64,15 +69,16 @@
   const a=S.acc||{},b=a.curve||{},f1=v=>v==null?'N/A':(+v).toFixed(1),f3=v=>v==null?'N/A':(+v).toFixed(3);
   if(!a.n)return '';
   const g=a.xg_goals||{},sh=a.shares||{},c60=b['60']||{},c75=b['75']||{};
-  const hi=(c75.bins||[]).find(x=>x[0]===0.8);
+  /* the bin where the curve was furthest from what happened, at minute 60 or 75 (30+ matches) */
+  let hi=null;[[60,c60],[75,c75]].forEach(([mn,c])=>(c.bins||[]).forEach(b=>{if(b[2]>=30&&Math.abs(b[3]-b[4])>0.08&&(!hi||Math.abs(b[3]-b[4])>Math.abs(hi.b[3]-hi.b[4])))hi={mn,b}}));
   const o25=S.acc25;
-  const en=[`<b>How good is it?</b> On this season's ${nb(a.n)} finished matches the win / draw / loss chances built from the shots scored a Brier error of ${nb(f3(a.brier_chances))}, against ${nb(f3(a.brier_rates))} for the league's plain win / draw / loss rates (lower is better; the shots are known after the match, so this explains results, it does not predict them). The shots were worth ${nb(f1(g.xg))} goals in total and ${nb(g.goals)} were scored.`,
+  const en=[`<b>How good is it?</b> On ${nb(a.n)} finished matches of this season's leagues and cups in the data, the win / draw / loss chances built from the shots scored a Brier error of ${nb(f3(a.brier_chances))}, against ${nb(f3(a.brier_rates))} for the league's plain win / draw / loss rates (lower is better; the shots are known after the match, so this explains results, it does not predict them). The shots were worth ${nb(f1(g.xg))} goals in total and ${nb(g.goals)} were scored.`,
    `The verdicts so far: ${nb(sh.deserved||0)} deserved, ${nb(sh.close||0)} close calls, ${nb(sh.lucky||0)} stolen wins, ${nb(sh.fair||0)} fair draws, ${nb(sh.saved||0)} unearned points.`];
-  const arr=[`<b>كم هي دقيقة؟</b> على ${nb(a.n)} مباراة منتهية هذا الموسم، فرص الفوز والتعادل والخسارة المبنية على التسديدات خطؤها (Brier) ${nb(f3(a.brier_chances))} مقابل ${nb(f3(a.brier_rates))} لمعدلات الدوري العادية (الأقل أحسن؛ التسديدات تُعرف بعد المباراة، فهي تشرح النتائج وما تتوقعها). التسديدات كانت تساوي ${nb(f1(g.xg))} هدف بالمجموع وسُجّل ${nb(g.goals)}.`,
+  const arr=[`<b>كم هي دقيقة؟</b> على ${nb(a.n)} مباراة منتهية من دوريات وكؤوس هذا الموسم في البيانات، فرص الفوز والتعادل والخسارة المبنية على التسديدات خطؤها (Brier) ${nb(f3(a.brier_chances))} مقابل ${nb(f3(a.brier_rates))} لمعدلات الدوري العادية (الأقل أحسن؛ التسديدات تُعرف بعد المباراة، فهي تشرح النتائج وما تتوقعها). التسديدات كانت تساوي ${nb(f1(g.xg))} هدف بالمجموع وسُجّل ${nb(g.goals)}.`,
    `الأحكام للحين: ${nb(sh.deserved||0)} مستحق، ${nb(sh.close||0)} متقارب، ${nb(sh.lucky||0)} فوز مسروق، ${nb(sh.fair||0)} تعادل عادل، ${nb(sh.saved||0)} نقطة غير مستحقة.`];
   if(c60.n){
-   en.push(`The curve, on ${nb(c60.n)} matches with an Elo prediction: error ${nb(f3(c60.brier))} at minute 60 and ${nb(f3(c75.brier))} at minute 75, against ${nb(f3(c60.base))} for Elo's chances before kick-off.`+(hi&&hi[2]>=30?` It is a little too sure late in matches: where it said 80–90% for a home win at minute 75, the home side won ${nb(Math.round(hi[4]*100)+'%')} of ${nb(hi[2])} matches.`:''));
-   arr.push(`المنحنى، على ${nb(c60.n)} مباراة عندها توقع Elo: الخطأ ${nb(f3(c60.brier))} عند الدقيقة 60 و${nb(f3(c75.brier))} عند الدقيقة 75، مقابل ${nb(f3(c60.base))} لفرص Elo قبل صافرة البداية.`+(hi&&hi[2]>=30?` وهو واثق زيادة قليلاً آخر المباراة: لما قال 80–90% لفوز المضيف عند الدقيقة 75، فاز المضيف في ${nb(Math.round(hi[4]*100)+'%')} من ${nb(hi[2])} مباراة.`:''));
+   en.push(`The curve, on ${nb(c60.n)} matches with an Elo prediction: error ${nb(f3(c60.brier))} at minute 60 and ${nb(f3(c75.brier))} at minute 75, against ${nb(f3(c60.base))} for Elo's chances before kick-off.`+(hi?` It is not always as sure as it sounds: where it said ${nb(Math.round(hi.b[0]*100)+'–'+Math.round(hi.b[1]*100)+'%')} for a home win at minute ${nb(hi.mn)}, the home side won ${nb(Math.round(hi.b[4]*100)+'%')} of ${nb(hi.b[2])} matches.`:''));
+   arr.push(`المنحنى، على ${nb(c60.n)} مباراة عندها توقع Elo: الخطأ ${nb(f3(c60.brier))} عند الدقيقة 60 و${nb(f3(c75.brier))} عند الدقيقة 75، مقابل ${nb(f3(c60.base))} لفرص Elo قبل صافرة البداية.`+(hi?` وما هو دايماً بقدر ثقته: لما قال ${nb(Math.round(hi.b[0]*100)+'–'+Math.round(hi.b[1]*100)+'%')} لفوز المضيف عند الدقيقة ${nb(hi.mn)}، فاز المضيف في ${nb(Math.round(hi.b[4]*100)+'%')} من ${nb(hi.b[2])} مباراة.`:''));
   }
   if(o25&&o25.n){
    en.push(`Last season (${nb(o25.n)} matches): shot-based error ${nb(f3(o25.brier_chances))} against ${nb(f3(o25.brier_rates))}.`);
@@ -85,7 +91,15 @@
   id=decodeURIComponent(id||'');
   const m=D&&D.matches&&D.matches.find(x=>x.match_id===id),lg=D&&D.id;
   const head=`<h2>${two('Full-time story','قصة المباراة')}</h2>`;
-  if(!m){el.innerHTML=head+empty('This match is not in the open league.','هذي المباراة مو في الدوري المفتوح.',` <a href="#/matches">${two('Matches →','المباريات ←')}</a>`);return}
+  if(!m){
+   /* a notification can point at a match of another league: the story file knows which one, so open that league (once) and draw again */
+   let S0=null;try{S0=await loadStory()}catch(x){S0=null}
+   const e0=S0&&S0.m[id],h0=location.hash;
+   if(e0&&e0.lg&&e0.lg!==lg&&typeof setLeague==='function'&&!SWITCHED.has(id)&&el.isConnected&&D.id===lg){
+    SWITCHED.add(id);try{await setLeague(e0.lg);if(location.hash===h0)route()}catch(x){}return}
+   if(!el.isConnected||location.hash!==h0)return;
+   el.innerHTML=head+empty('This match is not in the open league.','هذي المباراة مو في الدوري المفتوح.',` <a href="#/matches">${two('Matches →','المباريات ←')}</a>`);return}
+  SWITCHED.delete(id);
   const sc=typeof wkSc==='function'?wkSc(m.score):null;
   if(!sc){el.innerHTML=head+empty('This match has not been played yet.','هذي المباراة ما انلعبت للحين.',` <a href="#/preview/${encodeURIComponent(id)}">${two('Match preview →','معاينة المباراة ←')}</a>`);return}
   el.innerHTML=head+`<p class="mu"><span class="rc-n">${nm(m.home)} – ${nm(m.away)}</span> · ${nb(esc(D.name||''))} · ${nb(esc(String(m.date).slice(0,10)))}</p><div id="rc" class="rc ins"><div class="empty skel">${two('Loading…','جاري التحميل…')}</div></div>`;
@@ -112,7 +126,7 @@
    <div class="card rc-sv"><button type="button" class="s" id="rcsave">${two('Save as picture','احفظها كصورة')}</button> <a href="#/match/${encodeURIComponent(id)}">${two('Match centre →','مركز المباراة ←')}</a></div>
    <div class="card rc-ac">${notes(S)}</div>`;
   const sv=root.querySelector('#rcsave');
-  sv.onclick=async()=>{if(!INS.cardKit||!INS.cardKit.savePng)return;const c=card(m,e,ar());sv.disabled=true;try{await INS.cardKit.savePng(c.svg,c.W,c.H,m.home+' '+m.away,'recap')}catch(x){}sv.disabled=false};
+  sv.onclick=async()=>{if(!INS.cardKit||!INS.cardKit.savePng)return;sv.disabled=true;try{const c=card(m,e,ar());await INS.cardKit.savePng(c.svg,c.W,c.H,m.home+' '+m.away,'recap')}catch(x){}sv.disabled=false};
  };
  /* a finished match with a story gets a link in the Match centre */
  if(typeof R.match==='function'){
