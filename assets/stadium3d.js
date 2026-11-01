@@ -117,15 +117,30 @@
  }
  let S=null;
  function unmount(){if(!S)return;cancelAnimationFrame(S.raf);removeEventListener('scroll',S.onScroll);removeEventListener('resize',S.onResize);if(S.el)S.el.remove();S=null;document.documentElement.classList.remove('st3-on')}
- function mount(club){
+ /* the photo mode: a real photograph of the stadium (sp.photo, credited in sp.credit), shown a little wider than the window and panned slowly by a CSS
+    animation (the compositor moves it: no script per frame); scrolling shifts it a few pixels. If the file does not load, the drawn model takes its place. */
+ function mountPhoto(club,sp){
+  const t0=performance.now(),el=document.createElement('div');el.id='st3-bg';el.className='st3 st3-photo';el.setAttribute('aria-hidden','true');
+  el.innerHTML='<div class="st3-ph"><img alt="" decoding="async"></div>';
+  document.body.appendChild(el);document.documentElement.classList.add('st3-on');
+  const img=el.querySelector('img');
+  S={key:KEY(club),el,sp,mode:'photo',raf:0,still:reduce(),dip:0,fps:null,frameMs:null,panels:0,iw:0,ih:0};
+  img.onload=()=>{if(!S||S.el!==el)return;S.iw=img.naturalWidth;S.ih=img.naturalHeight;S.ms=performance.now()-t0;el.classList.add('st3-ph-ok');say()};
+  img.onerror=()=>{if(!S||S.el!==el)return;unmount();mount(club,'model')};
+  img.src=sp.photo;
+  S.onScroll=()=>{S.dip=Math.min(40,(scrollY||0)*.04);el.style.setProperty('--dy',S.dip.toFixed(1)+'px')};addEventListener('scroll',S.onScroll,{passive:true});
+  return S;
+ }
+ function mount(club,force){
   const sp=SPEC[KEY(club)];if(!sp||!on()){unmount();return null}
-  if(S&&S.key===KEY(club))return S;unmount();
+  if(S&&S.key===KEY(club)&&(force!=='model'||S.mode==='model'))return S;unmount();
+  if(sp.photo&&force!=='model')return mountPhoto(club,sp);
   const t0=performance.now();
   const el=document.createElement('div');el.id='st3-bg';el.className='st3';el.setAttribute('aria-hidden','true');
   el.innerHTML='<canvas class="st3-cv"></canvas>';
   document.body.appendChild(el);document.documentElement.classList.add('st3-on');
   const cv=el.querySelector('canvas'),ctx=cv.getContext('2d'),P=panels(sp);
-  S={key:KEY(club),el,cv,sp,P,raf:0,turn:0,dip:0,fps:null,drawn:0,frameMs:null,panels:P.length};
+  S={key:KEY(club),el,cv,sp,P,mode:'model',raf:0,turn:0,dip:0,fps:null,drawn:0,frameMs:null,panels:P.length};
   const size=()=>{const dpr=Math.min(1.5,window.devicePixelRatio||1),W=innerWidth,H=innerHeight;S.dpr=dpr;S.W=W;S.H=H;cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr)};
   const frame=()=>{const a=performance.now();S.cam=camera(sp,S.W,S.H,S.turn,S.dip);S.drawn=draw(ctx,sp,P,S.cam,S.dpr);S.frameMs=performance.now()-a};
   const dipNow=()=>Math.min(40,(scrollY||0)*.04);
@@ -145,13 +160,17 @@
  }
  const ar=()=>typeof ARL==='object'&&!!ARL.on;
  function say(){const m=document.querySelector('.st3-m');if(!m||!S)return;
+  if(S.mode==='photo'){m.innerHTML=S.iw?`${ar()?'صورة':'photo'} ${nb(S.iw+' × '+S.ih)}`:'';return}
   m.innerHTML=`${ar()?'الإطار يُرسم في':'a frame takes'} ${nb((S.frameMs||0).toFixed(1)+' ms')} · ${nb(S.panels)} ${ar()?'لوح':'panels'}${S.fps!=null?` · ${nb(S.fps+' fps')}`:''}`}
  /* the line under the club's header: what it is, the switch and the measurements */
  function control(el,club){
   const sp=SPEC[KEY(club)],hd=el&&el.querySelector('.clubhd');if(!sp||!hd)return;
   let c=el.querySelector('.st3-ctl');if(!c){c=document.createElement('p');c.className='st3-ctl mu';hd.insertAdjacentElement('afterend',c)}
   const draw=()=>{const o=on();
-   c.innerHTML=`${two(`Behind this page: ${sp.name} in 3D, a simple model (a concept, not the exact stadium).`,`خلف هذي الصفحة: ملعب ${sp.ar} بثلاثة أبعاد، مجسّم مبسّط (تصوّر، مو الملعب بمقاساته).`)}
+   const cr=sp.credit,link=cr&&cr.url?`<a href="${esc(cr.url)}" target="_blank" rel="noopener">${esc(cr.title||cr.url)}</a>`:'';
+   const note=sp.photo&&S&&S.mode==='photo'?two(`Behind this page: a photograph of ${sp.name}${cr?` by ${esc(cr.by)} (${esc(cr.license)}), ${link}`:''}.`,`خلف هذي الصفحة: صورة لملعب ${sp.ar}${cr?` من ${esc(cr.by)} (${esc(cr.license)})، ${link}`:''}.`)
+    :two(`Behind this page: ${sp.name} in 3D, a simple model (a concept, not the exact stadium).`,`خلف هذي الصفحة: ملعب ${sp.ar} بثلاثة أبعاد، مجسّم مبسّط (تصوّر، مو الملعب بمقاساته).`);
+   c.innerHTML=`${note}
     <button type="button" class="st3-sw" aria-pressed="${o}">${o?two('Turn off','أوقفه'):two('Turn on','شغّله')}</button> <span class="st3-m"></span>`;
    c.querySelector('.st3-sw').onclick=()=>{setOn(!on());if(on())mount(club);else unmount();draw()};
    say()};
@@ -167,6 +186,6 @@
   return out;
  };
  addEventListener('hashchange',()=>{if(!/^#\/club\//.test(location.hash))unmount()});
- INS.stadium3d={SPEC,N,M,NEAR,mount,unmount,on,panels,camera,project,state:()=>S};
+ INS.stadium3d={SPEC,N,M,NEAR,mount,unmount,on,control,panels,camera,project,state:()=>S};
  if(typeof D==='object'&&D&&typeof route==='function')route();
 })();

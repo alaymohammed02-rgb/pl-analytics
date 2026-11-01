@@ -83,6 +83,25 @@ const SECOND=`(()=>{const sub=(p,q)=>[p[0]-q[0],p[1]-q[1],p[2]-q[2]],dot=(a,b)=>
  ok(rm.still&&rm.t===0&&rm.fps==null&&rm.fm>0,'reduced motion: drawn once, the camera does not drift');
  await pg.evaluate(()=>scrollTo(0,500));await wait(pg,200);ok(Math.abs(await pg.evaluate(()=>INS.stadium3d.state().dip)-20)<.01,'reduced motion: scrolling still redraws with the dip');
  ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await ctx.close();
+ /* the photo mode: when the club has a photograph (here one drawn by the test), it replaces the model, credited, panned by CSS, shifted by scrolling */
+ ({ctx,pg,errs}=await T.open(b,{vw:1280,league:LG,hash:RM}));await pg.waitForSelector('#st3-bg canvas',{state:'attached',timeout:120000});await wait(pg,500);
+ const ph=await pg.evaluate(async()=>{const S=INS.stadium3d,sp=S.SPEC['real madrid'],c=document.createElement('canvas');c.width=2048;c.height=512;const x=c.getContext('2d'),g=x.createLinearGradient(0,0,2048,0);g.addColorStop(0,'#223');g.addColorStop(1,'#a63');x.fillStyle=g;x.fillRect(0,0,2048,512);
+  sp.photo=c.toDataURL('image/png');sp.credit={by:'A. Photographer',license:'CC BY 4.0',url:'https://example.org/photo',title:'the photo page'};
+  S.unmount();S.mount('Real Madrid');S.control(document,'Real Madrid');await new Promise(r=>setTimeout(r,1200));
+  const e=document.getElementById('st3-bg'),i=e.querySelector('img'),st=S.state();
+  return {mode:st.mode,canvas:!!e.querySelector('canvas'),cls:e.className,w:i.naturalWidth,h:i.naturalHeight,op:getComputedStyle(i).opacity,anim:getComputedStyle(i).animationName,pe:getComputedStyle(e).pointerEvents,aria:e.getAttribute('aria-hidden'),
+   line:document.querySelector('.st3-ctl').innerText,href:(document.querySelector('.st3-ctl a')||{}).href,rd:document.querySelector('.st3-m').textContent}});
+ ok(ph.mode==='photo'&&!ph.canvas&&/st3-ph-ok/.test(ph.cls)&&ph.w===2048&&ph.h===512&&ph.op==='1','photo mode: the photograph replaces the model and shows once loaded');
+ ok(ph.anim==='st3-pan'&&ph.pe==='none'&&ph.aria==='true','the photograph is panned by a CSS animation, behind the page, never taking the pointer');
+ ok(/photograph of Santiago Bernabéu by A\. Photographer \(CC BY 4\.0\)/.test(ph.line)&&ph.href==='https://example.org/photo','the line under the header credits the author and the licence and links the source');
+ ok(/photo 2048 × 512/.test(ph.rd),'the readout gives the real size of the photograph ('+ph.rd+')');
+ await pg.evaluate(()=>scrollTo(0,500));await wait(pg,200);
+ ok(await pg.evaluate(()=>{const e=document.getElementById('st3-bg');return e.style.getPropertyValue('--dy')==='20.0px'&&getComputedStyle(e.querySelector('.st3-ph')).transform!=='none'}),'scrolling 500 px shifts the photograph 20 px (0.04 a pixel)');
+ await pg.evaluate(()=>{INS.stadium3d.SPEC['real madrid'].photo='data:image/png;base64,AAAA';INS.stadium3d.unmount();INS.stadium3d.mount('Real Madrid')});await wait(pg,800);
+ ok(await pg.evaluate(()=>{const s=INS.stadium3d.state();return s&&s.mode==='model'&&!!document.querySelector('#st3-bg canvas')&&!document.querySelector('#st3-bg img')}),'a photograph that does not load: the drawn model takes its place');
+ await pg.emulateMedia({reducedMotion:'reduce'});await pg.evaluate(()=>{const sp=INS.stadium3d.SPEC['real madrid'];const c=document.createElement('canvas');c.width=64;c.height=16;sp.photo=c.toDataURL();INS.stadium3d.unmount();INS.stadium3d.mount('Real Madrid')});await wait(pg,600);
+ ok(await pg.evaluate(()=>getComputedStyle(document.querySelector('#st3-bg img')).animationName==='none'),'reduced motion: the photograph stands still');
+ ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await ctx.close();
  /* Arabic on a phone */
  ({ctx,pg,errs}=await T.open(b,{vw:390,lang:'ar',league:LG,hash:RM}));await pg.waitForSelector('.st3-ctl',{timeout:120000});await pg.waitForSelector('#st3-bg canvas',{state:'attached'});await wait(pg,2600);
  const art=await pg.$eval('.st3-ctl',e=>e.innerText);
