@@ -41,7 +41,7 @@
   const say=()=>{m.innerHTML=`${ar()?'بُني في':'built in'} ${nb(st.ms.toFixed(1)+' ms')} · ${nb(st.els)} ${ar()?'عنصر':'elements'}${st.fps!=null?` · ${nb(st.fps+' fps')} ${ar()?'أثناء السحب':'while dragging'}`:''}`};
   const ar=()=>typeof ARL==='object'&&!!ARL.on;
   apply();
-  st.ms=performance.now()-t0;st.els=root.querySelectorAll('*').length;say();
+  st.ms=performance.now()-t0;st.els=stage.querySelectorAll('*').length;say();
   let ro=null;if(typeof ResizeObserver==='function'){ro=new ResizeObserver(apply);ro.observe(stage)}
   /* the opening turn: once, from a steep top view down to the resting angle */
   if(!reduce()&&pins.length){const a=performance.now(),from={rx:78,rz:-70};st.rx=from.rx;st.rz=from.rz;apply();

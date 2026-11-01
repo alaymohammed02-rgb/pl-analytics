@@ -23,8 +23,8 @@ const turn=pg=>pg.evaluate(()=>{const w=document.querySelector('.p3-world'),s=ge
  ok(pins.every(p=>{const e=Math.max(10,Math.min(150,per[p.id]*1.2));return Math.abs(p.h-e)<=Math.max(0.12*e,1.2)}),'each pin is as high as his actions per start x 1.2 (table value, clamped 10 to 150)');
  const lab=await pg.$$eval('.p3-pin.a .p3-hd span',a=>a.map(s=>s.textContent));ok(lab.length===pins.length&&lab.every(Boolean),'every pin carries the player\'s surname ('+lab.slice(0,3).join(', ')+'…)');
  /* the readout is true */
- const rd=await pg.$eval('.p3-m',e=>e.textContent),els=await pg.$eval('.p3',e=>e.querySelectorAll('*').length);
- const mm=/built in ([\d.]+) ms · (\d+) elements/.exec(rd);ok(mm&&+mm[2]===els&&+mm[1]>0&&+mm[1]<2000,'the readout says how long the scene took and how many elements it has, and the count is real ('+rd+')');
+ const rd=await pg.$eval('.p3-m',e=>e.textContent),els=await pg.$eval('.p3-stage',e=>e.querySelectorAll('*').length);
+ const mm=/built in ([\d.]+) ms · (\d+) elements/.exec(rd);ok(mm&&+mm[2]===els&&+mm[1]>0&&+mm[1]<2000,'the readout says how long the scene took and how many elements the scene has, and the count is real ('+rd+')');
  /* the opening turn ends at the resting angle, then drag and keys turn it */
  let t0=await turn(pg);ok(Math.abs(t0.rx-58)<.5&&Math.abs(t0.rz+24)<.5,'it comes to rest at 58 / -24 degrees after the opening turn ('+t0.rx.toFixed(1)+' / '+t0.rz.toFixed(1)+')');
  const bb=await (await pg.$('.p3-stage')).boundingBox();const cx=bb.x+bb.width/2,cy=bb.y+bb.height/2;
