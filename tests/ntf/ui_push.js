@@ -55,12 +55,16 @@ async function ctxFor(b,{vw=1100,lang='en',ready=true,perm=true,inbox=200,favs=[
  const welcome=await pg.evaluate(()=>window.__calls.filter(x=>x[0]==='show').map(x=>x[1]));
  ok(welcome.length===1&&/Notifications are on/.test(welcome[0]),'a welcome notification is shown, so you see at once that it works ('+welcome[0]+')');
  ok(await pg.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();return !!r&&/sw\.js$/.test(r.active?r.active.scriptURL:(r.installing||r.waiting||{scriptURL:''}).scriptURL)}),'the service worker sw.js is registered');
+ ok(m1.tone==='calm','the first message says tone "calm" (the default)');
+ ok(await pg.$$eval('#ntftone button',a=>a.map(b=>b.dataset.tone+':'+b.getAttribute('aria-pressed')).join())==='calm:true,fun:false'&&!!(await pg.$('#ntftone.seg')),'the card offers the tone choice (two buttons in a .seg group), calm is chosen');
+ await pg.click('#ntftone button[data-tone="fun"]');await pg.waitForTimeout(1200);
+ ok(posts.length===2&&open(posts[1].body).tone==='fun'&&JSON.stringify(open(posts[1].body).teams)===JSON.stringify(['Arsenal','Chelsea'])&&await pg.evaluate(()=>localStorage.getItem('plx_tone'))==='fun'&&(await pg.$eval('#ntftone button[data-tone="fun"]',b=>b.getAttribute('aria-pressed')))==='true','choosing banter re-sends the subscription with tone "fun", saves it in this browser, and the choice shows as pressed');
  /* the teams change: the new list is sent, with no page open on the card */
  await pg.selectOption('#ovtt','Brentford');await pg.click('#ovta');await pg.waitForFunction(()=>true);await pg.waitForTimeout(2000);
- ok(posts.length===2&&JSON.stringify(open(posts[1].body).teams)===JSON.stringify(['Arsenal','Chelsea','Brentford']),'starring Brentford sends the new list of 3 teams (a second sealed message)');
+ ok(posts.length===3&&JSON.stringify(open(posts[2].body).teams)===JSON.stringify(['Arsenal','Chelsea','Brentford'])&&open(posts[2].body).tone==='fun','starring Brentford sends the new list of 3 teams (another sealed message) and keeps the chosen tone');
  /* turn off */
  await pg.waitForSelector('#ntfoff');await pg.click('#ntfoff');await pg.waitForSelector('#ntfon',{timeout:20000});await pg.waitForTimeout(300);
- const m3=posts.length===3?open(posts[2].body):null;
+ const m3=posts.length===4?open(posts[3].body):null;
  ok((await pg.evaluate(()=>window.__calls.filter(x=>x[0]==='unsubscribe').length))===1&&m3&&m3.remove==='https://push.test/endpoint-1','"Turn off" unsubscribes and sends a sealed removal of that endpoint');
  ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await c.close();
  /* ---- Arabic: language in the message and the card */
@@ -68,6 +72,7 @@ async function ctxFor(b,{vw=1100,lang='en',ready=true,perm=true,inbox=200,favs=[
  ok(/فعّل الإشعارات/.test(await pg.innerText('#ntfon'))&&await T.noscroll(pg),'Arabic phone: the button is in Arabic and the page does not scroll sideways');
  await pg.click('#ntfon');await pg.waitForSelector('#ntfoff',{timeout:30000});
  ok(open(posts[0].body).lang==='ar'&&/شغّالة/.test(await pg.innerText('.ntf-on')),'Arabic: the message says lang "ar" and the card says on in Arabic');
+ ok(/محلّل هادي/.test(await pg.innerText('#ntftone'))&&/معلّق حماس/.test(await pg.innerText('#ntftone')),'Arabic: the tone choice is in Arabic');
  {const u=await pg.evaluate(`(${T.untr})('#ntfcard','select,option,.fx-en,bdi')`);ok(!u.length,'Arabic: the card is translated '+u.slice(0,4).join(' | '))}
  await pg.screenshot({path:__dirname+'/push_390_ar.png'});ok(!errs.length,'Arabic phone: no page errors '+errs.slice(0,2).join(' ; '));await c.close();
  /* ---- not ready, blocked, unsupported */

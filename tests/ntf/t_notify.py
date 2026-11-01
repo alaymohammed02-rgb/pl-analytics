@@ -132,6 +132,11 @@ TX = {'en': ['Arsenal deserved it: their chances were worth 2.4 goals to 0.9.', 
 STORY = {'m1': {'s': '2-1', 'tx': TX}, 'm4': {'s': '3-3', 'tx': {'en': ['', None], 'ar': ['', None]}}}
 Ms, _ = plan(L, FX, {'v': 1, 'r': {}, 'm': {}}, NOW, BASE, NS, story=STORY)
 r1s = [(p, k) for p, k in Ms if k[0] == 'r' and k[1].startswith('m1|')]
+FXT = {'en': ['Daylight robbery!', None], 'ar': ['سرقوها!', None]}
+Mf, _ = plan(L, FX, {'v': 1, 'r': {}, 'm': {}}, NOW, BASE, NS, story={'m1': {'s': '2-1', 'tx': TX, 'fx': FXT}})
+rf = [(p, k) for p, k in Mf if k[0] == 'r' and k[1].startswith('m1|')]
+ok(len(rf) == 2 and all(k[4] == TX and k[5] == FXT and p['message'] == TX['en'][0] + '\n' + TX['ar'][0] + '\nPremier League' for p, k in rf), 'a story with a banter version: the key carries both (calm in 5th, banter in 6th); the ntfy message stays calm')
+ok(all(len(k) == 6 and k[5] is None for p, k in r1s) and all(len(k) == 5 for p, k in Ms if k[0] == 'm'), 'a story without a banter version has None there; reminders keep their 5 elements')
 ok(len(r1s) == 2 and all(p['message'] == TX['en'][0] + '\n' + TX['ar'][0] + '\nPremier League' and p['click'] == BASE + '#/recap/m1' and k[4] == TX for p, k in r1s), 'a result with a story: the English and Arabic verdict sentences and the league, the link to the recap, the sentences in the key')
 ok(all(p['title'] == 'Arsenal 2–1 Chelsea' and p['tags'] == ['soccer'] and 'delay' not in p for p, _ in r1s), 'a result with a story keeps the score title and the tag')
 r4s = [(p, k) for p, k in Ms if k[0] == 'r' and k[1].startswith('m4|')]

@@ -52,7 +52,10 @@
   const r=await fetch(new URL('/pla-'+C.ns+'_inbox',C.server).href,{method:'POST',body:JSON.stringify(await seal(P.box,obj))});
   if(!r.ok)throw new Error('inbox '+r.status);
  }
- const subMsg=sub=>({v:1,sub:sub.toJSON?sub.toJSON():sub,teams:favNames().slice(0,30),lang:(typeof ARL==='object'&&ARL.on)?'ar':'en'});
+ /* the tone of the story sentences (calm analyst or match banter): kept in this browser, sent sealed with the subscription, read by the recap page too */
+ const getTone=()=>{try{return localStorage.getItem('plx_tone')==='fun'?'fun':'calm'}catch(e){return 'calm'}};
+ const setTone=t=>{try{localStorage.setItem('plx_tone',t==='fun'?'fun':'calm')}catch(e){}};
+ const subMsg=sub=>({v:1,sub:sub.toJSON?sub.toJSON():sub,teams:favNames().slice(0,30),lang:(typeof ARL==='object'&&ARL.on)?'ar':'en',tone:getTone()});
  /* the teams changed while this device is subscribed: send the new list (the Overview card does not need to be open) */
  let RT=null;
  document.addEventListener('fav-change',()=>{clearTimeout(RT);RT=setTimeout(async()=>{try{
@@ -95,7 +98,10 @@
   let sub=null;
   try{if(Notification.permission==='granted'){const reg=await navigator.serviceWorker.getRegistration();sub=reg?await reg.pushManager.getSubscription():null}}catch(e){}
   if(sub){
-   box.innerHTML=head+`<p class="ntf-m ntf-on">${two(`Notifications are <b>on</b> for this device (${n} ${n===1?'team':'teams'}). They start at the next sync, up to about an hour after you turn them on or change your teams.`,`الإشعارات <b>شغّالة</b> على هذا الجهاز (${nb(n)} ${n===1?'فريق':'فرق'}). تبدأ من المزامنة الجاية، لين ساعة تقريبًا بعد ما تفعّلها أو تغيّر فرقك.`)}</p>${btn('ntfoff','Turn off','أوقفها','s ntf-off')}`;
+   box.innerHTML=head+`<p class="ntf-m ntf-on">${two(`Notifications are <b>on</b> for this device (${n} ${n===1?'team':'teams'}). They start at the next sync, up to about an hour after you turn them on or change your teams.`,`الإشعارات <b>شغّالة</b> على هذا الجهاز (${nb(n)} ${n===1?'فريق':'فرق'}). تبدأ من المزامنة الجاية، لين ساعة تقريبًا بعد ما تفعّلها أو تغيّر فرقك.`)}</p>
+    <p class="ntf-m">${two('Tone of the match story in your notifications:','نبرة قصة المباراة في إشعاراتك:')}</p>
+    <div class="seg ntf-tone" id="ntftone" role="group" aria-label="Tone">${[['calm','Calm analyst','محلّل هادي'],['fun','Match banter','معلّق حماس']].map(([k,en,ar])=>`<button type="button" data-tone="${k}" aria-pressed="${getTone()===k}"${busy?' disabled':''}>${two(en,ar)}</button>`).join('')}</div>
+    <p class="mu ntf-m">${two('Same facts and numbers either way. The ntfy app below always uses the calm one: its topics are public, so they do not know who reads them.','نفس الحقائق والأرقام في الحالتين. تطبيق ntfy تحت يبقى على النبرة الهادية دايماً: مواضيعه عامة وما تعرف مين يقراها.')}</p>${btn('ntfoff','Turn off','أوقفها','s ntf-off')}`;
    return 'on';
   }
   box.innerHTML=head+msg('Turn on notifications and this device gets the <b>final score</b> of your teams\' matches and a <b>reminder shortly before kick-off</b>, even when the site is closed. No app to install.','فعّل الإشعارات وهذا الجهاز تجيه <b>النتيجة النهائية</b> لمباريات فرقك و<b>تذكير قبل الانطلاق بشوي</b>، حتى لو الموقع مقفل. بدون تثبيت تطبيق.')+btn('ntfon','Turn on notifications','فعّل الإشعارات');
@@ -147,6 +153,11 @@
      try{await reg.showNotification(document.documentElement.lang==='ar'?'الإشعارات شغّالة':'Notifications are on',{body:document.documentElement.lang==='ar'?'بتوصلك نتائج فرقك وتذكير قبل مبارياتهم.':'You will get your teams\' results and a reminder before their matches.',icon:'assets/icons/icon-192.png',tag:'pla-welcome'})}catch(e){}
     }catch(e){await draw(false);say(box,'Could not turn notifications on ('+esc(String(e&&e.message||e).slice(0,80))+'). Try again in a moment.','ما قدرت أفعّل الإشعارات ('+nb(esc(String(e&&e.message||e).slice(0,80)))+'). جرّب بعد شوي.')}
    };
+   box.querySelectorAll('#ntftone button').forEach(b=>b.onclick=async()=>{
+    const t=b.dataset.tone;if(t===getTone())return;setTone(t);
+    try{const reg=await navigator.serviceWorker.getRegistration(),sub=reg&&await reg.pushManager.getSubscription();if(sub)await drop(C,P,subMsg(sub))}catch(e){setTone(t==='fun'?'calm':'fun');await draw(false);say(box,'Could not save the tone. Try again in a moment.','ما قدرت أحفظ النبرة. جرّب بعد شوي.');return}
+    await draw(false);
+   });
    if(off)off.onclick=async()=>{
     off.disabled=true;
     try{
