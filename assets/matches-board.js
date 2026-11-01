@@ -41,15 +41,16 @@
   const lab=d=>d===today?'Today':d===off(-1)?'Yesterday':d===off(1)?'Tomorrow':new Date(d+'T12:00:00').toLocaleDateString(lc(),{weekday:'short',day:'numeric',month:'short'});
   /* data/live.json (written by the sync when PitchAPI has it): official lineups (XI badge) and the state of a match */
   const live=x=>{const e=LV&&LV.m&&LV.m[String(x.id)];return e?{e,s:typeof lvState==='function'?lvState(e):'pre',xi:e.lu?'<span class="md-xi" title="Official lineups are out">XI</span>':''}:{e:null,s:'pre',xi:''}};
-  const draw=(scroll=true)=>{
-   const F=fold.get(),L=R_.list.filter(x=>x.day===DAY),order=(ALL.leagues||[]).map(l=>l.id),by=new Map();
+  /* one day's list (the groups of its leagues, the fold-all button and the note): the Matches board draws it for the open day and, while a finger drags, for the next to it */
+  const part=day=>{
+   const F=fold.get(),L=R_.list.filter(x=>x.day===day),order=(ALL.leagues||[]).map(l=>l.id),by=new Map();
    L.sort((a,b)=>(a.t||0)-(b.t||0)||a.h.localeCompare(b.h)).forEach(x=>{(by.get(x.lid)||by.set(x.lid,[]).get(x.lid)).push(x)});
    const lids=[...by.keys()].sort((a,b)=>(order.indexOf(a)+1||99)-(order.indexOf(b)+1||99));
    /* your teams first: their matches of the day, from every league (they stay in their league's list too) */
    const fav=new Set(typeof favList==='function'?favList().map(f=>f.t):[]),mine=L.filter(x=>fav.has(x.h)||fav.has(x.a));
    if(mine.length){by.set('★',mine);lids.unshift('★')}
    const allF=lids.length&&lids.every(l=>F.has(l));
-   sec.innerHTML=`<h2 class="mb-h">Matches</h2><div class="mb-days" role="tablist">${days.map(d=>`<button type="button" role="tab" aria-selected="${d===DAY}" class="${d===DAY?'on':''}" data-d="${d}">${esc(lab(d))}</button>`).join('')}</div><div class="mb-pg">
+   return `
     ${lids.length?lids.map(lid=>{const img=lid==='★'?null:lgImg(R_.s,lid),f=F.has(lid);return `<div class="mb-g${f?' f':''}${lid==='★'?' mb-fav':''}"><button type="button" class="mb-lh" data-l="${esc(lid)}" aria-expanded="${!f}">${lid==='★'?'<span class="mb-star" aria-hidden="true">★</span>':img?`<img src="${esc(img)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">`:'<span class="mb-cr mb-nd"></span>'}<b>${lid==='★'?'Your teams':esc(lgName(R_.s,lid))}</b><span class="mb-n mu">${by.get(lid).length}</span><span class="mb-ch" aria-hidden="true"></span></button>
      <div class="mb-rows">${by.get(lid).map(x=>{const st=state(x),tm=x.t?new Date(x.t).toLocaleTimeString(lc(),{hour:'numeric',minute:'2-digit'}):'',L_=st==='ft'||st==='off'?{e:null,s:'',xi:''}:live(x),e=L_.e,mn=e&&typeof lvMinute==='function'?lvMinute(e):null;
       /* a missing score is shown as –, never as 0 */
@@ -58,10 +59,14 @@
        :L_.s==='ft'&&e.sh!=null&&e.sa!=null?`<b class="mb-sc">${e.sh} – ${e.sa}</b><span class="mb-s">FT</span>${L_.xi}`
        :st==='wait'?`<b class="mb-t">${esc(tm)}</b><span class="mb-s mb-w">Awaiting result</span>${L_.xi}`:`<b class="mb-t">${esc(tm||'–')}</b>${L_.xi}`;
       return `<a class="mb-r${fav.has(x.h)||fav.has(x.a)?' mine':''}" href="#/${st==='ft'?'match':'preview'}/${encodeURIComponent(x.id)}" data-lid="${esc(x.lid)}"><span class="mb-tm h">${esc(x.h)}</span>${crest(R_.s,x.lid,x.h)}<span class="mb-m">${mid}</span>${crest(R_.s,x.lid,x.a)}<span class="mb-tm a">${esc(x.a)}</span></a>`}).join('')}</div></div>`}).join('')
-     :(()=>{const prev=days.filter(d=>d<DAY&&R_.list.some(x=>x.day===d)).pop(),next=days.find(d=>d>DAY&&R_.list.some(x=>x.day===d));
+     :(()=>{const prev=days.filter(d=>d<day&&R_.list.some(x=>x.day===d)).pop(),next=days.find(d=>d>day&&R_.list.some(x=>x.day===d));
        return `<div class="empty mb-empty"><span>No matches in the site's leagues on this day.</span>${prev||next?`<span class="mb-jump">${prev?`<button type="button" class="s" data-d="${prev}">← <span>${esc(lab(prev))}</span></button>`:''}${next?`<button type="button" class="s" data-d="${next}"><span>${esc(lab(next))}</span> →</button>`:''}</span>`:''}</div>`})()}
     ${lids.length?`<div class="mb-all"><button type="button" class="s" data-all="${allF?'show':'hide'}">${allF?'Show all':'Hide all'} <span aria-hidden="true">${allF?'⌄':'⌃'}</span></button></div>`:''}
-    <p class="mu mb-note"><span>Times in your time zone.</span> <span>PitchAPI publishes a result after the match has ended, so there are no live scores here.</span></p></div>`;
+    <p class="mu mb-note"><span>Times in your time zone.</span> <span>PitchAPI publishes a result after the match has ended, so there are no live scores here.</span></p>`;
+  };
+  const draw=(scroll=true)=>{
+   g=null;
+   sec.innerHTML=   sec.innerHTML=`<h2 class="mb-h">Matches</h2><div class="mb-days" role="tablist">${days.map(d=>`<button type="button" role="tab" aria-selected="${d===DAY}" class="${d===DAY?'on':''}" data-d="${d}">${esc(lab(d))}</button>`).join('')}</div><div class="mb-pgw"><div class="mb-pg">${part(DAY)}</div></div>`;
    const on=sec.querySelector('.mb-days .on');if(scroll&&on&&on.scrollIntoView)on.scrollIntoView({block:'nearest',inline:'center'});
   };
   sec.addEventListener('click',async e=>{
@@ -73,46 +78,65 @@
     e.preventDefault();const h=r.getAttribute('href');$('#app').innerHTML='<div class="empty">Loading league…</div>';
     try{await setLeague(r.dataset.lid);if(typeof CMP!=='undefined')CMP=[];if(typeof head==='function')head();if(location.hash===h)route();else location.hash=h}catch(err){route()}}
   });
-  /* swipe the list with a finger, like a pager: the list follows the finger while it moves (a little, with resistance, beyond the first and the last day) and the
-     page fades a little; on release it slides away in the way of the move and the next or the previous day slides in from the other side, or, if the move was
-     short, slow and small, it springs back. Mostly horizontal moves only (a vertical one scrolls the page) and never from the day strip (it scrolls by itself).
-     The way is mirrored in Arabic (right to left: a move to the right goes to the next day). With reduced motion the day changes at once, nothing follows the finger. */
+  /* swipe the list with a finger, like a pager. While a one-finger move is mostly sideways the open day's list and the next (or the previous) day's list, built beside it, move
+     together with the finger, one to one, so there is never an empty space; on release a move of 15% of the list (40 px at least) or a flick takes the neighbour in (0.22 s,
+     a little less for a fast flick) and the day strip's choice moves with it, otherwise both spring back. Beyond the first or the last day the list gives a quarter as much.
+     A vertical move never moves the list and a move starting on the day strip (it scrolls by itself) does nothing. Mirrored in Arabic (a move to the right goes to the next day).
+     With reduced motion nothing follows the finger and the day changes at once. */
   const RM=()=>!!(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches);
-  const pgEl=()=>sec.querySelector('.mb-pg');
   const isNext=dx=>document.documentElement.dir==='rtl'?dx>0:dx<0;
-  const hasNb=next=>{const j=days.indexOf(DAY)+(next?1:-1);return j>=0&&j<days.length};
-  const clear=pg=>{pg.style.transition='';pg.style.transform='';pg.style.opacity=''};
-  const back=pg=>{pg.style.transition='transform .2s ease,opacity .2s ease';pg.style.transform='translateX(0)';pg.style.opacity='1';setTimeout(()=>clear(pg),240)};
-  let g=null;   /* the move in progress: {x,y,t,mode,pg,w,busy} */
+  const dayAt=(d0,next)=>days[days.indexOf(d0)+(next?1:-1)];
+  const EASE='transform .22s cubic-bezier(.22,.9,.28,1)',GAP=10;
+  const setX=(m,x)=>{m.pg.style.transform='translateX('+x.toFixed(1)+'px)';if(m.nb)m.nb.style.transform='translateX('+x.toFixed(1)+'px)'};
+  const clean=(...els)=>els.forEach(e=>{if(e){e.style.transition='';e.style.transform='';e.style.willChange=''}});
+  /* the neighbour list on the side the finger pulls from (a finger moving left pulls the list on the right), built once per side */
+  const ensure=(m,dx)=>{
+   const side=dx<0?1:-1;if(m.side===side)return;m.side=side;if(m.nb){m.nb.remove();m.nb=null}
+   m.day=dayAt(DAY,isNext(dx));if(!m.day)return;
+   const nb=document.createElement('div');nb.className='mb-pg mb-nb';nb.innerHTML=part(m.day);
+   nb.style.left=side>0?'calc(100% + '+GAP+'px)':'calc(-100% - '+GAP+'px)';nb.style.willChange='transform';m.pg.after(nb);m.nb=nb;
+  };
+  const stripTo=d=>{sec.querySelectorAll('.mb-days button').forEach(b=>{const on=b.dataset.d===d;b.classList.toggle('on',on);b.setAttribute('aria-selected',String(on))});
+   const on=sec.querySelector('.mb-days .on');if(on&&on.scrollIntoView)on.scrollIntoView({block:'nearest',inline:'center'})};
+  const back=m=>{
+   m.busy=true;m.pg.style.transition=EASE;if(m.nb)m.nb.style.transition=EASE;setX(m,0);
+   setTimeout(()=>{if(m.nb)m.nb.remove();clean(m.pg);g=null},250);
+  };
+  const go=(m,v)=>{
+   m.busy=true;const w=m.w+GAP,target=m.side>0?-w:w,ease=Math.abs(v)>1?'transform .16s cubic-bezier(.22,.9,.28,1)':EASE;
+   DAY=m.day;stripTo(DAY);sec.appendChild(document.createComment(''));          /* the choice moved: the glass of the strip slides to it now */
+   m.pg.style.transition=ease;m.nb.style.transition=ease;setX(m,target);
+   setTimeout(()=>{
+    if(!m.pg.isConnected||!m.nb.isConnected){g=null;return}
+    m.pg.remove();m.nb.classList.remove('mb-nb');m.nb.style.left='';clean(m.nb);g=null;
+    for(const n of [...sec.childNodes])if(n.nodeType===8)n.remove();
+   },Math.abs(v)>1?190:260);
+  };
+  let g=null;   /* the move in progress: {x,y,t,mode,pg,w,side,nb,day,busy,pts} */
   sec.addEventListener('touchstart',e=>{
-   if(g&&g.busy)return;const pg=pgEl(),t=e.touches[0];
-   g=e.touches.length===1&&pg&&!e.target.closest('.mb-days')?{x:t.clientX,y:t.clientY,t:Date.now(),mode:'',pg,w:Math.max(200,pg.getBoundingClientRect().width)}:null;
+   if(g&&g.busy)return;const pg=sec.querySelector('.mb-pg:not(.mb-nb)'),t=e.touches[0];
+   g=e.touches.length===1&&pg&&!e.target.closest('.mb-days')?{x:t.clientX,y:t.clientY,t:Date.now(),mode:'',pg,w:Math.max(200,pg.getBoundingClientRect().width),side:0,nb:null,day:'',pts:[[Date.now(),t.clientX]]}:null;
   },{passive:true});
   sec.addEventListener('touchmove',e=>{
    if(!g||g.busy)return;const t=e.touches[0],dx=t.clientX-g.x,dy=t.clientY-g.y;
    if(!g.mode){if(Math.abs(dx)<10&&Math.abs(dy)<10)return;g.mode=Math.abs(dx)>1.2*Math.abs(dy)?'h':'v'}
    if(g.mode!=='h'||RM())return;
-   const k=hasNb(isNext(dx))?1:.25,x=dx*k;
-   g.pg.style.transition='none';g.pg.style.transform='translateX('+x.toFixed(1)+'px)';g.pg.style.opacity=String(1-Math.min(.45,Math.abs(x)/g.w*.6));
+   const now=Date.now();g.pts.push([now,t.clientX]);while(g.pts.length>2&&now-g.pts[0][0]>120)g.pts.shift();
+   ensure(g,dx);g.pg.style.transition='none';if(g.nb)g.nb.style.transition='none';g.pg.style.willChange='transform';
+   setX(g,g.nb?dx:dx*.25);
   },{passive:true});
-  const go=(m,next,dx)=>{
-   m.busy=true;const sign=dx<0?-1:1,pg=m.pg;
-   const swap=()=>{
-    DAY=days[days.indexOf(DAY)+(next?1:-1)];draw();g=null;const np=pgEl();if(!np||RM())return;
-    np.style.transition='none';np.style.transform='translateX('+(-sign*m.w*.3).toFixed(0)+'px)';np.style.opacity='0';
-    requestAnimationFrame(()=>requestAnimationFrame(()=>{np.style.transition='transform .24s cubic-bezier(.2,.8,.2,1),opacity .24s ease';np.style.transform='translateX(0)';np.style.opacity='1';setTimeout(()=>clear(np),280)}));
-   };
-   if(RM()){swap();return}
-   pg.style.transition='transform .16s ease-in,opacity .16s ease-in';pg.style.transform='translateX('+(sign*m.w*.6).toFixed(0)+'px)';pg.style.opacity='0';setTimeout(swap,160);
-  };
   sec.addEventListener('touchend',e=>{
-   const m=g;if(!m||m.busy)return;const t=e.changedTouches[0],dx=t.clientX-m.x,dy=t.clientY-m.y,dt=Math.max(1,Date.now()-m.t),ax=Math.abs(dx),next=isNext(dx);
-   /* far enough (a fifth of the list, 60 px at least) or a quick flick (30 px and 0.45 px/ms), and mostly horizontal */
-   const ok=m.mode==='h'&&hasNb(next)&&ax>=1.6*Math.abs(dy)&&(ax>=Math.max(60,m.w*.2)||(ax>=30&&ax/dt>=.45));
-   if(!ok){g=null;if(m.mode==='h'&&!RM())back(m.pg);return}
-   go(m,next,dx);
+   const m=g;if(!m||m.busy)return;const t=e.changedTouches[0],dx=t.clientX-m.x,dy=t.clientY-m.y,ax=Math.abs(dx);
+   if(m.mode!=='h'){g=null;return}
+   if(RM()){g=null;const d=dayAt(DAY,isNext(dx));if(d&&ax>=Math.max(60,m.w*.2)&&ax>=1.6*Math.abs(dy)){DAY=d;draw()}return}
+   ensure(m,dx);
+   const a=m.pts[0],now=Date.now(),v=now-a[0]>0?(t.clientX-a[1])/Math.max(1,now-a[0]):0,vv=Math.abs(v);
+   /* far enough (15% of the list, 40 px at least) or a flick (25 px at 0.4 px/ms), mostly horizontal, and the finger still going the way it started */
+   const ok=!!m.nb&&ax>=1.6*Math.abs(dy)&&(ax>=Math.max(40,m.w*.15)||(ax>=25&&vv>=.4))&&(dx<0)===(m.side>0);
+   if(!ok){back(m);return}
+   go(m,vv);
   },{passive:true});
-  sec.addEventListener('touchcancel',()=>{const m=g;if(!m||m.busy)return;g=null;if(m.mode==='h'&&!RM())back(m.pg)},{passive:true});
+  sec.addEventListener('touchcancel',()=>{const m=g;if(!m||m.busy)return;if(m.mode==='h'&&!RM())back(m);else g=null},{passive:true});
   draw();
   home.insertBefore(sec,home.firstElementChild);
   sec.addEventListener('mb-redraw',()=>draw(false));   /* your teams changed */

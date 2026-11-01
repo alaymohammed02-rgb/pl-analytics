@@ -1,5 +1,6 @@
 /* Matches board swipe (assets/matches-board.js, top of the Overview): the list is a pager that follows the finger. A phone with touch (touch events through CDP):
-   - while the finger moves sideways the list moves with it (translateX equal to the move) and fades a little; past the first or the last day it moves only a quarter as much;
+   - while the finger moves sideways the list moves with it (translateX equal to the move, one to one) and the next (finger to the left) or the previous day's list, built beside it,
+     moves with it too, so there is never an empty space; past the first or the last day there is no neighbour and the list moves only a quarter as much;
    - on release a move of a fifth of the list (60 px at least), or a quick flick (30 px at 0.45 px/ms), slides the list away and the next (finger to the left) or the previous
      day (finger to the right) slides in, mirrored in Arabic; what is shown is exactly what pressing that day's tab shows; the list ends with no leftover movement;
    - a short, slow, small move springs back (the list returns to its place, the day is the same); a slanted move (not 1.6 times more across than down) does not change the day;
@@ -20,26 +21,32 @@ const day=pg=>pg.$eval('.mb-days .on',e=>e.dataset.d);
 const days=pg=>pg.$$eval('.mb-days button',a=>a.map(x=>x.dataset.d));
 const snap=pg=>pg.$$eval('.mb-g',a=>a.map(g=>g.innerText.replace(/\s+/g,' ').trim()).join(' | '));
 /* the list's own movement: pixels across (from its matrix) and opacity */
-const mv=pg=>pg.$eval('.mb-pg',e=>{const cs=getComputedStyle(e),m=cs.transform==='none'?[1,0,0,1,0,0]:cs.transform.match(/-?[\d.e-]+/g).map(Number);return {x:m[4]||0,o:+cs.opacity,style:e.getAttribute('style')||''}});
+const mv=pg=>pg.$eval('.mb-pg:not(.mb-nb)',e=>{const cs=getComputedStyle(e),m=cs.transform==='none'?[1,0,0,1,0,0]:cs.transform.match(/-?[\d.e-]+/g).map(Number);return {x:m[4]||0,o:+cs.opacity,style:e.getAttribute('style')||''}});
+const nbOf=pg=>pg.$eval('.mb-nb',e=>{const r=e.getBoundingClientRect();return {left:r.left,right:r.right,text:e.innerText.replace(/\s+/g,' ').trim(),n:document.querySelectorAll('.mb-nb').length}}).catch(()=>null);
+const panes=pg=>pg.$$eval('.mb-pg',a=>a.length);
 async function pressDay(pg,d){await pg.click('.mb-days button[data-d="'+d+'"]');await pg.waitForTimeout(400);return snap(pg)}
 const listY=pg=>pg.$eval('.mb-g,.mb-empty',e=>{const r=e.getBoundingClientRect();return r.y+Math.min(r.height-6,60)});
 (async()=>{const b=await T.launch();
  let {ctx,pg,cdp,errs}=await phone(b,'en');
  const ds=await days(pg),d0=await day(pg),i0=ds.indexOf(d0);
  ok(ds.length>=3&&i0>0&&i0<ds.length-1,'the board opens on today ('+d0+') with a day before and a day after, '+ds.length+' days in the strip');
- const X=195,Y=await listY(pg);
+ const X=195,Y=await listY(pg);let nbText='';
  /* the list follows the finger */
  {const up=await down(cdp,pg,X+90,Y,X-10,Y,200);const m=await mv(pg);
-  ok(Math.abs(m.x-(-100))<4&&m.o<1&&m.o>0.5,'while the finger moves 100 px to the left the list is 100 px to the left ('+m.x.toFixed(1)+') and fades a little (opacity '+m.o.toFixed(2)+')');
+  const nb=await nbOf(pg);
+  ok(Math.abs(m.x-(-100))<4&&m.o===1,'while the finger moves 100 px to the left the list is 100 px to the left ('+m.x.toFixed(1)+'), one to one, with no fade');
+  ok(!!nb&&nb.n===1&&nb.left<390-40&&nb.left>150&&nb.right>390,'the next day\'s list is already beside it, coming in from the right (its left edge at '+(nb&&nb.left.toFixed(0))+' px of 390): no empty space');
+  nbText=nb&&nb.text;
   await up(700);ok(await day(pg)===ds[i0+1],'letting go after 100 px (more than a fifth of the list): the next day ('+ds[i0+1]+')')}
- ok(await mv(pg).then(m=>m.x===0&&m.o===1&&m.style===''),'after the slide there is no leftover movement on the list (no inline style)');
+ ok(await mv(pg).then(m=>m.x===0&&m.o===1&&m.style==='')&&await panes(pg)===1&&await nbOf(pg)===null,'after the slide there is one list, no neighbour pane and no leftover inline style');
+ ok(nbText===await pg.$eval('.mb-pg',e=>e.innerText.replace(/\s+/g,' ').trim()),'and it is the very list that was beside the finger (the same text)');
  ok(await snap(pg)===await pressDay(pg,ds[i0+1]),'what the swipe shows is exactly what pressing that day shows');
  await swipe(cdp,pg,X-90,Y,X+90,Y);ok(await day(pg)===ds[i0],'a swipe to the right goes back to the day before ('+ds[i0]+')');
  await swipe(cdp,pg,X-90,Y,X+90,Y);ok(await day(pg)===ds[i0-1],'and once more: the day before that ('+ds[i0-1]+')');
  const here=await day(pg);
  /* a small slow move springs back; the list returned to its place */
  {const up=await down(cdp,pg,X+25,Y,X-25,Y,300);const m=await mv(pg);ok(Math.abs(m.x+50)<4,'a 50 px move: the list follows ('+m.x.toFixed(1)+')');await up(500);
-  ok(await day(pg)===here&&await mv(pg).then(m=>m.x===0&&m.o===1),'letting go after 50 px, slowly: the list springs back to its place and the day is the same')}
+  ok(await day(pg)===here&&await mv(pg).then(m=>m.x===0&&m.o===1)&&await panes(pg)===1,'letting go after 50 px, slowly: the list springs back to its place, the neighbour is removed and the day is the same')}
  /* a slow but long move now counts (it is a drag, not a flick) */
  await swipe(cdp,pg,X+90,Y,X-90,Y,1100,700);ok(await day(pg)===ds[i0],'a slow move of 180 px (1.1 s) still goes to the next day: it is a drag');
  /* a quick flick of 40 px */
@@ -53,7 +60,7 @@ const listY=pg=>pg.$eval('.mb-g,.mb-empty',e=>{const r=e.getBoundingClientRect()
  /* the entrance: the new list starts away and faded, and ends in place */
  {await pg.evaluate(()=>{window.__min=1;window.__off=0;const f=()=>{const p=document.querySelector('.mb-pg');if(p){const cs=getComputedStyle(p),o=+cs.opacity;if(o<window.__min)window.__min=o;const m=cs.transform==='none'?0:+cs.transform.match(/-?[\d.e-]+/g)[4];if(Math.abs(m)>window.__off)window.__off=Math.abs(m)}window.__raf=requestAnimationFrame(f)};f()});
   await swipe(cdp,pg,X+90,Y,X-90,Y,150,700);const r=await pg.evaluate(()=>{cancelAnimationFrame(window.__raf);return {min:window.__min,off:window.__off}});
-  ok(r.min<0.5&&r.off>40,'the change is animated: the list went down to opacity '+r.min.toFixed(2)+' and moved '+r.off.toFixed(0)+' px away, then settled');
+  ok(r.off>300,'the change is animated: the list moved '+r.off.toFixed(0)+' px across, then settled');
   ok(await mv(pg).then(m=>m.x===0&&m.o===1&&m.style===''),'and it ends in place with no inline style');
   await pg.click('.mb-days button[data-d="'+ds[i0]+'"]');await pg.waitForTimeout(300);ok(await mv(pg).then(m=>m.style===''),'pressing a day tab moves nothing')}
  /* a tap still opens a match */
@@ -61,7 +68,7 @@ const listY=pg=>pg.$eval('.mb-g,.mb-empty',e=>{const r=e.getBoundingClientRect()
  /* the ends: the list gives a quarter as much and springs back */
  await pg.click('.mb-days button[data-d="'+ds[0]+'"]');await pg.waitForTimeout(300);
  {const Y3=await listY(pg);const up=await down(cdp,pg,X-90,Y3,X+90,Y3,200);const m=await mv(pg);
-  ok(m.x>30&&m.x<60,'on the first day a move of 180 px to the right moves the list only a quarter as much ('+m.x.toFixed(0)+' px)');await up(500);
+  ok(m.x>30&&m.x<60&&await nbOf(pg)===null,'on the first day a move of 180 px to the right moves the list only a quarter as much ('+m.x.toFixed(0)+' px) and there is no neighbour');await up(500);
   ok(await day(pg)===ds[0]&&await mv(pg).then(m=>m.x===0&&m.o===1),'and it springs back; the day stays the first')}
  await pg.click('.mb-days button[data-d="'+ds[ds.length-1]+'"]');await pg.waitForTimeout(300);
  {const Y3=await listY(pg);await swipe(cdp,pg,X+90,Y3,X-90,Y3);ok(await day(pg)===ds[ds.length-1]&&await mv(pg).then(m=>m.x===0&&m.o===1),'on the last day a swipe to the left does nothing')}

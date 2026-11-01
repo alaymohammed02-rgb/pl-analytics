@@ -606,5 +606,7 @@ html[dir=rtl] .dl-bars .ph-bn bdi{text-align:right}
 .ts-c{padding:12px 14px}.ts-c .hhd{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;justify-content:space-between;margin-bottom:10px}.ts-c .hhd h3{margin:0}
 .ts-l li>span.mu{grid-column:3;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-/* Matches board: the pager of a swipe to another day (assets/matches-board.js); the list keeps vertical scrolling, the day strip its own sideways scrolling */
-.mb-pg{display:grid;gap:10px;touch-action:pan-y}
+/* Matches board: the pager of a swipe to another day (assets/matches-board.js): the open day's list and, while a finger drags, the next day's list beside it; vertical scrolling stays, the day strip scrolls by itself */
+.mb-pgw{position:relative;overflow-x:clip;touch-action:pan-y}
+.mb-pg{display:grid;gap:10px}
+.mb-nb{position:absolute;top:0;width:100%}
