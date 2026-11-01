@@ -145,6 +145,7 @@ st = PUT.get('data/story.json')
 ok(st is not None and set(st['m']) == {'m1', 'm4'}, 'step: one entry per finished match whose shots add up to the score (m2 has no shots, m3 does not add up, m5 is unplayed)')
 e1, e4 = st['m']['m1'], st['m']['m4']
 ok(e1['lg'] == 'l1' and e1['s'] == '2-1' and e1['x'] == [1.3, 0.5] and e1['vs'] == 'h' and e1['vd'] in ('deserved', 'close', 'lucky'), 'step: entry fields (league, score, xG home/away rounded to 2 decimals, result side, verdict)')
+ok(e1['g'] == [[10, 'h'], [55, 'h'], [80, 'a']] and e4['g'] == [[70, 'h']], 'step: the goals (minute, side) are in the entry for the card')
 ok(e1['c'] is not None and e1['c'][-1] == [90, 1.0, 0.0] and e1['tp'] is not None and e1['tx']['en'][1] and e1['tx']['ar'][1], 'step: a match with an Elo prediction has a curve ending on the result, a turning point and both sentences')
 ok(e4['c'] is None and e4['tp'] is None and e4['tx']['en'][1] is None and e4['tx']['en'][0] and e4['tx']['ar'][0], 'step: no Elo prediction -> verdict only (no curve, no turning point)')
 ok(st['acc']['n'] == 2 and st['acc']['curve']['60']['n'] == 1 and st['v'] == 1 and len(st['key']) == 10 and st['acc25'] is None, 'step: accuracy over the 2 matches, the curve scored on the 1 with a prediction, acc25 None without a 2025-26 file')
@@ -189,6 +190,7 @@ else:
             n += 1; h, a = map(int, e['s'].split('-')); x = xs.get(mid, [0.0, 0.0])
             if ms[mid]['s'] != e['s'] or gs.get(mid, [0, 0]) != [h, a]: bad.append((mid, 'score'))
             if abs(x[0] - e['x'][0]) > 0.006 or abs(x[1] - e['x'][1]) > 0.006: bad.append((mid, 'xg', x, e['x']))
+            if sorted(x[1] for x in e['g']).count('h') != h or sorted(x[1] for x in e['g']).count('a') != a: bad.append((mid, 'goals'))
             if e['vd'] not in ('deserved', 'close', 'lucky', 'fair', 'saved') or (e['vs'] == 'd') != (h == a): bad.append((mid, 'verdict'))
             if not (e['tx']['en'][0] and e['tx']['ar'][0]) or abs(sum(e['pv']) - 1) > 0.004: bad.append((mid, 'text/pv'))
             if e['c']:

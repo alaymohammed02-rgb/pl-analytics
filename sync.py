@@ -9018,11 +9018,11 @@ INDEX = _x_fpx_index(INDEX)
 # الكود في ملفات مستقلة في المستودع: assets/*.js و assets/features.css و manifest.webmanifest و sw.js و assets/icons/.
 # هذا القسم يضيف روابطها للصفحة فقط (بعد السكربت الرئيسي، فتلقى R و PAGES جاهزة). غيّر FEATURES_V لما تتغير الملفات.
 # ============================================================================
-FEATURES_V = "60"
+FEATURES_V = "61"
 FEATURES_JS = ("pla-data", "share-card", "threat-map", "match-whatif", "player-page", "match-centre", "home-extra", "team-round",
                "preview", "club-extra", "rankings-extra", "fantasy-extra", "insights-core", "hidden-gems", "player-dna", "team-dna",
                "reality-check", "matches-board", "match-replay", "match-story", "overview", "press-height",
-               "season-sim", "luck-table", "player-twin", "player-cards", "beat-model", "rare-cases", "attack-share", "drawer", "tap-twice", "line-height", "league-pool", "game-states", "likely-xi", "club-twins", "carry-team", "report-card", "league-dna", "thrill", "defense-card", "press-card", "sb-press", "stat-stability", "keeps-up", "goalkeepers", "xi-builder", "player-prices", "xi-battle", "player-story", "time-machine", "ask", "wrapped", "levels", "club-elo", "title-race", "elo-river", "heartbeat", "club-shape", "fortress", "late-show", "run-in", "team-season", "notify", "holo", "seasons", "liquid-glass")
+               "season-sim", "luck-table", "player-twin", "player-cards", "beat-model", "rare-cases", "attack-share", "drawer", "tap-twice", "line-height", "league-pool", "game-states", "likely-xi", "club-twins", "carry-team", "report-card", "league-dna", "thrill", "defense-card", "press-card", "sb-press", "stat-stability", "keeps-up", "goalkeepers", "xi-builder", "player-prices", "xi-battle", "player-story", "time-machine", "ask", "wrapped", "levels", "club-elo", "title-race", "elo-river", "heartbeat", "club-shape", "fortress", "late-show", "run-in", "team-season", "notify", "recap", "holo", "seasons", "liquid-glass")
 
 
 def _x_feat_index(html):
@@ -11505,7 +11505,7 @@ function psSaved(){for(const st of [()=>localStorage,()=>sessionStorage])try{con
 /* files that only describe the current season (today's matches, coming fixtures, live scores, season facts, rare cases):
    in a past season they answer "not found", so the widgets that use them stay out instead of mixing in this season */
 function psCurOnly(){if(window.__psF)return;const f0=window.fetch;window.__psF=1;
- window.fetch=function(u){const s=String(u&&u.url||u);if(/(^|\/)data\/(live|fixtures|schedule|facts|rare|fpl|fpl_track|market|elo|elo_own|priors|xib|xib_test)\.json/.test(s))return Promise.resolve(new Response('{}',{status:404}));return f0.apply(this,arguments)}}
+ window.fetch=function(u){const s=String(u&&u.url||u);if(/(^|\/)data\/(live|fixtures|schedule|facts|rare|fpl|fpl_track|market|elo|elo_own|priors|xib|xib_test|story)\.json/.test(s))return Promise.resolve(new Response('{}',{status:404}));return f0.apply(this,arguments)}}
 function psView(x){
  ALL0=x;const s=psSaved();if(!s||!x||!x.seasons||!x.leagues)return x;
  let lid=null;for(const st of [()=>localStorage,()=>sessionStorage])try{lid=st().getItem('league');if(lid)break}catch(e){}
@@ -13078,7 +13078,7 @@ def story_items(matches, rows_by, pre_by, seed=None):
 def story_entry(it, lid):
     xh, xa, ph = story_chances(it["rows"], it["home"], it["away"])
     v = story_verdict(it["score"], xh, xa, ph)
-    e = {"lg": lid, "s": f"{it['score'][0]}-{it['score'][1]}", "x": [round(xh, 2), round(xa, 2)], "pv": [round(p, 3) for p in ph], "vs": v["vs"], "vd": v["vd"], "c": None, "tp": None}
+    e = {"lg": lid, "s": f"{it['score'][0]}-{it['score'][1]}", "x": [round(xh, 2), round(xa, 2)], "pv": [round(p, 3) for p in ph], "vs": v["vs"], "vd": v["vd"], "g": [[g[0], g[2]] for g in it["goals"]], "c": None, "tp": None}
     if it["pre"]:
         e["c"] = story_curve(it["goals"], it["pre"], it["total"])
         e["tp"] = story_turn(it["goals"], it["pre"], it["total"], v["vs"])
