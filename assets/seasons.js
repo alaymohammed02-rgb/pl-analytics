@@ -20,6 +20,7 @@
   sim:['The simulator plays the rest of a season; a finished season has nothing left to play.','المحاكي يلعب باقي الموسم، والموسم المنتهي ما بقى فيه شي.'],
   xi:['Likely line-ups are for the coming matches.','التشكيلات المتوقعة للمباريات الجاية.'],
   preview:['Previews are for the coming matches.','المعاينة للمباريات الجاية.'],
+  recap:['The full-time story reads the stories written for this season\'s matches.','قصة المباراة تقرأ القصص المكتوبة لمباريات هذا الموسم.'],
   runin:['The run-in uses today\'s ratings and the matches still to play this season.','باقي الموسم يستخدم تقييمات اليوم والمباريات اللي ما انلعبت بعد هذا الموسم.'],
   battle:['XI Battle uses the players\' numbers as of now.','معركة التشكيلات تستخدم أرقام اللاعبين الحالية.'],
   rare:['Very rare cases are worked out by the sync for the current season only.','الحالات النادرة تنحسب في المزامنة للموسم الحالي فقط.']};

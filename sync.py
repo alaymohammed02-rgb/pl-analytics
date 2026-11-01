@@ -9018,11 +9018,11 @@ INDEX = _x_fpx_index(INDEX)
 # الكود في ملفات مستقلة في المستودع: assets/*.js و assets/features.css و manifest.webmanifest و sw.js و assets/icons/.
 # هذا القسم يضيف روابطها للصفحة فقط (بعد السكربت الرئيسي، فتلقى R و PAGES جاهزة). غيّر FEATURES_V لما تتغير الملفات.
 # ============================================================================
-FEATURES_V = "60"
+FEATURES_V = "61"
 FEATURES_JS = ("pla-data", "share-card", "threat-map", "match-whatif", "player-page", "match-centre", "home-extra", "team-round",
                "preview", "club-extra", "rankings-extra", "fantasy-extra", "insights-core", "hidden-gems", "player-dna", "team-dna",
                "reality-check", "matches-board", "match-replay", "match-story", "overview", "press-height",
-               "season-sim", "luck-table", "player-twin", "player-cards", "beat-model", "rare-cases", "attack-share", "drawer", "tap-twice", "line-height", "league-pool", "game-states", "likely-xi", "club-twins", "carry-team", "report-card", "league-dna", "thrill", "defense-card", "press-card", "sb-press", "stat-stability", "keeps-up", "goalkeepers", "xi-builder", "player-prices", "xi-battle", "player-story", "time-machine", "ask", "wrapped", "levels", "club-elo", "title-race", "elo-river", "heartbeat", "club-shape", "fortress", "late-show", "run-in", "team-season", "notify", "holo", "seasons", "liquid-glass")
+               "season-sim", "luck-table", "player-twin", "player-cards", "beat-model", "rare-cases", "attack-share", "drawer", "tap-twice", "line-height", "league-pool", "game-states", "likely-xi", "club-twins", "carry-team", "report-card", "league-dna", "thrill", "defense-card", "press-card", "sb-press", "stat-stability", "keeps-up", "goalkeepers", "xi-builder", "player-prices", "xi-battle", "player-story", "time-machine", "ask", "wrapped", "levels", "club-elo", "title-race", "elo-river", "heartbeat", "club-shape", "fortress", "late-show", "run-in", "team-season", "notify", "recap", "holo", "seasons", "liquid-glass")
 
 
 def _x_feat_index(html):
@@ -11505,7 +11505,7 @@ function psSaved(){for(const st of [()=>localStorage,()=>sessionStorage])try{con
 /* files that only describe the current season (today's matches, coming fixtures, live scores, season facts, rare cases):
    in a past season they answer "not found", so the widgets that use them stay out instead of mixing in this season */
 function psCurOnly(){if(window.__psF)return;const f0=window.fetch;window.__psF=1;
- window.fetch=function(u){const s=String(u&&u.url||u);if(/(^|\/)data\/(live|fixtures|schedule|facts|rare|fpl|fpl_track|market|elo|elo_own|priors|xib|xib_test)\.json/.test(s))return Promise.resolve(new Response('{}',{status:404}));return f0.apply(this,arguments)}}
+ window.fetch=function(u){const s=String(u&&u.url||u);if(/(^|\/)data\/(live|fixtures|schedule|facts|rare|fpl|fpl_track|market|elo|elo_own|priors|xib|xib_test|story)\.json/.test(s))return Promise.resolve(new Response('{}',{status:404}));return f0.apply(this,arguments)}}
 function psView(x){
  ALL0=x;const s=psSaved();if(!s||!x||!x.seasons||!x.leagues)return x;
  let lid=null;for(const st of [()=>localStorage,()=>sessionStorage])try{lid=st().getItem('league');if(lid)break}catch(e){}
@@ -12811,6 +12811,359 @@ def run_pipeline(hub, pit_key):
 # ===== TMACH END =====
 
 
+# ===== STORY START =====
+# Full-time verdict (owner asked 1 Nov 2026): for every finished match of the current season that has shots whose goals add up to the score, a verdict from the
+# chances (what the shots were worth, each shot scoring with probability xG), a win-probability curve (Elo's pre-match chances turned into two goal rates, then the
+# score and the minutes left), the goal that lifted the final result most, and two sentences in English and Arabic. data/story.json feeds the notification
+# (final-score message) and the page #/recap/<match id>, so the two never disagree. Optional: a failure never stops the sync. Must run before NOTIFY.
+import math
+
+VD_DESERVED = 0.50      # a win: the winner's chance-based chance of winning at least this -> "deserved"
+VD_LUCKY = 0.25         # below this (and the loser had more xG) -> "lucky"; in between "close"
+VD_DRAW_FAIR = 0.45     # a draw: neither side's chance-based chance of winning reaches this -> "fair", else "saved"
+VD_GAP_WIN = 0.20       # "lucky" also needs the loser's chance-based chance of winning to be this much higher than the winner's (added after review: a borderline gap is "close")
+VD_GAP_DRAW = 0.25      # "saved" also needs the two sides' chance-based chances of winning to be this far apart, else "fair"
+ST_ADDED_LEFT = 3 / 90.0   # a goal at minute 90 (or 45) in added time: the data has no clock, so 3 minutes are assumed to be left
+ST_GRID = (0, 15, 30, 45, 60, 75)
+ST_MAXG = 12
+ST_TOTAL0 = 2.6         # league goals per match until 30 matches are known
+STORY_PATH = "data/story.json"
+
+
+def story_goals(rows, home, away):
+    """[(minute, added minute, 'h'|'a')] of one match from its shot rows (ev == 'Goal'); an own goal counts for the other side; None if a club is neither side."""
+    out = []
+    for r in rows:
+        if r.get("ev") != "Goal":
+            continue
+        c = r.get("c")
+        if c not in (home, away):
+            return None
+        side = "h" if c == home else "a"
+        if r.get("og"):
+            side = "a" if side == "h" else "h"
+        out.append((int(r.get("mn") or 0), int(r.get("ma") or 0), side))
+    return sorted(out, key=lambda g: (g[0], g[1]))
+
+
+def _pb(ps):
+    """distribution of goals scored by independent shots with scoring probabilities ps (capped at 15)"""
+    d = [1.0]
+    for p in ps:
+        n = d + [0.0]
+        for k, v in enumerate(d):
+            n[k] -= v * p
+            n[k + 1] += v * p
+        d = n
+    if len(d) > 16:
+        d = d[:15] + [sum(d[15:])]
+    return d
+
+
+def story_chances(rows, home, away):
+    """(xG home, xG away, [P(home wins), P(draw), P(away wins)]) if the same shots were taken again; own goals and shots without xG are left out"""
+    ps = {"h": [], "a": []}
+    for r in rows:
+        if r.get("og") or r.get("xg") is None:
+            continue
+        c = r.get("c")
+        if c in (home, away):
+            ps["h" if c == home else "a"].append(min(max(float(r["xg"]), 0.0), 1.0))
+    a, b = _pb(ps["h"]), _pb(ps["a"])
+    w = sum(a[i] * b[j] for i in range(len(a)) for j in range(len(b)) if i > j)
+    d = sum(a[i] * b[i] for i in range(min(len(a), len(b))))
+    return sum(ps["h"]), sum(ps["a"]), [w, d, max(0.0, 1.0 - w - d)]
+
+
+def story_verdict(score, xh, xa, ph):
+    """-> {"vs": 'h'|'a'|'d', "vd": 'deserved'|'close'|'lucky'|'fair'|'saved'} with the fixed cut-offs above"""
+    h, a = score
+    if h == a:
+        return {"vs": "d", "vd": "fair" if max(ph[0], ph[2]) < VD_DRAW_FAIR or abs(ph[0] - ph[2]) < VD_GAP_DRAW else "saved"}
+    w = "h" if h > a else "a"
+    q, ql = (ph[0], ph[2]) if w == "h" else (ph[2], ph[0])
+    xw, xl = (xh, xa) if w == "h" else (xa, xh)
+    return {"vs": w, "vd": "deserved" if q >= VD_DESERVED else "lucky" if (q < VD_LUCKY and xl > xw and ql - q >= VD_GAP_WIN - 1e-9) else "close"}
+
+
+def _pois(l, n=ST_MAXG):
+    p = [math.exp(-l)]
+    for k in range(1, n + 1):
+        p.append(p[-1] * l / k)
+    return p
+
+
+def story_p(diff, frac, lh, la):
+    """(P(home wins), P(draw), P(away wins)) from a goal difference `diff` (home - away) with `frac` of the match left and full-match goal rates lh, la"""
+    if frac <= 0:
+        return (1.0, 0.0, 0.0) if diff > 0 else (0.0, 1.0, 0.0) if diff == 0 else (0.0, 0.0, 1.0)
+    a, b = _pois(lh * frac), _pois(la * frac)
+    w = d = 0.0
+    for i, x in enumerate(a):
+        for j, y in enumerate(b):
+            t = diff + i - j
+            if t > 0:
+                w += x * y
+            elif t == 0:
+                d += x * y
+    return (w, d, max(0.0, 1.0 - w - d))
+
+
+def story_rates(pre, total):
+    """(lam_h, lam_a) with lam_h + lam_a == total whose Poisson-difference P(home) - P(away) equals pre[0] - pre[2] (bisection on the home share)"""
+    want = pre[0] - pre[2]
+    lo, hi = 0.001, 0.999
+    for _ in range(60):
+        s = (lo + hi) / 2
+        p = story_p(0, 1.0, s * total, (1 - s) * total)
+        if p[0] - p[2] < want:
+            lo = s
+        else:
+            hi = s
+    s = (lo + hi) / 2
+    return s * total, (1 - s) * total
+
+
+def _left(minute):
+    return (90 - min(90, minute)) / 90.0
+
+
+def _left_goal(minute):
+    """time left when a goal is scored at `minute`: a goal at 90 or later is in added time"""
+    return ST_ADDED_LEFT if minute >= 90 else _left(minute)
+
+
+def story_curve(goals, pre, total):
+    """[[minute, P(home wins), P(draw)]]: minutes 0, 15 ... 75, every goal (after it) and 90; away = 1 - home - draw"""
+    lh, la = story_rates(pre, total)
+    pts = []
+    gm = {g[0] for g in goals}
+    marks = [(m, 0, None, -1) for m in ST_GRID if m not in gm]
+    marks += [(g[0], 1, g, i) for i, g in enumerate(goals)] + [(90, 2, "end", -1)]
+    marks.sort(key=lambda x: (x[0], x[1], x[3]))
+    for m, _, g, i in marks:
+        if g == "end":
+            diff = sum(1 if x[2] == "h" else -1 for x in goals)
+            frac = 0.0
+        elif g is None:
+            diff = sum(1 if x[2] == "h" else -1 for x in goals if x[0] < m)
+            frac = _left(m)
+        else:
+            diff = sum(1 if x[2] == "h" else -1 for x in goals[:i + 1])
+            frac = _left_goal(m)
+        w, d, _ = story_p(diff, frac, lh, la)
+        pts.append([m, round(w, 3), round(d, 3)])
+    return pts
+
+
+def story_turn(goals, pre, total, vs):
+    """the goal that raised the chance of the final result (the winner's win, or the draw) the most -> {"m", "side", "a", "b"} in whole percent, or None"""
+    if not goals:
+        return None
+    lh, la = story_rates(pre, total)
+    k = {"h": 0, "a": 2, "d": 1}[vs]
+    best, diff = None, 0
+    for g in goals:
+        left = _left_goal(g[0])
+        before = story_p(diff, left, lh, la)[k]
+        diff += 1 if g[2] == "h" else -1
+        after = story_p(diff, left, lh, la)[k]
+        if best is None or after - before > best[0] + 1e-12:
+            best = (after - before, g[0], before, after, g[1])
+    if best[0] <= 0:
+        return None
+    return {"m": best[1], "x": best[4], "side": vs if vs in ("h", "a") else None, "a": int(round(best[2] * 100)), "b": int(round(best[3] * 100))}
+
+
+def story_text(e, home, away):
+    """{"en": [verdict, turning or None], "ar": [...]} from an entry {"x", "pv", "vs", "vd", "tp"}"""
+    f = lambda v: f"{v:.1f}"
+    xh, xa = e["x"]
+    vs, vd = e["vs"], e["vd"]
+    W, L = (home, away) if vs == "h" else (away, home)
+    xw, xl = (xh, xa) if vs == "h" else (xa, xh)
+    if vd == "deserved":
+        v = (f"{W} deserved it: their chances were worth {f(xw)} goals to {f(xl)}.", f"{W} يستاهل الفوز: فرصه تساوي {f(xw)} هدف مقابل {f(xl)}.")
+    elif vd == "close":
+        v = (f"A close call: {W} won, but the chances ({f(xw)} to {f(xl)}) could have gone either way.", f"مباراة متقاربة: فاز {W}، لكن الفرص ({f(xw)} مقابل {f(xl)}) كان ممكن تروح للطرفين.")
+    elif vd == "lucky":
+        v = (f"A stolen win for {W}: {L}'s chances were worth {f(xl)} goals to {f(xw)}.", f"فوز مسروق لـ{W}: فرص {L} تساوي {f(xl)} هدف مقابل {f(xw)}.")
+    elif vd == "fair":
+        v = (f"A fair draw: the chances were close ({f(xh)} to {f(xa)}).", f"تعادل عادل: الفرص متقاربة ({f(xh)} مقابل {f(xa)}).")
+    else:
+        pv = e["pv"]
+        S, O, xs, xo = (home, away, xh, xa) if pv[0] < pv[2] else (away, home, xa, xh)
+        v = (f"{S} took a point they did not earn: {O}'s chances were worth {f(xo)} goals to {f(xs)}.", f"{S} أخذ نقطة ما استحقها: فرص {O} تساوي {f(xo)} هدف مقابل {f(xs)}.")
+    t = e.get("tp")
+    if t:
+        t = dict(t, m=f"{t['m']}+{t['x']}" if t.get("x") else t["m"])
+    if not t:
+        tt = (None, None)
+    elif vs == "d":
+        tt = (f"The draw settled in minute {t['m']}, when the chance of a draw went from {t['a']}% to {t['b']}%.", f"استقر التعادل في الدقيقة {t['m']} لما تغيّرت فرصته من {t['a']}% إلى {t['b']}%.")
+    else:
+        tt = (f"The match turned in minute {t['m']}, when {W}'s chance of winning went from {t['a']}% to {t['b']}%.", f"انقلبت المباراة في الدقيقة {t['m']} لما ارتفعت فرصة فوز {W} من {t['a']}% إلى {t['b']}%.")
+    return {"en": [v[0], tt[0]], "ar": [v[1], tt[1]]}
+def story_total(n, goals):
+    """league goals per match from the n matches before this one with `goals` goals in all: ST_TOTAL0 until 30 are known"""
+    return ST_TOTAL0 if n < 30 else goals / n
+
+
+def _brier(p, o):
+    return sum((p[i] - (1.0 if i == o else 0.0)) ** 2 for i in range(3))
+
+
+def story_accuracy(items):
+    """How good are the chances and the curve? items: [{"score","rows","home","away","pre"|None,"total"}] of finished matches with consistent goals.
+    -> {"n", "xg_goals", "shares", "brier_chances", "brier_rates", "curve": {"30"|"60"|"75": {"n","brier","base","bins"}}}"""
+    n = len(items)
+    out = {"n": n, "xg_goals": {"xg": 0.0, "goals": 0}, "shares": {k: 0 for k in ("deserved", "close", "lucky", "fair", "saved")}, "brier_chances": None, "brier_rates": None, "curve": {}}
+    cur = {m: {"n": 0, "b": 0.0, "base": 0.0, "bins": [[0, 0.0, 0] for _ in range(10)]} for m in (30, 60, 75)}
+    res, bc = [], 0.0
+    for it in items:
+        h, a = it["score"]
+        o = 0 if h > a else 1 if h == a else 2
+        res.append(o)
+        xh, xa, ph = story_chances(it["rows"], it["home"], it["away"])
+        out["xg_goals"]["xg"] += xh + xa
+        out["xg_goals"]["goals"] += h + a
+        out["shares"][story_verdict((h, a), xh, xa, ph)["vd"]] += 1
+        bc += _brier(ph, o)
+        if it.get("pre"):
+            lh, la = story_rates(it["pre"], it["total"])
+            goals = story_goals(it["rows"], it["home"], it["away"]) or []
+            for m, c in cur.items():
+                diff = sum(1 if g[2] == "h" else -1 for g in goals if g[0] <= m)
+                p = story_p(diff, _left(m), lh, la)
+                c["n"] += 1
+                c["b"] += _brier(p, o)
+                c["base"] += _brier(it["pre"], o)
+                b = c["bins"][min(9, int(p[0] * 10))]
+                b[0] += 1
+                b[1] += p[0]
+                b[2] += 1 if o == 0 else 0
+    if n:
+        rates = [res.count(k) / n for k in (0, 1, 2)]
+        out["brier_chances"] = round(bc / n, 4)
+        out["brier_rates"] = round(sum(_brier(rates, o) for o in res) / n, 4)
+        out["xg_goals"]["xg"] = round(out["xg_goals"]["xg"], 2)
+    for m, c in cur.items():
+        k = c["n"]
+        out["curve"][str(m)] = {"n": k, "brier": round(c["b"] / k, 4) if k else None, "base": round(c["base"] / k, 4) if k else None,
+                                "bins": [[i / 10, (i + 1) / 10, b[0], round(b[1] / b[0], 3), round(b[2] / b[0], 3)] for i, b in enumerate(c["bins"]) if b[0]]}
+    return out
+def story_shot_rows(sh):
+    """{match id: [row dicts]} from a *_sh.json ({"cols","rows"}); only the fields the engine reads"""
+    cols = (sh or {}).get("cols") or []
+    ix = {c: cols.index(c) for c in ("m", "c", "ev", "og", "mn", "ma", "xg") if c in cols}
+    out = {}
+    if "m" not in ix or "c" not in ix or "ev" not in ix:
+        return out
+    for r in (sh or {}).get("rows") or []:
+        out.setdefault(r[ix["m"]], []).append({k: r[i] for k, i in ix.items()})
+    return out
+
+
+def story_items(matches, rows_by, pre_by, seed=None):
+    """items for story_accuracy / entries, in date order: finished matches whose shots exist and whose goals add up to the score.
+    matches: league-file match dicts; pre_by: {match id: [pH, pD, pA]}; seed: (number of matches, goals) before the first one, for the league's goals-per-match mean."""
+    n, gsum = seed or (0, 0)
+    out = []
+    for m in sorted(matches, key=lambda m: (str(m.get("d")), str(m.get("i")))):
+        sc = re.fullmatch(r"(\d+)-(\d+)", str(m.get("s") or "").strip())
+        if not sc:
+            continue
+        h, a = int(sc.group(1)), int(sc.group(2))
+        total = story_total(n, gsum)
+        n, gsum = n + 1, gsum + h + a
+        rows = rows_by.get(m.get("i"))
+        goals = story_goals(rows, m["h"], m["a"]) if rows else None
+        if goals is None:
+            continue
+        if sum(1 for g in goals if g[2] == "h") != h or sum(1 for g in goals if g[2] == "a") != a:
+            continue
+        out.append({"id": m["i"], "score": (h, a), "rows": rows, "home": m["h"], "away": m["a"], "pre": pre_by.get(m["i"]), "total": total, "goals": goals})
+    return out
+
+
+def story_entry(it, lid):
+    xh, xa, ph = story_chances(it["rows"], it["home"], it["away"])
+    v = story_verdict(it["score"], xh, xa, ph)
+    e = {"lg": lid, "s": f"{it['score'][0]}-{it['score'][1]}", "x": [round(xh, 2), round(xa, 2)], "pv": [round(p, 3) for p in ph], "vs": v["vs"], "vd": v["vd"], "g": [[g[0], g[2]] + ([g[1]] if g[1] else []) for g in it["goals"]], "c": None, "tp": None}
+    if it["pre"]:
+        e["c"] = story_curve(it["goals"], it["pre"], it["total"])
+        e["tp"] = story_turn(it["goals"], it["pre"], it["total"], v["vs"])
+    e["tx"] = story_text(e, it["home"], it["away"])
+    return e
+
+
+def sync_story(hub, now=None):
+    """Writes data/story.json. The current season is recomputed every run from the (small) current files, so a corrected score or xG is picked up; the finished
+    2025-26 season's big files are downloaded only when their version changes (their goals-per-match seed and accuracy are kept in the file); nothing is written
+    when the result is the same as the file's."""
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    idx = gh_get_json(hub, "data/index.json") or {}
+    sj = gh_get_json(hub, "data/seasons.json") or {}
+    elo = gh_get_json(hub, "data/elo_own.json") or {}
+    old = gh_get_json(hub, STORY_PATH)
+    old = old if isinstance(old, dict) else {}
+    lgs = [l for l in (idx.get("leagues") or []) if l.get("id") and l.get("file") and l.get("sh_file")]
+    pf = {}
+    for l in lgs:
+        f = (((sj.get("leagues") or {}).get(l["id"]) or {}).get("seasons") or {}).get("2025-26") or {}
+        fl = f.get("files") or {}
+        pf[l["id"]] = fl if f.get("complete") and fl.get("file") and fl.get("sh_file") else None
+    k25 = hashlib.sha1(json.dumps([[lid, (fl or {}).get("v"), (fl or {}).get("sh_v")] for lid, fl in sorted(pf.items())]).encode()).hexdigest()[:10]
+    reuse = old.get("k25") == k25 and isinstance(old.get("seed"), dict) and "acc25" in old
+    seeds, allp, cur = {}, [], {}
+    for l in lgs:
+        lid, fl = l["id"], pf[l["id"]]
+        if reuse:
+            seeds[lid] = tuple(old["seed"].get(lid) or (0, 0))
+        elif fl:
+            pms = (gh_get_json(hub, "data/" + fl["file"]) or {}).get("matches") or []
+            sc = [re.fullmatch(r"(\d+)-(\d+)", str(m.get("s") or "").strip()) for m in pms]
+            seeds[lid] = (sum(1 for x in sc if x), sum(int(x.group(1)) + int(x.group(2)) for x in sc if x))
+            allp += story_items(pms, story_shot_rows(gh_get_json(hub, "data/" + fl["sh_file"])), {})
+        else:
+            seeds[lid] = (0, 0)
+        ms = (gh_get_json(hub, "data/" + l["file"]) or {}).get("matches") or []
+        sh = story_shot_rows(gh_get_json(hub, "data/" + l["sh_file"]))
+        pre = ((elo.get("leagues") or {}).get(lid) or {}).get("pred") or {}
+        cur[lid] = story_items(ms, sh, pre, seeds[lid])
+    if not cur:
+        return
+    out = {"v": 1, "m": {}}
+    allc = []
+    for lid, items in sorted(cur.items()):
+        allc += items
+        for it in items:
+            out["m"][it["id"]] = story_entry(it, lid)
+    out["acc"] = story_accuracy(allc)
+    out["acc25"] = old.get("acc25") if reuse else (story_accuracy(allp) if allp else None)
+    out["seed"] = {lid: list(v) for lid, v in sorted(seeds.items())}
+    out["k25"] = k25
+    out["key"] = hashlib.sha1(json.dumps(out, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:10]
+    if old.get("key") == out["key"] and old.get("v") == 1:
+        return
+    out["t"] = now.strftime("%Y-%m-%d %H:%M:%S")
+    gh_put(hub, STORY_PATH, json.dumps(out, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), "Update match stories")
+    a = out["acc"]
+    log(f"  [القصة] {len(out['m'])} مباراة — خطأ Brier للفرص {a['brier_chances']} مقابل {a['brier_rates']} لمعدلات الدوري ({a['n']} مباراة)")
+
+
+_orig_run_pipeline_story = run_pipeline
+
+
+def run_pipeline(hub, pit_key):
+    out = _orig_run_pipeline_story(hub, pit_key)
+    try:
+        sync_story(hub)
+    except Exception as e:      # optional: never stops the sync
+        log(f"  [القصة] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
+    return out
+# ===== STORY END =====
+
 # ===== NOTIFY START =====
 # Notifications for the teams you star (owner asked 30 Oct 2026). The site is static, so it cannot push by itself; this step is the sender, and it has two doors:
 #   1. the free ntfy app: one public ntfy.sh topic per team, pla-<namespace>-<slug of the team's name> (the namespace is in data/notify.json so that other people's
@@ -12864,10 +13217,23 @@ def notify_topic(ns, team):
     return f"pla-{ns}-{notify_slug(team)}"
 
 
-def notify_plan(leagues, fixtures, state, now, base_url, ns, channel="ntfy"):
+def story_notice(e, score):
+    """the sentences of a story entry ({"en": [verdict, turning|None], "ar": [...]}) if it is usable in a notification for a match with this score ("2-1"), else None"""
+    try:
+        tx = e["tx"]
+        if e["s"] == score and all(isinstance(tx[l][0], str) and tx[l][0] and all(x is None or isinstance(x, str) for x in tx[l]) for l in ("en", "ar")):
+            return {"en": list(tx["en"]), "ar": list(tx["ar"])}
+    except Exception:
+        pass
+    return None
+
+
+def notify_plan(leagues, fixtures, state, now, base_url, ns, channel="ntfy", story=None):
     """-> (messages, state'). A message is (payload, key) with key = (kind, state key, day, league name, kick-off "HH:MM" or None).
     channel "ntfy": reminders are queued with ntfy's delay; state keys r / m; the first run is a missing state.
-    channel "push": reminders go out when the kick-off is 15 to 95 minutes away; state keys pr / pm; the first run is a state without "pv"."""
+    channel "push": reminders go out when the kick-off is 15 to 95 minutes away; state keys pr / pm; the first run is a state without "pv".
+    story = data/story.json["m"]: a result whose match has an entry carries the verdict instead of "Full time", links to #/recap/<id>, and its key's 5th element is the
+    sentences {"en": [...], "ar": [...]} (push_text reads it); a match without an entry is announced as before."""
     push = channel == "push"
     rk, mk = ("pr", "pm") if push else ("r", "m")
     first = (not (state or {}).get("pv")) if push else state is None
@@ -12893,9 +13259,10 @@ def notify_plan(leagues, fixtures, state, now, base_url, ns, channel="ntfy"):
                 if first:
                     st[rk][key] = d
                     continue
+                tx = story_notice((story or {}).get(str(m["i"])), f"{sc.group(1)}-{sc.group(2)}")
                 res.append((d, str(m["i"]), {"topic": notify_topic(ns, team), "title": f"{m['h']} {sc.group(1)}\u2013{sc.group(2)} {m['a']}",
-                                           "message": f"Full time \u00b7 \u0627\u0646\u062a\u0647\u062a \u0627\u0644\u0645\u0628\u0627\u0631\u0627\u0629\n{lname}",
-                                           "tags": ["soccer"], "click": f"{base_url}#/match/{m['i']}"}, (rk[-1], key, d, lname, None)))
+                                           "message": (f"{tx['en'][0]}\n{tx['ar'][0]}\n{lname}" if tx else f"Full time \u00b7 \u0627\u0646\u062a\u0647\u062a \u0627\u0644\u0645\u0628\u0627\u0631\u0627\u0629\n{lname}"),
+                                           "tags": ["soccer"], "click": f"{base_url}#/{'recap' if tx else 'match'}/{m['i']}"}, (rk[-1], key, d, lname, tx)))
     for lid, lname, _ in leagues:
         for f in (fixtures.get(lid) or []):
             try:
@@ -13003,7 +13370,9 @@ def push_clean(obj):
 def push_text(payload, key, lang):
     """The title and body of a push in the device's language; the team names stay as they are."""
     kind, lname, hh = key[0], key[3], key[4]
-    if kind == "r":
+    if kind == "r" and isinstance(hh, dict):
+        body = " ".join(x for x in hh.get(lang) or hh["en"] if x) + f" \u00b7 {lname}"
+    elif kind == "r":
         body = f"\u0627\u0646\u062a\u0647\u062a \u0627\u0644\u0645\u0628\u0627\u0631\u0627\u0629 \u00b7 {lname}" if lang == "ar" else f"Full time \u00b7 {lname}"
     else:
         body = f"\u062a\u0646\u0637\u0644\u0642 \u0627\u0644\u0633\u0627\u0639\u0629 {hh} \u0628\u062a\u0648\u0642\u064a\u062a \u063a\u0631\u064a\u0646\u062a\u0634 \u00b7 {lname}" if lang == "ar" else f"Kick-off {hh} UTC \u00b7 {lname}"
@@ -13026,7 +13395,7 @@ def push_send(sub, data, vapid_raw, sub_claim, timeout=15):
         return "fail"
 
 
-def push_run(hub, cfg, leagues, fixtures, st, now, base, send=None, inbox=None):
+def push_run(hub, cfg, leagues, fixtures, st, now, base, send=None, inbox=None, story=None):
     """The browser door. Returns the state (a new dict) and writes data/push_status.json and data/push_subs.json. Does nothing without the secret."""
     send = send or push_send
     pub = gh_get_json(hub, PUSH_PATH) or {}
@@ -13076,7 +13445,7 @@ def push_run(hub, cfg, leagues, fixtures, st, now, base, send=None, inbox=None):
         c = push_clean(push_open(keys["box"], v["s"]))
         if c:
             live[k] = c
-    msgs, st2 = notify_plan(leagues, fixtures, st, now, base, ns, channel="push")
+    msgs, st2 = notify_plan(leagues, fixtures, st, now, base, ns, channel="push", story=story)
     claim = (re.match(r"https://[\w.-]+", base or "") or [None])[0]   # the VAPID subject: the site's own origin (py_vapid accepts https://host without a path)
     if not claim:
         log("  [إشعارات المتصفح] ما عندي عنوان الموقع — تخطيت")
@@ -13120,7 +13489,9 @@ def sync_notify(hub, now=None, post=None, send=None, inbox=None):
     fixtures = (gh_get_json(hub, "data/fixtures.json") or {}).get("leagues") or {}
     old = gh_get_json(hub, NOTIFY_STATE)
     base = hub.get("url") or (f"https://{hub['repo'].split('/')[0]}.github.io/{hub['repo'].split('/')[1]}/" if "/" in str(hub.get("repo")) else "")
-    msgs, st = notify_plan(leagues, fixtures, old, now, base, ns)
+    story = gh_get_json(hub, "data/story.json")
+    story = story.get("m") if isinstance(story, dict) and isinstance(story.get("m"), dict) else {}
+    msgs, st = notify_plan(leagues, fixtures, old, now, base, ns, story=story)
     sent = fails = streak = 0
     for payload, key in msgs[:NOTIFY_MAX_POSTS]:
         try:
@@ -13139,7 +13510,7 @@ def sync_notify(hub, now=None, post=None, send=None, inbox=None):
     log(f"  [إشعارات] أُرسل {sent} إشعار" + (f"، فشل {fails}" if fails else "") + ("، أول تشغيل: النتائج الحالية اتعلّمت بدون إرسال" if old is None else "")
         + (f"، تبقّى {len(msgs) - sent - fails} للمرة الجاية" if len(msgs) > sent + fails else ""))
     try:
-        st = push_run(hub, {"ns": ns, "server": server}, leagues, fixtures, st, now, base, send=send, inbox=inbox)
+        st = push_run(hub, {"ns": ns, "server": server}, leagues, fixtures, st, now, base, send=send, inbox=inbox, story=story)
     except Exception as e:      # the browser door never stops the ntfy door's state from being saved
         log(f"  [إشعارات المتصفح] خطأ ({type(e).__name__}: {e})")
     gh_put(hub, NOTIFY_STATE, json.dumps(st, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8"), "Update notification state")

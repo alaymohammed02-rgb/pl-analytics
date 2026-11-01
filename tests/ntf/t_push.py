@@ -122,6 +122,13 @@ ok(sorted((k, len(v)) for k, v in by.items()) == [('a', 1), ('b', 1), ('c', 1)],
 pa, pb, pc = decrypt(DA, by['a'][0][1]), decrypt(DB, by['b'][0][1]), decrypt(DC, by['c'][0][1])
 ok(pa == {'title': 'Arsenal 2–1 Chelsea', 'body': 'انتهت المباراة · Premier League', 'url': BASE + '#/match/m1', 'tag': 'm1|arsenal'}, 'device a (Arabic) gets "Arsenal 2–1 Chelsea", the Arabic body, the match link and a tag')
 ok(pb['body'] == 'Full time · Premier League' and pb['title'] == pa['title'] and pb['tag'] == 'm1|chelsea', 'device b (English) gets the English body for the same match')
+TXP = {'en': ['A stolen win for Arsenal: Chelsea\'s chances were worth 1.9 goals to 0.4.', None], 'ar': ['فوز مسروق لـArsenal: فرص Chelsea تساوي 1.9 هدف مقابل 0.4.', 'انقلبت المباراة في الدقيقة 70.']}
+KEYS = ('r', 'm1|arsenal', '2026-10-30', 'Premier League', TXP)
+PL_ = {'title': 'Arsenal 2–1 Chelsea', 'click': BASE + '#/recap/m1'}
+ptx = G['push_text']
+ok(ptx(PL_, KEYS, 'en') == {'title': 'Arsenal 2–1 Chelsea', 'body': TXP['en'][0] + ' · Premier League', 'url': BASE + '#/recap/m1', 'tag': 'm1|arsenal'}, 'push_text: the English verdict (a missing second sentence is dropped), the league, the recap link')
+ok(ptx(PL_, KEYS, 'ar')['body'] == TXP['ar'][0] + ' ' + TXP['ar'][1] + ' · Premier League', 'push_text: the Arabic device gets both Arabic sentences')
+ok(ptx(PL_, KEYS[:4] + (None,), 'ar')['body'] == 'انتهت المباراة · Premier League', 'push_text: a result without a story keeps the old text')
 ok(pc['title'] == 'Leeds United v Hull City' and pc['body'] == 'Kick-off 12:40 UTC · Premier League' and pc['url'] == BASE + '#/preview/f1', 'device c gets the reminder 40 minutes before kick-off, with the time and the preview link')
 ok(all(vapid_ok(h, ORIGIN, 'https://me.github.io') for k in by for h, _ in by[k]), 'every request carries a valid VAPID signature (ES256, audience = the push service, subject = the origin of the site, not expired) made with the sender key')
 ok(all({a.lower(): b for a, b in h.items()}.get('content-encoding') == 'aes128gcm' and int({a.lower(): b for a, b in h.items()}.get('ttl', 0)) > 0 for k in by for h, _ in by[k]), 'the body is aes128gcm and has a time to live')
