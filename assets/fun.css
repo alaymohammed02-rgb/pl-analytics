@@ -657,3 +657,11 @@ html[dir=rtl] .dl-bars .ph-bn bdi{text-align:right}
 .cs-3d,.rc-3d{margin-top:6px}
 @media(max-width:560px){.p3-hd span{font-size:10px;top:-24px}}
 @media(prefers-reduced-motion:reduce){.p3-world{will-change:auto}}
+
+/* ===== The club's stadium in 3D behind its page (concept, assets/stadium3d.js) ===== */
+.st3{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden}
+.st3::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(6,15,23,.10) 0,rgba(6,15,23,0) 30%,rgba(10,26,30,.55) 62%,rgba(10,26,30,.88) 100%)}
+.st3-cv{display:block;width:100%;height:100%}
+.st3-ctl{margin:8px 2px 0;font-size:12.5px;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
+.st3-sw{min-height:28px;padding:2px 12px;border-radius:999px;font-size:12px}
+.st3-m{margin-inline-start:auto;font-variant-numeric:tabular-nums}
