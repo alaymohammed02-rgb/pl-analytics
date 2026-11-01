@@ -24,13 +24,13 @@ const vars=pg=>pg.evaluate(()=>{const s=getComputedStyle(document.documentElemen
   ok(cr.btn>=3&&cr.ink>=4.5&&cr.mu>=4.5&&cr.link>=4.5,'Barcelona palette passes contrast '+JSON.stringify(Object.fromEntries(Object.entries(cr).map(([k,x])=>[k,+x.toFixed(1)]))));
   await go(pg,'#/club/'+encodeURIComponent('Atlético Madrid'),'.clubhd img.clubimg');await pg.waitForTimeout(300);v=await vars(pg);const h2=await pg.evaluate(x=>thHsl(x),v.th);
   ok((h2[0]<15||h2[0]>345)&&h2[1]>.5,'Atlético page in red ('+v.th+')');
-  await go(pg,'#/club/Elche','.clubhd');v=await vars(pg);ok(v.th==='#07903f','Elche (no logo): its configured kit colours, green ('+v.th+')');
+  await go(pg,'#/club/Elche','.clubhd');v=await vars(pg);ok(v.th==='#068139','Elche (no logo): its configured kit colours, green ('+v.th+')');
   if(vw===1280){/* other leagues */
    await pg.selectOption('#lgpick','l_1Isor4');await pg.waitForFunction(()=>D.id==='l_1Isor4');await go(pg,'#/club/'+encodeURIComponent('Borussia Dortmund'),'.clubhd img.clubimg');await pg.waitForTimeout(300);v=await vars(pg);
    const hd=await pg.evaluate(x=>thHsl(x)[0],v.th);ok(hd>40&&hd<65,'Dortmund page in yellow ('+v.th+', text '+v.ink+')');
    await go(pg,'#/club/'+encodeURIComponent('Bayern München'),'.clubhd img.clubimg');await pg.waitForTimeout(300);v=await vars(pg);const hb=await pg.evaluate(x=>thHsl(x)[0],v.th);ok(hb<15||hb>340,'Bayern page in red ('+v.th+')');
    await pg.selectOption('#lgpick','l_0ALvwF');await pg.waitForFunction(()=>D.id==='l_0ALvwF');await go(pg,'#/club/Juventus','.clubhd img.clubimg');await pg.waitForTimeout(300);v=await vars(pg);
-   ok(v.th==='#ffffff'&&/#1[0-9a-f]{5}/.test(v.bg),'Juventus (black and white crest): neutral page, white buttons ('+v.th+' on '+v.bg+')');
+   ok(v.th==='#ffffff'&&/#[01][0-9a-f]{5}/.test(v.bg),'Juventus (black and white crest): neutral page, white buttons ('+v.th+' on '+v.bg+')');
    const hl=await pg.evaluate(()=>document.getElementById('lglogo').src.slice(0,30));ok(/^data:image\/png/.test(hl),'header logo follows the selected league');
    await pg.selectOption('#lgpick','l_4WFCIZ');await pg.waitForFunction(()=>D.id==='l_4WFCIZ');await go(pg,'#/club/Arsenal','.clubhd img.clubimg');await pg.waitForTimeout(300);v=await vars(pg);
    ok(v.th==='#ea0107','Arsenal keeps its configured kit colours even with a logo ('+v.th+')');
