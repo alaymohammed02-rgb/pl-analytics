@@ -12,15 +12,22 @@
    The choice is kept in plx_st3d (on by default). INS.stadium3d = {SPEC, mount(club), unmount(), on(), state(), panels(spec), camera(...), project(...)} for tests. */
 (function(){
  if(typeof R!=='object'||typeof INS!=='object')return;
+ const SRC=document.currentScript&&document.currentScript.src||'';
  const two=(en,ar)=>`<span class="fx-en">${en}</span><span class="fx-ar" dir="rtl">${ar}</span>`;
  const nb=x=>`<bdi dir="ltr">${x}</bdi>`;
  const reduce=()=>typeof matchMedia==='function'&&matchMedia('(prefers-reduced-motion: reduce)').matches;
  const on=()=>{try{return localStorage.getItem('plx_st3d')!=='0'}catch(e){return true}};
  const setOn=v=>{try{localStorage.setItem('plx_st3d',v?'1':'0')}catch(e){}};
+ /* the WebGL scene (assets/stadium-gl.js, three.js): tried after the drawn model is up; plx_st3gl=0 keeps the drawn model */
+ const glOn=()=>{try{return localStorage.getItem('plx_st3gl')!=='0'}catch(e){return true}};
+ const GL_URL=()=>{try{const q=SRC.split('?')[1];return new URL('stadium-gl.js'+(q?'?'+q:''),SRC).href}catch(e){return 'assets/stadium-gl.js'}};
+ let glBroken=false;
+ /* a slow device (under 20 frames a second) is given fewer pixels: 80% of the resolution each time, down to about half */
+ const nextScale=(fps,scale)=>fps<20&&scale>.55?+(scale*.8).toFixed(3):scale;
  /* the model: rings [a along the pitch, b across it, height], 3.4 units a metre on the pitch */
  const N=48,M=3.4;
  const SPEC={
-  'real madrid':{name:'Santiago Bernabéu',ar:'سانتياغو برنابيو',seat:'#2c4a86',seat2:'#d9dee8',roof:'#151a22',led:'#2f7bff',
+  'real madrid':{gl:true,name:'Santiago Bernabéu',ar:'سانتياغو برنابيو',seat:'#2c4a86',seat2:'#d9dee8',roof:'#151a22',led:'#2f7bff',
    rings:{
     low:[[205,150,6],[292,218,66],14],        /* lower tier: from the pitch side up and out, 14 rows */
     led:[[294,220,68],[296,221,80]],          /* the blue LED ribbon between the tiers */
@@ -116,23 +123,39 @@
   return L.length;
  }
  let S=null;
- function unmount(){if(!S)return;cancelAnimationFrame(S.raf);removeEventListener('scroll',S.onScroll);removeEventListener('resize',S.onResize);if(S.el)S.el.remove();S=null;document.documentElement.classList.remove('st3-on')}
- function mount(club){
+ function unmount(){if(!S)return;cancelAnimationFrame(S.raf);if(S.gl){try{S.gl.dispose()}catch(e){}}removeEventListener('scroll',S.onScroll);removeEventListener('resize',S.onResize);if(S.el)S.el.remove();S=null;document.documentElement.classList.remove('st3-on')}
+ /* the photo mode: a real photograph of the stadium (sp.photo, credited in sp.credit), shown a little wider than the window and panned slowly by a CSS
+    animation (the compositor moves it: no script per frame); scrolling shifts it a few pixels. If the file does not load, the drawn model takes its place. */
+ function mountPhoto(club,sp){
+  const t0=performance.now(),el=document.createElement('div');el.id='st3-bg';el.className='st3 st3-photo';el.setAttribute('aria-hidden','true');
+  el.innerHTML='<div class="st3-ph"><img alt="" decoding="async"></div>';
+  document.body.appendChild(el);document.documentElement.classList.add('st3-on');
+  const img=el.querySelector('img');
+  S={key:KEY(club),el,sp,mode:'photo',raf:0,still:reduce(),dip:0,fps:null,frameMs:null,panels:0,iw:0,ih:0};
+  img.onload=()=>{if(!S||S.el!==el)return;S.iw=img.naturalWidth;S.ih=img.naturalHeight;S.ms=performance.now()-t0;el.classList.add('st3-ph-ok');say()};
+  img.onerror=()=>{if(!S||S.el!==el)return;unmount();mount(club,'model')};
+  img.src=sp.photo;
+  S.onScroll=()=>{S.dip=Math.min(40,(scrollY||0)*.04);el.style.setProperty('--dy',S.dip.toFixed(1)+'px')};addEventListener('scroll',S.onScroll,{passive:true});
+  return S;
+ }
+ function mount(club,force){
   const sp=SPEC[KEY(club)];if(!sp||!on()){unmount();return null}
-  if(S&&S.key===KEY(club))return S;unmount();
+  if(S&&S.key===KEY(club)&&(force!=='model'||S.mode==='model'))return S;unmount();
+  if(sp.photo&&force!=='model')return mountPhoto(club,sp);
   const t0=performance.now();
   const el=document.createElement('div');el.id='st3-bg';el.className='st3';el.setAttribute('aria-hidden','true');
   el.innerHTML='<canvas class="st3-cv"></canvas>';
   document.body.appendChild(el);document.documentElement.classList.add('st3-on');
   const cv=el.querySelector('canvas'),ctx=cv.getContext('2d'),P=panels(sp);
-  S={key:KEY(club),el,cv,sp,P,raf:0,turn:0,dip:0,fps:null,drawn:0,frameMs:null,panels:P.length};
+  S={key:KEY(club),el,cv,sp,P,mode:'model',raf:0,turn:0,dip:0,fps:null,drawn:0,frameMs:null,panels:P.length};
   const size=()=>{const dpr=Math.min(1.5,window.devicePixelRatio||1),W=innerWidth,H=innerHeight;S.dpr=dpr;S.W=W;S.H=H;cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr)};
   const frame=()=>{const a=performance.now();S.cam=camera(sp,S.W,S.H,S.turn,S.dip);S.drawn=draw(ctx,sp,P,S.cam,S.dpr);S.frameMs=performance.now()-a};
   const dipNow=()=>Math.min(40,(scrollY||0)*.04);
   size();S.dip=dipNow();frame();
   S.ms=performance.now()-t0;
-  S.onScroll=()=>{S.dip=dipNow();if(S.still)frame()};addEventListener('scroll',S.onScroll,{passive:true});
-  S.onResize=()=>{size();frame()};addEventListener('resize',S.onResize);
+  S.onScroll=()=>{S.dip=dipNow();if(S.still)redraw()};addEventListener('scroll',S.onScroll,{passive:true});
+  const redraw=()=>{if(S.mode==='gl')S.gl.render(performance.now(),{turn:S.turn,dip:S.dip});else frame()};
+  S.onResize=()=>{S.W=innerWidth;S.H=innerHeight;if(S.mode==='gl'){S.gl.resize(S.W,S.H);if(S.still)redraw()}else{size();frame()}};addEventListener('resize',S.onResize);
   S.still=reduce();
   if(!S.still){
    /* the slow drift round the stands: about 30 frames a second, rAF stops by itself while the page is hidden */
@@ -141,17 +164,41 @@
     S.turn=sp.cam.orbit*Math.sin((t-start)/16000*2*Math.PI);frame();fr++;
     if(t-f0>=2000){S.fps=Math.round(fr*1000/(t-f0));fr=0;f0=t;say()}};
    S.raf=requestAnimationFrame(tick)}
+  if(sp.gl&&glOn()&&!glBroken)upgrade(club,el,sp,redraw);
   return S;
+ }
+ /* the WebGL scene replaces the drawn model once it is ready (the model stays if WebGL or the file fails); one render before it is shown, so the first frame is not black */
+ function upgrade(club,el,sp,redraw){
+  import(GL_URL()).then(m=>{
+   if(!S||S.el!==el||S.mode!=='model')return;
+   let g;try{g=m.create(KEY(club),{W:S.W,H:S.H,dpr:S.dpr})}catch(e){S.glErr=String(e&&e.message||e);return}
+   g.render(performance.now(),{turn:S.turn,dip:S.dip});
+   g.canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();glBroken=true;if(S&&S.el===el){unmount();mount(club,'model')}});
+   el.appendChild(g.canvas);S.gl=g;
+   requestAnimationFrame(()=>{if(!S||S.el!==el)return;el.classList.add('st3-gl-ok');
+    setTimeout(()=>{if(!S||S.el!==el)return;cancelAnimationFrame(S.raf);S.mode='gl';S.panels=0;if(S.cv){S.cv.remove();S.cv=null}S.frameMs=null;S.fps=null;
+     const start=performance.now();let last=0,fr=0,f0=start;
+     if(S.still){redraw();say();return}
+     const tick=t=>{if(!S||S.el!==el)return;S.raf=requestAnimationFrame(tick);if(t-last<30)return;last=t;
+      S.turn=sp.cam.orbit*Math.sin((t-start)/16000*2*Math.PI);const a=performance.now();g.render(t,{turn:S.turn,dip:S.dip});S.frameMs=performance.now()-a;fr++;
+      if(t-f0>=2000){S.fps=Math.round(fr*1000/(t-f0));fr=0;f0=t;const k=nextScale(S.fps,g.scale);if(k!==g.scale)g.setScale(k);say()}};
+     S.raf=requestAnimationFrame(tick);say()},900)});
+  }).catch(e=>{if(S&&S.el===el)S.glErr=String(e&&e.message||e)});
  }
  const ar=()=>typeof ARL==='object'&&!!ARL.on;
  function say(){const m=document.querySelector('.st3-m');if(!m||!S)return;
+  if(S.mode==='gl'){const st=S.gl.stats;m.innerHTML=`${nb(st.drawCalls)} ${ar()?'استدعاء رسم':'draw calls'} · ${nb(st.triangles)} ${ar()?'مثلث':'triangles'}${S.fps!=null?` · ${nb(S.fps+' fps')}`:''}${S.gl.scale<1?` · ${ar()?'الدقة':'resolution'} ${nb(Math.round(S.gl.scale*100)+'%')}`:''}`;return}
+  if(S.mode==='photo'){m.innerHTML=S.iw?`${ar()?'صورة':'photo'} ${nb(S.iw+' × '+S.ih)}`:'';return}
   m.innerHTML=`${ar()?'الإطار يُرسم في':'a frame takes'} ${nb((S.frameMs||0).toFixed(1)+' ms')} · ${nb(S.panels)} ${ar()?'لوح':'panels'}${S.fps!=null?` · ${nb(S.fps+' fps')}`:''}`}
  /* the line under the club's header: what it is, the switch and the measurements */
  function control(el,club){
   const sp=SPEC[KEY(club)],hd=el&&el.querySelector('.clubhd');if(!sp||!hd)return;
   let c=el.querySelector('.st3-ctl');if(!c){c=document.createElement('p');c.className='st3-ctl mu';hd.insertAdjacentElement('afterend',c)}
   const draw=()=>{const o=on();
-   c.innerHTML=`${two(`Behind this page: ${sp.name} in 3D, a simple model (a concept, not the exact stadium).`,`خلف هذي الصفحة: ملعب ${sp.ar} بثلاثة أبعاد، مجسّم مبسّط (تصوّر، مو الملعب بمقاساته).`)}
+   const cr=sp.credit,link=cr&&cr.url?`<a href="${esc(cr.url)}" target="_blank" rel="noopener">${esc(cr.title||cr.url)}</a>`:'';
+   const note=sp.photo&&S&&S.mode==='photo'?two(`Behind this page: a photograph of ${sp.name}${cr?` by ${esc(cr.by)} (${esc(cr.license)}), ${link}`:''}.`,`خلف هذي الصفحة: صورة لملعب ${sp.ar}${cr?` من ${esc(cr.by)} (${esc(cr.license)})، ${link}`:''}.`)
+    :two(`Behind this page: ${sp.name} in 3D, a simple model (a concept, not the exact stadium).`,`خلف هذي الصفحة: ملعب ${sp.ar} بثلاثة أبعاد، مجسّم مبسّط (تصوّر، مو الملعب بمقاساته).`);
+   c.innerHTML=`${note}
     <button type="button" class="st3-sw" aria-pressed="${o}">${o?two('Turn off','أوقفه'):two('Turn on','شغّله')}</button> <span class="st3-m"></span>`;
    c.querySelector('.st3-sw').onclick=()=>{setOn(!on());if(on())mount(club);else unmount();draw()};
    say()};
@@ -167,6 +214,6 @@
   return out;
  };
  addEventListener('hashchange',()=>{if(!/^#\/club\//.test(location.hash))unmount()});
- INS.stadium3d={SPEC,N,M,NEAR,mount,unmount,on,panels,camera,project,state:()=>S};
+ INS.stadium3d={SPEC,N,M,NEAR,nextScale,mount,unmount,on,control,panels,camera,project,state:()=>S};
  if(typeof D==='object'&&D&&typeof route==='function')route();
 })();
