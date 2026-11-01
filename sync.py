@@ -12811,6 +12811,190 @@ def run_pipeline(hub, pit_key):
 # ===== TMACH END =====
 
 
+# ===== STORY START =====
+# Full-time verdict (owner asked 1 Nov 2026): for every finished match of the current season that has shots whose goals add up to the score, a verdict from the
+# chances (what the shots were worth, each shot scoring with probability xG), a win-probability curve (Elo's pre-match chances turned into two goal rates, then the
+# score and the minutes left), the goal that lifted the final result most, and two sentences in English and Arabic. data/story.json feeds the notification
+# (final-score message) and the page #/recap/<match id>, so the two never disagree. Optional: a failure never stops the sync. Must run before NOTIFY.
+import math
+
+VD_DESERVED = 0.50      # a win: the winner's chance-based chance of winning at least this -> "deserved"
+VD_LUCKY = 0.25         # below this (and the loser had more xG) -> "lucky"; in between "close"
+VD_DRAW_FAIR = 0.45     # a draw: neither side's chance-based chance of winning reaches this -> "fair", else "saved"
+ST_GRID = (0, 15, 30, 45, 60, 75)
+ST_MAXG = 12
+ST_TOTAL0 = 2.6         # league goals per match until 30 matches are known
+STORY_PATH = "data/story.json"
+
+
+def story_goals(rows, home, away):
+    """[(minute, added minute, 'h'|'a')] of one match from its shot rows (ev == 'Goal'); an own goal counts for the other side; None if a club is neither side."""
+    out = []
+    for r in rows:
+        if r.get("ev") != "Goal":
+            continue
+        c = r.get("c")
+        if c not in (home, away):
+            return None
+        side = "h" if c == home else "a"
+        if r.get("og"):
+            side = "a" if side == "h" else "h"
+        out.append((int(r.get("mn") or 0), int(r.get("ma") or 0), side))
+    return sorted(out, key=lambda g: (g[0], g[1]))
+
+
+def _pb(ps):
+    """distribution of goals scored by independent shots with scoring probabilities ps (capped at 15)"""
+    d = [1.0]
+    for p in ps:
+        n = d + [0.0]
+        for k, v in enumerate(d):
+            n[k] -= v * p
+            n[k + 1] += v * p
+        d = n
+    if len(d) > 16:
+        d = d[:15] + [sum(d[15:])]
+    return d
+
+
+def story_chances(rows, home, away):
+    """(xG home, xG away, [P(home wins), P(draw), P(away wins)]) if the same shots were taken again; own goals and shots without xG are left out"""
+    ps = {"h": [], "a": []}
+    for r in rows:
+        if r.get("og") or r.get("xg") is None:
+            continue
+        c = r.get("c")
+        if c in (home, away):
+            ps["h" if c == home else "a"].append(min(max(float(r["xg"]), 0.0), 1.0))
+    a, b = _pb(ps["h"]), _pb(ps["a"])
+    w = sum(a[i] * b[j] for i in range(len(a)) for j in range(len(b)) if i > j)
+    d = sum(a[i] * b[i] for i in range(min(len(a), len(b))))
+    return sum(ps["h"]), sum(ps["a"]), [w, d, max(0.0, 1.0 - w - d)]
+
+
+def story_verdict(score, xh, xa, ph):
+    """-> {"vs": 'h'|'a'|'d', "vd": 'deserved'|'close'|'lucky'|'fair'|'saved'} with the fixed cut-offs above"""
+    h, a = score
+    if h == a:
+        return {"vs": "d", "vd": "fair" if max(ph[0], ph[2]) < VD_DRAW_FAIR else "saved"}
+    w = "h" if h > a else "a"
+    q = ph[0] if w == "h" else ph[2]
+    xw, xl = (xh, xa) if w == "h" else (xa, xh)
+    return {"vs": w, "vd": "deserved" if q >= VD_DESERVED else "lucky" if (q < VD_LUCKY and xl > xw) else "close"}
+
+
+def _pois(l, n=ST_MAXG):
+    p = [math.exp(-l)]
+    for k in range(1, n + 1):
+        p.append(p[-1] * l / k)
+    return p
+
+
+def story_p(diff, frac, lh, la):
+    """(P(home wins), P(draw), P(away wins)) from a goal difference `diff` (home - away) with `frac` of the match left and full-match goal rates lh, la"""
+    if frac <= 0:
+        return (1.0, 0.0, 0.0) if diff > 0 else (0.0, 1.0, 0.0) if diff == 0 else (0.0, 0.0, 1.0)
+    a, b = _pois(lh * frac), _pois(la * frac)
+    w = d = 0.0
+    for i, x in enumerate(a):
+        for j, y in enumerate(b):
+            t = diff + i - j
+            if t > 0:
+                w += x * y
+            elif t == 0:
+                d += x * y
+    return (w, d, max(0.0, 1.0 - w - d))
+
+
+def story_rates(pre, total):
+    """(lam_h, lam_a) with lam_h + lam_a == total whose Poisson-difference P(home) - P(away) equals pre[0] - pre[2] (bisection on the home share)"""
+    want = pre[0] - pre[2]
+    lo, hi = 0.001, 0.999
+    for _ in range(60):
+        s = (lo + hi) / 2
+        p = story_p(0, 1.0, s * total, (1 - s) * total)
+        if p[0] - p[2] < want:
+            lo = s
+        else:
+            hi = s
+    s = (lo + hi) / 2
+    return s * total, (1 - s) * total
+
+
+def _left(minute):
+    return (90 - min(90, minute)) / 90.0
+
+
+def story_curve(goals, pre, total):
+    """[[minute, P(home wins), P(draw)]]: minutes 0, 15 ... 75, every goal (after it) and 90; away = 1 - home - draw"""
+    lh, la = story_rates(pre, total)
+    pts, diff = [], 0
+    gm = {g[0] for g in goals}
+    marks = [(m, None) for m in ST_GRID if m not in gm]
+    marks += [(g[0], g) for g in goals] + [(90, "end")]
+    marks.sort(key=lambda x: (x[0], 1 if x[1] == "end" else 0))
+    seen = 0
+    for m, g in marks:
+        if g == "end":
+            diff = sum(1 if x[2] == "h" else -1 for x in goals)
+        elif g is None:
+            diff = sum(1 if x[2] == "h" else -1 for x in goals if x[0] < m)
+        else:
+            seen += 1
+            diff = sum(1 if x[2] == "h" else -1 for x in goals[:goals.index(g) + 1])
+        w, d, _ = story_p(diff, _left(m), lh, la)
+        pts.append([m, round(w, 3), round(d, 3)])
+    return pts
+
+
+def story_turn(goals, pre, total, vs):
+    """the goal that raised the chance of the final result (the winner's win, or the draw) the most -> {"m", "side", "a", "b"} in whole percent, or None"""
+    if not goals:
+        return None
+    lh, la = story_rates(pre, total)
+    k = {"h": 0, "a": 2, "d": 1}[vs]
+    best, diff = None, 0
+    for g in goals:
+        left = _left(g[0])
+        before = story_p(diff, left, lh, la)[k]
+        diff += 1 if g[2] == "h" else -1
+        after = story_p(diff, left, lh, la)[k]
+        if best is None or after - before > best[0] + 1e-12:
+            best = (after - before, g[0], before, after)
+    if best[0] <= 0:
+        return None
+    return {"m": best[1], "side": vs if vs in ("h", "a") else None, "a": int(round(best[2] * 100)), "b": int(round(best[3] * 100))}
+
+
+def story_text(e, home, away):
+    """{"en": [verdict, turning or None], "ar": [...]} from an entry {"x", "pv", "vs", "vd", "tp"}"""
+    f = lambda v: f"{v:.1f}"
+    xh, xa = e["x"]
+    vs, vd = e["vs"], e["vd"]
+    W, L = (home, away) if vs == "h" else (away, home)
+    xw, xl = (xh, xa) if vs == "h" else (xa, xh)
+    if vd == "deserved":
+        v = (f"{W} deserved it: their chances were worth {f(xw)} goals to {f(xl)}.", f"{W} يستاهل الفوز: فرصه تساوي {f(xw)} هدف مقابل {f(xl)}.")
+    elif vd == "close":
+        v = (f"A close call: {W} won, but the chances ({f(xw)} to {f(xl)}) could have gone either way.", f"مباراة متقاربة: فاز {W}، لكن الفرص ({f(xw)} مقابل {f(xl)}) كان ممكن تروح للطرفين.")
+    elif vd == "lucky":
+        v = (f"A stolen win for {W}: {L}'s chances were worth {f(xl)} goals to {f(xw)}.", f"فوز مسروق لـ{W}: فرص {L} تساوي {f(xl)} هدف مقابل {f(xw)}.")
+    elif vd == "fair":
+        v = (f"A fair draw: the chances were close ({f(xh)} to {f(xa)}).", f"تعادل عادل: الفرص متقاربة ({f(xh)} مقابل {f(xa)}).")
+    else:
+        pv = e["pv"]
+        S, O, xs, xo = (home, away, xh, xa) if pv[0] < pv[2] else (away, home, xa, xh)
+        v = (f"{S} took a point they did not earn: {O}'s chances were worth {f(xo)} goals to {f(xs)}.", f"{S} أخذ نقطة ما استحقها: فرص {O} تساوي {f(xo)} هدف مقابل {f(xs)}.")
+    t = e.get("tp")
+    if not t:
+        tt = (None, None)
+    elif vs == "d":
+        tt = (f"The draw settled in minute {t['m']}, when the chance of a draw went from {t['a']}% to {t['b']}%.", f"استقر التعادل في الدقيقة {t['m']} لما تغيّرت فرصته من {t['a']}% إلى {t['b']}%.")
+    else:
+        tt = (f"The match turned in minute {t['m']}, when {W}'s chance of winning went from {t['a']}% to {t['b']}%.", f"انقلبت المباراة في الدقيقة {t['m']} لما ارتفعت فرصة فوز {W} من {t['a']}% إلى {t['b']}%.")
+    return {"en": [v[0], tt[0]], "ar": [v[1], tt[1]]}
+# ===== STORY END =====
+
 # ===== NOTIFY START =====
 # Notifications for the teams you star (owner asked 30 Oct 2026). The site is static, so it cannot push by itself; this step is the sender, and it has two doors:
 #   1. the free ntfy app: one public ntfy.sh topic per team, pla-<namespace>-<slug of the team's name> (the namespace is in data/notify.json so that other people's
