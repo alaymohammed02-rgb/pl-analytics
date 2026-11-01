@@ -20,6 +20,8 @@
  /* the team names inside a sentence from the file, kept as they are in right-to-left text */
  const sent=(s,H,A)=>{let o=esc(s);[H,A].filter(Boolean).sort((a,b)=>b.length-a.length).forEach(n=>{const e=esc(n);if(e)o=o.split(e).join('<bdi>'+e+'</bdi>')});return o};
  const pct=v=>Math.round(v*100);
+ /* the tone chosen in the Notifications card (calm analyst or match banter); a story without a banter version reads calm */
+ const toneKey=e=>{try{return localStorage.getItem('plx_tone')==='fun'&&e&&e.fx&&e.fx.en&&e.fx.ar?'fx':'tx'}catch(x){return 'tx'}};
  /* ---------- the curve: three stacked bands (home win at the bottom, draw, away win on top) over the 90 minutes ---------- */
  function curve(e,o){
   const {l,t,w,h,pal}=o,X=m=>l+w*m/90,Y=p=>t+h*(1-p),C=e.c;
@@ -51,7 +53,7 @@
   g+=t(W/2,168,(D.name||'')+' · '+String(m.date||'').slice(0,10),{size:26,fill:mu,a:'middle'});
   const vw=VW[e.vd]||['',''];
   g+=t(W/2,250,T(vw[0],vw[1]),{size:54,w:800,a:'middle',fill:'#f2c14e'});
-  const lines=(e.tx&&e.tx[A?'ar':'en']||[]).filter(Boolean);
+  const lines=((e[toneKey(e)]||e.tx||{})[A?'ar':'en']||[]).filter(Boolean);
   lines.forEach((s,i)=>{const parts=wrap(s,A?34:44);parts.forEach((p,j)=>{g+=t(W/2,320+i*130+j*40,p,{size:30,a:'middle'})})});
   if(e.c&&e.c.length){
    g+=curve(e,{l:110,t:560,w:W-110-PX,h:420,fs:24,sw:2,r:9,pal:PNG_PAL});
@@ -111,14 +113,14 @@
   const e=S.m[id];
   if(!e||!Array.isArray(e.x)||!e.tx){root.innerHTML=empty('There is no story for this match: its shot data is missing or its goals do not add up to the score.','ما فيه قصة لهذي المباراة: بيانات تسديداتها ناقصة أو أهدافها ما تطابق النتيجة.',back);return}
   const ds=String(e.s).split('-'),vw=VW[e.vd]||['',''];
-  const s0=e.tx.en||[],s1=e.tx.ar||[];
+  const tk=toneKey(e),s0=e[tk].en||[],s1=e[tk].ar||[];
   const sentences=[0,1].filter(i=>s0[i]||s1[i]).map(i=>`<p class="rc-s${i?' rc-tp':' rc-v'}">${two(sent(s0[i]||'',m.home,m.away),sent(s1[i]||'',m.home,m.away))}</p>`).join('');
   const mx=Math.max(e.x[0],e.x[1],.1);
   const bar=(c,v,p)=>`<div class="rc-xr"><span class="rc-xn">${nm(c)}</span><span class="rc-xb"><i style="width:${(v/mx*100).toFixed(1)}%"></i></span><b>${nb(v.toFixed(2))}</b></div>`;
   const cv=e.c&&e.c.length?`<svg id="rcsvg" class="rc-svg" viewBox="0 0 640 300" role="img" aria-label="${x_(m.home+' '+e.s+' '+m.away)}" data-l="52" data-t="14" data-w="572" data-h="230">${curve(e,{l:52,t:14,w:572,h:230,fs:13,sw:1,r:5,pal:PAGE_PAL})}</svg>
     <div class="rc-lg"><span><i class="rc-k1"></i>${nm(m.home)}</span><span><i class="rc-k2"></i>${two('Draw','تعادل')}</span><span><i class="rc-k3"></i>${nm(m.away)}</span><span><i class="rc-k4"></i>${two('Goal','هدف')}</span></div>`
    :`<div class="empty">${two('Elo has no pre-match prediction for this match, so there is no curve; the verdict above comes from the shots.','Elo ما عنده توقع قبل هذي المباراة، فما فيه منحنى؛ الحكم فوق مبني على التسديدات.')}</div>`;
-  root.innerHTML=`<div class="card rc-top"><div class="rc-sc" data-s="${esc(e.s)}"><b>${nb(ds[0])}</b><span>–</span><b>${nb(ds[1])}</b></div><div class="rc-vd" data-vd="${esc(e.vd)}">${two(vw[0],vw[1])}</div>${sentences}</div>
+  root.innerHTML=`<div class="card rc-top" data-tone="${tk=='fx'?'fun':'calm'}"><div class="rc-sc" data-s="${esc(e.s)}"><b>${nb(ds[0])}</b><span>–</span><b>${nb(ds[1])}</b></div><div class="rc-vd" data-vd="${esc(e.vd)}">${two(vw[0],vw[1])}</div>${sentences}</div>
    <div class="card rc-cv"><h3>${two('Chance of each result, minute by minute','فرصة كل نتيجة دقيقة بدقيقة')}</h3>${cv}
     <p class="mu rc-note">${two('The curve follows the scoreboard (Elo\'s chances before kick-off, the score and the minutes left); the verdict follows the shots, so they can disagree: that is what a stolen win is. Red cards are not in the shot data, so the curve ignores them.','المنحنى يتبع النتيجة (فرص Elo قبل المباراة، والنتيجة، والدقائق الباقية)؛ والحكم يتبع التسديدات، فممكن يختلفون: وهذا بالضبط معنى الفوز المسروق. الكروت الحمراء مو في بيانات التسديدات، فالمنحنى يتجاهلها.')}</p></div>
    <div class="card rc-ch"><h3>${two('The chances','الفرص')}</h3>${bar(m.home,e.x[0])}${bar(m.away,e.x[1])}

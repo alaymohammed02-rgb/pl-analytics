@@ -84,6 +84,7 @@ cl = G['push_clean']; good = {'sub': {'endpoint': 'https://fcm.googleapis.com/fc
 c1 = cl(good)
 ok(c1 and c1[0] == hashlib.sha256(good['sub']['endpoint'].encode()).hexdigest()[:16] and 'arsenal' in c1[2] and 'brighton-hove-albion' in c1[2] and len(c1[2]) == 30 and c1[3] == 'ar', 'a good subscription: an id from the endpoint, the teams as slugs (30 at most), the language')
 ok(cl(dict(good, lang='fr'))[3] == 'en', 'any language but Arabic is English')
+ok(c1[4] == 'calm' and cl(dict(good, tone='fun'))[4] == 'fun' and cl(dict(good, tone='shout'))[4] == 'calm' and cl(dict(good, tone=5))[4] == 'calm', 'the tone of a device is calm unless it says "fun" (anything else is calm)')
 ok(all(cl(x) is None for x in [dict(good, sub=dict(good['sub'], endpoint='http://evil.example/x')), dict(good, sub=dict(good['sub'], endpoint='https://a/' + 'x' * 800)), dict(good, sub={'endpoint': 'https://a/b'}), dict(good, sub=dict(good['sub'], keys={'p256dh': 'x' * 300, 'auth': 'y'})), {}, 'x', None]), 'an endpoint that is not https, an oversize one, missing keys, oversize keys and junk are dropped')
 # ---- the inbox topic of a fake ntfy
 LINES = []
@@ -110,9 +111,18 @@ def setup(subs=None, state=None, keys=KEYS):
     else: os.environ['PUSH_KEYS'] = keys
 def run(inbox=None, state_now=NOW):
     G['sync_notify'](HUB, state_now, post=lambda s, p: True, inbox=lambda srv, ns: inbox or [])
-def sealed(d, teams, lang='en'): return seal(BP, {'v': 1, 'sub': d['sub'], 'teams': teams, 'lang': lang})
+def sealed(d, teams, lang='en', tone=None): return seal(BP, dict({'v': 1, 'sub': d['sub'], 'teams': teams, 'lang': lang}, **({'tone': tone} if tone else {})))
 DA, DB, DC, DD = device('a'), device('b'), device('c'), device('d')
 OLD = {'v': 1, 'pv': 1, 'r': {}, 'm': {}, 'pr': {}, 'pm': {}}
+FXP = {'en': ['Daylight robbery! Arsenal won it.', 'It all flipped in minute 70.'], 'ar': ['سرقوها! Arsenal فاز.', 'كل شي انقلب في الدقيقة 70.']}
+# ---- a story with both tones: a device that chose banter gets it, the others the calm one
+TXE = {'en': ['A stolen win.', 'It turned in minute 70.'], 'ar': ['فوز مسروق.', 'انقلبت في الدقيقة 70.']}
+setup(state=OLD); STORE['data/story.json'] = {'m': {'m1': {'s': '2-1', 'tx': TXE, 'fx': FXP}}}
+run([sealed(DA, ['Arsenal'], 'ar'), sealed(DB, ['Chelsea'], 'en', 'fun'), sealed(DC, ['Arsenal'], 'ar', 'fun')])
+byt = {}
+for path, h, body in SEEN: byt.setdefault(path.split('/')[-1], []).append(decrypt({'a': DA, 'b': DB, 'c': DC}[path.split('/')[-1]], body))
+ok(byt['a'][0]['body'] == TXE['ar'][0] + ' ' + TXE['ar'][1] + ' · Premier League' and byt['b'][0]['body'] == FXP['en'][0] + ' ' + FXP['en'][1] + ' · Premier League' and byt['c'][0]['body'] == FXP['ar'][0] + ' ' + FXP['ar'][1] + ' · Premier League', 'a run with a story: the calm Arabic device, the banter English device and the banter Arabic device each get their own text')
+ok(all(p['url'] == BASE + '#/recap/m1' for l in byt.values() for p in l), 'every push links to the recap')
 # ---- a full run: two devices follow the teams of today's match, one follows Leeds, one nothing that happens
 setup(state=OLD)
 run([sealed(DA, ['Arsenal'], 'ar'), sealed(DB, ['Chelsea', 'Brentford'], 'en'), sealed(DC, ['Leeds United'], 'en'), sealed(DD, ['Wolves'], 'en')])
@@ -128,6 +138,10 @@ PL_ = {'title': 'Arsenal 2–1 Chelsea', 'click': BASE + '#/recap/m1'}
 ptx = G['push_text']
 ok(ptx(PL_, KEYS, 'en') == {'title': 'Arsenal 2–1 Chelsea', 'body': TXP['en'][0] + ' · Premier League', 'url': BASE + '#/recap/m1', 'tag': 'm1|arsenal'}, 'push_text: the English verdict (a missing second sentence is dropped), the league, the recap link')
 ok(ptx(PL_, KEYS, 'ar')['body'] == TXP['ar'][0] + ' ' + TXP['ar'][1] + ' · Premier League', 'push_text: the Arabic device gets both Arabic sentences')
+FXP = {'en': ['Daylight robbery! Arsenal won it.', 'It all flipped in minute 70.'], 'ar': ['سرقوها! Arsenal فاز.', 'كل شي انقلب في الدقيقة 70.']}
+K6 = KEYS + (FXP,)
+ok(ptx(PL_, K6, 'en', 'fun')['body'] == FXP['en'][0] + ' ' + FXP['en'][1] + ' · Premier League' and ptx(PL_, K6, 'ar', 'fun')['body'] == FXP['ar'][0] + ' ' + FXP['ar'][1] + ' · Premier League', 'push_text: the banter version in the device language')
+ok(ptx(PL_, K6, 'en', 'calm') == ptx(PL_, KEYS, 'en') and ptx(PL_, K6, 'en') == ptx(PL_, KEYS, 'en') and ptx(PL_, KEYS + (None,), 'en', 'fun') == ptx(PL_, KEYS, 'en'), 'push_text: calm by default, and a story without a banter version falls back to calm')
 ok(ptx(PL_, KEYS[:4] + (None,), 'ar')['body'] == 'انتهت المباراة · Premier League', 'push_text: a result without a story keeps the old text')
 ok(pc['title'] == 'Leeds United v Hull City' and pc['body'] == 'Kick-off 12:40 UTC · Premier League' and pc['url'] == BASE + '#/preview/f1', 'device c gets the reminder 40 minutes before kick-off, with the time and the preview link')
 ok(all(vapid_ok(h, ORIGIN, 'https://me.github.io') for k in by for h, _ in by[k]), 'every request carries a valid VAPID signature (ES256, audience = the push service, subject = the origin of the site, not expired) made with the sender key')

@@ -103,3 +103,11 @@ File layout of `story.json` (keep it small: aim for 60 KB gzipped or less for a 
 7. **Red cards.** `*_sh.json` has no card events; the builder checks the other files, and unless a file has them the card says red cards are ignored.
 8. **Order and plumbing found by the review.** The STORY block must run and be committed before NOTIFY (which reads from the hub); `push_text` rebuilds the body from the key and device language, so the verdict has to travel in the key or a language-keyed payload; the click and push link become `#/recap/<id>`; `recap` goes in the past-season `NOT` list and `story` in `psCurOnly`; the notification tests (`t_notify.py`, `t_push.py`, `ui_push.js`) change with the text.
 9. **Accuracy statement.** The page prints the measured numbers (calibration at 30/60/75, share of results per verdict word, xG against goals) and says in words whether they are good; the notification itself carries no accuracy line.
+
+## Step 2: a tone to choose (owner approved 1 Nov 2026: "إي، ابدأ")
+
+The owner asked in the brainstorm for a tone he can change in the site. Step 1 shipped the calm analyst. Step 2 adds **match banter**: the same facts and numbers, said with more heat (Gulf Arabic and plain English), for example "Daylight robbery! Hull City won it, but Manchester United's chances were worth 1.8 goals to 1.3." / "سرقوها! ...".
+
+- `story_text(e, home, away, tone)` gets `tone` = "calm" (default) or "fun"; `data/story.json` entries carry `fx` next to `tx` (both stored, so the notification and the page still read one file; the file grows by about a third). Every number in an `fx` sentence equals the one in the `tx` sentence (tested on the whole real file).
+- The choice sits in the Notifications card under "Your teams" (a two-button choice, saved in this browser as `plx_tone`, default calm). It travels in the sealed subscription message (`tone`), changing it re-sends the message like a change of starred teams. Web Push uses it per device; **the ntfy door stays calm** (its topics are public and do not know the reader). The recap page and its saved picture use the same choice.
+- Anti-goals: no new claim in the banter that the calm text does not make; no different verdict word or number; default stays calm.

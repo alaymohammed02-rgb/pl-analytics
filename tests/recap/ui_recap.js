@@ -70,6 +70,18 @@ async function page(pg){await pg.waitForSelector('.rc-sc, #rc .empty:not(.skel)'
   else ok(false,'a story of another league exists')}
  {const bad=Object.entries(S.m).filter(([k,v])=>v.tx.en[1]&&/from 0% to 100%/.test(v.tx.en[1])).length;ok(bad===0,'no turning sentence claims a jump from 0% to 100%');
   const ad=Object.entries(S.m).filter(([k,v])=>v.tp&&v.tp.x>0);ok(ad.every(([k,v])=>v.tx.en[1].includes('minute '+v.tp.m+'+'+v.tp.x)),ad.length+' turning points in added time say "minute 90+x"')}
+ /* the tone chosen in the Notifications card (plx_tone): banter sentences verbatim on the page and in the picture; calm by default; calm when a story has no banter */
+ {const id=picks.win,e=S.m[id];
+  let o=await T.open(b,{vw:1100,league:LG,hash:'#/recap/'+id,init:{plx_tone:'fun'}});await page(o.pg);
+  ok(await o.pg.$eval('.rc-top',x=>x.dataset.tone)==='fun'&&JSON.stringify(await o.pg.$$eval('.rc-s .fx-en',a=>a.map(x=>x.textContent)))===JSON.stringify(e.fx.en.filter(Boolean))&&JSON.stringify(await o.pg.$$eval('.rc-s .fx-ar',a=>a.map(x=>x.textContent)))===JSON.stringify(e.fx.ar.filter(Boolean)),'tone "fun": the page shows the banter sentences of the file, verbatim, in both languages');
+  const sv=await o.pg.evaluate(([id,e])=>INS.recap.card(D.matches.find(x=>x.match_id===id),e,false).svg,[id,e]);
+  const fw=e.fx.en[0].split(' ').slice(0,3).join(' ');ok(sv.includes(fw)&&fw!==e.tx.en[0].split(' ').slice(0,3).join(' '),'tone "fun": the saved picture carries the banter wording ("'+fw+'…")');
+  ok(!o.errs.length,'no page errors '+o.errs.slice(0,2).join(' ; '));await o.ctx.close();
+  o=await T.open(b,{vw:1100,league:LG,hash:'#/recap/'+id});await page(o.pg);
+  ok(await o.pg.$eval('.rc-top',x=>x.dataset.tone)==='calm'&&JSON.stringify(await o.pg.$$eval('.rc-s .fx-en',a=>a.map(x=>x.textContent)))===JSON.stringify(e.tx.en.filter(Boolean)),'no choice made: the calm sentences');await o.ctx.close();
+  const mod=JSON.parse(JSON.stringify(S));delete mod.m[id].fx;
+  o=await T.open(b,{vw:1100,league:LG,hash:'',init:{plx_tone:'fun'}});await o.ctx.route(/\/story\.json/,r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(mod)}));await o.pg.goto(o.pg.url().split('#')[0]+'#/recap/'+id);await page(o.pg);
+  ok(await o.pg.$eval('.rc-top',x=>x.dataset.tone)==='calm'&&!o.errs.length,'tone "fun" but the story has no banter version: it reads calm, no errors');await o.ctx.close()}
  /* a match with no curve (no Elo prediction) shows the verdict and says so */
  {const nc=Object.keys(S.m).find(k=>S.m[k].lg===LG&&!S.m[k].c);
   if(nc){const {ctx,pg,errs}=await T.open(b,{vw:1100,league:LG,hash:'#/recap/'+nc});await page(pg);ok(!(await pg.$('#rcsvg'))&&/no pre-match prediction/.test(await pg.innerText('.rc-cv .empty'))&&!!(await pg.$('.rc-v')),'no Elo prediction: the verdict is there, the curve says why it is missing');ok(!errs.length,'no page errors');await ctx.close()}

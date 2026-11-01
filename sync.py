@@ -9018,7 +9018,7 @@ INDEX = _x_fpx_index(INDEX)
 # الكود في ملفات مستقلة في المستودع: assets/*.js و assets/features.css و manifest.webmanifest و sw.js و assets/icons/.
 # هذا القسم يضيف روابطها للصفحة فقط (بعد السكربت الرئيسي، فتلقى R و PAGES جاهزة). غيّر FEATURES_V لما تتغير الملفات.
 # ============================================================================
-FEATURES_V = "61"
+FEATURES_V = "62"
 FEATURES_JS = ("pla-data", "share-card", "threat-map", "match-whatif", "player-page", "match-centre", "home-extra", "team-round",
                "preview", "club-extra", "rankings-extra", "fantasy-extra", "insights-core", "hidden-gems", "player-dna", "team-dna",
                "reality-check", "matches-board", "match-replay", "match-story", "overview", "press-height",
@@ -12975,34 +12975,43 @@ def story_turn(goals, pre, total, vs):
     return {"m": best[1], "x": best[4], "side": vs if vs in ("h", "a") else None, "a": int(round(best[2] * 100)), "b": int(round(best[3] * 100))}
 
 
-def story_text(e, home, away):
-    """{"en": [verdict, turning or None], "ar": [...]} from an entry {"x", "pv", "vs", "vd", "tp"}"""
+def story_text(e, home, away, tone="calm"):
+    """{"en": [verdict, turning or None], "ar": [...]} from an entry {"x", "pv", "vs", "vd", "tp"}; tone "calm" (the analyst, default) or "fun" (match banter: the same
+    facts and numbers, said with more heat)"""
+    fun = tone == "fun"
     f = lambda v: f"{v:.1f}"
     xh, xa = e["x"]
     vs, vd = e["vs"], e["vd"]
     W, L = (home, away) if vs == "h" else (away, home)
     xw, xl = (xh, xa) if vs == "h" else (xa, xh)
+    pv = e.get("pv") or [0, 0, 0]
+    S, O, xs, xo = (home, away, xh, xa) if pv[0] < pv[2] else (away, home, xa, xh)
     if vd == "deserved":
-        v = (f"{W} deserved it: their chances were worth {f(xw)} goals to {f(xl)}.", f"{W} يستاهل الفوز: فرصه تساوي {f(xw)} هدف مقابل {f(xl)}.")
+        v = (f"{W} took it and deserved it: chances worth {f(xw)} goals to {f(xl)}. No arguments.", f"{W} أخذها وهو يستاهل: فرصه بقيمة {f(xw)} هدف مقابل {f(xl)}. ما في كلام.") if fun else \
+            (f"{W} deserved it: their chances were worth {f(xw)} goals to {f(xl)}.", f"{W} يستاهل الفوز: فرصه تساوي {f(xw)} هدف مقابل {f(xl)}.")
     elif vd == "close":
-        v = (f"A close call: {W} won, but the chances ({f(xw)} to {f(xl)}) could have gone either way.", f"مباراة متقاربة: فاز {W}، لكن الفرص ({f(xw)} مقابل {f(xl)}) كان ممكن تروح للطرفين.")
+        v = (f"A proper scrap: {W} won it, but on chances it was {f(xw)} to {f(xl)} and it could have gone either way.", f"مباراة عضّ أصابع: فاز {W}، لكن الفرص {f(xw)} مقابل {f(xl)} وكان ممكن تروح لأي طرف.") if fun else \
+            (f"A close call: {W} won, but the chances ({f(xw)} to {f(xl)}) could have gone either way.", f"مباراة متقاربة: فاز {W}، لكن الفرص ({f(xw)} مقابل {f(xl)}) كان ممكن تروح للطرفين.")
     elif vd == "lucky":
-        v = (f"A stolen win for {W}: {L}'s chances were worth {f(xl)} goals to {f(xw)}.", f"فوز مسروق لـ{W}: فرص {L} تساوي {f(xl)} هدف مقابل {f(xw)}.")
+        v = (f"Daylight robbery! {W} won it, but {L}'s chances were worth {f(xl)} goals to {f(xw)}.", f"سرقوها! {W} فاز، لكن فرص {L} بقيمة {f(xl)} هدف مقابل {f(xw)}.") if fun else \
+            (f"A stolen win for {W}: {L}'s chances were worth {f(xl)} goals to {f(xw)}.", f"فوز مسروق لـ{W}: فرص {L} تساوي {f(xl)} هدف مقابل {f(xw)}.")
     elif vd == "fair":
-        v = (f"A fair draw: the chances were close ({f(xh)} to {f(xa)}).", f"تعادل عادل: الفرص متقاربة ({f(xh)} مقابل {f(xa)}).")
+        v = (f"Honours even: the chances were level ({f(xh)} to {f(xa)}), the draw is fair.", f"تعادل بالعدل: الفرص متقاربة ({f(xh)} مقابل {f(xa)}).") if fun else \
+            (f"A fair draw: the chances were close ({f(xh)} to {f(xa)}).", f"تعادل عادل: الفرص متقاربة ({f(xh)} مقابل {f(xa)}).")
     else:
-        pv = e["pv"]
-        S, O, xs, xo = (home, away, xh, xa) if pv[0] < pv[2] else (away, home, xa, xh)
-        v = (f"{S} took a point they did not earn: {O}'s chances were worth {f(xo)} goals to {f(xs)}.", f"{S} أخذ نقطة ما استحقها: فرص {O} تساوي {f(xo)} هدف مقابل {f(xs)}.")
+        v = (f"{S} walked away with a point they did not earn: {O}'s chances were worth {f(xo)} goals to {f(xs)}.", f"{S} طلع بنقطة ما استحقها: فرص {O} بقيمة {f(xo)} هدف مقابل {f(xs)}.") if fun else \
+            (f"{S} took a point they did not earn: {O}'s chances were worth {f(xo)} goals to {f(xs)}.", f"{S} أخذ نقطة ما استحقها: فرص {O} تساوي {f(xo)} هدف مقابل {f(xs)}.")
     t = e.get("tp")
     if t:
         t = dict(t, m=f"{t['m']}+{t['x']}" if t.get("x") else t["m"])
     if not t:
         tt = (None, None)
     elif vs == "d":
-        tt = (f"The draw settled in minute {t['m']}, when the chance of a draw went from {t['a']}% to {t['b']}%.", f"استقر التعادل في الدقيقة {t['m']} لما تغيّرت فرصته من {t['a']}% إلى {t['b']}%.")
+        tt = (f"The draw was sealed in minute {t['m']}: its chance went from {t['a']}% to {t['b']}%.", f"التعادل انحسم في الدقيقة {t['m']}: فرصته راحت من {t['a']}% إلى {t['b']}%.") if fun else \
+            (f"The draw settled in minute {t['m']}, when the chance of a draw went from {t['a']}% to {t['b']}%.", f"استقر التعادل في الدقيقة {t['m']} لما تغيّرت فرصته من {t['a']}% إلى {t['b']}%.")
     else:
-        tt = (f"The match turned in minute {t['m']}, when {W}'s chance of winning went from {t['a']}% to {t['b']}%.", f"انقلبت المباراة في الدقيقة {t['m']} لما ارتفعت فرصة فوز {W} من {t['a']}% إلى {t['b']}%.")
+        tt = (f"It all flipped in minute {t['m']}: {W}'s chance of winning jumped from {t['a']}% to {t['b']}%.", f"كل شي انقلب في الدقيقة {t['m']}: فرصة فوز {W} قفزت من {t['a']}% إلى {t['b']}%.") if fun else \
+            (f"The match turned in minute {t['m']}, when {W}'s chance of winning went from {t['a']}% to {t['b']}%.", f"انقلبت المباراة في الدقيقة {t['m']} لما ارتفعت فرصة فوز {W} من {t['a']}% إلى {t['b']}%.")
     return {"en": [v[0], tt[0]], "ar": [v[1], tt[1]]}
 def story_total(n, goals):
     """league goals per match from the n matches before this one with `goals` goals in all: ST_TOTAL0 until 30 are known"""
@@ -13094,6 +13103,7 @@ def story_entry(it, lid):
         e["c"] = story_curve(it["goals"], it["pre"], it["total"])
         e["tp"] = story_turn(it["goals"], it["pre"], it["total"], v["vs"])
     e["tx"] = story_text(e, it["home"], it["away"])
+    e["fx"] = story_text(e, it["home"], it["away"], "fun")
     return e
 
 
@@ -13217,10 +13227,11 @@ def notify_topic(ns, team):
     return f"pla-{ns}-{notify_slug(team)}"
 
 
-def story_notice(e, score):
-    """the sentences of a story entry ({"en": [verdict, turning|None], "ar": [...]}) if it is usable in a notification for a match with this score ("2-1"), else None"""
+def story_notice(e, score, tone="calm"):
+    """the sentences of a story entry ({"en": [verdict, turning|None], "ar": [...]}) if it is usable in a notification for a match with this score ("2-1"), else None;
+    tone "calm" reads the entry's "tx", "fun" its "fx" """
     try:
-        tx = e["tx"]
+        tx = e["fx" if tone == "fun" else "tx"]
         if e["s"] == score and all(isinstance(tx[l][0], str) and tx[l][0] and all(x is None or isinstance(x, str) for x in tx[l]) for l in ("en", "ar")):
             return {"en": list(tx["en"]), "ar": list(tx["ar"])}
     except Exception:
@@ -13259,10 +13270,12 @@ def notify_plan(leagues, fixtures, state, now, base_url, ns, channel="ntfy", sto
                 if first:
                     st[rk][key] = d
                     continue
-                tx = story_notice((story or {}).get(str(m["i"])), f"{sc.group(1)}-{sc.group(2)}")
+                en_ = (story or {}).get(str(m["i"]))
+                tx = story_notice(en_, f"{sc.group(1)}-{sc.group(2)}")
+                fx = story_notice(en_, f"{sc.group(1)}-{sc.group(2)}", "fun") if tx else None
                 res.append((d, str(m["i"]), {"topic": notify_topic(ns, team), "title": f"{m['h']} {sc.group(1)}\u2013{sc.group(2)} {m['a']}",
                                            "message": (f"{tx['en'][0]}\n{tx['ar'][0]}\n{lname}" if tx else f"Full time \u00b7 \u0627\u0646\u062a\u0647\u062a \u0627\u0644\u0645\u0628\u0627\u0631\u0627\u0629\n{lname}"),
-                                           "tags": ["soccer"], "click": f"{base_url}#/{'recap' if tx else 'match'}/{m['i']}"}, (rk[-1], key, d, lname, tx)))
+                                           "tags": ["soccer"], "click": f"{base_url}#/{'recap' if tx else 'match'}/{m['i']}"}, (rk[-1], key, d, lname, tx, fx)))
     for lid, lname, _ in leagues:
         for f in (fixtures.get(lid) or []):
             try:
@@ -13362,14 +13375,16 @@ def push_clean(obj):
         if not (isinstance(keys.get("p256dh"), str) and isinstance(keys.get("auth"), str)) or len(keys["p256dh"]) > 120 or len(keys["auth"]) > 60:
             return None
         teams = [str(t) for t in (obj.get("teams") or [])][:PUSH_MAX_TEAMS]
-        return push_sub_id(ep), {"endpoint": ep, "keys": {"p256dh": keys["p256dh"], "auth": keys["auth"]}}, {notify_slug(t) for t in teams}, ("ar" if obj.get("lang") == "ar" else "en")
+        return push_sub_id(ep), {"endpoint": ep, "keys": {"p256dh": keys["p256dh"], "auth": keys["auth"]}}, {notify_slug(t) for t in teams}, ("ar" if obj.get("lang") == "ar" else "en"), ("fun" if obj.get("tone") == "fun" else "calm")
     except Exception:
         return None
 
 
-def push_text(payload, key, lang):
-    """The title and body of a push in the device's language; the team names stay as they are."""
+def push_text(payload, key, lang, tone="calm"):
+    """The title and body of a push in the device's language (and tone: "fun" is the banter version of a story, calm when there is none); the team names stay as they are."""
     kind, lname, hh = key[0], key[3], key[4]
+    if kind == "r" and tone == "fun" and len(key) > 5 and isinstance(key[5], dict):
+        hh = key[5]
     if kind == "r" and isinstance(hh, dict):
         body = " ".join(x for x in hh.get(lang) or hh["en"] if x) + f" \u00b7 {lname}"
     elif kind == "r":
@@ -13457,7 +13472,7 @@ def push_run(hub, cfg, leagues, fixtures, st, now, base, send=None, inbox=None, 
         ok_any = not targets
         all_gone = bool(targets)
         for k, c in targets:
-            r = send(c[1], push_text(payload, key, c[3]), keys["vapid"], claim)
+            r = send(c[1], push_text(payload, key, c[3], c[4]), keys["vapid"], claim)
             if r == "ok":
                 sent += 1; ok_any = True; all_gone = False
             elif r == "gone":

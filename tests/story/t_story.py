@@ -196,6 +196,25 @@ try:
 except Exception as ex:
     ok(False, 'wrapper: raised %r' % ex)
 
+
+# ---- the second tone (banter): the same facts and numbers, other words
+FT = G['story_text']
+Ef = {'s': '2-1', 'x': [2.4, 0.9], 'pv': [0.86, 0.1, 0.04], 'vs': 'h', 'vd': 'deserved', 'tp': {'m': 78, 'side': 'h', 'a': 31, 'b': 78}}
+t = FT(Ef, 'Barcelona', 'Real Madrid', 'fun')
+ok(t['en'] == ['Barcelona took it and deserved it: chances worth 2.4 goals to 0.9. No arguments.', "It all flipped in minute 78: Barcelona's chance of winning jumped from 31% to 78%."], 'banter: deserved + turning (English)')
+ok(t['ar'] == ['Barcelona أخذها وهو يستاهل: فرصه بقيمة 2.4 هدف مقابل 0.9. ما في كلام.', 'كل شي انقلب في الدقيقة 78: فرصة فوز Barcelona قفزت من 31% إلى 78%.'], 'banter: deserved + turning (Arabic)')
+cases = [dict(Ef, vd='close', x=[1.1, 1.0], tp=None), dict(Ef, vd='lucky', x=[0.4, 1.9], tp=None), dict(Ef, vs='d', s='1-1', vd='fair', x=[1.2, 1.1], tp={'m': 70, 'side': None, 'a': 22, 'b': 61}),
+         dict(Ef, vs='d', s='0-0', vd='saved', x=[0.2, 2.1], pv=[0.02, 0.1, 0.88], tp=None), dict(Ef, tp={'m': 90, 'x': 3, 'side': 'h', 'a': 12, 'b': 93})]
+exp = {'close': 'A proper scrap: Barcelona won it, but on chances it was 1.1 to 1.0 and it could have gone either way.', 'lucky': "Daylight robbery! Barcelona won it, but Real Madrid's chances were worth 1.9 goals to 0.4.",
+       'fair': 'Honours even: the chances were level (1.2 to 1.1), the draw is fair.', 'saved': "Barcelona walked away with a point they did not earn: Real Madrid's chances were worth 2.1 goals to 0.2."}
+for c in cases:
+    calm, fun = FT(c, 'Barcelona', 'Real Madrid'), FT(c, 'Barcelona', 'Real Madrid', 'fun')
+    nums = lambda x: sorted(re.findall(r'\d+(?:\.\d+)?', ' '.join(y for y in x if y)))
+    ok(all(nums(calm[l]) == nums(fun[l]) for l in ('en', 'ar')) and (fun['en'][1] is None) == (calm['en'][1] is None) and fun != calm, 'banter %s: the same numbers as the calm text, other words, a turning sentence exactly when the calm one has it' % c['vd'])
+    if c['vd'] in exp and c['tp'] is None: ok(fun['en'][0] == exp[c['vd']], 'banter %s: %s' % (c['vd'], fun['en'][0][:50]))
+ok('minute 90+3' in FT(cases[-1], 'A', 'B', 'fun')['en'][1] and 'الدقيقة 90+3' in FT(cases[-1], 'A', 'B', 'fun')['ar'][1], 'banter: stoppage time is "minute 90+3" too')
+ok(FT(Ef, 'A', 'B') == FT(Ef, 'A', 'B', 'calm') and FT(Ef, 'A', 'B', 'nonsense') == FT(Ef, 'A', 'B'), 'the default (and any unknown tone) is calm')
+ok(st['m']['m1']['fx']['en'][0] and st['m']['m1']['fx']['ar'][0] and st['m']['m1']['fx'] != st['m']['m1']['tx'], 'step: an entry carries both tones')
 # ---- the real data/story.json (the placeholder before the first sync): every entry recomputed from the shot files with a loop of its own
 SP = os.environ.get('STORY_FILE') or os.path.join(REPO, 'data', 'story.json')
 real = json.load(open(SP, encoding='utf-8'))
@@ -224,6 +243,8 @@ else:
             if abs(x[0] - e['x'][0]) > 0.006 or abs(x[1] - e['x'][1]) > 0.006: bad.append((mid, 'xg', x, e['x']))
             if sorted(x[1] for x in e['g']).count('h') != h or sorted(x[1] for x in e['g']).count('a') != a: bad.append((mid, 'goals'))
             if e['vd'] not in ('deserved', 'close', 'lucky', 'fair', 'saved') or (e['vs'] == 'd') != (h == a): bad.append((mid, 'verdict'))
+            nm_ = lambda x: sorted(re.findall(r'\d+(?:\.\d+)?', ' '.join(y for y in x if y)))
+            if not all(e['fx'][l][0] and nm_(e['fx'][l]) == nm_(e['tx'][l]) for l in ('en', 'ar')): bad.append((mid, 'fx numbers'))
             if not (e['tx']['en'][0] and e['tx']['ar'][0]) or abs(sum(e['pv']) - 1) > 0.004: bad.append((mid, 'text/pv'))
             if e['c']:
                 last = e['c'][-1]
