@@ -13192,10 +13192,23 @@ def notify_topic(ns, team):
     return f"pla-{ns}-{notify_slug(team)}"
 
 
-def notify_plan(leagues, fixtures, state, now, base_url, ns, channel="ntfy"):
+def story_notice(e):
+    """the sentences of a story entry ({"en": [verdict, turning|None], "ar": [...]}) if the entry is usable in a notification, else None"""
+    try:
+        tx = e["tx"]
+        if all(isinstance(tx[l][0], str) and tx[l][0] for l in ("en", "ar")):
+            return {"en": list(tx["en"]), "ar": list(tx["ar"])}
+    except Exception:
+        pass
+    return None
+
+
+def notify_plan(leagues, fixtures, state, now, base_url, ns, channel="ntfy", story=None):
     """-> (messages, state'). A message is (payload, key) with key = (kind, state key, day, league name, kick-off "HH:MM" or None).
     channel "ntfy": reminders are queued with ntfy's delay; state keys r / m; the first run is a missing state.
-    channel "push": reminders go out when the kick-off is 15 to 95 minutes away; state keys pr / pm; the first run is a state without "pv"."""
+    channel "push": reminders go out when the kick-off is 15 to 95 minutes away; state keys pr / pm; the first run is a state without "pv".
+    story = data/story.json["m"]: a result whose match has an entry carries the verdict instead of "Full time", links to #/recap/<id>, and its key's 5th element is the
+    sentences {"en": [...], "ar": [...]} (push_text reads it); a match without an entry is announced as before."""
     push = channel == "push"
     rk, mk = ("pr", "pm") if push else ("r", "m")
     first = (not (state or {}).get("pv")) if push else state is None
@@ -13221,9 +13234,10 @@ def notify_plan(leagues, fixtures, state, now, base_url, ns, channel="ntfy"):
                 if first:
                     st[rk][key] = d
                     continue
+                tx = story_notice((story or {}).get(str(m["i"])))
                 res.append((d, str(m["i"]), {"topic": notify_topic(ns, team), "title": f"{m['h']} {sc.group(1)}\u2013{sc.group(2)} {m['a']}",
-                                           "message": f"Full time \u00b7 \u0627\u0646\u062a\u0647\u062a \u0627\u0644\u0645\u0628\u0627\u0631\u0627\u0629\n{lname}",
-                                           "tags": ["soccer"], "click": f"{base_url}#/match/{m['i']}"}, (rk[-1], key, d, lname, None)))
+                                           "message": (f"{tx['en'][0]}\n{tx['ar'][0]}\n{lname}" if tx else f"Full time \u00b7 \u0627\u0646\u062a\u0647\u062a \u0627\u0644\u0645\u0628\u0627\u0631\u0627\u0629\n{lname}"),
+                                           "tags": ["soccer"], "click": f"{base_url}#/{'recap' if tx else 'match'}/{m['i']}"}, (rk[-1], key, d, lname, tx)))
     for lid, lname, _ in leagues:
         for f in (fixtures.get(lid) or []):
             try:
@@ -13331,7 +13345,9 @@ def push_clean(obj):
 def push_text(payload, key, lang):
     """The title and body of a push in the device's language; the team names stay as they are."""
     kind, lname, hh = key[0], key[3], key[4]
-    if kind == "r":
+    if kind == "r" and isinstance(hh, dict):
+        body = " ".join(x for x in hh.get(lang) or hh["en"] if x) + f" \u00b7 {lname}"
+    elif kind == "r":
         body = f"\u0627\u0646\u062a\u0647\u062a \u0627\u0644\u0645\u0628\u0627\u0631\u0627\u0629 \u00b7 {lname}" if lang == "ar" else f"Full time \u00b7 {lname}"
     else:
         body = f"\u062a\u0646\u0637\u0644\u0642 \u0627\u0644\u0633\u0627\u0639\u0629 {hh} \u0628\u062a\u0648\u0642\u064a\u062a \u063a\u0631\u064a\u0646\u062a\u0634 \u00b7 {lname}" if lang == "ar" else f"Kick-off {hh} UTC \u00b7 {lname}"
@@ -13354,7 +13370,7 @@ def push_send(sub, data, vapid_raw, sub_claim, timeout=15):
         return "fail"
 
 
-def push_run(hub, cfg, leagues, fixtures, st, now, base, send=None, inbox=None):
+def push_run(hub, cfg, leagues, fixtures, st, now, base, send=None, inbox=None, story=None):
     """The browser door. Returns the state (a new dict) and writes data/push_status.json and data/push_subs.json. Does nothing without the secret."""
     send = send or push_send
     pub = gh_get_json(hub, PUSH_PATH) or {}
@@ -13404,7 +13420,7 @@ def push_run(hub, cfg, leagues, fixtures, st, now, base, send=None, inbox=None):
         c = push_clean(push_open(keys["box"], v["s"]))
         if c:
             live[k] = c
-    msgs, st2 = notify_plan(leagues, fixtures, st, now, base, ns, channel="push")
+    msgs, st2 = notify_plan(leagues, fixtures, st, now, base, ns, channel="push", story=story)
     claim = (re.match(r"https://[\w.-]+", base or "") or [None])[0]   # the VAPID subject: the site's own origin (py_vapid accepts https://host without a path)
     if not claim:
         log("  [إشعارات المتصفح] ما عندي عنوان الموقع — تخطيت")
@@ -13448,7 +13464,9 @@ def sync_notify(hub, now=None, post=None, send=None, inbox=None):
     fixtures = (gh_get_json(hub, "data/fixtures.json") or {}).get("leagues") or {}
     old = gh_get_json(hub, NOTIFY_STATE)
     base = hub.get("url") or (f"https://{hub['repo'].split('/')[0]}.github.io/{hub['repo'].split('/')[1]}/" if "/" in str(hub.get("repo")) else "")
-    msgs, st = notify_plan(leagues, fixtures, old, now, base, ns)
+    story = gh_get_json(hub, "data/story.json")
+    story = story.get("m") if isinstance(story, dict) and isinstance(story.get("m"), dict) else {}
+    msgs, st = notify_plan(leagues, fixtures, old, now, base, ns, story=story)
     sent = fails = streak = 0
     for payload, key in msgs[:NOTIFY_MAX_POSTS]:
         try:
@@ -13467,7 +13485,7 @@ def sync_notify(hub, now=None, post=None, send=None, inbox=None):
     log(f"  [إشعارات] أُرسل {sent} إشعار" + (f"، فشل {fails}" if fails else "") + ("، أول تشغيل: النتائج الحالية اتعلّمت بدون إرسال" if old is None else "")
         + (f"، تبقّى {len(msgs) - sent - fails} للمرة الجاية" if len(msgs) > sent + fails else ""))
     try:
-        st = push_run(hub, {"ns": ns, "server": server}, leagues, fixtures, st, now, base, send=send, inbox=inbox)
+        st = push_run(hub, {"ns": ns, "server": server}, leagues, fixtures, st, now, base, send=send, inbox=inbox, story=story)
     except Exception as e:      # the browser door never stops the ntfy door's state from being saved
         log(f"  [إشعارات المتصفح] خطأ ({type(e).__name__}: {e})")
     gh_put(hub, NOTIFY_STATE, json.dumps(st, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8"), "Update notification state")

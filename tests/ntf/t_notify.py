@@ -84,6 +84,14 @@ S = PUT['data/notify_state.json']
 ok(len(S['r']) == 4 and len(S['m']) == 4, 'and writes the state with what it sent (4 results, 4 reminders)')
 SENT.clear(); G['sync_notify'](HUB, NOW, post=lambda srv, pl: (SENT.append(pl), True)[1])
 ok(SENT == [], 'run again: nothing is sent')
+# the step reads data/story.json: a result with a story goes out as the verdict
+setup({'v': 1, 'r': {}, 'm': {}}); STORE['data/story.json'] = {'m': {'m1': {'tx': {'en': ['E1', None], 'ar': ['A1', None]}}}}; SENT.clear()
+G['sync_notify'](HUB, NOW, post=lambda srv, pl: (SENT.append(pl), True)[1])
+sm1 = [pl for pl in SENT if pl['click'].endswith('#/recap/m1')]
+ok(len(sm1) == 2 and all(pl['message'] == 'E1\nA1\nPremier League' for pl in sm1) and len(SENT) == 8, 'the step reads data/story.json: the result of m1 goes out as the verdict to both teams, the other messages are unchanged')
+setup({'v': 1, 'r': {}, 'm': {}}); STORE['data/story.json'] = 'broken'; SENT.clear()
+G['sync_notify'](HUB, NOW, post=lambda srv, pl: (SENT.append(pl), True)[1])
+ok(len(SENT) == 8 and not [1 for pl in SENT if '#/recap/' in pl['click']], 'a broken data/story.json: everything goes out as before')
 # a failing host: nothing failed is marked, and three failures in a row stop the run
 setup({'v': 1, 'r': {}, 'm': {}}); CALLS = []
 def bad(srv, pl): CALLS.append(pl); raise OSError('down')
@@ -118,6 +126,20 @@ ok(len(SENT) == 4 and all('alarm_clock' in p['tags'] for p in SENT) and len(PUT[
 # the wrapper: another name for the previous pipeline than the others (a repeated name made run_pipeline call itself once)
 names = re.findall(r'^_orig_run_pipeline_(\w+) = run_pipeline', src, re.M)
 ok(len(names) == len(set(names)) and 'notify' in names, 'the wrapped pipeline has its own name (%s)' % ', '.join(names))
+# ---- with a story (data/story.json["m"]): the verdict replaces "Full time", the link opens the recap
+TX = {'en': ['Arsenal deserved it: their chances were worth 2.4 goals to 0.9.', "The match turned in minute 78, when Arsenal's chance of winning went from 31% to 78%."],
+      'ar': ['Arsenal يستاهل الفوز: فرصه تساوي 2.4 هدف مقابل 0.9.', 'انقلبت المباراة في الدقيقة 78 لما ارتفعت فرصة فوز Arsenal من 31% إلى 78%.']}
+STORY = {'m1': {'tx': TX}, 'm4': {'tx': {'en': ['', None], 'ar': ['', None]}}}
+Ms, _ = plan(L, FX, {'v': 1, 'r': {}, 'm': {}}, NOW, BASE, NS, story=STORY)
+r1s = [(p, k) for p, k in Ms if k[0] == 'r' and k[1].startswith('m1|')]
+ok(len(r1s) == 2 and all(p['message'] == TX['en'][0] + '\n' + TX['ar'][0] + '\nPremier League' and p['click'] == BASE + '#/recap/m1' and k[4] == TX for p, k in r1s), 'a result with a story: the English and Arabic verdict sentences and the league, the link to the recap, the sentences in the key')
+ok(all(p['title'] == 'Arsenal 2–1 Chelsea' and p['tags'] == ['soccer'] and 'delay' not in p for p, _ in r1s), 'a result with a story keeps the score title and the tag')
+r4s = [(p, k) for p, k in Ms if k[0] == 'r' and k[1].startswith('m4|')]
+ok(len(r4s) == 2 and all('Full time' in p['message'] and p['click'] == BASE + '#/match/m4' and k[4] is None for p, k in r4s), 'a result whose story has an empty sentence is announced as before (no verdict, match link)')
+ok([k for _, k in Ms if k[0] == 'm'] == [k for _, k in M if k[0] == 'm'], 'reminders are the same with or without stories')
+done = {'v': 1, 'r': {'m1|arsenal': '2026-10-30', 'm1|chelsea': '2026-10-30'}, 'm': {}}
+Md, _ = plan(L, FX, done, NOW, BASE, NS, story=STORY)
+ok(not [1 for _, k in Md if k[1].startswith('m1|')], 'a result already announced plainly is not announced again when its story shows up')
 # ---- the real request against a fake ntfy server
 GOT = []
 class H(BaseHTTPRequestHandler):
@@ -131,6 +153,8 @@ pl = {'topic': topic(NS, 'Atlético Madrid'), 'title': 'Atlético Madrid 1–0 S
 ok(G['notify_post']('http://127.0.0.1:%d' % srv.server_port, pl) is True, 'a real POST to a server on this machine succeeds')
 path, ctype, body = GOT[0]
 ok(path == '/' and ctype.startswith('application/json') and json.loads(body.decode('utf-8')) == pl, 'it is a POST to the server root with a UTF-8 JSON body that holds exactly the message (the Arabic survives)')
+pl2 = r1s[0][0]
+ok(G['notify_post']('http://127.0.0.1:%d' % srv.server_port, pl2) is True and json.loads(GOT[1][2].decode('utf-8')) == pl2, 'the story message also goes out as UTF-8 JSON with the Arabic intact')
 srv.shutdown()
 try:
     G['notify_post']('http://127.0.0.1:1', pl, timeout=1); bad_ok = False
