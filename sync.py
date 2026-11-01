@@ -6317,8 +6317,10 @@ _X_THJS = r"""/* ===== Theme: league colours, club colours and defending champio
       and dot show every colour at its share;
    4. gold, only for a defending champion that data/champions.json verifies for the current season.
    Statistical colours (chart panels and marks, form, heatmaps, status green/red/amber) are not part of the theme. */
+/* the page itself is the same in every league and for every club: a pitch at night. The league's or club's colour lights it (accents, glow, buttons, bars) but never repaints it */
+const TH_NIGHT={bg:'#0a1a1e',sf:'#10282a',ln:'#27474a'};
 const THEME={
- base:{key:'base',bg:'#0d1520',sf:'#152130',ln:'#25374d',tx:'#e8eef5',mu:'#8a9bb0',th:'#4cc38a',ink:'#06210f',hi:'#4cc38a',link:'#5aa9e6',deep:'#0f3b2c'},
+ base:{key:'base',bg:'#0a1a1e',sf:'#10282a',ln:'#27474a',tx:'#e8eef5',mu:'#8a9bb0',th:'#4cc38a',ink:'#06210f',hi:'#4cc38a',link:'#5aa9e6',deep:'#0f3b2c'},
  /* base = identity colour; the page shades are derived from it (thPalette). The Premier League shades follow its purple and
     magenta identity directly. */
  leagues:[
@@ -6395,7 +6397,7 @@ function thPalette(base,o={},alt=null){
  /* neutral clubs (black and white): the lighter colour leads */
  if(alt&&thHsl(base)[1]<.12&&thHsl(alt)[1]<.12&&thLum(alt)>thLum(base))[base,alt]=[alt,base];
  const [h,s0,l0]=thHsl(base),s=Math.min(s0,.92),neutral=s0<.12;
- const bg=o.bg||thHex(h,neutral?0:s*.85,.085),sf=o.sf||thHex(h,neutral?0:s*.7,.135),ln=o.ln||thHex(h,neutral?0:s*.45,.26),B=[bg,sf];
+ const bg=TH_NIGHT.bg,sf=TH_NIGHT.sf,ln=TH_NIGHT.ln,B=[bg,sf];
  /* buttons: visible on the page (3:1) with readable text (4.5:1): the club's own colour, then a little darker or lighter, then its second colour */
  const okTh=x=>Math.min(thCr(x,bg),thCr(x,sf))>=3,inkOf=(x,other)=>[other,'#ffffff','#0b0b0b'].filter(Boolean).find(i=>thCr(i,x)>=4.5);
  let th=o.th,ink=th?inkOf(th):null;
@@ -9018,11 +9020,11 @@ INDEX = _x_fpx_index(INDEX)
 # الكود في ملفات مستقلة في المستودع: assets/*.js و assets/features.css و manifest.webmanifest و sw.js و assets/icons/.
 # هذا القسم يضيف روابطها للصفحة فقط (بعد السكربت الرئيسي، فتلقى R و PAGES جاهزة). غيّر FEATURES_V لما تتغير الملفات.
 # ============================================================================
-FEATURES_V = "62"
+FEATURES_V = "64"
 FEATURES_JS = ("pla-data", "share-card", "threat-map", "match-whatif", "player-page", "match-centre", "home-extra", "team-round",
                "preview", "club-extra", "rankings-extra", "fantasy-extra", "insights-core", "hidden-gems", "player-dna", "team-dna",
                "reality-check", "matches-board", "match-replay", "match-story", "overview", "press-height",
-               "season-sim", "luck-table", "player-twin", "player-cards", "beat-model", "rare-cases", "attack-share", "drawer", "tap-twice", "line-height", "league-pool", "game-states", "likely-xi", "club-twins", "carry-team", "report-card", "league-dna", "thrill", "defense-card", "press-card", "sb-press", "stat-stability", "keeps-up", "goalkeepers", "xi-builder", "player-prices", "xi-battle", "player-story", "time-machine", "ask", "wrapped", "levels", "club-elo", "title-race", "elo-river", "heartbeat", "club-shape", "fortress", "late-show", "run-in", "team-season", "notify", "recap", "holo", "seasons", "liquid-glass")
+               "season-sim", "luck-table", "player-twin", "player-cards", "beat-model", "rare-cases", "attack-share", "drawer", "tap-twice", "line-height", "league-pool", "game-states", "likely-xi", "club-twins", "carry-team", "report-card", "league-dna", "thrill", "defense-card", "press-card", "sb-press", "stat-stability", "keeps-up", "goalkeepers", "xi-builder", "player-prices", "xi-battle", "player-story", "time-machine", "ask", "wrapped", "levels", "club-elo", "title-race", "elo-river", "heartbeat", "club-shape", "fortress", "late-show", "run-in", "team-season", "notify", "pitch3d", "recap", "holo", "seasons", "liquid-glass")
 
 
 def _x_feat_index(html):

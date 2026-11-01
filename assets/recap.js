@@ -125,8 +125,23 @@
     <p class="mu rc-note">${two('The curve follows the scoreboard (Elo\'s chances before kick-off, the score and the minutes left); the verdict follows the shots, so they can disagree: that is what a stolen win is. Red cards are not in the shot data, so the curve ignores them.','المنحنى يتبع النتيجة (فرص Elo قبل المباراة، والنتيجة، والدقائق الباقية)؛ والحكم يتبع التسديدات، فممكن يختلفون: وهذا بالضبط معنى الفوز المسروق. الكروت الحمراء مو في بيانات التسديدات، فالمنحنى يتجاهلها.')}</p></div>
    <div class="card rc-ch"><h3>${two('The chances','الفرص')}</h3>${bar(m.home,e.x[0])}${bar(m.away,e.x[1])}
     <p class="mu rc-note">${two(`If the same shots were taken again: ${nm(m.home)} win ${nb(pct(e.pv[0])+'%')}, draw ${nb(pct(e.pv[1])+'%')}, ${nm(m.away)} win ${nb(pct(e.pv[2])+'%')}.`,`لو تكررت نفس التسديدات: فوز ${nm(m.home)} ${nb(pct(e.pv[0])+'%')}، تعادل ${nb(pct(e.pv[1])+'%')}، فوز ${nm(m.away)} ${nb(pct(e.pv[2])+'%')}.`)}</p></div>
+   ${INS.pitch3d?`<div class="card rc-3"><h3>${two('The shots in 3D (experimental)','التسديدات بثلاثة أبعاد (تجريبي)')}</h3>
+    <div class="seg p3-seg" id="rc3t" role="group" aria-label="${ar()?'العرض':'View'}"><button type="button" data-v="2" aria-pressed="${!INS.pitch3d.get()}">${two('Off','إيقاف')}</button><button type="button" data-v="3" aria-pressed="${INS.pitch3d.get()}">${two('3D shot towers','أبراج التسديدات 3D')}</button></div><div class="rc-3d" id="rc3d"></div></div>`:''}
    <div class="card rc-sv"><button type="button" class="s" id="rcsave">${two('Save as picture','احفظها كصورة')}</button> <a href="#/match/${encodeURIComponent(id)}">${two('Match centre →','مركز المباراة ←')}</a></div>
    <div class="card rc-ac">${notes(S)}</div>`;
+  /* the shots in 3D (experimental): a pin for every shot, as high as its xG, at the place it was taken; the away team's shots are turned round so the two sides attack opposite ways */
+  const t3=root.querySelector('#rc3t'),h3=root.querySelector('#rc3d');
+  const show3=async()=>{if(!h3||!INS.pitch3d)return;const on=INS.pitch3d.get();t3.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String((b.dataset.v==='3')===on)));
+   if(!on){h3.innerHTML='';return}
+   h3.innerHTML=`<div class="empty skel">${two('Loading the shots…','جاري تحميل التسديدات…')}</div>`;
+   let Z=null;try{Z=typeof loadSh==='function'?await loadSh():null}catch(x){Z=null}
+   if(!root.isConnected||D.id!==lg||!INS.pitch3d.get())return;
+   const rows=Z&&Z.rows?Z.rows.filter(r=>r.m===id&&!r.og&&r.x!=null&&r.y!=null):[];
+   if(!rows.length){h3.innerHTML=`<div class="empty">${two('No shot positions for this match.','ما فيه أماكن تسديدات لهذي المباراة.')}</div>`;return}
+   INS.pitch3d.mount(h3,{pins:rows.map((r,i)=>{const hm=r.c===m.home,xg=+r.xg||0,goal=r.ev==='Goal';return {id:i,x:hm?r.x:105-r.x,y:hm?r.y:68-r.y,h:Math.max(12,Math.min(170,12+xg*230)),cls:hm?'a':'b',goal,label:goal?Math.round(r.mn)+"'":''}}),
+    note:two(`Pin height = the shot's xG. A ringed pin is a goal. ${esc(m.home)} attacks to the right, ${esc(m.away)} to the left. Own goals are not shown.`,`ارتفاع العمود = xG التسديدة. العمود المحاط بحلقة هدف. ${esc(m.home)} يهاجم نحو اليمين و${esc(m.away)} نحو اليسار. الأهداف العكسية ما تظهر.`)})};
+  if(t3)t3.querySelectorAll('button').forEach(b=>b.onclick=()=>{INS.pitch3d.set(b.dataset.v==='3');show3()});
+  show3();
   const sv=root.querySelector('#rcsave');
   sv.onclick=async()=>{if(!INS.cardKit||!INS.cardKit.savePng)return;sv.disabled=true;try{const c=card(m,e,ar());await INS.cardKit.savePng(c.svg,c.W,c.H,m.home+' '+m.away,'recap')}catch(x){}sv.disabled=false};
  };

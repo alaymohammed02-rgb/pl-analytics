@@ -78,13 +78,14 @@
   const ms=S.fm?all.filter(m=>m.f===S.fm):all,main=aggregate(ms),cmp=S.cmp?aggregate(C.clubs.get(S.cmp)):null;
   const f1=v=>v==null?'–':v.toFixed(1),dpt=a=>a.lines.DEF&&a.lines.FWD?a.lines.FWD.x-a.lines.DEF.x:null;
   const lineRow=(k,en,arb)=>`<tr data-k="${k}"><td>${two(en,arb)}</td><td class="n cs-a">${nb(f1(main.lines[k]&&main.lines[k].x))}</td>${cmp?`<td class="n cs-b">${nb(f1(cmp.lines[k]&&cmp.lines[k].x))}</td>`:''}</tr>`;
+  const d3=!!(INS.pitch3d&&INS.pitch3d.get()&&main.pts.length);
   const sorted=main.pts.slice().sort((a,b)=>a.x-b.x||(a.name<b.name?-1:1));
   root.innerHTML=`<div class="card lk-intro"><p>${two('<b>Where a club really plays.</b> Each dot is a starter, placed at the centre of his match actions over his starts (own goal on the left, the team attacks to the right). It shows how deep the defence sits, how far the forwards are from it and who drifts where, season so far.','<b>وين النادي يلعب فعلًا.</b> كل نقطة لاعب أساسي، في مركز أفعاله في مبارياته (المرمى على اليسار والفريق يهاجم لليمين). تشوف قد إيش الدفاع متراجع، وكم المسافة بينه وبين المهاجمين، ومين يتحرك وين، من بداية الموسم.')}</p></div>
    <div class="card"><div class="ctl"><label class="dcx-l"><span class="mu">${two('Club','النادي')}</span><select id="csc">${teams.map(t=>`<option value="${esc(t)}"${t===S.team?' selected':''}>${esc(t)}</option>`).join('')}</select></label>
     <label class="dcx-l"><span class="mu">${two('Compare with','قارن مع')}</span><select id="csp"><option value="">${ar()?'بدون':'None'}</option>${teams.filter(t=>t!==S.team).map(t=>`<option value="${esc(t)}"${t===S.cmp?' selected':''}>${esc(t)}</option>`).join('')}</select></label></div>
     <div class="seg cs-fm" id="csf" role="group" aria-label="${ar()?'التشكيل':'Formation'}"><button type="button" data-f="" aria-pressed="${!S.fm}" class="${S.fm?'':'on'}">${two('All','الكل')} ${nb(all.length)}</button>${fms.map(([f,n])=>`<button type="button" data-f="${esc(f)}" aria-pressed="${S.fm===f}" class="${S.fm===f?'on':''}">${nb(esc(f||'?'))} ${nb(n)}</button>`).join('')}</div></div>
    <div class="card cs-c"><p class="mu cs-hd">${two(`${esc(S.team)}: ${main.n} ${main.n===1?'match':'matches'}${S.fm?' in '+esc(S.fm):''}; a player is drawn from ${main.need} starts`,`${nm(S.team)}: ${nb(main.n)} مباراة${S.fm?' بتشكيل '+nb(esc(S.fm)):''}؛ اللاعب يظهر من ${nb(main.need)} مباراة أساسي`)}${cmp?` · <span class="cs-cb">${two(`outlined: ${esc(S.cmp)}`,`الحلقات: ${nm(S.cmp)}`)}</span>`:''}</p>
-    ${main.pts.length?pitch(main,cmp):`<div class="empty">${two('No player has enough starts with 10 or more actions yet.','ما فيه لاعب عنده مباريات أساسي كافية (10 أفعال أو أكثر) للحين.')}</div>`}
+    ${main.pts.length?`<div class="seg p3-seg" id="cs3t" role="group" aria-label="${ar()?'العرض':'View'}"><button type="button" data-v="2" aria-pressed="${!d3}">2D</button><button type="button" data-v="3" aria-pressed="${d3}">${two('3D · experimental','3D · تجريبي')}</button></div>${d3?'<div class="cs-3d" id="cs3d"></div>':pitch(main,cmp)}`:`<div class="empty">${two('No player has enough starts with 10 or more actions yet.','ما فيه لاعب عنده مباريات أساسي كافية (10 أفعال أو أكثر) للحين.')}</div>`}
     <p class="mu ins-note">${two('The centre of a player\'s actions is where the ball was touched, so it is pulled towards where his team plays: this is where the club operated, not where its players stood. The left flank is at the top. Pitch 105 × 68 m.','مركز أفعال اللاعب هو المكان اللي انلمست فيه الكرة، فينسحب نحو المكان اللي يلعب فيه فريقه: هذا مكان نشاط النادي، مو مكان وقوف لاعبيه. الجناح الأيسر فوق. الملعب 105 × 68 م.')}</p></div>
    <div class="card"><h3>${two('The three lines','الخطوط الثلاثة')}</h3>
     <table class="lk-t cs-t"><thead><tr><th>${two('Line (metres from own goal)','الخط (أمتار من مرماه)')}</th><th class="n">${nm(S.team)}</th>${cmp?`<th class="n">${nm(S.cmp)}</th>`:''}</tr></thead><tbody>
@@ -97,6 +98,9 @@
   q('#csc').onchange=e=>{S.team=e.target.value;S.fm='';draw(root,C)};
   q('#csp').onchange=e=>{S.cmp=e.target.value;draw(root,C)};
   root.querySelectorAll('#csf button').forEach(b=>b.onclick=()=>{S.fm=b.dataset.f;draw(root,C)});
+  root.querySelectorAll('#cs3t button').forEach(b=>b.onclick=()=>{if(!INS.pitch3d)return;INS.pitch3d.set(b.dataset.v==='3');draw(root,C)});
+  if(d3&&q('#cs3d')){const pin=(p,cls)=>({id:p.id,x:p.x,y:p.y,h:Math.max(10,Math.min(150,p.per*1.2)),label:cls==='a'?surname(p.name):'',cls});
+   INS.pitch3d.mount(q('#cs3d'),{pins:[...(cmp?cmp.pts.map(p=>pin(p,'b')):[]),...main.pts.map(p=>pin(p,'a'))],note:two('Pin height = actions per start. Drag to turn the pitch. The team attacks to the right.','ارتفاع العمود = أفعال في المباراة الأساسية. اسحب لتدوير الملعب. الفريق يهاجم نحو اليمين.')})}
  }
  INS.ar({'Club shape':'شكل النادي'});
  if(typeof D==='object'&&D&&typeof route==='function')route();
