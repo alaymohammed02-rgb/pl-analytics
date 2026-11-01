@@ -13,20 +13,20 @@ const cr=(a,b)=>{const x=lum(a),y=lum(b);return (Math.max(x,y)+.05)/(Math.min(x,
 (async()=>{
  /* the files */
  {const faces=[...css.matchAll(/url\(([^)]+)\)/g)].map(m=>m[1]);const files=faces.map(f=>path.join(A,f));
-  ok(faces.length===9&&faces.every(f=>/^fonts\/plex-sans(-arabic|-latin|-latin-ext)?-?\d*\.woff2$|^fonts\/plex-sans-(latin|latin-ext|arabic)-(400|600|700)\.woff2$/.test(f)),'identity.css names 9 font files, all inside assets/fonts');
+  ok(faces.length===15&&faces.every(f=>/^fonts\/plex-sans-(latin|latin-ext|arabic)-(400|600|700)\.woff2$|^fonts\/changa-(latin|latin-ext|arabic)-(700|800)\.woff2$/.test(f)),'identity.css names 15 font files (Plex Sans: Latin, Latin extended, Arabic x 3 weights; Changa: the same three scripts x 2 weights), all inside assets/fonts');
   ok(files.every(f=>fs.existsSync(f)&&fs.readFileSync(f).slice(0,4).toString()==='wOF2'&&fs.statSync(f).size<60000),'each is a real woff2 file under 60 KB ('+files.map(f=>Math.round(fs.statSync(f).size/1024)+'K').join(' ')+')');
   ok(!/https?:|@import|googleapis|gstatic/i.test(css),'the stylesheet asks nothing of another site');
-  ok(fs.readFileSync(path.join(A,'fonts','OFL-IBM-Plex-Sans.txt'),'utf8').includes('SIL Open Font License')&&fs.readFileSync(path.join(A,'fonts','OFL-IBM-Plex-Sans-Arabic.txt'),'utf8').includes('SIL Open Font License'),'the licence of each font family is next to the files')}
+  ok(fs.readFileSync(path.join(A,'fonts','OFL-Changa.txt'),'utf8').includes('SIL Open Font License')&&fs.readFileSync(path.join(A,'fonts','OFL-IBM-Plex-Sans.txt'),'utf8').includes('SIL Open Font License')&&fs.readFileSync(path.join(A,'fonts','OFL-IBM-Plex-Sans-Arabic.txt'),'utf8').includes('SIL Open Font License'),'the licence of each font family is next to the files')}
  const b=await T.launch();
  /* English: fonts, type, glass */
  let {ctx,pg,errs}=await T.open(b,{vw:1280,lang:'en',league:'l_4WFCIZ',hash:'#/fortress'});const reqs=[];pg.on('request',r=>reqs.push(r.url()));
  await pg.waitForSelector('.ft-row',{timeout:90000});await pg.waitForTimeout(1200);
  const en=await pg.evaluate(()=>{const cs=(e,p)=>getComputedStyle(e)[p],h=document.querySelector('#app h2'),card=document.querySelector('.card'),tb=document.querySelector('.ft-t,table');
-  return {fam:cs(document.body,'fontFamily'),h2w:cs(h,'fontWeight'),h2ls:cs(h,'letterSpacing'),h2fs:parseFloat(cs(h,'fontSize')),tab:tb?cs(tb,'fontVariantNumeric'):'',rad:parseFloat(cs(card,'borderRadius')),sh:cs(card,'boxShadow'),bg:cs(card,'backgroundColor'),hb:cs(document.querySelector('header'),'backdropFilter'),
+  return {fam:cs(document.body,'fontFamily'),h2fam:cs(h,'fontFamily'),h2w:cs(h,'fontWeight'),h2ls:cs(h,'letterSpacing'),h2fs:parseFloat(cs(h,'fontSize')),tab:tb?cs(tb,'fontVariantNumeric'):'',rad:parseFloat(cs(card,'borderRadius')),sh:cs(card,'boxShadow'),bg:cs(card,'backgroundColor'),hb:cs(document.querySelector('header'),'backdropFilter'),
    fonts:[...document.fonts].filter(f=>f.status==='loaded').map(f=>f.family.replace(/"/g,'')+' '+f.weight)}});
  ok(/^"?Plex Sans"?,\s*"?Plex Sans Arabic"?/.test(en.fam),'the page font is Plex Sans, then Plex Sans Arabic ('+en.fam.slice(0,50)+')');
- ok(en.fonts.includes('Plex Sans 400')&&en.fonts.includes('Plex Sans 700'),'the Latin files of weight 400 and 700 are loaded ('+en.fonts.join(', ')+')');
- ok(+en.h2w===700&&parseFloat(en.h2ls)<0&&en.h2fs>=22&&en.h2fs<=28,'the page title is bold, slightly tight and 22 to 28 px ('+en.h2fs.toFixed(1)+' px, spacing '+en.h2ls+')');
+ ok(en.fonts.includes('Plex Sans 400')&&en.fonts.includes('Changa Display 800'),'the Latin files of Plex Sans 400 and Changa 800 (titles) are loaded ('+en.fonts.join(', ')+')');
+ ok(+en.h2w===800&&parseFloat(en.h2ls)<0&&en.h2fs>=22&&en.h2fs<=30&&/^"?Changa Display"?/.test(en.h2fam||''),'the page title is Changa 800, slightly tight and 22 to 30 px ('+en.h2fs.toFixed(1)+' px, spacing '+en.h2ls+')');
  ok(/tabular-nums/.test(en.tab),'numbers in tables are tabular');
  ok(en.rad===14&&/inset/.test(en.sh)&&/rgba?\(0, 0, 0/.test(en.sh),'a card has a 14 px radius, an inset highlight and a drop shadow');
  ok(!/\.card[^{]*\{[^}]*background/.test(css.replace(/\/\*[\s\S]*?\*\//g,'')),'identity.css never sets a card\'s background: the theme\'s colour is what the Liquid Glass reads ('+en.bg+')');

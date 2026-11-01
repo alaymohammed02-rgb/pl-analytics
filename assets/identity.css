@@ -1,12 +1,12 @@
-/* ===== Visual identity (loaded last): IBM Plex type, calm editorial rhythm, glass surfaces =====
-   - Fonts are files of this project (assets/fonts, SIL Open Font License, licences next to them): IBM Plex Sans for Latin text and numbers,
-     IBM Plex Sans Arabic for Arabic, each loaded only when a page shows characters of its script (unicode-range). No request leaves the site.
-   - Editorial type: tighter, heavier page titles, quiet small-weight table headers, tabular figures wherever numbers line up.
-   - Glass surfaces: a card is a soft sheen on its own colour (an inset highlight, an inset top glow and a drop shadow) and a clear
-     edge, over a faint glow of the league's colour behind the page; the header and the bar of pages above every page are real glass (blur).
-   - Rules here must not change the size or the position of anything a test or the Liquid Glass measures: no padding, height or
-     font-size changes on buttons, rows, bars and tabs, and a group's own background colour is left to the theme (the lens reads it).
-   - Specificity is raised with `html body` because some stylesheets are added by script after this file loads. */
+/* ===== Visual identity "Night pitch" (loaded last) =====
+   The whole site is a pitch seen at night under floodlights. The page is the same deep green-black in every league (the theme fixes it, see TH_NIGHT in sync.py);
+   the league's or club's colour lights it: accents, the glow in the corner, the buttons and bars. What you remember is the pitch's own drawing:
+   - turf stripes: the faint bands of mown grass behind the page, and again as the alternate rows of every table;
+   - chalk: a halfway line and a centre circle behind the page, and the same line-ring-line as the mark under every page title and on the brand;
+   - the scoreboard: Changa (heavy, wide, sporty) for titles, scores and big numbers; IBM Plex for everything you read.
+   Rules (kept from the first identity): fonts are files of this project (assets/fonts, SIL Open Font License, licences next to them), each loaded only when a page
+   shows its script; nothing here changes the size or position of a button, row, bar or tab, a group's own background colour is left to the theme (the Liquid Glass
+   reads it), no text-transform; specificity is raised with `html body` because some stylesheets are added by script after this file loads. */
 @font-face{font-family:"Plex Sans";font-style:normal;font-weight:400;font-display:swap;src:url(fonts/plex-sans-latin-400.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
 @font-face{font-family:"Plex Sans";font-style:normal;font-weight:600;font-display:swap;src:url(fonts/plex-sans-latin-600.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
 @font-face{font-family:"Plex Sans";font-style:normal;font-weight:700;font-display:swap;src:url(fonts/plex-sans-latin-700.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
@@ -16,38 +16,64 @@
 @font-face{font-family:"Plex Sans Arabic";font-style:normal;font-weight:400;font-display:swap;src:url(fonts/plex-sans-arabic-400.woff2) format("woff2");unicode-range:U+0600-06FF,U+0750-077F,U+0870-088E,U+0890-0891,U+0897-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FE74,U+FE76-FEFC}
 @font-face{font-family:"Plex Sans Arabic";font-style:normal;font-weight:600;font-display:swap;src:url(fonts/plex-sans-arabic-600.woff2) format("woff2");unicode-range:U+0600-06FF,U+0750-077F,U+0870-088E,U+0890-0891,U+0897-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FE74,U+FE76-FEFC}
 @font-face{font-family:"Plex Sans Arabic";font-style:normal;font-weight:700;font-display:swap;src:url(fonts/plex-sans-arabic-700.woff2) format("woff2");unicode-range:U+0600-06FF,U+0750-077F,U+0870-088E,U+0890-0891,U+0897-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FE74,U+FE76-FEFC}
+/* the display face: Changa, 700 for card titles and 800 for page titles, scores and big numbers (Arabic, Latin and Latin extended files) */
+@font-face{font-family:"Changa Display";font-style:normal;font-weight:700;font-display:swap;src:url(fonts/changa-latin-700.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:"Changa Display";font-style:normal;font-weight:800;font-display:swap;src:url(fonts/changa-latin-800.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:"Changa Display";font-style:normal;font-weight:700;font-display:swap;src:url(fonts/changa-latin-ext-700.woff2) format("woff2");unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:"Changa Display";font-style:normal;font-weight:800;font-display:swap;src:url(fonts/changa-latin-ext-800.woff2) format("woff2");unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:"Changa Display";font-style:normal;font-weight:700;font-display:swap;src:url(fonts/changa-arabic-700.woff2) format("woff2");unicode-range:U+0600-06FF,U+0750-077F,U+0870-088E,U+0890-0891,U+0897-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FE74,U+FE76-FEFC}
+@font-face{font-family:"Changa Display";font-style:normal;font-weight:800;font-display:swap;src:url(fonts/changa-arabic-800.woff2) format("woff2");unicode-range:U+0600-06FF,U+0750-077F,U+0870-088E,U+0890-0891,U+0897-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FE74,U+FE76-FEFC}
 
 :root{
  color-scheme:dark;
  --font:"Plex Sans","Plex Sans Arabic",system-ui,-apple-system,"Segoe UI",Tahoma,"Noto Sans Arabic",sans-serif;
+ --font-d:"Changa Display","Plex Sans","Plex Sans Arabic",system-ui,sans-serif;
  --id-r:14px;
- --id-edge:rgba(255,255,255,.10);
- --id-lift:inset 0 1px 0 rgba(255,255,255,.12),inset 0 34px 44px -34px rgba(255,255,255,.14),inset 0 -1px 0 rgba(0,0,0,.25),0 16px 36px -18px rgba(0,0,0,.7);
+ --id-chalk:rgba(237,242,232,.13);      /* a pitch line seen at night */
+ --id-edge:var(--id-chalk);
+ --id-stripe:rgba(237,242,232,.024);    /* one band of mown grass over the next */
+ --id-lift:inset 0 1px 0 rgba(255,255,255,.10),inset 0 30px 40px -34px rgba(255,255,255,.10),inset 0 -1px 0 rgba(0,0,0,.30),0 14px 32px -18px rgba(0,0,0,.75);
 }
 /* the Arabic stylesheet (added by script) sets the font of `html[dir=rtl] body`, so this needs one more attribute to win */
 html body,html[dir=rtl][lang] body{font-family:var(--font)}
 html body{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
 html body :is(button,input,select,textarea){font-family:inherit}
 
-/* the faint glow of the league's colour behind the whole page (fixed, so it stays while the page scrolls) */
+/* the pitch behind the page (fixed, so it stays while the page scrolls): mown stripes, the centre circle of the next pitch in chalk, cropped at the edge of the screen, and the league's light
+   from the top corner */
 html body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
- background:radial-gradient(880px 520px at 10% -6%,var(--th-glow,rgba(76,195,138,.2)),transparent 64%),
-  radial-gradient(720px 460px at 94% 2%,color-mix(in srgb,var(--th-hi,#4cc38a) 14%,transparent),transparent 62%)}
+ background:
+  radial-gradient(900px 520px at 8% -8%,var(--th-glow,rgba(76,195,138,.2)),transparent 62%),
+  radial-gradient(720px 460px at 96% 0,color-mix(in srgb,var(--th-hi,#4cc38a) 13%,transparent),transparent 62%),
+  radial-gradient(circle at 106% 58%,transparent 0 372px,rgba(237,242,232,.075) 373px 375px,transparent 376px),
+  linear-gradient(90deg,transparent calc(106% - 2px),rgba(237,242,232,.07) calc(106% - 2px),transparent 106%),
+  repeating-linear-gradient(90deg,transparent 0 96px,var(--id-stripe) 96px 192px)}
 html body ::selection{background:var(--th-soft,rgba(76,195,138,.25))}
 
-/* type: page titles carry the page, table headers whisper, numbers line up */
-html body h2{font-weight:700;font-size:clamp(22px,1.2vw + 17px,28px);letter-spacing:-.018em;line-height:1.15}
-html body h3{letter-spacing:.005em}
-html body :is(table,.kpi b,.hb-t b,.ft-row,.ls-row,.lk-t){font-variant-numeric:tabular-nums}
+/* type: the display face carries titles and scores, Plex carries everything you read; numbers line up */
+html body h2{font-family:var(--font-d);font-weight:800;font-size:clamp(23px,1.3vw + 17px,30px);letter-spacing:-.012em;line-height:1.12}
+html body h3{font-family:var(--font-d);font-weight:700;letter-spacing:0}
+html body :is(.kpi b,.hb-t b,.bm-s b,.mb-sc,.rc-sc b,.mc-sb b){font-family:var(--font-d);font-weight:800}
+html body :is(table,.kpi b,.hb-t b,.ft-row,.ls-row,.lk-t,.mb-sc,.rc-sc){font-variant-numeric:tabular-nums}
 html body th{font-size:12.5px;letter-spacing:.04em;font-weight:600}
-html body .top b{font-weight:700;letter-spacing:-.01em}
-/* the brand bead: a small glass sphere in the league's colour (its size and place are the theme's) */
-html body .brand .bm{background:radial-gradient(circle at 32% 28%,#fff 0,var(--th-hi,#4cc38a) 42%,color-mix(in srgb,var(--th-hi,#4cc38a) 55%,#000) 100%);box-shadow:0 0 0 1px rgba(255,255,255,.28),0 0 14px var(--th-glow,rgba(76,195,138,.4))}
+html body .top b{font-family:var(--font-d);font-weight:800;letter-spacing:0}
 html[lang=ar] body :is(h2,h3,th,.top b){letter-spacing:0}
+/* the chalk mark under every page title: a line, a ring, a line (it draws in from the centre once when the page opens) */
+html body h2::after{content:"";display:block;width:64px;height:11px;margin-top:5px;border-radius:0;opacity:1;
+ background:
+  radial-gradient(circle at 50% 50%,transparent 0 3.2px,var(--th-hi,#4cc38a) 3.6px 5.2px,transparent 5.6px),
+  linear-gradient(var(--th-hi,#4cc38a),var(--th-hi,#4cc38a)) left center/calc(50% - 8px) 2px no-repeat,
+  linear-gradient(var(--th-hi,#4cc38a),var(--th-hi,#4cc38a)) right center/calc(50% - 8px) 2px no-repeat;
+ transform-origin:50% 50%;animation:id-chalk .7s cubic-bezier(.2,.8,.2,1) both}
+@keyframes id-chalk{from{transform:scaleX(.15);opacity:0}to{transform:none;opacity:1}}
+/* the brand: a centre circle with its spot */
+html body .brand .bm{background:radial-gradient(circle,var(--th-hi,#4cc38a) 0 26%,transparent 29%);box-shadow:inset 0 0 0 2px var(--th-hi,#4cc38a),0 0 12px var(--th-glow,rgba(76,195,138,.4))}
+/* tables: the stripes of the pitch */
+html body tbody tr:nth-child(even)>td{background-color:var(--id-stripe)}
 html body tbody tr{transition:background-color .15s}
-html body tbody tr:hover>td{background-color:rgba(255,255,255,.04)}
+html body tbody tr:hover>td{background-color:rgba(237,242,232,.065)}
 
-/* glass surfaces */
+/* surfaces: a chalk edge and a soft lift (the card's own background stays the theme's) */
 html body :is(.card,.kpi){border-color:var(--id-edge);border-radius:var(--id-r);box-shadow:var(--id-lift)}
 html body :is(.empty){border-radius:var(--id-r)}
 html body header{border-bottom-color:var(--id-edge);-webkit-backdrop-filter:blur(16px) saturate(1.35);backdrop-filter:blur(16px) saturate(1.35)}
@@ -56,5 +82,5 @@ html body :is(input,select,textarea):focus{outline:none;border-color:var(--th-hi
 :where(a,button,[tabindex]):focus-visible{outline:2px solid var(--th-hi,#4cc38a);outline-offset:2px}
 html body .tag{border-color:var(--id-edge)}
 
-@media(max-width:560px){html body :is(.card,.kpi){border-radius:12px}}
-@media(prefers-reduced-motion:reduce){html body tbody tr{transition:none}}
+@media(max-width:560px){html body :is(.card,.kpi){border-radius:12px}html body::before{background-size:auto}}
+@media(prefers-reduced-motion:reduce){html body tbody tr{transition:none}html body h2::after{animation:none}}

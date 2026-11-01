@@ -28,14 +28,14 @@ const noScroll=pg=>pg.evaluate(()=>document.scrollingElement.scrollWidth-innerWi
   /* four colours, each as big as its share */
   await lg(pg,'l_0ErfuF');await go(pg,'#/club/'+encodeURIComponent('Real Madrid'),'.clubhd img.clubimg');
   const rm=await pg.evaluate(()=>{const g=getComputedStyle(document.querySelector('.clubst')).backgroundImage,st=[...g.matchAll(/rgb\((\d+), (\d+), (\d+)\) (\d+(?:\.\d+)?)%/g)].map(m=>[m[1]+','+m[2]+','+m[3],+m[4]]);
-   const s=getComputedStyle(document.documentElement);return {st,th:s.getPropertyValue('--th').trim(),bg:s.getPropertyValue('--bg').trim(),h:thHsl(s.getPropertyValue('--bg').trim())[0]}});
+   const s=getComputedStyle(document.documentElement);return {st,th:s.getPropertyValue('--th').trim(),bg:s.getPropertyValue('--bg').trim(),h:thHsl(s.getPropertyValue('--th').trim())[0]}});
   const seg=[];for(let i=0;i<rm.st.length;i+=2)seg.push([rm.st[i][0],rm.st[i+1][1]-rm.st[i][1]]);
   ok(seg.length===4&&seg.map(x=>x[1]).join()==='58,18,14,10'&&seg[0][0]==='255,255,255'&&seg[3][0]==='238,49,36',P+'Real Madrid stripe: white 58%, gold 18%, blue 14%, red 10% ('+seg.map(x=>x[0]+':'+x[1]).join(' ')+')');
-  ok(rm.h>195&&rm.h<225,P+'Real Madrid page drawn in its blue (page '+rm.bg+', buttons '+rm.th+')');
+  ok(rm.h>195&&rm.h<225,P+'Real Madrid page lit in its blue (the page is the night green-black '+rm.bg+', buttons '+rm.th+')');
   if(vw===1280){
    for(const [l,n] of [['l_4WFCIZ','Fulham'],['l_0ErfuF','Valencia'],['l_4WFCIZ','Newcastle United'],['l_4QexZg','Nacional']]){await lg(pg,l);await go(pg,'#/club/'+encodeURIComponent(n),'.clubhd');
     const v=await pg.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--th').trim());ok(v==='#ffffff',n+': a small accent does not colour a black-and-white club\'s page ('+v+')')}
-   await lg(pg,'l_4WFCIZ');await go(pg,'#/club/'+encodeURIComponent('Aston Villa'),'.clubhd');let v=await pg.evaluate(()=>[getComputedStyle(document.documentElement).getPropertyValue('--th').trim(),thHsl(getComputedStyle(document.documentElement).getPropertyValue('--bg').trim())[0]]);
+   await lg(pg,'l_4WFCIZ');await go(pg,'#/club/'+encodeURIComponent('Aston Villa'),'.clubhd');let v=await pg.evaluate(()=>[getComputedStyle(document.documentElement).getPropertyValue('--th').trim(),thHsl(getComputedStyle(document.documentElement).getPropertyValue('--th').trim())[0]]);
    ok(v[1]>300||v[1]<10,'Aston Villa page in claret ('+v.join(' ')+')');
    /* crest colours for a club not configured */
    await lg(pg,'l_4QexZg');await go(pg,'#/club/Alverca','.clubhd img.clubimg');await pg.waitForTimeout(400);const al=await pg.evaluate(()=>clubCols('Alverca'));

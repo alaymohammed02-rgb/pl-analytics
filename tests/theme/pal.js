@@ -1,3 +1,4 @@
+const TH_NIGHT={bg:'#0a1a1e',sf:'#10282a',ln:'#27474a'};
 /* shades for a whole page from one identity colour (HSL), each step checked for contrast; used for leagues and clubs */
 const thHex=(h,s,l)=>{s=Math.max(0,Math.min(1,s));l=Math.max(0,Math.min(1,l));const k=n=>(n+h/30)%12,a=s*Math.min(l,1-l),f=n=>l-a*Math.max(-1,Math.min(k(n)-3,Math.min(9-k(n),1)));return '#'+[f(0),f(8),f(4)].map(x=>Math.round(x*255).toString(16).padStart(2,'0')).join('')};
 const thHsl=hex=>{const [r,g,b]=thRgb(hex).map(v=>v/255),mx=Math.max(r,g,b),mn=Math.min(r,g,b),l=(mx+mn)/2,d=mx-mn;let h=0,s=0;
@@ -8,7 +9,7 @@ function thPalette(base,o={},alt=null){
  /* neutral clubs (black and white): the lighter colour leads */
  if(alt&&thHsl(base)[1]<.12&&thHsl(alt)[1]<.12&&thLum(alt)>thLum(base))[base,alt]=[alt,base];
  const [h,s0,l0]=thHsl(base),s=Math.min(s0,.92),neutral=s0<.12;
- const bg=o.bg||thHex(h,neutral?0:s*.85,.085),sf=o.sf||thHex(h,neutral?0:s*.7,.135),ln=o.ln||thHex(h,neutral?0:s*.45,.26),B=[bg,sf];
+ const bg=TH_NIGHT.bg,sf=TH_NIGHT.sf,ln=TH_NIGHT.ln,B=[bg,sf];
  /* buttons: visible on the page (3:1) with readable text (4.5:1): the club's own colour, then a little darker or lighter, then its second colour */
  const okTh=x=>Math.min(thCr(x,bg),thCr(x,sf))>=3,inkOf=(x,other)=>[other,'#ffffff','#0b0b0b'].filter(Boolean).find(i=>thCr(i,x)>=4.5);
  let th=o.th,ink=th?inkOf(th):null;

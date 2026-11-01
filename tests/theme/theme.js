@@ -1,3 +1,4 @@
+const TH_NIGHT={bg:'#0a1a1e',sf:'#10282a',ln:'#27474a'};
 /* ===== Theme: league colours, club colours and defending champions =====
    One configuration for every colour that carries identity. Layers:
    1. PL Analytics (wordmark, layout) — always the same; THEME.base is the original dark navy look;
@@ -8,7 +9,7 @@
    4. gold, only for a defending champion that data/champions.json verifies for the current season.
    Statistical colours (chart panels and marks, form, heatmaps, status green/red/amber) are not part of the theme. */
 const THEME={
- base:{key:'base',bg:'#0d1520',sf:'#152130',ln:'#25374d',tx:'#e8eef5',mu:'#8a9bb0',th:'#4cc38a',ink:'#06210f',hi:'#4cc38a',link:'#5aa9e6',deep:'#0f3b2c'},
+ base:{key:'base',bg:'#0a1a1e',sf:'#10282a',ln:'#27474a',tx:'#e8eef5',mu:'#8a9bb0',th:'#4cc38a',ink:'#06210f',hi:'#4cc38a',link:'#5aa9e6',deep:'#0f3b2c'},
  /* base = identity colour; the page shades are derived from it (thPalette). The Premier League shades follow its purple and
     magenta identity directly. */
  leagues:[
@@ -85,7 +86,7 @@ function thPalette(base,o={},alt=null){
  /* neutral clubs (black and white): the lighter colour leads */
  if(alt&&thHsl(base)[1]<.12&&thHsl(alt)[1]<.12&&thLum(alt)>thLum(base))[base,alt]=[alt,base];
  const [h,s0,l0]=thHsl(base),s=Math.min(s0,.92),neutral=s0<.12;
- const bg=o.bg||thHex(h,neutral?0:s*.85,.085),sf=o.sf||thHex(h,neutral?0:s*.7,.135),ln=o.ln||thHex(h,neutral?0:s*.45,.26),B=[bg,sf];
+ const bg=TH_NIGHT.bg,sf=TH_NIGHT.sf,ln=TH_NIGHT.ln,B=[bg,sf];
  /* buttons: visible on the page (3:1) with readable text (4.5:1): the club's own colour, then a little darker or lighter, then its second colour */
  const okTh=x=>Math.min(thCr(x,bg),thCr(x,sf))>=3,inkOf=(x,other)=>[other,'#ffffff','#0b0b0b'].filter(Boolean).find(i=>thCr(i,x)>=4.5);
  let th=o.th,ink=th?inkOf(th):null;
