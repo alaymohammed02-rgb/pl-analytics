@@ -12993,6 +12993,54 @@ def story_text(e, home, away):
     else:
         tt = (f"The match turned in minute {t['m']}, when {W}'s chance of winning went from {t['a']}% to {t['b']}%.", f"انقلبت المباراة في الدقيقة {t['m']} لما ارتفعت فرصة فوز {W} من {t['a']}% إلى {t['b']}%.")
     return {"en": [v[0], tt[0]], "ar": [v[1], tt[1]]}
+def story_total(prev):
+    """league goals per match from the matches before this one [(home goals, away goals)]: ST_TOTAL0 until 30 are known"""
+    return ST_TOTAL0 if len(prev) < 30 else sum(h + a for h, a in prev) / len(prev)
+
+
+def _brier(p, o):
+    return sum((p[i] - (1.0 if i == o else 0.0)) ** 2 for i in range(3))
+
+
+def story_accuracy(items):
+    """How good are the chances and the curve? items: [{"score","rows","home","away","pre"|None,"total"}] of finished matches with consistent goals.
+    -> {"n", "xg_goals", "shares", "brier_chances", "brier_rates", "curve": {"30"|"60"|"75": {"n","brier","base","bins"}}}"""
+    n = len(items)
+    out = {"n": n, "xg_goals": {"xg": 0.0, "goals": 0}, "shares": {k: 0 for k in ("deserved", "close", "lucky", "fair", "saved")}, "brier_chances": None, "brier_rates": None, "curve": {}}
+    cur = {m: {"n": 0, "b": 0.0, "base": 0.0, "bins": [[0, 0.0, 0] for _ in range(10)]} for m in (30, 60, 75)}
+    res, bc = [], 0.0
+    for it in items:
+        h, a = it["score"]
+        o = 0 if h > a else 1 if h == a else 2
+        res.append(o)
+        xh, xa, ph = story_chances(it["rows"], it["home"], it["away"])
+        out["xg_goals"]["xg"] += xh + xa
+        out["xg_goals"]["goals"] += h + a
+        out["shares"][story_verdict((h, a), xh, xa, ph)["vd"]] += 1
+        bc += _brier(ph, o)
+        if it.get("pre"):
+            lh, la = story_rates(it["pre"], it["total"])
+            goals = story_goals(it["rows"], it["home"], it["away"]) or []
+            for m, c in cur.items():
+                diff = sum(1 if g[2] == "h" else -1 for g in goals if g[0] <= m)
+                p = story_p(diff, _left(m), lh, la)
+                c["n"] += 1
+                c["b"] += _brier(p, o)
+                c["base"] += _brier(it["pre"], o)
+                b = c["bins"][min(9, int(p[0] * 10))]
+                b[0] += 1
+                b[1] += p[0]
+                b[2] += 1 if o == 0 else 0
+    if n:
+        rates = [res.count(k) / n for k in (0, 1, 2)]
+        out["brier_chances"] = round(bc / n, 4)
+        out["brier_rates"] = round(sum(_brier(rates, o) for o in res) / n, 4)
+        out["xg_goals"]["xg"] = round(out["xg_goals"]["xg"], 2)
+    for m, c in cur.items():
+        k = c["n"]
+        out["curve"][str(m)] = {"n": k, "brier": round(c["b"] / k, 4) if k else None, "base": round(c["base"] / k, 4) if k else None,
+                                "bins": [[i / 10, (i + 1) / 10, b[0], round(b[1] / b[0], 3), round(b[2] / b[0], 3)] for i, b in enumerate(c["bins"]) if b[0]]}
+    return out
 # ===== STORY END =====
 
 # ===== NOTIFY START =====
