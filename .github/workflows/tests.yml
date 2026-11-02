@@ -44,7 +44,7 @@ jobs:
           - shard: 7
             tests: "ps/ui_ps.js ps/ui_ps_crawl.js"
           - shard: 1
-            tests: "ui/ui_ux.js ph/ui_dlh.js fun/ui_sm.js fun/ui_lk.js xib/ui_xib.js story/ui_story.js"
+            tests: "ui/ui_ux.js ph/ui_dlh.js fun/ui_sm.js fun/ui_lk.js xib/ui_xib.js story/ui_story.js fm/ui_fm.js"
           - shard: 2
             tests: "shape/ui_shape.js holo/ui_holo.js river/ui_river.js lab/ui_lab.js lab/ui_lab2.js theme/ui_theme.js logo/ui_logo.js eng/ui_eng.js ui_test.js"
           - shard: 3
