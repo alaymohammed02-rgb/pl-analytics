@@ -1,7 +1,7 @@
 /* Mujassam Studio service worker: keeps the editor's own files on the device so it opens fast and without a connection.
    Network first (a fresh copy always wins when online), the last good copy when the network fails. Only this folder's own files. */
-const CACHE='mjm-studio-v1';
-const SHELL=['./','index.html','manifest.webmanifest','icon-192.png','icon-512.png','apple-touch-icon.png','vendor/three.min.js','vendor/OrbitControls.js','vendor/TransformControls.js','vendor/GLTFLoader.js','vendor/OBJLoader.js'];
+const CACHE='mjm-studio-v2';
+const SHELL=['./','index.html','manifest.webmanifest','icon-192.png','icon-512.png','apple-touch-icon.png','vendor/three.min.js','vendor/OrbitControls.js','vendor/TransformControls.js','vendor/GLTFLoader.js','vendor/OBJLoader.js','vendor/DRACOLoader.js','vendor/meshopt_decoder.js','vendor/draco/draco_wasm_wrapper.js','vendor/draco/draco_decoder.js','vendor/draco/draco_decoder.wasm'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).catch(()=>null).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
 self.addEventListener('fetch',e=>{
