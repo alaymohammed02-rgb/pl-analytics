@@ -84,3 +84,59 @@ html body .tag{border-color:var(--id-edge)}
 
 @media(max-width:560px){html body :is(.card,.kpi){border-radius:12px}html body::before{background-size:auto}}
 @media(prefers-reduced-motion:reduce){html body tbody tr{transition:none}html body h2::after{animation:none}}
+
+/* ===== "Scores" look (opt-in: class `fm` on <html>, set by assets/fm-style.js; off by default, so everything above stays as it is) =====
+   The traits of a scores app: a pure black page, flat grey surfaces with no chalk edge or lift, one green accent, 16 px corners, quiet headers, a bottom bar on phones and
+   your teams as colour tiles. It only restyles: no size or position of a button, row, tab or bar changes (borders keep their width and only turn transparent), a group's
+   own background is left to the variables (the Liquid Glass reads them, and rebuilds when the class on <html> changes). The theme writes --bg, --sf, --ln and --th-hi as inline
+   styles on <html>, so the look sets them with !important. */
+html.fm{
+ --bg:#000 !important;--sf:#1d1d1d !important;--ln:#2c2c2c !important;--tx:#fff !important;--mu:#9b9b9b !important;
+ --th-hi:#60df6e !important;--th-link:#60df6e !important;--th-ink:#06210f !important;--th-deep:#1f7a2c !important;
+ --th-soft:rgba(96,223,110,.12) !important;--th-bd:rgba(96,223,110,.4) !important;
+ --id-r:16px;--id-edge:transparent;--id-lift:none;--id-stripe:transparent;--glass-bd:transparent;--fm-acc:#60df6e;--fm-bar:#141414;--fm-head:#1a1a1a}
+html.fm body::before{display:none}
+html.fm body h2::after{display:none}
+html.fm body header{background:var(--fm-head);border-bottom-color:transparent;-webkit-backdrop-filter:none;backdrop-filter:none}
+html.fm body .mb-g{border-radius:16px;border-color:transparent}
+html.fm body .mb-lh{background:transparent}
+html.fm body .mb-r{border-top-color:rgba(255,255,255,.05)}
+html.fm body .mb-r:active{background:rgba(255,255,255,.08)}
+html.fm body :is(.card,.kpi,.ovf-c){border-radius:16px}
+html.fm body .mb-days button.on{border-bottom-color:var(--fm-acc)}
+
+/* your teams as colour tiles (Overview): the club's own colour, its crest, its name and its next match; the chips they replace stay in the page, hidden */
+.fm-tiles{display:none}
+html.fm .ovt .ovt-l{display:none}
+html.fm .fm-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:8px 0 10px}
+html.fm .fm-tile{position:relative;border-radius:16px;background:var(--fm-bg,#1d1d1d);color:#fff;min-width:0;overflow:hidden;transition:transform .12s ease-out}
+html.fm .fm-tile.dk{color:#111}
+html.fm .fm-tile:active{transform:scale(.97)}
+html.fm .fm-a{display:flex;flex-direction:column;gap:8px;aspect-ratio:1/.96;padding:14px;color:inherit;text-decoration:none}
+html.fm .fm-cr{width:44px;height:44px;object-fit:contain;flex:none}
+html.fm .fm-in{display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(255,255,255,.2);font:800 20px var(--font-d)}
+html.fm .fm-n{font:800 18px/1.15 var(--font-d);overflow-wrap:anywhere}
+html.fm .fm-nx{margin-top:auto;display:flex;flex-direction:column;gap:1px;font-size:12.5px;line-height:1.3;opacity:.92}
+html.fm .fm-w{font-weight:700}
+html.fm .fm-o{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+html.fm body .fm-x{position:absolute;inset-block-start:6px;inset-inline-end:6px;width:30px;min-height:30px;height:30px;padding:0;border-radius:50%;background:rgba(0,0,0,.28);color:inherit;border:0;font-size:18px;line-height:1;box-shadow:none}
+html.fm body .fm-tile.dk .fm-x{background:rgba(255,255,255,.35)}
+
+/* the look's switch, the last row of the menu drawer */
+.fm-sw{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px;border-top:1px solid var(--ln)}
+.fm-sw-t{color:var(--mu);font-size:13px;font-weight:600}
+.fm-sw button{min-height:40px;border-radius:999px;padding:8px 16px}
+
+/* the bottom bar (phones only; the page makes room for it) */
+#fmbar{display:none}
+@media(max-width:640px){
+ html.fm #fmbar{display:flex;position:fixed;inset-inline:0;bottom:0;z-index:4;background:var(--fm-bar);padding:6px 4px calc(6px + env(safe-area-inset-bottom))}
+ html.fm.dr-on body{padding-bottom:calc(72px + env(safe-area-inset-bottom))}
+ html.fm #fmbar>*{flex:1 1 0;min-width:0;padding:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:56px;border-radius:12px;color:var(--mu);font-size:11.5px;font-weight:600;text-decoration:none}
+ html.fm body #fmbar button{background:none;border:0;padding:0;box-shadow:none;font:inherit;font-size:11.5px;font-weight:600;color:var(--mu)}
+ html.fm #fmbar svg{width:24px;height:24px}
+ html.fm #fmbar span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ html.fm #fmbar [aria-current=page]{color:var(--fm-acc)}
+ html.fm #fmbar>*:active{background:rgba(255,255,255,.06)}
+}
+@media(prefers-reduced-motion:reduce){html.fm .fm-tile{transition:none}html.fm .fm-tile:active{transform:none}}
