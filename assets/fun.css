@@ -736,3 +736,9 @@ html[dir=rtl] .dl-bars .ph-bn bdi{text-align:right}
 .ctm-s.w{background:#178a49}.ctm-s.l{background:#c8342f}.ctm-s.d{background:#5f6c78}.ctm-s.t{background:transparent;color:var(--tx);font-weight:600}
 .ctm-more{width:100%;min-height:40px;margin:6px 0 4px;border-radius:999px}.ctm-n{margin:10px 2px 0}
 @media (max-width:420px){.ctm-r{gap:6px}.ctm-h,.ctm-a{font-size:13.5px}.ctm-s{min-width:54px;padding:4px 6px}}
+
+/* Matches page tabs and results (assets/matches-page.js) */
+.mp-tabs{margin:12px 0 14px}.mp-f{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:6px}.mp-n{font-size:13px}
+.mp-l{padding:0;margin-top:6px}.mpd{margin-top:14px}.mpdh{margin:0 2px 6px;font-size:12.5px;font-weight:700;color:var(--mu)}
+.mpm{border:1px solid var(--ln);border-radius:12px;margin-bottom:6px;padding:10px 12px;background:rgba(255,255,255,.03)}.mpm:first-of-type{border-top:1px solid var(--ln)}
+.ctm-s.n{background:rgba(255,255,255,.1);color:var(--tx)}.mpw{font-weight:700}
