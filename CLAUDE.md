@@ -22,6 +22,7 @@ A static football analytics site on GitHub Pages. A Python sync (`sync.py`, run 
   - no commercial use;
   - show the StatsBomb logo where it is used.
   - SkillCorner asks for credit.
+- **3D work lives on the `3D` branch** (owner asked 2 Nov 2026): the stadium behind a club's page, the pitch in 3D, Mujassam Studio and anything new in 3D are developed on `3D` (see `docs/3D.md` there), not on the project's branch. What is already on `main` stays as it is: GitHub Pages serves `main` only, and the studio's address stops working if its folder leaves `main`. Football-project work continues on the usual branch.
 - **Git:**
   - no force push;
   - stage specific files, never `git add -A` (tests touch `data/index.json`);
