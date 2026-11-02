@@ -414,7 +414,10 @@ function solidGeo(s,thr,depth,W,H){
 }
 function reliefGeo(s,thr,depth,W,H,inv){
   const g=new THREE.PlaneGeometry(W,H,s.w-1,s.h-1),pos=g.attributes.position,m=maskOf(s,thr,false),d=s.d;
-  for(let i=0;i<s.w*s.h;i++){let l=(.299*d[i*4]+.587*d[i*4+1]+.114*d[i*4+2])/255;if(inv)l=1-l;pos.setZ(i,m[i]?l*depth:0)}
+  /* brightness -> height, then softened twice with a 3 x 3 average so noise and sharp edges do not become spikes */
+  let h=new Float32Array(s.w*s.h);for(let i=0;i<h.length;i++){let l=(.299*d[i*4]+.587*d[i*4+1]+.114*d[i*4+2])/255;if(inv)l=1-l;h[i]=m[i]?l:0}
+  for(let k=0;k<2;k++){const o=new Float32Array(h.length);for(let y=0;y<s.h;y++)for(let x=0;x<s.w;x++){let a=0,c=0;for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){const X=x+dx,Y=y+dy;if(X>=0&&Y>=0&&X<s.w&&Y<s.h){a+=h[Y*s.w+X];c++}}o[y*s.w+x]=a/c}h=o}
+  for(let i=0;i<h.length;i++)pos.setZ(i,h[i]*depth);
   g.translate(0,0,-depth/2);g.computeVertexNormals();return g;
 }
 async function buildImage(mesh){
@@ -426,7 +429,7 @@ async function buildImage(mesh){
   else if(p.mode==='relief')g=reliefGeo(sample(im,190),p.thr,p.depth,W,H,p.inv);
   if(!g)g=new THREE.PlaneGeometry(W,H);
   const old=mesh.geometry;mesh.geometry=g;old.dispose();
-  const mt=mesh.material;mt.map=texOf(p.id,im);mt.alphaTest=.02;mt.side=THREE.DoubleSide;mt.needsUpdate=true;
+  const mt=mesh.material;mt.map=texOf(p.id,im);mt.emissive.set(0xffffff);mt.emissiveMap=mt.map;mt.emissiveIntensity=.85;mt.alphaTest=.02;mt.side=THREE.DoubleSide;mt.needsUpdate=true;
   mesh.userData.built=(mesh.userData.built||0)+1;
 }
 let rebuildT=0;function rebuildSoon(m){clearTimeout(rebuildT);rebuildT=setTimeout(()=>buildImage(m),120)}
@@ -442,7 +445,7 @@ async function addImageFile(file){
 async function addImageData(url){
   const id='i'+Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36);IMAGES[id]=url;
   let alpha=false;try{alpha=sample(await loadImg(id),120).alpha}catch(e){return}
-  const d={t:'image',n:uniqueName('image'),c:'#ffffff',m:.05,r:.7,o:1,w:0,v:1,p:[objs.length%3*1.1-1.1,1,0],q:[0,0,0],s:[1,1,1],im:{id,mode:alpha?'solid':'relief',depth:alpha?.25:.35,thr:.3,inv:0}};
+  const d={t:'image',n:uniqueName('image'),c:'#ffffff',m:.05,r:.7,o:1,w:0,v:1,p:[objs.length%3*1.1-1.1,1,0],q:[0,0,0],s:[1,1,1],im:{id,mode:alpha?'solid':'flat',depth:alpha?.25:.12,thr:.3,inv:0}};
   const m=make(d);scene.add(m);objs.push(m);select(objs.length-1);commit();return m;
 }
 

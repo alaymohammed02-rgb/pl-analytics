@@ -54,7 +54,7 @@ const bytes=f=>Array.from(fs.readFileSync(path.join(FX,f)));
    const RC=THREE.Raycaster,V=THREE.Vector3;const hit=x=>{const r=new RC(new V(mr.position.x+x,mr.position.y,5),new V(0,0,-1));mr.updateMatrixWorld(true);return r.intersectObject(mr,false).length};
    out.hole=hit(0);out.ringHit=hit(.525);out.outside=hit(.95);
    mr.userData.im.depth=.6;await M.buildImage(mr);mr.geometry.computeBoundingBox();out.bz2=mr.geometry.boundingBox.max.z-mr.geometry.boundingBox.min.z;
-   const mg=await M.addImageData(grad);await wait(700);out.gmode=mg.userData.im.mode;out.gtype2=mg.geometry.type;
+   const mg=await M.addImageData(grad);await wait(700);out.gmode0=mg.userData.im.mode;out.gdepth0=mg.userData.im.depth;out.emis=mg.material.emissiveIntensity>0&&!!mg.material.emissiveMap;mg.userData.im.mode='relief';mg.userData.im.depth=.35;await M.buildImage(mg);out.gmode=mg.userData.im.mode;out.gtype2=mg.geometry.type;
    const pos=mg.geometry.attributes.position;let ymax=-1e9;for(let i=0;i<pos.count;i++)ymax=Math.max(ymax,pos.getY(i));
    let lo=1e9,hi=-1e9,zl=0,zr=0;for(let i=0;i<pos.count;i++){if(Math.abs(pos.getY(i)-ymax)<1e-6){const x=pos.getX(i);if(x<lo){lo=x;zl=pos.getZ(i)}if(x>hi){hi=x;zr=pos.getZ(i)}}}
    out.dz=zr-zl;out.depth=mg.userData.im.depth;
@@ -67,6 +67,7 @@ const bytes=f=>Array.from(fs.readFileSync(path.join(FX,f)));
   ok(near(R.bz,.25,.01)&&R.bx>1.3&&R.bx<1.5,'its depth is the slider\'s 0.25 and its width the ring\'s about 1.4 ('+R.bz.toFixed(2)+', '+R.bx.toFixed(2)+')');
   ok(R.hole===0&&R.ringHit>0&&R.outside===0,'the hole is real: a ray through the centre misses, through the ring hits, outside misses');
   ok(near(R.bz2,.6,.01),'raising the depth to 0.6 rebuilds the solid');
+  ok(R.gmode0==='flat'&&near(R.gdepth0,.12,1e-9)&&R.emis,'an ordinary opaque photo starts flat, shown in its own colours (emissive map), with a gentle depth of 0.12 ready for Relief');
   ok(R.gmode==='relief'&&/Plane/.test(R.gtype2)&&R.dz>.25&&R.dz<.4,'an opaque picture becomes a relief, its bright side higher than its dark side by about the depth 0.35 ('+R.dz.toFixed(2)+')');
   ok(/Plane/.test(R.flatType),'flat mode is a plain plane');
   ok(R.hasImgs===2&&R.imgMeshes===2&&near(R.bz3,R.d3,.02),'saving keeps both pictures; loading rebuilds them with the saved depth');
