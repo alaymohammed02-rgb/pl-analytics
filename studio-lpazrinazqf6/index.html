@@ -111,7 +111,7 @@ h2{font:700 15px var(--f-display);margin:0 0 8px}
   <div class="app">
     <div class="left">
     <input type="file" id="imgIn" accept="image/*" multiple hidden>
-    <input type="file" id="mdlIn" accept=".glb,.gltf,.obj,model/gltf-binary,model/gltf+json" multiple hidden>
+    <input type="file" id="mdlIn" multiple hidden>
     <div class="stage" id="stage"><div class="tip" data-i18n="tip"></div></div>
     <div class="tl" id="tl" aria-label="timeline">
       <div class="row">
@@ -186,6 +186,9 @@ h2{font:700 15px var(--f-display);margin:0 0 8px}
 <script src="vendor/TransformControls.js"></script>
 <script src="vendor/GLTFLoader.js"></script>
 <script src="vendor/OBJLoader.js"></script>
+<script src="vendor/DRACOLoader.js"></script>
+<script src="vendor/meshopt_decoder.js"></script>
+<script>window.MJM_DRACO="vendor/draco/";</script>
 <script>
 (function(){
 'use strict';
@@ -194,14 +197,14 @@ const store=(k,v)=>{try{if(v===undefined)return localStorage.getItem(k);localSto
 
 /* ---------- words ---------- */
 const W={
- ar:{sub:'محرر مجسّمات ثلاثية الأبعاد',tip:'اسحب للدوران · اضغط شكلاً لتحديده · قرّص بإصبعين للتقريب · أفلت صورة أو نموذج هنا',image:'صورة',model:'نموذج',play:'تشغيل',pauseT:'إيقاف مؤقت',stopT:'من البداية',keyAdd:'إطار مفتاحي',keyDel:'حذف الإطار',easeSmooth:'ناعم',easeLin:'خطي',dur:'المدة (ث)',loop:'تكرار',auto:'مفتاح تلقائي',needSel:'اختر شكلاً أولاً',noKey:'ما فيه إطار قريب من الوقت الحالي',tlHint:'اختر شكلاً، حرّك المؤشر الزمني، غيّر موضع الشكل أو دورانه أو حجمه أو لونه، ثم اضغط «إطار مفتاحي». المحرر يحسب الحركة بين الإطارات. «مفتاح تلقائي» يسجّل كل تعديل إطاراً.',modelBad:'تعذّر فتح النموذج. المدعوم: GLB وglTF وOBJ (بدون ضغط Draco).',modelBig:'الملف أكبر من 40 ميغابايت',modelMissing:'ملف هذا النموذج غير موجود في هذا المتصفح',tris:'عدد المثلثات',modelNote:'النموذج يحتفظ بموادّه الأصلية. غيّر اللون أو المعدنية فقط إذا بغيت تغيّرها لكل أجزائه.',imgTitle:'تحويل الصورة',imgMode:'النوع',mFlat:'مسطّحة',mRelief:'نقش بارز (حسب السطوع)',mSolid:'مجسّم (من حدود الشكل)',imgDepth:'العمق',imgThr:'حساسية الحدود',imgInv:'عكس السطوع',imgHint:'«مجسّم» يناسب الشعارات والرموز ذات الخلفية الواضحة أو الشفافة. «نقش بارز» يناسب الصور العادية. هذا تحويل من الصورة نفسها، فما يخمّن الجوانب الخلفية.',imgBad:'تعذّر فتح الصورة',add:'أضف',box:'مكعب',sphere:'كرة',cylinder:'أسطوانة',cone:'مخروط',torus:'حلقة',plane:'سطح',
+ ar:{sub:'محرر مجسّمات ثلاثية الأبعاد',tip:'اسحب للدوران · اضغط شكلاً لتحديده · قرّص بإصبعين للتقريب · أفلت صورة أو نموذج هنا',image:'صورة',model:'نموذج',play:'تشغيل',pauseT:'إيقاف مؤقت',stopT:'من البداية',keyAdd:'إطار مفتاحي',keyDel:'حذف الإطار',easeSmooth:'ناعم',easeLin:'خطي',dur:'المدة (ث)',loop:'تكرار',auto:'مفتاح تلقائي',needSel:'اختر شكلاً أولاً',noKey:'ما فيه إطار قريب من الوقت الحالي',tlHint:'اختر شكلاً، حرّك المؤشر الزمني، غيّر موضع الشكل أو دورانه أو حجمه أو لونه، ثم اضغط «إطار مفتاحي». المحرر يحسب الحركة بين الإطارات. «مفتاح تلقائي» يسجّل كل تعديل إطاراً.',modelBad:'تعذّر فتح النموذج. المدعوم: GLB وglTF وOBJ.',modelType:'نوع الملف غير مدعوم. المدعوم: GLB وglTF وOBJ. حوّل ملفات مثل FBX وSTL وUSDZ إلى GLB ببرنامج مجاني مثل Blender.',modelZip:'هذا ملف مضغوط (ZIP). فك الضغط واختر ملف GLB أو glTF أو OBJ.',modelCorrupt:'الملف تالف أو ما اكتمل تنزيله، أو مو GLB أو glTF صالح.',modelDraco:'هذا النموذج مضغوط بـDraco وهذه النسخة ما تدعمه. افتحه من تطبيق Mujassam المثبّت، أو نزّل نسخة بدون ضغط.',modelMeshopt:'هذا النموذج مضغوط بـmeshopt وهذه النسخة ما تدعمه.',modelKtx:'هذا النموذج يستخدم صوراً بصيغة KTX2 وهي غير مدعومة. نزّل نسخة بدون ضغط للصور.',modelExternal:'هذا glTF يعتمد على ملفات خارجية. اختر ملف glTF مع ملفاته (bin والصور) معاً في نفس الاختيار، أو استخدم GLB. الناقص:',modelBig:'الملف أكبر من 40 ميغابايت',modelMissing:'ملف هذا النموذج غير موجود في هذا المتصفح',tris:'عدد المثلثات',modelNote:'النموذج يحتفظ بموادّه الأصلية. غيّر اللون أو المعدنية فقط إذا بغيت تغيّرها لكل أجزائه.',imgTitle:'تحويل الصورة',imgMode:'النوع',mFlat:'مسطّحة',mRelief:'نقش بارز (حسب السطوع)',mSolid:'مجسّم (من حدود الشكل)',imgDepth:'العمق',imgThr:'حساسية الحدود',imgInv:'عكس السطوع',imgHint:'«مجسّم» يناسب الشعارات والرموز ذات الخلفية الواضحة أو الشفافة. «نقش بارز» يناسب الصور العادية. هذا تحويل من الصورة نفسها، فما يخمّن الجوانب الخلفية.',imgBad:'تعذّر فتح الصورة',add:'أضف',box:'مكعب',sphere:'كرة',cylinder:'أسطوانة',cone:'مخروط',torus:'حلقة',plane:'سطح',
   move:'تحريك',rotate:'تدوير',scale:'تكبير',snap:'مغناطيس',undo:'تراجع',redo:'إعادة',dup:'نسخ',del:'حذف',frame:'تركيز',
   objects:'الأشكال',props:'الخصائص',scene:'المشهد',save:'حفظ',noSel:'اختر شكلاً من القائمة أو من المشهد.',name:'الاسم',pos:'الموضع (م)',rot:'الدوران (درجة)',scl:'الحجم',
   color:'اللون',metal:'المعدنية',rough:'الخشونة',opacity:'الشفافية',wire:'شبكة هيكلية',bg:'لون الخلفية',ambient:'الإضاءة العامة',sun:'الشمس',grid:'الشبكة',shadows:'الظلال',
   resetCam:'إعادة الكاميرا',newScene:'مشهد جديد',confirmNew:'اضغط مرة ثانية للتأكيد',picture:'صورة المشهد',capture:'التقط صورة',shotHint:'اضغط مطولاً على الصورة لحفظها في جوالك.',
   json:'بيانات المشهد',copy:'نسخ',copied:'تم النسخ',apply:'تطبيق',bad:'البيانات غير صالحة',applied:'تم تطبيق المشهد',empty:'ما فيه أشكال. أضف شكلاً من الأعلى.',hide:'إخفاء',show:'إظهار',
   autosave:'يحفظ المحرر مشهدك تلقائياً في هذا المتصفح فقط. انسخ البيانات لتحتفظ بنسخة.',lang:'English',demo:'مشهد تجريبي'},
- en:{sub:'3D scene editor',tip:'Drag to orbit · tap a shape to select · pinch to zoom · drop an image or model here',image:'Image',model:'Model',play:'Play',pauseT:'Pause',stopT:'From start',keyAdd:'Keyframe',keyDel:'Delete key',easeSmooth:'Smooth',easeLin:'Linear',dur:'Length (s)',loop:'Loop',auto:'Auto key',needSel:'Pick a shape first',noKey:'No key near the current time',tlHint:'Pick a shape, move the playhead, change its position, rotation, size or colour, then press Keyframe. The editor works out the motion between keys. Auto key records every edit as a key.',modelBad:'This model could not be opened. Supported: GLB, glTF and OBJ (no Draco compression).',modelBig:'The file is larger than 40 MB',modelMissing:'This model file is not in this browser',tris:'Triangles',modelNote:'The model keeps its own materials. Change colour or metalness only if you want to override them on every part.',imgTitle:'Image to 3D',imgMode:'Mode',mFlat:'Flat',mRelief:'Relief (by brightness)',mSolid:'Solid (from the outline)',imgDepth:'Depth',imgThr:'Outline sensitivity',imgInv:'Invert brightness',imgHint:'Solid suits logos and icons with a clear or transparent background. Relief suits ordinary photos. This converts the picture itself; it does not guess the hidden back side.',imgBad:'The image could not be opened',add:'Add',box:'Box',sphere:'Sphere',cylinder:'Cylinder',cone:'Cone',torus:'Torus',plane:'Plane',
+ en:{sub:'3D scene editor',tip:'Drag to orbit · tap a shape to select · pinch to zoom · drop an image or model here',image:'Image',model:'Model',play:'Play',pauseT:'Pause',stopT:'From start',keyAdd:'Keyframe',keyDel:'Delete key',easeSmooth:'Smooth',easeLin:'Linear',dur:'Length (s)',loop:'Loop',auto:'Auto key',needSel:'Pick a shape first',noKey:'No key near the current time',tlHint:'Pick a shape, move the playhead, change its position, rotation, size or colour, then press Keyframe. The editor works out the motion between keys. Auto key records every edit as a key.',modelBad:'This model could not be opened. Supported: GLB, glTF and OBJ.',modelType:'This file type is not supported. Supported: GLB, glTF and OBJ. Convert FBX, STL or USDZ files to GLB with a free tool such as Blender.',modelZip:'This is a ZIP file. Unpack it and pick the GLB, glTF or OBJ file.',modelCorrupt:'The file is damaged or did not finish downloading, or it is not a valid GLB or glTF.',modelDraco:'This model uses Draco compression and this version cannot read it. Open it in the installed Mujassam app, or download an uncompressed copy.',modelMeshopt:'This model uses meshopt compression and this version cannot read it.',modelKtx:'This model uses KTX2 images, which are not supported. Download a copy without image compression.',modelExternal:'This glTF needs outside files. Pick the glTF together with its files (bin and images) in one selection, or use GLB. Missing:',modelBig:'The file is larger than 40 MB',modelMissing:'This model file is not in this browser',tris:'Triangles',modelNote:'The model keeps its own materials. Change colour or metalness only if you want to override them on every part.',imgTitle:'Image to 3D',imgMode:'Mode',mFlat:'Flat',mRelief:'Relief (by brightness)',mSolid:'Solid (from the outline)',imgDepth:'Depth',imgThr:'Outline sensitivity',imgInv:'Invert brightness',imgHint:'Solid suits logos and icons with a clear or transparent background. Relief suits ordinary photos. This converts the picture itself; it does not guess the hidden back side.',imgBad:'The image could not be opened',add:'Add',box:'Box',sphere:'Sphere',cylinder:'Cylinder',cone:'Cone',torus:'Torus',plane:'Plane',
   move:'Move',rotate:'Rotate',scale:'Scale',snap:'Snap',undo:'Undo',redo:'Redo',dup:'Duplicate',del:'Delete',frame:'Frame',
   objects:'Objects',props:'Properties',scene:'Scene',save:'Save',noSel:'Pick a shape from the list or the scene.',name:'Name',pos:'Position (m)',rot:'Rotation (deg)',scl:'Scale',
   color:'Colour',metal:'Metalness',rough:'Roughness',opacity:'Opacity',wire:'Wireframe',bg:'Background',ambient:'Ambient light',sun:'Sun',grid:'Grid',shadows:'Shadows',
@@ -252,13 +255,49 @@ let sayT=0;function say(msg){const e=$('#status');e.textContent=msg;clearTimeout
 const idb=()=>new Promise((res,rej)=>{try{const r=indexedDB.open('mjm',1);r.onupgradeneeded=()=>r.result.createObjectStore('models');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}catch(e){rej(e)}});
 async function idbPut(k,v){try{const d=await idb();await new Promise((res,rej)=>{const tx=d.transaction('models','readwrite');tx.objectStore('models').put(v,k);tx.oncomplete=res;tx.onerror=()=>rej(tx.error)});d.close()}catch(e){}}
 async function idbGet(k){try{const d=await idb();const v=await new Promise((res,rej)=>{const q=d.transaction('models').objectStore('models').get(k);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)});d.close();return v}catch(e){return undefined}}
+const dracoOK=()=>!!(THREE.DRACOLoader&&window.MJM_DRACO);
+const meshoptOK=()=>!!(window.MeshoptDecoder&&THREE.GLTFLoader.prototype.setMeshoptDecoder);
+const fail=(key,detail)=>{const e=new Error(key);e.key=key;if(detail)e.detail=detail;return e};
+const baseName=u=>{try{return decodeURIComponent(u.split('?')[0]).split('/').pop()}catch(e){return u.split('/').pop()}};
+const whyBad=e=>t(e&&e.key||'modelBad')+(e&&e.detail?' '+e.detail:'');
+/* reads a GLB's header or a glTF's JSON and says what the file needs, before three.js tries to build it, so the message names the real reason */
+function inspectModel(main,kind,files){
+  if(kind==='obj')return;
+  let json;
+  if(kind==='glb'){
+    const dv=new DataView(main);
+    if(main.byteLength<20||dv.getUint32(0,true)!==0x46546C67)throw fail('modelCorrupt');
+    const len=dv.getUint32(12,true);if(dv.getUint32(16,true)!==0x4E4F534A||20+len>main.byteLength)throw fail('modelCorrupt');
+    try{json=JSON.parse(new TextDecoder().decode(new Uint8Array(main,20,len)))}catch(e){throw fail('modelCorrupt')}
+  }else{
+    try{json=JSON.parse(new TextDecoder().decode(main))}catch(e){throw fail('modelCorrupt')}
+    if(!json||!json.asset)throw fail('modelCorrupt');
+  }
+  const need=[].concat(json.extensionsRequired||[],json.extensionsUsed||[]);
+  if(need.includes('KHR_draco_mesh_compression')&&!dracoOK())throw fail('modelDraco');
+  if(need.includes('EXT_meshopt_compression')&&!meshoptOK())throw fail('modelMeshopt');
+  if((json.extensionsRequired||[]).includes('KHR_texture_basisu'))throw fail('modelKtx');
+  const ext=[].concat(json.buffers||[],json.images||[]).map(x=>x&&x.uri).filter(u=>u&&!/^data:/i.test(u)).map(baseName);
+  const miss=ext.filter(n=>!files||!(n in files));
+  if(miss.length)throw fail('modelExternal',[...new Set(miss)].join(', '));
+}
 function parseModel(id,kind){
   return MCACHE[id]||(MCACHE[id]=(async()=>{
-    let buf=MODELS[id];if(!buf){buf=await idbGet(id);if(buf)MODELS[id]=buf}
-    if(!buf)throw new Error('missing');
+    let src=MODELS[id];if(!src){src=await idbGet(id);if(src)MODELS[id]=src}
+    if(!src)throw new Error('missing');
+    const main=kind==='gltf'?src.main:src,files=kind==='gltf'?src.files:null;
+    inspectModel(main,kind,files);
     let sc;
-    if(kind==='obj')sc=new THREE.OBJLoader().parse(new TextDecoder().decode(buf));
-    else sc=await new Promise((res,rej)=>{new THREE.GLTFLoader().parse(kind==='gltf'?new TextDecoder().decode(buf):buf,'',g=>res(g.scene),rej)});
+    if(kind==='obj')sc=new THREE.OBJLoader().parse(new TextDecoder().decode(main));
+    else{
+      const urls={},manager=new THREE.LoadingManager();
+      if(files){Object.keys(files).forEach(n=>{urls[n]=URL.createObjectURL(new Blob([files[n]]))});manager.setURLModifier(u=>urls[baseName(u)]||u)}
+      const loader=new THREE.GLTFLoader(manager);let dr=null;
+      if(dracoOK()){dr=new THREE.DRACOLoader();dr.setDecoderPath(window.MJM_DRACO);loader.setDRACOLoader(dr)}
+      if(meshoptOK())loader.setMeshoptDecoder(window.MeshoptDecoder);
+      try{sc=await new Promise((res,rej)=>{loader.parse(kind==='gltf'?new TextDecoder().decode(main):main,'',g=>res(g.scene),rej)})}
+      finally{Object.values(urls).forEach(u=>URL.revokeObjectURL(u));if(dr)dr.dispose()}
+    }
     /* put it on the ground, centred, 2.5 units on its longest side */
     const box=new THREE.Box3().setFromObject(sc),size=box.getSize(new THREE.Vector3()),c=box.getCenter(new THREE.Vector3());
     if(!isFinite(size.x+size.y+size.z)||Math.max(size.x,size.y,size.z)<=0)throw new Error('empty');
@@ -283,22 +322,33 @@ async function buildModel(root,apply,d){
     if(apply){eachMat(root,mt=>{if(mt!==root.material)applyDummy(root,mt)})}
     if(objs[sel]===root)syncProps();
   }catch(e){
-    root.userData.err=e.message==='missing'?'missing':'bad';
+    const missing=e.message==='missing';root.userData.err=missing?'missing':'bad';
     const ph=new THREE.Mesh(new THREE.BoxGeometry(1.2,1.2,1.2),new THREE.MeshBasicMaterial({color:0xe5684f,wireframe:true}));ph.position.y=.6;root.add(ph);root.userData.inst=null;
-    say(root.userData.err==='missing'?t('modelMissing'):t('modelBad'));
+    say(missing?t('modelMissing'):whyBad(e));
   }
 }
 function applyDummy(root,mt){const d=root.material;if(mt.color)mt.color.copy(d.color);if(mt.metalness!==undefined){mt.metalness=d.metalness;mt.roughness=d.roughness}mt.opacity=d.opacity;mt.transparent=d.opacity<1;mt.wireframe=d.wireframe;mt.needsUpdate=true}
-async function addModelBuffer(buf,name,kind){
-  const id='m'+Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36);MODELS[id]=buf;idbPut(id,buf);
-  try{await parseModel(id,kind)}catch(e){delete MODELS[id];say(t('modelBad'));return null}
+async function addModelBuffer(src,name,kind){
+  const id='m'+Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36);MODELS[id]=src;
+  try{await parseModel(id,kind)}catch(e){delete MODELS[id];say(whyBad(e));return null}
+  idbPut(id,src);
   const d={t:'model',n:name,c:'#ffffff',m:.1,r:.55,o:1,w:0,v:1,p:[0,0,0],q:[0,0,0],s:[1,1,1],mo:{id,k:kind}};
   const m=make(d);scene.add(m);objs.push(m);select(objs.length-1);commit();return m;
 }
-async function addModelFile(file){
-  if(file.size>40*1024*1024){say(t('modelBig'));return}
-  const ext=(file.name.split('.').pop()||'').toLowerCase(),kind=ext==='obj'?'obj':(ext==='gltf'?'gltf':'glb');
-  try{const buf=await file.arrayBuffer();await addModelBuffer(buf,file.name.replace(/\.[^.]+$/,'').slice(0,40)||t('model'),kind)}catch(e){say(t('modelBad'))}
+const MB=1024*1024,extOf=f=>(f.name.split('.').pop()||'').toLowerCase();
+/* one or several files: a glTF takes the other files picked with it (its .bin and images) */
+async function addModelFiles(list){
+  const all=[...list];if(!all.length)return;
+  const models=all.filter(isModelFile),rest=all.filter(f=>!isModelFile(f));
+  if(!models.length){say(t(all.some(f=>/^(zip|rar|7z|gz|tar)$/.test(extOf(f)))?'modelZip':'modelType'));return}
+  if(all.reduce((n,f)=>n+f.size,0)>40*MB){say(t('modelBig'));return}
+  for(const f of models){
+    const ext=extOf(f),name=f.name.replace(/\.[^.]+$/,'').slice(0,40)||t('model');
+    try{
+      if(ext==='gltf'){const files={};for(const o of rest)files[o.name]=await o.arrayBuffer();await addModelBuffer({main:await f.arrayBuffer(),files},name,'gltf')}
+      else await addModelBuffer(await f.arrayBuffer(),name,ext==='obj'?'obj':'glb');
+    }catch(e){say(t('modelBad'))}
+  }
 }
 const isModelFile=f=>/\.(glb|gltf|obj)$/i.test(f.name);
 
@@ -604,11 +654,11 @@ $('#im-mode').addEventListener('change',()=>{imEdit(im=>{im.mode=$('#im-mode').v
 $('#im-depth').addEventListener('input',()=>imEdit(im=>{im.depth=+$('#im-depth').value},true));$('#im-depth').addEventListener('change',commit);
 $('#im-thr').addEventListener('input',()=>imEdit(im=>{im.thr=+$('#im-thr').value},true));$('#im-thr').addEventListener('change',commit);
 $('#im-inv').addEventListener('click',()=>{imEdit(im=>{im.inv=im.inv?0:1});syncProps();commit()});
-$('#mdlIn').addEventListener('change',async e=>{for(const f of [...e.target.files])await addModelFile(f);e.target.value=''});
+$('#mdlIn').addEventListener('change',async e=>{await addModelFiles(e.target.files);e.target.value=''});
 $('#imgIn').addEventListener('change',async e=>{for(const f of [...e.target.files])await addImageFile(f);e.target.value=''});
 ['dragenter','dragover'].forEach(n=>stage.addEventListener(n,e=>{e.preventDefault();stage.classList.add('drop')}));
 ['dragleave','drop'].forEach(n=>stage.addEventListener(n,e=>{e.preventDefault();stage.classList.remove('drop')}));
-stage.addEventListener('drop',async e=>{for(const f of [...(e.dataTransfer&&e.dataTransfer.files||[])]){if(/^image\//.test(f.type))await addImageFile(f);else if(isModelFile(f))await addModelFile(f)}});
+stage.addEventListener('drop',async e=>{const fl=[...(e.dataTransfer&&e.dataTransfer.files||[])];if(!fl.length)return;if(fl.some(isModelFile)){await addModelFiles(fl);return}const imgs=fl.filter(f=>/^image\//.test(f.type));if(imgs.length){for(const f of imgs)await addImageFile(f)}else await addModelFiles(fl)});
 
 /* scene tab */
 const sBg=$('#s-bg'),sAmb=$('#s-amb'),sSun=$('#s-sun');
@@ -691,7 +741,7 @@ tabs.firstChild&&openTab('p-obj');
 resize();load(start);syncScene();
 cur=JSON.stringify(serialize());if(!saved)persist();
 syncBar();tlSync();loop();
-window.__mjm={objs,select,add,serialize,undo,redoIt,addImageData,buildImage,load,IMAGES,addModelBuffer,pickNdc,MODELS,MCACHE,camera,eachMat,triCount,A,applyAt,poseAt,addKey};
+window.__mjm={objs,select,add,serialize,undo,redoIt,addImageData,buildImage,load,IMAGES,addModelBuffer,addModelFiles,pickNdc,MODELS,MCACHE,camera,eachMat,triCount,A,applyAt,poseAt,addKey};
 })();
 </script>
 

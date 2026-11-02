@@ -26,7 +26,9 @@ for D in dirs:
     remote=[r for r in refs if re.match(r'(https?:)?//',r)]
     ok(all(os.path.exists(D+r) for r in local),'every local file the page names exists ('+str(len(local))+')')
     ok(all(r.startswith('https://fonts.googleapis.com/') for r in remote),'the only remote reference is the font stylesheet ('+', '.join(remote)+')')
-    ok(len([r for r in local if r.startswith('vendor/') and r.endswith('.js')])==5,'the five libraries (three, orbit, transform, GLTF, OBJ) are shipped in vendor/')
+    ok(len([r for r in local if r.startswith('vendor/') and r.endswith('.js')])==7,'the seven libraries (three, orbit, transform, GLTF, OBJ, Draco loader, meshopt) are shipped in vendor/')
+    ok(all(os.path.exists(D+'vendor/draco/'+f) for f in ('draco_decoder.js','draco_decoder.wasm','draco_wasm_wrapper.js','LICENSE-draco.txt')) and 'window.MJM_DRACO="vendor/draco/"' in html,'the Draco decoder (js, wasm, wrapper) is shipped next to its licence and the page points at it')
+    ok('Apache License' in open(D+'vendor/draco/LICENSE-draco.txt',encoding='utf8').read(),'Draco\'s Apache 2.0 licence text is shipped')
     ok(re.search(r'\bMIT\b',open(D+'vendor/LICENSE-three.txt',encoding='utf8').read()) is not None,'the three.js MIT licence is shipped with them')
     sw=open(D+'sw.js',encoding='utf8').read()
     shell=re.findall(r"'([^']+)'",re.search(r'const SHELL=\[(.*?)\];',sw).group(1))
