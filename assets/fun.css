@@ -716,3 +716,10 @@ html[dir=rtl] .dl-bars .ph-bn bdi{text-align:right}
 .gp-sg{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:4px}.gp-sb{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;width:100%;min-height:40px;padding:6px 12px;text-align:start;border-radius:10px;font-size:14.5px}.gp-sb .mu{font-size:12.5px}
 .gp-l{margin:8px 0 0;font-size:13px}.gp-end{margin-top:12px;padding:12px;border:1px solid var(--th-hi,var(--ln));border-radius:12px;background:rgba(255,255,255,.04)}.gp-end h3{margin:0 0 4px;font-size:18px}.gp-sq{margin:6px 0;font-size:16px;letter-spacing:.04em}
 .gp-ac{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}.gp-sh,.gp-pl{min-height:40px;padding:6px 18px;border-radius:999px;font-weight:700}
+
+/* Bench impact (assets/bench-impact.js) */
+.bn-wr{overflow-x:auto}.bn-t td,.bn-ct td,.bn-st td{vertical-align:middle}.bn-t td:first-child .mu{display:block;font-size:12px}.bn-c{font-size:13px;font-weight:400}.bn-more{margin-top:10px;min-height:40px;padding:6px 18px;border-radius:999px}#bnq{min-height:36px;padding:4px 10px;border-radius:10px;min-width:150px}
+
+/* Offline note (assets/offline-note.js) */
+.off-n{position:fixed;left:50%;transform:translateX(-50%);bottom:12px;z-index:90;width:max-content;max-width:min(560px,calc(100vw - 24px));box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:10px 14px;border-radius:14px;background:rgba(16,40,42,.97);border:1px solid var(--th-hi,var(--ln));box-shadow:0 8px 24px rgba(0,0,0,.4);font-size:13.5px;line-height:1.45}
+.off-n[hidden]{display:none}.off-n.off{border-color:#e9b44c}.off-t{flex:1 1 200px;min-width:0}.off-r,.off-x{min-height:36px;padding:4px 14px;border-radius:999px;font-weight:700}
