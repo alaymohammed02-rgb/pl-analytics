@@ -97,6 +97,7 @@
   box.querySelector('#ovta').onclick=()=>{if(st.value)favToggle(sl.value,st.value)};
   box.querySelectorAll('[data-x]').forEach(b=>b.onclick=()=>favToggle(b.dataset.l,b.dataset.x));
   if(INS.notifyCard)INS.notifyCard(box.querySelector('.ovt'),T);   /* the ntfy card (assets/notify.js) */
+  if(INS.calCard)INS.calCard(box.querySelector('.ovt'),T);   /* the calendar file (assets/team-calendar.js) */
  }
  /* a league's teams: the open league's matches, else its fixtures and the schedule */
  async function teamsOf(l){
