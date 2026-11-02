@@ -673,3 +673,6 @@ html[dir=rtl] .dl-bars .ph-bn bdi{text-align:right}
 .st3-ctl{margin:8px 2px 0;font-size:12.5px;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
 .st3-sw{min-height:28px;padding:2px 12px;border-radius:999px;font-size:12px}
 .st3-m{margin-inline-start:auto;font-variant-numeric:tabular-nums}
+
+/* Calendar file card (assets/team-calendar.js) */
+.cal{margin-top:12px;padding:14px}.cal h3{margin:0 0 6px;font-size:15px;color:var(--tx)}.cal p{margin:6px 0}.cal-al{display:flex;align-items:center;gap:8px;margin:8px 0;font-size:14px}.cal-al input{width:18px;height:18px;accent-color:var(--th-hi,var(--g))}.cal-go{min-height:40px;padding:6px 18px;border-radius:999px;font-weight:700}
