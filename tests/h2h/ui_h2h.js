@@ -49,7 +49,7 @@ async function check(pg,id,a,b,label,lang){
   const l5=await pg.$$eval('.h2-f',e=>e.map(x=>({id:x.dataset.id,c:x.className})));
   ok(l5.length===Math.min(5,R0.n)&&l5.every((f,i)=>{const x=R0.list[i],ga=x.h===a?x.hg:x.ag,gb=x.h===a?x.ag:x.hg;return f.id===x.id&&f.c.includes(ga>gb?'w':ga<gb?'l':'d')}),label+': the last five from '+a+'\'s side');
   ok(await pg.$$eval('.h2-mk',e=>e.length)===R0.n,label+': a tick on the chart for each of the '+R0.n+' meetings');
- }else ok(/have not met/.test(await pg.innerText('#h2rec'))&&!(await pg.$('.h2-m')),label+': a pair that has not met says so and lists nothing');
+ }else ok((lang==='ar'?/ما التقوا/:/have not met/).test(await pg.innerText('#h2rec'))&&!(await pg.$('.h2-m')),label+': a pair that has not met says so and lists nothing');
  /* Elo lines */
  const H=EL[id].h;
  for(const [c,t] of [['a',a],['b',b]]){const p=await poly(pg,c),hh=H[t];
