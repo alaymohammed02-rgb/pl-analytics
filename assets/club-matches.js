@@ -30,13 +30,13 @@
   setup(el,hd,name);return out;
  };
  function setup(el,hd,name){
-  const want=/\/matches\/?$/.test(location.hash)?'matches':'overview';
+  const wm=/\/(matches|table)\/?$/.exec(location.hash),want=wm?wm[1]:'overview';
   const bar=document.createElement('div');bar.id='cttabs';bar.className='seg ct-tabs';bar.setAttribute('role','group');bar.setAttribute('aria-label',ar()?'أقسام النادي':'Club sections');
-  bar.innerHTML=[['overview','Overview','نظرة عامة'],['matches','Matches','المباريات']].map(([k,e,a])=>`<button type="button" data-k="${k}" aria-pressed="${k===want}" class="${k===want?'on':''}">${two(e,a)}</button>`).join('');
-  const ov=document.createElement('div');ov.id='ctov';const mt=document.createElement('div');mt.id='ctmt';mt.hidden=want!=='matches';ov.hidden=want!=='overview';
+  bar.innerHTML=[['overview','Overview','نظرة عامة'],['matches','Matches','المباريات'],['table','Table','الجدول']].map(([k,e,a])=>`<button type="button" data-k="${k}" aria-pressed="${k===want}" class="${k===want?'on':''}">${two(e,a)}</button>`).join('');
+  const ov=document.createElement('div');ov.id='ctov';const mt=document.createElement('div');mt.id='ctmt';mt.hidden=want!=='matches';ov.hidden=want!=='overview';const tb=document.createElement('div');tb.id='cttb';tb.hidden=want!=='table';
   /* the stadium's one-line note (assets/stadium3d.js) stays right under the header, above the tabs */
-  const ctl=el.querySelector(':scope > .st3-ctl'),keep=n=>n===hd||n===bar||n===ov||n===mt||n===ctl||(n.classList&&n.classList.contains('st3-ctl'));
-  (ctl||hd).after(bar);bar.after(ov);ov.after(mt);
+  const ctl=el.querySelector(':scope > .st3-ctl'),keep=n=>n===hd||n===bar||n===ov||n===mt||n===tb||n===ctl||(n.classList&&n.classList.contains('st3-ctl'));
+  (ctl||hd).after(bar);bar.after(ov);ov.after(mt);mt.after(tb);
   [...el.children].forEach(n=>{if(!keep(n))ov.appendChild(n)});
   /* pieces that other files add to the club page after this point (they are awaited, but a late one must not end up outside the Overview) */
   const mo=new MutationObserver(ms=>{
@@ -46,12 +46,12 @@
   mo.observe(el,{childList:true});
   const pick=(k,hash)=>{
    bar.querySelectorAll('button').forEach(b=>{const on=b.dataset.k===k;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on)});
-   ov.hidden=k!=='overview';mt.hidden=k!=='matches';
-   if(k==='matches')build(mt,name);
-   if(hash!==false){try{history.replaceState(null,'','#/club/'+encodeURIComponent(name)+(k==='matches'?'/matches':''))}catch(e){}}
+   ov.hidden=k!=='overview';mt.hidden=k!=='matches';tb.hidden=k!=='table';
+   if(k==='matches')build(mt,name);if(k==='table')buildTable(tb,name);
+   if(hash!==false){try{history.replaceState(null,'','#/club/'+encodeURIComponent(name)+(k==='overview'?'':'/'+k))}catch(e){}}
   };
   bar.querySelectorAll('button').forEach(b=>b.onclick=()=>pick(b.dataset.k));
-  if(want==='matches')build(mt,name);
+  if(want==='matches')build(mt,name);if(want==='table')buildTable(tb,name);
  }
  /* ---- the data ---- */
  async function gather(name){
@@ -117,6 +117,18 @@
   if(!mt.isConnected)return;
   if(!data){mt._built=false;mt.innerHTML=`<div class="card ctm"><div class="empty">${two('The matches are not available right now.','المباريات مو متوفرة الحين.')}</div></div>`;return}
   mt._data=data;mt._np=PAGE_P;mt._nu=PAGE_U;render(mt,name);
+ }
+
+ /* ---- the league table, with this club's row marked ---- */
+ function buildTable(tb,name){
+  if(tb._built)return;tb._built=true;
+  const fin=D.matches.filter(m=>wkSc(m.score)&&m.date);
+  const note=`<p class="mu ins-note">${two('The league table from the finished matches in the data: points, then goal difference, then goals scored, then name. The full table, with its week-by-week replay, is on the League table page.','جدول الدوري من المباريات المنتهية في البيانات: النقاط، ثم فارق الأهداف، ثم الأهداف المسجّلة، ثم الاسم. الجدول الكامل مع إعادة الأسابيع في صفحة جدول الدوري.')} <a href="#/table">${two('Open the league table','افتح جدول الدوري')}</a></p>`;
+  if(!fin.length){tb.innerHTML=`<div class="card ctt"><div class="empty">${two('No results in the data yet.','ما فيه نتائج في البيانات للحين.')}</div></div>`;return}
+  if(typeof ltOk==='function'&&!ltOk(fin)){tb.innerHTML=`<div class="card ctt"><div class="empty">${two('This competition is a tournament (groups and knockout rounds), so it has no single league table.','هذي بطولة (مجموعات وأدوار إقصاء)، فما لها جدول واحد.')}</div></div>`;return}
+  const T=ltTable(fin,new Map());
+  const form=r=>r.form.slice(-5).map(x=>`<i class="ltf ${x}" title="${x==='W'?'Win':x==='D'?'Draw':'Loss'}"></i>`).join('');
+  tb.innerHTML=`<div class="card ctt" id="cttt"><h3>${two('League table','جدول الدوري')} <span class="mu">${nm(D.name)}</span></h3><div class="ctt-w"><table class="lk-t ctt-t"><thead><tr><th class="n">#</th><th>${two('Club','النادي')}</th><th class="n">${two('P','لعب')}</th><th class="n">${two('W','ف')}</th><th class="n">${two('D','ت')}</th><th class="n">${two('L','خ')}</th><th class="n">${two('GD','فرق')}</th><th class="n">${two('Pts','نقاط')}</th><th>${two('Form','الشكل')}</th></tr></thead><tbody>${T.map((r,i)=>`<tr class="ctt-r${r.t===name?' me':''}" data-t="${esc(r.t)}" data-pos="${i+1}" data-pts="${r.pts}" data-p="${r.p}"><td class="n">${nb(i+1)}</td><td><a class="clk" href="#/club/${encodeURIComponent(r.t)}/table">${typeof clubDot==='function'?clubDot(r.t):''}<span>${nm(r.t)}</span></a></td><td class="n">${nb(r.p)}</td><td class="n">${nb(r.w)}</td><td class="n">${nb(r.d)}</td><td class="n">${nb(r.l)}</td><td class="n">${nb((r.f-r.a>0?'+':r.f-r.a<0?'−':'')+Math.abs(r.f-r.a))}</td><td class="n"><b>${nb(r.pts)}</b></td><td class="ctt-f">${form(r)}</td></tr>`).join('')}</tbody></table></div>${note}</div>`;
  }
  INS.clubMatches={gather};
  INS.ar({'Previous matches':'المباريات السابقة','Upcoming matches':'المباريات القادمة'});
