@@ -21,6 +21,7 @@ function same(got,W,label){
  ok(await pg.evaluate(()=>document.querySelector('#mpu').hidden&&!document.querySelector('#mpr').hidden&&localStorage.getItem('plx_mp')==='res'),'Results opens on a tap and the choice is kept (plx_mp)');
  ok(A.length>40,'reference: '+A.length+' finished matches in LaLiga');
  same(await rows(pg),A.slice(0,40),'first 40');
+ ok(await pg.$eval('#mphs',h=>getComputedStyle(h).overflowX==='auto'&&getComputedStyle(h).display==='flex'),'the matches sit side by side in a sideways strip, not a column');
  ok(+await pg.$eval('#mpcount',e=>e.dataset.n)===A.length&&/matches/.test(await pg.innerText('#mpcount')),'the count says '+A.length);
  ok((await pg.$$eval('#mpl .mpm',a=>a.map(d=>d.dataset.d))).every((d,i,x)=>i===0||x[i-1]>=d),'dates run from the newest to the oldest');
  ok(/Previous matches/.test(await pg.innerText('#mpl h3'))&&await pg.$$eval('#mpl .mpm',a=>a.every(r=>r.querySelector('.ctm-s').classList.contains('n')&&r.dataset.res==='n')),'one card titled Previous matches; with no club the pills are neutral');
@@ -48,7 +49,11 @@ function same(got,W,label){
  /* Arabic and phone */
  for(const lang of ['ar','en']){({ctx,pg,errs}=await T.open(b,{vw:390,lang,league:LL,hash:'#/matches',init:{plx_mp:'res'}}));await pg.waitForSelector('#mpl .mpm',{timeout:90000});await pg.waitForTimeout(400);
   ok(await T.noscroll(pg),lang+' phone: no horizontal scroll');
-  ok(await pg.$$eval('#mpl .mpm',a=>a.every(r=>{const x=r.getBoundingClientRect();return x.left>=-1&&x.right<=innerWidth+1})),lang+' phone: every row fits');
+  ok(await pg.$eval('#mphs',h=>{const c=[...h.querySelectorAll('.mpm')],t=c.map(x=>Math.round(x.getBoundingClientRect().top));const hr=h.getBoundingClientRect();return h.scrollWidth>h.clientWidth+50&&hr.left>=-1&&hr.right<=innerWidth+1&&t.every(v=>v===t[0])}),lang+' phone: the cards sit in one strip that scrolls sideways and the strip fits the screen');
+  const x0=await pg.$eval('#mphs',h=>h.scrollLeft);await pg.click('#mpold');await pg.waitForTimeout(900);const x1=await pg.$eval('#mphs',h=>h.scrollLeft);
+  ok(lang==='ar'?x1<x0:x1>x0,lang+' phone: the older arrow moves the strip '+(lang==='ar'?'left':'right')+' ('+x0+' to '+x1+')');
+  await pg.click('#mpnew');await pg.waitForTimeout(900);ok(Math.abs(await pg.$eval('#mphs',h=>h.scrollLeft)-x0)<4,lang+' phone: the newer arrow brings it back');
+  ok(await pg.$$eval('#mphs .mpm',a=>a.every(r=>{const k=r.querySelector('.ctm-r'),n=[...k.children].map(e=>e.getBoundingClientRect());return n.every(b=>b.right<=r.getBoundingClientRect().right+1&&b.left>=r.getBoundingClientRect().left-1)})),lang+' phone: nothing sticks out of a card');
   const g=await pg.$$eval('#mpl .mpm',a=>a.slice(0,40).map(r=>r.dataset.id));ok(g.join()===A.slice(0,40).map(x=>x.id).join(),lang+' phone: the same 40 matches in the same order');
   if(lang==='ar'){const u=await pg.evaluate(T.untr,'#mpr');ok(!u.length,'Arabic: the Results tab is translated '+u.slice(0,5).join(' | '));ok(/النتائج/.test(await pg.innerText('#mptabs'))&&/القادمة/.test(await pg.innerText('#mptabs')),'Arabic: the two tabs');ok(!/\$\{|NaN|undefined/.test(await pg.innerText('#app')),'no template text, NaN or undefined')}
   ok(!errs.length,lang+' phone: no page errors '+errs.slice(0,2).join(' ; '));await ctx.close()}
