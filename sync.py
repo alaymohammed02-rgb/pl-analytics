@@ -6069,8 +6069,8 @@ _AR_SEASON.update({
     "xG # v #": "xG # مقابل #",
     "won with less xG": "فاز بـxG أقل",
     "No shot data for these matches.": "لا توجد بيانات تسديد لهذه المباريات.",
-    "has the league's highest xT per 90 this season:": "عنده أعلى xT لكل 90 دقيقة في الدوري هذا الموسم:",
-    "has the league's highest xG per 90 this season:": "عنده أعلى xG لكل 90 دقيقة في الدوري هذا الموسم:",
+    "has the league's highest xT per # this season:": "عنده أعلى xT لكل # دقيقة في الدوري هذا الموسم:",
+    "has the league's highest xG per # this season:": "عنده أعلى xG لكل # دقيقة في الدوري هذا الموسم:",
     "(at least # minutes)": "(# دقيقة على الأقل)",
     "create the most chances in the league:": "يصنعون أكثر الفرص في الدوري:",
     "xG a match": "xG لكل مباراة",
@@ -9020,7 +9020,7 @@ INDEX = _x_fpx_index(INDEX)
 # الكود في ملفات مستقلة في المستودع: assets/*.js و assets/features.css و manifest.webmanifest و sw.js و assets/icons/.
 # هذا القسم يضيف روابطها للصفحة فقط (بعد السكربت الرئيسي، فتلقى R و PAGES جاهزة). غيّر FEATURES_V لما تتغير الملفات.
 # ============================================================================
-FEATURES_V = "76"
+FEATURES_V = "77"
 FEATURES_JS = ("pla-data", "share-card", "threat-map", "match-whatif", "player-page", "match-centre", "home-extra", "team-round",
                "preview", "club-extra", "rankings-extra", "fantasy-extra", "insights-core", "hidden-gems", "player-dna", "team-dna",
                "reality-check", "matches-board", "match-replay", "match-story", "overview", "press-height",

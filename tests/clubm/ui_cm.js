@@ -20,6 +20,7 @@ function upcoming(club,lid,ids){
  const out=[];for(const id of Object.keys(FX.leagues))for(const x of FX.leagues[id]){if((x.h!==club&&x.a!==club)||ids.has(x.i))continue;const t=x.k?Date.parse(x.k):NaN;
   if(isFinite(t)?t<NOW-2*3600e3:x.d<lday(NOW))continue;out.push({id:x.i,d:x.d,k:isFinite(t)?x.k:'',t:isFinite(t)?t:Date.parse(x.d+'T23:59:00Z'),h:x.h,a:x.a,comp:id===lid?'':leagueOf(id)?leagueOf(id).name:id,link:id===lid?'#/preview/'+x.i:''})}
  return out.sort((a,b)=>a.t-b.t||cmp(a.id,b.id))}
+const T0=pg=>pg.evaluate(()=>document.scrollingElement.scrollWidth<=innerWidth+1);
 async function open(b,{vw=430,lang='en',league,hash}){const ctx=await b.newContext({viewport:{width:vw,height:900},timezoneId:TZ,locale:'en-US'});await ctx.clock.setFixedTime(NOW);
  await ctx.addInitScript(([l,g])=>{if(!sessionStorage.getItem('s')){sessionStorage.setItem('s','1');localStorage.clear();localStorage.setItem('league',g);localStorage.setItem('lang',l)}},[lang,league]);
  const pg=await ctx.newPage(),errs=[];pg.on('pageerror',e=>errs.push(e.message));pg.on('console',m=>{const u=(m.location()||{}).url||'';if(m.type()==='error'&&!/favicon|ERR_TUNNEL_CONNECTION_FAILED|api.github.com|cdn.pitchapi|Failed to load resource/.test(u+m.text()))errs.push(m.text())});
@@ -36,7 +37,7 @@ function checkUp(got,W,club,label){
  const P=past(BAR,LL,[UCL]),ids=new Set(P.map(p=>p.id)),U=upcoming(BAR,LL,ids);
  ok(P.some(p=>p.comp==='Champions League')&&P.some(p=>!p.comp)&&U.some(u=>u.comp==='Champions League')&&U.some(u=>!u.comp),'the reference: Barcelona has league and Champions League matches, past ('+P.length+') and upcoming ('+U.length+')');
  let {ctx,pg,errs}=await open(b,{league:LL,hash:'#/club/'+encodeURIComponent(BAR)});await pg.waitForSelector('#cttabs',{timeout:90000});await pg.waitForTimeout(700);
- ok(await pg.$$eval('#cttabs button',a=>a.map(x=>x.dataset.k+':'+x.getAttribute('aria-pressed')).join())==='overview:true,matches:false','the tab bar has Overview (chosen) and Matches');
+ ok(await pg.$$eval('#cttabs button',a=>a.map(x=>x.dataset.k+':'+x.getAttribute('aria-pressed')).join())==='overview:true,matches:false,table:false','the tab bar has Overview (chosen), Matches and Table');
  ok(await pg.evaluate(()=>{const h=document.querySelector('.clubhd'),t=document.querySelector('#cttabs');return (h.nextElementSibling===t||(h.nextElementSibling&&h.nextElementSibling.classList.contains('st3-ctl')&&h.nextElementSibling.nextElementSibling===t))&&!document.querySelector('#ctov').hidden&&document.querySelector('#ctmt').hidden}),'the Overview is open first and the tab bar sits right under the header (below the stadium note where a club has one)');
  ok(await pg.evaluate(()=>!!document.querySelector('#ctov .clubk')&&!!document.querySelector('#ctov #clx')&&!!document.querySelector('#ctov .fx')&&[...document.querySelectorAll('#ctov h3')].some(h=>/Recent results/.test(h.textContent))),'the Overview holds what the club page had: key numbers, the extras, next matches, recent results');
  ok(!!(await pg.$('#cttabs .lgx-g')),'the tab bar has the glass');
@@ -64,6 +65,24 @@ function checkUp(got,W,club,label){
  ok(await pg.evaluate(()=>!document.querySelector('#ctmt').hidden&&document.querySelector('#ctov').hidden&&document.querySelector('#cttabs button[data-k="matches"]').getAttribute('aria-pressed')==='true'),'the address #/club/<name>/matches opens the Matches tab');
  checkPast(await rows(pg,'#ctmp .ctm-m'),P.slice(-6),BAR,'opened by address');
  await ctx.close();
+ /* the Table tab: the league table with this club's row marked */
+ {const T=(id)=>{const L=J(leagueOf(id).file),t={};for(const m of L.matches){const g=sc(m.s);if(!g||!m.d)continue;for(const [c,f,a] of [[m.h,g[0],g[1]],[m.a,g[1],g[0]]]){const r=t[c]=t[c]||{t:c,p:0,w:0,d:0,l:0,f:0,a:0,pts:0};r.p++;r.f+=f;r.a+=a;if(f>a){r.w++;r.pts+=3}else if(f===a){r.d++;r.pts++}else r.l++}}
+   return Object.values(t).sort((x,y)=>y.pts-x.pts||(y.f-y.a)-(x.f-x.a)||y.f-x.f||cmp(x.t,y.t))};
+  const W=T(LL);({ctx,pg,errs}=await open(b,{league:LL,hash:'#/club/'+encodeURIComponent(BAR)}));await pg.waitForSelector('#cttabs',{timeout:90000});await pg.waitForTimeout(500);
+  await pg.evaluate(()=>{window.__same=1});await pg.click('#cttabs button[data-k="table"]');await pg.waitForSelector('.ctt-r',{timeout:30000});
+  ok(await pg.evaluate(()=>window.__same===1&&location.hash.endsWith('/table')&&document.querySelector('#ctov').hidden&&document.querySelector('#ctmt').hidden&&!document.querySelector('#cttb').hidden),'the Table tab opens without reloading and the address ends with /table');
+  const got=await pg.$$eval('.ctt-r',a=>a.map(r=>({t:r.dataset.t,pos:+r.dataset.pos,pts:+r.dataset.pts,p:+r.dataset.p,me:r.classList.contains('me'),cells:[...r.children].map(c=>c.textContent.replace(/[⁦-⁩‎‏]/g,'').trim())})));
+  ok(got.length===W.length&&W.every((w,i)=>{const g=got[i],gd=w.f-w.a;return g.t===w.t&&g.pos===i+1&&g.pts===w.pts&&g.p===w.p&&g.cells[0]===String(i+1)&&g.cells[2]===String(w.p)&&g.cells[3]===String(w.w)&&g.cells[4]===String(w.d)&&g.cells[5]===String(w.l)&&g.cells[6]===(gd>0?'+'+gd:gd<0?'−'+Math.abs(gd):'0')&&g.cells[7]===String(w.pts)}),'the table: '+W.length+' clubs in order with played, won, drawn, lost, goal difference and points, recomputed from the league file (leader '+W[0].t+' on '+W[0].pts+')');
+  ok(got.filter(g=>g.me).length===1&&got.find(g=>g.me).t===BAR,'only Barcelona\'s row is marked');
+  ok(await pg.$$eval('.ctt-r',a=>a.every(r=>r.querySelectorAll('.ltf').length===Math.min(5,+r.dataset.p))),'each row shows its last five results');
+  ok(await pg.evaluate(()=>!!document.querySelector('#cttb a[href="#/table"]')),'a link opens the full league table page');
+  ok(await T0(pg),'phone width: no horizontal scroll with the table');
+  await ctx.close();
+  ({ctx,pg,errs}=await open(b,{league:LL,hash:'#/club/'+encodeURIComponent(BAR)+'/table'}));await pg.waitForSelector('.ctt-r',{timeout:90000});
+  ok(await pg.evaluate(()=>!document.querySelector('#cttb').hidden&&document.querySelector('#cttabs button[data-k="table"]').getAttribute('aria-pressed')==='true'),'the address #/club/<name>/table opens the Table tab');await ctx.close()}
+ /* the Overview: the matches come first */
+ {({ctx,pg,errs}=await open(b,{league:LL,hash:'#/overview'}));await pg.waitForSelector('#ovmb',{timeout:90000});await pg.waitForTimeout(500);
+  ok(await pg.evaluate(()=>{const w=document.querySelector('#ovw');return w.firstElementChild.id==='ovmb'&&w.children[1].id==='ovteams'}),'Overview: the matches board is the first block, "Your teams" comes after it');await ctx.close()}
  /* a club with no European matches */
  {const V='Valencia',Pv=past(V,LL,[]),Uv=upcoming(V,LL,new Set(Pv.map(p=>p.id)));({ctx,pg,errs}=await open(b,{league:LL,hash:'#/club/'+V+'/matches'}));await pg.waitForSelector('.ctm-m',{timeout:90000});await pg.waitForTimeout(500);
   checkPast(await rows(pg,'#ctmp .ctm-m'),Pv.slice(-6),V,V);ok(!(await pg.$('.ctm-tag')),V+': no competition tags');
@@ -87,4 +106,7 @@ function checkUp(got,W,club,label){
   if(lang==='ar'){const u=await pg.evaluate(T.untr,'#ctmt');ok(!u.length,'Arabic: the Matches tab is translated '+u.slice(0,5).join(' | '));ok(/المباريات السابقة/.test(await pg.innerText('#ctmp h3'))&&/المباريات القادمة/.test(await pg.innerText('#ctmu h3')),'Arabic: the two card titles');
    ok(await pg.$eval('.ctm-r',e=>getComputedStyle(e).direction)==='ltr','Arabic: the match row keeps home on the left');ok(!/\$\{|NaN|undefined/.test(await pg.innerText('#ctmt')),'no template text, NaN or undefined')}
   ok(!errs.length,lang+' phone: no page errors '+errs.slice(0,2).join(' ; '));await ctx.close()}
+ {({ctx,pg,errs}=await open(b,{vw:390,lang:'ar',league:LL,hash:'#/club/'+BAR+'/table'}));await pg.waitForSelector('.ctt-r',{timeout:90000});await pg.waitForTimeout(400);
+  const u=await pg.evaluate(T.untr,'#cttb');ok(!u.length,'Arabic: the Table tab is translated '+u.slice(0,4).join(' | '));ok(await T.noscroll(pg),'Arabic phone: the table fits, no horizontal scroll');
+  ok(/جدول الدوري/.test(await pg.innerText('#cttb h3'))&&/الجدول/.test(await pg.innerText('#cttabs')),'Arabic: the tab and the card title');ok(!errs.length,'Arabic table: no page errors '+errs.slice(0,2).join(' ; '));await ctx.close()}
  await b.close();console.log(T.fails()?T.fails()+' FAILED':'all passed');process.exit(T.fails()?1:0)})();

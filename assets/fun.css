@@ -742,3 +742,7 @@ html[dir=rtl] .dl-bars .ph-bn bdi{text-align:right}
 .mp-l{padding:0;margin-top:6px}.mpd{margin-top:14px}.mpdh{margin:0 2px 6px;font-size:12.5px;font-weight:700;color:var(--mu)}
 .mpm{border:1px solid var(--ln);border-radius:12px;margin-bottom:6px;padding:10px 12px;background:rgba(255,255,255,.03)}.mpm:first-of-type{border-top:1px solid var(--ln)}
 .ctm-s.n{background:rgba(255,255,255,.1);color:var(--tx)}.mpw{font-weight:700}
+
+/* Club page Table tab (assets/club-matches.js) */
+.ctt{margin-top:12px;padding:8px 12px 12px}.ctt h3{margin:8px 0 8px;font-size:16px}.ctt-w{overflow-x:auto}.ctt-t td,.ctt-t th{padding:7px 6px;white-space:nowrap}.ctt-t td:nth-child(2){white-space:normal;min-width:120px}
+.ctt-r.me td{background:rgba(255,255,255,.1);font-weight:700}.ctt-r.me td:first-child{box-shadow:inset 3px 0 0 var(--th-hi,var(--g))}.ctt-f{white-space:nowrap}

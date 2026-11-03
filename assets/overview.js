@@ -69,7 +69,7 @@
  const lgLogo=l=>{const d=typeof LOGO==='object'&&LOGO.d&&LOGO.d[l];return d&&d.league||null};
  R.overview=async function(el){
   el.innerHTML=`<h2>Overview</h2><p class="mu ov-lead"><span>Every league on the site: the matches by day with your teams first, and the strangest numbers of the week.</span></p>
-   <div id="ovw" class="ovw"><div id="ovteams"></div><div id="ovmb"></div><div id="ovfx"></div><div id="ovft"></div></div>`;
+   <div id="ovw" class="ovw"><div id="ovmb"></div><div id="ovteams"></div><div id="ovfx"></div><div id="ovft"></div></div>`;
   const w=el.querySelector('#ovw');
   teamsBar(w.querySelector('#ovteams'));
   if(typeof mbMount==='function')mbMount(w.querySelector('#ovmb'));
