@@ -21,9 +21,18 @@
   if(!m.tabs.every(([k])=>orig[k]))return;   /* a half that is not there (a page another file did not register): leave the pair as it was */
   m.tabs.forEach(([key])=>{
    R[key]=async function(el,arg){
-    el.innerHTML=`<div class="seg mg-tabs" role="group" aria-label="${ar()?m.label[1]:m.label[0]}" data-host="${m.host}">${m.tabs.map(([k,e,a])=>`<button type="button" data-k="${k}" aria-pressed="${k===key}" class="${k===key?'on':''}">${two(e,a)}</button>`).join('')}</div><div class="mg-pane" id="mgp" data-k="${key}"></div>`;
-    el.querySelectorAll('.mg-tabs button').forEach(b=>b.onclick=()=>{if(b.dataset.k!==key)location.hash='#/'+b.dataset.k});
-    return orig[key].call(this,el.querySelector('#mgp'),arg);
+    /* the old page draws itself into the same container; the tab bar is put under its title (and put back whenever the page draws again), so a bar the page keeps first under the title, such as the level bar, stays where it was */
+    const bar=()=>{if(!el.isConnected||(location.hash||'').split('/')[1]!==key||el.querySelector(':scope > .mg-tabs'))return;
+     const b=document.createElement('div');b.className='seg mg-tabs';b.setAttribute('role','group');b.setAttribute('aria-label',ar()?m.label[1]:m.label[0]);b.dataset.host=m.host;
+     b.innerHTML=m.tabs.map(([k,e,a])=>`<button type="button" data-mg="${k}" aria-pressed="${k===key}" class="${k===key?'on':''}">${two(e,a)}</button>`).join('');
+     const h=el.querySelector(':scope > h2');if(h)h.after(b);else el.prepend(b)};
+    /* one listener on the container (a page that writes `el.innerHTML+=` re-creates the bar's buttons, so a listener on the bar would be lost); it answers first, in the capture phase, and keeps the old pages' own `.seg button` handlers off the bar */
+    if(el._mg)el.removeEventListener('click',el._mg,true);
+    el._mg=e=>{const x=e.target.closest&&e.target.closest('.mg-tabs button[data-mg]');if(!x)return;e.stopPropagation();e.preventDefault();if((location.hash||'').split('/')[1]===key&&x.dataset.mg!==key)location.hash='#/'+x.dataset.mg};
+    el.addEventListener('click',el._mg,true);
+    const mo=new MutationObserver(()=>{if(!el.isConnected||(location.hash||'').split('/')[1]!==key){mo.disconnect();return}bar()});
+    mo.observe(el,{childList:true});
+    try{return await orig[key].call(this,el,arg)}finally{bar()}
    };
   });
   /* the merged-away pages leave the page list (their addresses stay) */

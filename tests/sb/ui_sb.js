@@ -28,7 +28,7 @@ const png=async(pg,btn,w)=>{const [dl]=await Promise.all([pg.waitForEvent('downl
  let {ctx,pg,errs}=await open(b);
  await pg.waitForSelector('#sbpb .dcx-c svg',{timeout:60000});
  ok(await pg.evaluate(()=>!!document.querySelector('.sbp-att img[src="assets/statsbomb-logo.svg"]')&&/StatsBomb Open Data/.test(document.querySelector('.sbp-att').innerText)&&/analysis only/.test(document.querySelector('.sbp-att').innerText)),'the StatsBomb logo and the terms (free, analysis only, not commercial) are on the page');
- ok(await pg.evaluate(()=>INS.rooms.MERGED.sbpress==='ppda'&&typeof R.sbpress==='function'&&!!document.querySelector('#mgp[data-k="sbpress"]')&&document.querySelector('#secnav button.on').dataset.k==='tactics'),'the page is the Pressure maps tab of the Pressing page (Tactics room), still at #/sbpress');
+ ok(await pg.evaluate(()=>INS.rooms.MERGED.sbpress==='ppda'&&typeof R.sbpress==='function'&&!!document.querySelector('#app > .mg-tabs button.on[data-mg="sbpress"]')&&document.querySelector('#secnav button.on').dataset.k==='tactics'),'the page is the Pressure maps tab of the Pressing page (Tactics room), still at #/sbpress');
  /* the match: Alpha 2–1 Beta. Alpha: Ace (9) 1 pressure, a counterpress, in Alpha's high third; Ben (4) none. Beta: Carl (8) 1 pressure in the mid third. */
  ok(await shown(pg,'#sbpb')==='Alpha 2 – 1 Beta: Alpha 1 pressures, 1 counterpresses, 0/0/1 low/mid/high | Beta 1 pressures, 0 counterpresses, 0/1/0 low/mid/high','match map: both teams\' pressures, counterpresses and thirds, worked out by hand ('+await shown(pg,'#sbpb')+')');
  const dots=await pg.$$eval('#sbpb .sb-pr,#sbpb .sb-cp',a=>a.map(c=>[c.getAttribute('class'),+c.getAttribute('cx'),+c.getAttribute('cy')]));

@@ -64,9 +64,9 @@ const txt=s=>s.replace(/[⁦-⁩‎‏]/g,'').replace(/\s+/g,' ').trim();
  /* merged pages: each old address opens the page on its own tab */
  for(const [old,host,tabs,room] of [['looklike','twins',['twins','looklike'],'players'],['sbpress','ppda',['ppda','sbpress'],'tactics'],['data','settings',['settings','data'],'home'],['timemachine','race',['race','timemachine'],'league']]){
   await go(pg,'#/'+old,2200);
-  const m=await pg.evaluate(()=>({t:[...document.querySelectorAll('#app .mg-tabs button')].map(b=>[b.dataset.k,b.classList.contains('on')]),pane:!!document.querySelector('#mgp'),h2:(document.querySelector('#mgp h2')||{}).textContent||'',room:[...document.querySelectorAll('#secnav button.on')].map(b=>b.dataset.k).join()}));
+  const m=await pg.evaluate(()=>({t:[...document.querySelectorAll('#app .mg-tabs button')].map(b=>[b.dataset.mg,b.classList.contains('on')]),pane:!!document.querySelector('#app > h2')&&document.querySelector('#app > h2').nextElementSibling&&[...document.querySelectorAll('#app > .mg-tabs')].length===1,h2:(document.querySelector('#app > h2')||{}).textContent||'',room:[...document.querySelectorAll('#secnav button.on')].map(b=>b.dataset.k).join()}));
   ok(m.t.map(x=>x[0]).join()===tabs.join()&&m.t.filter(x=>x[1]).map(x=>x[0]).join()===old&&m.pane&&m.h2.length>3&&m.room===room,'#/'+old+' opens the merged page "'+host+'" on its own tab ('+m.h2.trim()+'), in the '+room+' room');
-  await pg.click('#app .mg-tabs button[data-k="'+host+'"]');await pg.waitForTimeout(900);ok(await pg.evaluate(()=>location.hash)==='#/'+host&&await pg.$eval('#app .mg-tabs button.on',b=>b.dataset.k)===host,'its first tab goes to #/'+host)}
+  await pg.click('#app .mg-tabs button[data-mg="'+host+'"]');await pg.waitForSelector('#app .mg-tabs button.on[data-mg="'+host+'"]',{timeout:60000}).catch(()=>{});await pg.waitForTimeout(300);ok(await pg.evaluate(()=>location.hash)==='#/'+host&&await pg.$eval('#app .mg-tabs button.on',b=>b.dataset.mg)===host,'its first tab goes to #/'+host)}
  ok(!(await pg.evaluate(()=>PAGES.some(p=>['looklike','sbpress','data','timemachine'].includes(p[0])))),'the merged-away names are out of the page list');
  /* the menu as a site map */
  await go(pg,'#/table',700);
