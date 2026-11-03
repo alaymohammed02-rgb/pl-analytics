@@ -8,7 +8,7 @@ const sc=s=>{const m=/^(\d+)\s*-\s*(\d+)$/.exec(String(s||'').trim());return m?[
 function fin(id){const L=J(IDX.leagues.find(l=>l.id===id).file);return L.matches.filter(m=>m.d&&sc(m.s)).map(m=>({id:m.i,d:m.d.slice(0,10),h:m.h,a:m.a,s:sc(m.s)})).sort((a,b)=>cmp(b.d,a.d)||cmp(b.id,a.id))}
 const dUTC=d=>new Date(d+'T12:00:00Z').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',timeZone:'UTC'});
 const norm=s=>s.replace(/[⁦-⁩‎‏]/g,'').replace(/\s+/g,' ').trim();
-const rows=pg=>pg.$$eval('#mpl .mpm',a=>a.map(r=>({id:r.dataset.id,h:r.dataset.h,a:r.dataset.a,score:r.dataset.score,href:r.getAttribute('href'),mid:r.querySelector('.ctm-s').textContent,names:[r.querySelector('.ctm-h').textContent,r.querySelector('.ctm-a').textContent],bold:[r.querySelector('.ctm-h').classList.contains('mpw'),r.querySelector('.ctm-a').classList.contains('mpw')],crests:r.querySelectorAll('.ctm-c').length,day:r.closest('.mpd').dataset.d,head:r.closest('.mpd').querySelector('.mpdh').textContent})));
+const rows=pg=>pg.$$eval('#mpl .mpm',a=>a.map(r=>({id:r.dataset.id,h:r.dataset.h,a:r.dataset.a,score:r.dataset.score,href:r.getAttribute('href'),mid:r.querySelector('.ctm-s').textContent,names:[r.querySelector('.ctm-h').textContent,r.querySelector('.ctm-a').textContent],bold:[r.querySelector('.ctm-h').classList.contains('mpw'),r.querySelector('.ctm-a').classList.contains('mpw')],crests:r.querySelectorAll('.ctm-c').length,day:r.dataset.d,head:r.querySelector('.ctm-dd').textContent,res:r.dataset.res,pill:r.querySelector('.ctm-s').className})));
 function same(got,W,label){
  ok(got.length===Math.min(W.length,got.length)&&got.length>0&&got.every((g,i)=>{const w=W[i],bh=w.s[0]>w.s[1],ba=w.s[0]<w.s[1];return g.id===w.id&&g.h===w.h&&g.a===w.a&&g.score===w.s[0]+'-'+w.s[1]&&norm(g.mid)===w.s[0]+' - '+w.s[1]&&g.href==='#/match/'+w.id&&norm(g.names[0])===w.h&&norm(g.names[1])===w.a&&g.bold[0]===bh&&g.bold[1]===ba&&g.crests===2&&g.day===w.d&&norm(g.head)===dUTC(w.d)}),label+': '+got.length+' rows match in order, with score, winner in bold, link, crests and the day header')}
 (async()=>{const b=await T.launch();
@@ -22,14 +22,17 @@ function same(got,W,label){
  ok(A.length>40,'reference: '+A.length+' finished matches in LaLiga');
  same(await rows(pg),A.slice(0,40),'first 40');
  ok(+await pg.$eval('#mpcount',e=>e.dataset.n)===A.length&&/matches/.test(await pg.innerText('#mpcount')),'the count says '+A.length);
- ok((await pg.$$eval('#mpl .mpd',a=>a.map(d=>d.dataset.d))).every((d,i,x)=>i===0||x[i-1]>d),'days run from the newest to the oldest, each once');
+ ok((await pg.$$eval('#mpl .mpm',a=>a.map(d=>d.dataset.d))).every((d,i,x)=>i===0||x[i-1]>=d),'dates run from the newest to the oldest');
+ ok(/Previous matches/.test(await pg.innerText('#mpl h3'))&&await pg.$$eval('#mpl .mpm',a=>a.every(r=>r.querySelector('.ctm-s').classList.contains('n')&&r.dataset.res==='n')),'one card titled Previous matches; with no club the pills are neutral');
  await pg.click('#mpmore');await pg.waitForTimeout(200);same(await rows(pg),A.slice(0,80),'after Show more');
  while(await pg.$('#mpmore')){await pg.click('#mpmore');await pg.waitForTimeout(80)}
  same(await rows(pg),A,'everything');ok((await rows(pg)).length===A.length,'all '+A.length+' matches can be reached with Show more');
  /* a club */
  for(const club of ['Barcelona','Elche']){const W=A.filter(x=>x.h===club||x.a===club);await pg.selectOption('#mpc',club);await pg.waitForTimeout(250);
   while(await pg.$('#mpmore')){await pg.click('#mpmore');await pg.waitForTimeout(60)}
-  same(await rows(pg),W,club);ok(+await pg.$eval('#mpcount',e=>e.dataset.n)===W.length,club+': the count is '+W.length)}
+  same(await rows(pg),W,club);
+  ok((await rows(pg)).every((g,i)=>{const w=W[i],home=w.h===club,gf=home?w.s[0]:w.s[1],ga=home?w.s[1]:w.s[0],c=gf>ga?'w':gf<ga?'l':'d';return g.res===c&&g.pill.split(' ').includes(c)}),club+': each pill is green / grey / red from the club\'s side');
+  ok(+await pg.$eval('#mpcount',e=>e.dataset.n)===W.length,club+': the count is '+W.length)}
  await pg.selectOption('#mpc','');await pg.waitForTimeout(200);
  ok(await T.noscroll(pg),'phone: no horizontal scroll');
  ok(await pg.evaluate(()=>{const a=[...document.querySelectorAll('#hubbar a')].map(x=>x.getAttribute('href'));return a[0]==='#/matches'&&document.querySelector('#hubbar a.on').getAttribute('href')==='#/matches'}),'the page is still the first tab of the Matches hub');
