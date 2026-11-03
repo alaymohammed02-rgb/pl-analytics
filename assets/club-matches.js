@@ -1,7 +1,7 @@
 /* ===== Club page: Overview and Matches tabs =====
    The club page (R.club, with the pieces other files add to it) stays as it was and becomes the "Overview" tab; a bar under the club's header (a `.seg` group, so it has the Liquid
-   Glass) adds "Matches": two cards, as on a club page of a scores app.
-   - Previous matches: every finished match of the club this season, oldest first, ending with the latest (the last 6 at first, "Show earlier results" adds 10 more): the date, the
+   Glass) adds "Matches": two cards, as on a club page of a scores app, each a strip of match cards that swipes left and right (the same strip as the Matches page's Results).
+   - Previous matches: every finished match of the club this season, the latest first (the last 6 at first, a "Show earlier results" card at the end of the strip adds 10 more): the date, the
      two names with their crests, the score in a pill coloured from the club's side (green win, grey draw, red defeat). The league's matches come from the open league's data; the
      club's European matches (Champions League) from that competition's file when the club plays in it this season, with the competition's name on the row.
    - Upcoming matches: the club's scheduled matches from data/fixtures.json in every competition the file lists, nearest first, with the kick-off in the viewer's time zone ("Today"
@@ -98,14 +98,18 @@
  }
  function render(mt,name){
   const {past,up}=mt._data,np=mt._np,nu=mt._nu,shownP=past.slice(Math.max(0,past.length-np)),shownU=up.slice(0,nu);
-  mt.innerHTML=`<div class="card ctm" id="ctmp"><h3>${two('Previous matches','المباريات السابقة')}</h3>
-    ${past.length>np?`<button type="button" class="s ctm-more" id="ctmE">${two('Show earlier results','أظهر نتائج أقدم')}</button>`:''}
-    ${shownP.length?shownP.map(x=>row(x,name,'p')).join(''):`<div class="empty">${two('No finished matches in the data yet.','ما فيه مباريات منتهية في البيانات للحين.')}</div>`}</div>
-   <div class="card ctm" id="ctmu"><h3>${two('Upcoming matches','المباريات القادمة')}</h3>
-    ${shownU.length?shownU.map(x=>row(x,name,'u')).join(''):`<div class="empty">${two('No scheduled matches in the data (the season may be over).','ما فيه مباريات مجدولة في البيانات (يمكن الموسم انتهى).')}</div>`}
-    ${up.length>nu?`<button type="button" class="s ctm-more" id="ctmM">${two('Show more','أظهر أكثر')}</button>`:''}
+  const strip=(id,aria,items,more)=>`<div class="mp-hs" id="${id}" tabindex="0" role="region" aria-label="${aria}">${items}${more}</div>`;
+  const arrows=(a,b)=>`<span class="mp-ar"><button type="button" class="s" data-go="-1" aria-label="${a}">‹</button><button type="button" class="s" data-go="1" aria-label="${b}">›</button></span>`;
+  const A=ar();
+  /* previous matches: the newest first, so the strip opens on the latest result and swipes back in time */
+  mt.innerHTML=`<div class="card ctm" id="ctmp"><div class="mp-hd"><h3>${two('Previous matches','المباريات السابقة')}</h3>${arrows(A?'الأحدث':'Newer',A?'الأقدم':'Older')}</div>
+    ${shownP.length?strip('ctmps',A?'المباريات السابقة':'Previous matches',shownP.slice().reverse().map(x=>row(x,name,'p')).join(''),past.length>np?`<button type="button" class="s ctm-more mp-more" id="ctmE">${two('Show earlier results','أظهر نتائج أقدم')}</button>`:''):`<div class="empty">${two('No finished matches in the data yet.','ما فيه مباريات منتهية في البيانات للحين.')}</div>`}</div>
+   <div class="card ctm" id="ctmu"><div class="mp-hd"><h3>${two('Upcoming matches','المباريات القادمة')}</h3>${shownU.length?arrows(A?'الأقرب':'Sooner',A?'الأبعد':'Later'):''}</div>
+    ${shownU.length?strip('ctmus',A?'المباريات القادمة':'Upcoming matches',shownU.map(x=>row(x,name,'u')).join(''),up.length>nu?`<button type="button" class="s ctm-more mp-more" id="ctmM">${two('Show more','أظهر أكثر')}</button>`:''):`<div class="empty">${two('No scheduled matches in the data (the season may be over).','ما فيه مباريات مجدولة في البيانات (يمكن الموسم انتهى).')}</div>`}
     ${shownU.some(x=>x.k)?`<p class="mu ins-note">${two('Kick-off times are in your time zone.','أوقات البداية بتوقيت جهازك.')}</p>`:''}</div>
    <p class="mu ins-note ctm-n">${two('Matches of the league and the Champions League where the data has them. A domestic cup is not in the data.','مباريات الدوري ودوري الأبطال حيث تتوفر في البيانات. كأس المحلي مو موجود في البيانات.')}</p>`;
+  mt.querySelectorAll('.mp-ar').forEach(box=>{const hs=box.closest('.card').querySelector('.mp-hs');if(!hs)return;
+   box.querySelectorAll('button').forEach(b=>b.onclick=()=>hs.scrollBy({left:(+b.dataset.go)*hs.clientWidth*.8*(A?-1:1),behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'}))});
   const e=mt.querySelector('#ctmE'),m=mt.querySelector('#ctmM');
   if(e)e.onclick=()=>{mt._np+=STEP;render(mt,name)};
   if(m)m.onclick=()=>{mt._nu+=STEP;render(mt,name)};
