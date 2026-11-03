@@ -12781,6 +12781,10 @@ def sync_tmach(hub, now=None):
         seasons = [(lab, el2_matches(hub, [f])) for lab, f in zip(labs, files)]
         if sum(len(ms) for _, ms in seasons) < 50:
             continue
+        if any(not ms for _, ms in seasons[:-1]):
+            # a finished season with no match is a failed read of its file, not a season without matches (3 Nov 2026: Premier League 2022-23 was written empty and the chain broke): keep the last good file
+            log(f"  [آلة الزمن] موسم منتهٍ بدون مباريات في {names.get(lid)} — قراءة فاشلة على الأرجح، أبقيت الملف السابق")
+            return
         chains[lid] = seasons
         key_src[lid] = [[lab, len(ms), max((m[0] for m in ms), default="")] for lab, ms in seasons]
     key = hashlib.sha1(json.dumps([key_src, EL2, TM_CHECK], sort_keys=True).encode()).hexdigest()[:10]
