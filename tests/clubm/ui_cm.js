@@ -25,6 +25,7 @@ async function open(b,{vw=430,lang='en',league,hash}){const ctx=await b.newConte
  await ctx.addInitScript(([l,g])=>{if(!sessionStorage.getItem('s')){sessionStorage.setItem('s','1');localStorage.clear();localStorage.setItem('league',g);localStorage.setItem('lang',l)}},[lang,league]);
  const pg=await ctx.newPage(),errs=[];pg.on('pageerror',e=>errs.push(e.message));pg.on('console',m=>{const u=(m.location()||{}).url||'';if(m.type()==='error'&&!/favicon|ERR_TUNNEL_CONNECTION_FAILED|api.github.com|cdn.pitchapi|Failed to load resource/.test(u+m.text()))errs.push(m.text())});
  await pg.goto('http://127.0.0.1:8765/index.html'+hash);return {ctx,pg,errs}}
+const rowsP=p=>rows(p,'#ctmp .ctm-m').then(a=>a.reverse());/* the strip lists the newest first; the data below is oldest first */
 const rows=(pg,sel)=>pg.$$eval(sel,a=>a.map(r=>({tag:r.tagName,id:r.dataset.id,d:r.dataset.d,h:r.dataset.h,a:r.dataset.a,comp:r.dataset.comp,score:r.dataset.score||'',res:r.dataset.res||'',href:r.getAttribute('href')||'',date:r.querySelector('.ctm-dd').textContent,tag:r.querySelector('.ctm-tag')?r.querySelector('.ctm-tag').textContent:'',mid:r.querySelector('.ctm-s').textContent,cls:r.querySelector('.ctm-s').className,imgs:[...r.querySelectorAll('img.ctm-c')].map(i=>i.getAttribute('src')),names:[r.querySelector('.ctm-h').textContent,r.querySelector('.ctm-a').textContent]})));
 function checkPast(got,W,club,label){
  ok(got.length===W.length&&W.every((w,i)=>{const g=got[i],home=w.h===club,gf=home?w.s[0]:w.s[1],ga=home?w.s[1]:w.s[0],res=gf>ga?'w':gf<ga?'l':'d';
@@ -43,11 +44,11 @@ function checkUp(got,W,club,label){
  ok(!!(await pg.$('#cttabs .lgx-g')),'the tab bar has the glass');
  await pg.evaluate(()=>{window.__same=1});await pg.click('#cttabs button[data-k="matches"]');await pg.waitForSelector('.ctm-m',{timeout:30000});await pg.waitForTimeout(500);
  ok(await pg.evaluate(()=>window.__same===1&&location.hash.endsWith('/matches')&&document.querySelector('#ctov').hidden&&!document.querySelector('#ctmt').hidden),'the Matches tab opens without reloading the page and the address ends with /matches');
- let got=await rows(pg,'#ctmp .ctm-m');checkPast(got,P.slice(-6),BAR,'first view');
+ let got=await rowsP(pg);checkPast(got,P.slice(-6),BAR,'first view');
  ok(!!(await pg.$('#ctmE')),'"Show earlier results" is there while there are older matches');
- await pg.click('#ctmE');await pg.waitForTimeout(200);got=await rows(pg,'#ctmp .ctm-m');checkPast(got,P.slice(-16),BAR,'after "Show earlier results"');
+ await pg.click('#ctmE');await pg.waitForTimeout(200);got=await rowsP(pg);checkPast(got,P.slice(-16),BAR,'after "Show earlier results"');
  while(await pg.$('#ctmE')){await pg.click('#ctmE');await pg.waitForTimeout(100)}
- got=await rows(pg,'#ctmp .ctm-m');checkPast(got,P,BAR,'everything');
+ got=await rowsP(pg);checkPast(got,P,BAR,'everything');
  got=await rows(pg,'#ctmu .ctm-m');checkUp(got.slice(0,8),U.slice(0,8),BAR,'upcoming, first 8');
  ok((U.length>8)===!!(await pg.$('#ctmM')),'"Show more" appears only when there are more than 8 upcoming');
  while(await pg.$('#ctmM')){await pg.click('#ctmM');await pg.waitForTimeout(100)}
@@ -56,14 +57,15 @@ function checkUp(got,W,club,label){
  /* crests */
  {const lo=J(leagueOf(LL).logo_file).teams,lu=J(leagueOf(UCL).logo_file).teams,all=await rows(pg,'.ctm-m'),want=n=>lo[n]||lu[n]||null;
   ok(all.every(r=>r.imgs.length===[r.h,r.a].filter(want).length&&[[r.h,r.imgs[0]],[r.a,r.imgs[1]||r.imgs[0]]].every(([n,s],i)=>!want(n)||true))&&all.every(r=>[r.h,r.a].filter(want).every(n=>r.imgs.includes(want(n)))),'every row shows each club\'s crest from its own league\'s logo file (the league\'s or the Champions League\'s)')}
- ok(await pg.evaluate(()=>[...document.querySelectorAll('.ctm-m')].every(r=>{const a=r.getBoundingClientRect();return a.right<=innerWidth+1&&a.left>=-1})),'phone width: every row fits the screen');
+ ok(await pg.evaluate(()=>[...document.querySelectorAll('.mp-hs')].every(h=>{const a=h.getBoundingClientRect(),c=[...h.querySelectorAll('.ctm-m')],t=c.map(x=>Math.round(x.getBoundingClientRect().top));return a.right<=innerWidth+1&&a.left>=-1&&h.scrollWidth>=h.clientWidth&&t.every(v=>v===t[0])&&c.every(k=>[...k.querySelectorAll('.ctm-r>*')].every(e=>{const b=e.getBoundingClientRect(),q=k.getBoundingClientRect();return b.right<=q.right+1&&b.left>=q.left-1}))})),'phone width: each strip fits the screen, its cards sit in one line and nothing sticks out of a card');
+ {const x0=await pg.$eval('#ctmps',h=>h.scrollLeft);if(await pg.$eval('#ctmps',h=>h.scrollWidth>h.clientWidth+20)){await pg.click('#ctmp [data-go="1"]');await pg.waitForTimeout(900);ok(await pg.$eval('#ctmps',h=>h.scrollLeft)>x0,'the Older arrow moves the previous matches strip');await pg.click('#ctmp [data-go="-1"]');await pg.waitForTimeout(900);ok(Math.abs(await pg.$eval('#ctmps',h=>h.scrollLeft)-x0)<4,'the Newer arrow brings it back')}}
  ok(await T.noscroll(pg),'phone width: no horizontal scroll');
  /* back to the Overview, then the address opens the tab */
  await pg.click('#cttabs button[data-k="overview"]');await pg.waitForTimeout(200);ok(await pg.evaluate(()=>!document.querySelector('#ctov').hidden&&document.querySelector('#ctmt').hidden&&!location.hash.endsWith('/matches')),'back to the Overview: the address loses /matches');
  ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await ctx.close();
  ({ctx,pg,errs}=await open(b,{league:LL,hash:'#/club/'+encodeURIComponent(BAR)+'/matches'}));await pg.waitForSelector('.ctm-m',{timeout:90000});await pg.waitForTimeout(500);
  ok(await pg.evaluate(()=>!document.querySelector('#ctmt').hidden&&document.querySelector('#ctov').hidden&&document.querySelector('#cttabs button[data-k="matches"]').getAttribute('aria-pressed')==='true'),'the address #/club/<name>/matches opens the Matches tab');
- checkPast(await rows(pg,'#ctmp .ctm-m'),P.slice(-6),BAR,'opened by address');
+ checkPast(await rowsP(pg),P.slice(-6),BAR,'opened by address');
  await ctx.close();
  /* the Table tab: the league table with this club's row marked */
  {const T=(id)=>{const L=J(leagueOf(id).file),t={};for(const m of L.matches){const g=sc(m.s);if(!g||!m.d)continue;for(const [c,f,a] of [[m.h,g[0],g[1]],[m.a,g[1],g[0]]]){const r=t[c]=t[c]||{t:c,p:0,w:0,d:0,l:0,f:0,a:0,pts:0};r.p++;r.f+=f;r.a+=a;if(f>a){r.w++;r.pts+=3}else if(f===a){r.d++;r.pts++}else r.l++}}
@@ -85,11 +87,11 @@ function checkUp(got,W,club,label){
   ok(await pg.evaluate(()=>{const w=document.querySelector('#ovw');return w.firstElementChild.id==='ovmb'&&w.children[1].id==='ovteams'}),'Overview: the matches board is the first block, "Your teams" comes after it');await ctx.close()}
  /* a club with no European matches */
  {const V='Valencia',Pv=past(V,LL,[]),Uv=upcoming(V,LL,new Set(Pv.map(p=>p.id)));({ctx,pg,errs}=await open(b,{league:LL,hash:'#/club/'+V+'/matches'}));await pg.waitForSelector('.ctm-m',{timeout:90000});await pg.waitForTimeout(500);
-  checkPast(await rows(pg,'#ctmp .ctm-m'),Pv.slice(-6),V,V);ok(!(await pg.$('.ctm-tag')),V+': no competition tags');
+  checkPast(await rowsP(pg),Pv.slice(-6),V,V);ok(!(await pg.$('.ctm-tag')),V+': no competition tags');
   while(await pg.$('#ctmM')){await pg.click('#ctmM');await pg.waitForTimeout(80)}checkUp(await rows(pg,'#ctmu .ctm-m'),Uv,V,V);await ctx.close()}
  /* a Premier League club in the Champions League */
  {const A='Arsenal',PL='l_4WFCIZ',Pa=past(A,PL,[UCL]),Ua=upcoming(A,PL,new Set(Pa.map(p=>p.id)));({ctx,pg,errs}=await open(b,{league:PL,hash:'#/club/'+A+'/matches'}));await pg.waitForSelector('.ctm-m',{timeout:90000});await pg.waitForTimeout(500);
-  while(await pg.$('#ctmE')){await pg.click('#ctmE');await pg.waitForTimeout(80)}checkPast(await rows(pg,'#ctmp .ctm-m'),Pa,A,A);
+  while(await pg.$('#ctmE')){await pg.click('#ctmE');await pg.waitForTimeout(80)}checkPast(await rowsP(pg),Pa,A,A);
   while(await pg.$('#ctmM')){await pg.click('#ctmM');await pg.waitForTimeout(80)}checkUp(await rows(pg,'#ctmu .ctm-m'),Ua,A,A);ok(!errs.length,A+': no page errors '+errs.slice(0,2).join(' ; '));await ctx.close()}
  /* failing files */
  {const c=await b.newContext({timezoneId:TZ,locale:'en-US'});await c.clock.setFixedTime(NOW);await c.addInitScript(l=>{localStorage.setItem('league',l);localStorage.setItem('lang','en')},LL);await c.route(/fixtures\.json/,r=>r.fulfill({status:500,body:''}));
@@ -98,13 +100,13 @@ function checkUp(got,W,club,label){
  {const c=await b.newContext({timezoneId:TZ,locale:'en-US'});await c.clock.setFixedTime(NOW);await c.addInitScript(l=>{localStorage.setItem('league',l);localStorage.setItem('lang','en')},LL);await c.route(/l_0bfbkO\.json/,r=>r.fulfill({status:500,body:''}));
   const p=await c.newPage(),e=[];p.on('pageerror',x=>e.push(x.message));await p.goto('http://127.0.0.1:8765/index.html#/club/'+BAR+'/matches');await p.waitForSelector('.ctm-m',{timeout:90000});await p.waitForTimeout(400);
   while(await p.$('#ctmE')){await p.click('#ctmE');await p.waitForTimeout(80)}
-  const g=await rows(p,'#ctmp .ctm-m');ok(g.length===P.filter(x=>!x.comp).length&&g.every(r=>!r.comp)&&!e.length,'without the Champions League file: the league matches show, the European ones are left out, no error');await c.close()}
+  const g=await rowsP(p);ok(g.length===P.filter(x=>!x.comp).length&&g.every(r=>!r.comp)&&!e.length,'without the Champions League file: the league matches show, the European ones are left out, no error');await c.close()}
  /* Arabic and phone */
  for(const lang of ['ar','en']){({ctx,pg,errs}=await open(b,{vw:390,lang,league:LL,hash:'#/club/'+BAR+'/matches'}));await pg.waitForSelector('.ctm-m',{timeout:90000});await pg.waitForTimeout(500);
   ok(await T.noscroll(pg),lang+' phone: no horizontal scroll');
-  checkPast(await rows(pg,'#ctmp .ctm-m').then(r=>r.map(x=>lang==='ar'?({...x,date:dUTC(P.find(p=>p.id===x.id).d),tag:x.tag?P.find(p=>p.id===x.id).comp:''}):x)),P.slice(-6),BAR,lang+' phone');
+  checkPast(await rowsP(pg).then(r=>r.map(x=>lang==='ar'?({...x,date:dUTC(P.find(p=>p.id===x.id).d),tag:x.tag?P.find(p=>p.id===x.id).comp:''}):x)),P.slice(-6),BAR,lang+' phone');
   if(lang==='ar'){const u=await pg.evaluate(T.untr,'#ctmt');ok(!u.length,'Arabic: the Matches tab is translated '+u.slice(0,5).join(' | '));ok(/المباريات السابقة/.test(await pg.innerText('#ctmp h3'))&&/المباريات القادمة/.test(await pg.innerText('#ctmu h3')),'Arabic: the two card titles');
-   ok(await pg.$eval('.ctm-r',e=>getComputedStyle(e).direction)==='ltr','Arabic: the match row keeps home on the left');ok(!/\$\{|NaN|undefined/.test(await pg.innerText('#ctmt')),'no template text, NaN or undefined')}
+   ok(await pg.$$eval('#ctmps .ctm-m',a=>a.length>1&&a[0].getBoundingClientRect().left>a[1].getBoundingClientRect().left),'Arabic: the strip starts at the right with the latest match');ok(!/\$\{|NaN|undefined/.test(await pg.innerText('#ctmt')),'no template text, NaN or undefined')}
   ok(!errs.length,lang+' phone: no page errors '+errs.slice(0,2).join(' ; '));await ctx.close()}
  {({ctx,pg,errs}=await open(b,{vw:390,lang:'ar',league:LL,hash:'#/club/'+BAR+'/table'}));await pg.waitForSelector('.ctt-r',{timeout:90000});await pg.waitForTimeout(400);
   const u=await pg.evaluate(T.untr,'#cttb');ok(!u.length,'Arabic: the Table tab is translated '+u.slice(0,4).join(' | '));ok(await T.noscroll(pg),'Arabic phone: the table fits, no horizontal scroll');

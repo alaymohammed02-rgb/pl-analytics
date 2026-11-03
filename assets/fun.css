@@ -744,7 +744,7 @@ html[dir=rtl] .dl-bars .ph-bn bdi{text-align:right}
 html[dir=rtl] .mp-ar .s{transform:scaleX(-1)}
 .mp-hs{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x proximity;padding:12px 2px 8px;margin-top:4px;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
 .mp-hs .ctm-m{flex:0 0 184px;scroll-snap-align:start;border:1px solid var(--ln);border-radius:14px;padding:12px 10px 12px;background:rgba(255,255,255,.03)}
-.mp-hs .ctm-d{justify-content:center;margin-bottom:10px}
+.mp-hs .ctm-d{justify-content:center;flex-wrap:wrap;margin-bottom:10px}
 .mp-hs .ctm-r{grid-template-columns:26px minmax(0,1fr);grid-template-rows:auto auto auto;gap:8px 8px;justify-items:stretch}
 html[dir=rtl] .mp-hs .ctm-r{direction:rtl}
 .mp-hs .ctm-r>:nth-child(2){grid-column:1;grid-row:1}
