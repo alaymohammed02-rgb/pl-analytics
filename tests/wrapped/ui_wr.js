@@ -50,7 +50,7 @@ async function open(b,o={}){const r=await T.open(b,{vw:520,league:LG,hash:'#/wra
 (async()=>{const b=await T.launch();
  let {ctx,pg,errs}=await open(b);
  const season=await pg.evaluate(()=>(typeof ALL==='object'&&ALL&&ALL.season)||(typeof curSeason==='function'?curSeason():'')||''),lgn=IDX(LG).name;
- ok(await pg.evaluate(()=>{const a=[...document.querySelectorAll('#hubbar a')].map(x=>x.getAttribute('href'));return a.indexOf('#/wrapped')===a.indexOf('#/ask')+1&&document.querySelector('#hubbar a.on').getAttribute('href')==='#/wrapped'}),'the page is the tab after Ask the site in the Home hub, marked open');
+ ok(await pg.evaluate(([k,r])=>{const on=document.querySelector('#secnav button.on'),h=document.getElementById('hubbar'),cur=h.querySelector(':scope > a.on'),back=h.querySelector(':scope > .hb-back');return !!on&&on.dataset.k===r&&(cur?cur.getAttribute('href')==='#/'+k:true)&&(r==='home'||(!!back&&back.getAttribute('href')==='#/r-'+r))},['wrapped','play']),'the page is in the play room: the room bar marks it, and the bar above it links back to the room and marks the page open');
  for(const club of ['AFC Bournemouth','Arsenal','Hull City']){
   await pg.selectOption('#wrc',club);await pg.waitForSelector('#wrst svg',{timeout:60000});await pg.waitForTimeout(500);const E=clubWant(LG,club),W=clubTexts(E,club,lgn,season);
   ok(JSON.stringify(await titles(pg))===JSON.stringify(W.map(x=>x[0])),club+': '+W.length+' slides, in order ('+W.map(x=>x[0]).join(', ')+')');

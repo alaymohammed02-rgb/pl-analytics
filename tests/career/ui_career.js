@@ -48,7 +48,7 @@ async function checkPlayer(pg,p,label,tabl=true){
 (async()=>{const b=await T.launch();
  ok(A&&Bm&&Cc&&Dd&&Ee&&Kc,'reference players: '+[A,Bm,Cc,Dd,Ee,Kc].map(p=>p&&p.name+' ('+p.v.length+')').join(', '));
  let {ctx,pg,errs}=await T.open(b,{vw:1100,league:'l_4WFCIZ',hash:'#/career'});await pg.waitForSelector('#pcchips a',{timeout:90000});await pg.waitForTimeout(400);
- ok(await pg.evaluate(()=>[...document.querySelectorAll('#hubbar a')].some(a=>a.getAttribute('href')==='#/career')&&document.querySelector('#hubbar a.on').getAttribute('href')==='#/career'),'the page is a tab of the Players hub');
+ ok(await pg.evaluate(([k,r])=>{const on=document.querySelector('#secnav button.on'),h=document.getElementById('hubbar'),cur=h.querySelector(':scope > a.on'),back=h.querySelector(':scope > .hb-back');return !!on&&on.dataset.k===r&&(cur?cur.getAttribute('href')==='#/'+k:true)&&!!back&&back.getAttribute('href')==='#/r-'+r},['career','players']),'the page is in the players room: the room bar marks it, and the bar above it links back to the room and marks the page open');
  /* first view: the list */
  const chips=all.filter(p=>p.v.length>=4&&p.pos!=='GK').sort((a,b)=>b.mi-a.mi||cmp(a.id,b.id)).slice(0,12).map(p=>p.id);
  ok((await pg.$$eval('#pcchips a',a=>a.map(x=>x.dataset.id))).join()===chips.join(),'the first view lists the 12 outfield players with 4+ seasons and most minutes, in order');

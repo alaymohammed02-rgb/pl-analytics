@@ -63,7 +63,7 @@ function same(got,E,label){
   want.sort((a,b)=>a.days-b.days||cmp(a.d,b.d)||cmp(a.t,b.t));
   const got=await pg.$$eval('.rd-cr',a=>a.map(r=>({t:r.dataset.t,days:+r.dataset.days})));
   ok(got.length===Math.min(8,want.length)&&got.every((g,i)=>g.t===want[i].t&&g.days===want[i].days),'the 8 shortest turnarounds before the next matches of the Premier League match: '+got.slice(0,3).map(g=>g.t+' '+g.days).join(', ')+'…')}
- ok(await pg.evaluate(()=>{const a=[...document.querySelectorAll('#hubbar a')].map(x=>x.getAttribute('href'));return a.indexOf('#/rest')===a.indexOf('#/fortress')+1&&document.querySelector('#hubbar a.on').getAttribute('href')==='#/rest'}),'the page is the Teams hub tab after Fortress, marked open');
+ ok(await pg.evaluate(([k,r])=>{const on=document.querySelector('#secnav button.on'),h=document.getElementById('hubbar'),cur=h.querySelector(':scope > a.on'),back=h.querySelector(':scope > .hb-back');return !!on&&on.dataset.k===r&&(cur?cur.getAttribute('href')==='#/'+k:true)&&(r==='home'||(!!back&&back.getAttribute('href')==='#/r-'+r))},['rest','clubs']),'the page is in the clubs room: the room bar marks it, and the bar above it links back to the room and marks the page open');
  ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await ctx.close();
  {const c2=await b.newContext();await c2.route(/results\.json/,async r=>{await new Promise(z=>setTimeout(z,2500));r.continue()});const p2=await c2.newPage(),e2=[];p2.on('pageerror',e=>e2.push(e.message));
   await p2.goto('http://127.0.0.1:8765/index.html#/rest');await p2.waitForSelector('#rdroot',{timeout:60000});await p2.evaluate(()=>location.hash='#/table');await p2.waitForSelector('.lt',{timeout:60000});await p2.waitForTimeout(3500);

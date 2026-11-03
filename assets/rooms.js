@@ -56,8 +56,7 @@
     P('overview','calendar','Every match of the day, with your teams first','كل مباريات اليوم، وفريقك أول'),
     P('ask','question','Ask a question in plain words and get the numbers','اسأل بكلامك العادي وخذ الأرقام')]},
    {k:'site',n:['The site','الموقع'],p:[
-    P('settings','gear','The leagues the site follows, and when its data was updated','الدوريات اللي يتابعها الموقع ووقت آخر تحديث'),
-    P('data','table','Which matches have complete data and which are missing parts','أي مباريات بياناتها كاملة وأي وحدة ناقصة')]}]},
+    P('settings','gear','The leagues the site follows, when its data was updated, and which matches have complete data','الدوريات اللي يتابعها الموقع ووقت آخر تحديث، وأي مباريات بياناتها كاملة')]}]},
   {k:'league',n:['League','الدوري'],d:['The table, every match, and who is going to win it.','الجدول وكل المباريات ومين راح يفوز باللقب.'],ic:'trophy',groups:[
    {k:'standings',n:['Standings','الترتيب'],p:[
     P('table','table','Who is top, who is in the fight, who is in danger?','مين فوق، ومين في المنافسة، ومين في الخطر؟'),
@@ -72,10 +71,9 @@
     P('states','repeat','Who rescues points from behind and who throws them away?','مين ينقذ نقاط وهو متأخر ومين يضيّعها؟'),
     P('late','clock','Which clubs win or lose points to late goals?','أي الأندية تكسب أو تخسر نقاط بأهداف متأخرة؟')]},
    {k:'race',n:['Title race','سباق اللقب'],p:[
-    P('race','line','Watch the table change week by week','شوف الجدول يتغير أسبوع بأسبوع'),
+    P('race','line','Watch the table change week by week, or go back to any day and see the table and the odds as they were','شوف الجدول يتغير أسبوع بأسبوع، أو ارجع لأي يوم وشوف الجدول والاحتمالات كيف كانت'),
     P('runin','target','How hard are the matches each club still has to play?','كم صعبة المباريات اللي باقية لكل نادي؟'),
-    P('sim','crystal','Play the rest of the season thousands of times: who wins?','العب باقي الموسم آلاف المرات: مين يفوز؟'),
-    P('timemachine','clock','Go back to any day and see the table and the odds as they were','ارجع لأي يوم وشوف الجدول والاحتمالات كيف كانت')]},
+    P('sim','crystal','Play the rest of the season thousands of times: who wins?','العب باقي الموسم آلاف المرات: مين يفوز؟')]},
    {k:'stories',n:['Stories of the season','حكايات الموسم'],p:[
     P('heartbeat','line','How surprising was the season, match by match?','كم كان الموسم مفاجئ، مباراة بمباراة؟'),
     P('rare','diamond','What happens about once a season, or less?','وش اللي يصير مرة بالموسم أو أقل؟')]}]},
@@ -108,8 +106,7 @@
     P('gems','diamond','Strong players the goals and assists do not show','لاعبين أقوياء الأهداف والتمريرات الحاسمة ما تبين مستواهم')]},
    {k:'compare',n:['Compare and look-alikes','قارن وشبيه اللاعب'],p:[
     P('compare','scale','Put players or teams side by side on any measures','حط لاعبين أو أندية جنب بعض على أي مقاييس'),
-    P('twins','versus','Who plays most like him?','مين يلعب أكثر شي مثله؟'),
-    P('looklike','versus','Pick the stats you care about and find players like him','اختر الإحصائيات اللي تهمك وشوف لاعبين مثله')]},
+    P('twins','versus','Who plays most like him? The quick version, or pick the stats you care about','مين يلعب أكثر شي مثله؟ بالنسخة السريعة أو باختيار الإحصائيات اللي تهمك')]},
    {k:'market',n:['Market','السوق'],p:[
     P('prices','coin','What are the players worth?','كم قيمة اللاعبين؟')]},
    {k:'repeat',n:['Does it repeat?','هل يتكرر؟'],p:[
@@ -128,8 +125,7 @@
    {k:'passing',n:['Passing','التمرير'],p:[
     P('passing','network','Pass networks: who connects the team?','شبكات التمرير: مين يربط الفريق؟')]},
    {k:'pressing',n:['Pressing','الضغط'],p:[
-    P('ppda','network','How hard does each team press, match by match?','كم قوة ضغط كل فريق، مباراة بمباراة؟'),
-    P('sbpress','heat','Pressure maps from StatsBomb\'s open competitions','خرائط الضغط من مسابقات StatsBomb المفتوحة')]}]},
+    P('ppda','network','How hard does each team press, match by match, plus pressure maps from StatsBomb\'s open competitions','كم قوة ضغط كل فريق، مباراة بمباراة، مع خرائط الضغط من مسابقات StatsBomb المفتوحة')]}]},
   {k:'play',n:['Play','العب'],d:['Fantasy, games, predictions and your season as a story.','الفانتازي والألعاب والتوقعات وموسمك كقصة.'],ic:'pad',groups:[
    {k:'fantasy',n:['Fantasy','الفانتازي'],p:[
     P('fantasy','star','Pick your Fantasy team with the best predictions','اختر فريق الفانتازي بأفضل التوقعات'),
@@ -150,30 +146,31 @@
  ROOMS.forEach(r=>r.groups.forEach(g=>g.p.forEach(e=>{ENT.set(e[0],{room:r,group:g,e});GRP.set(r.k+'-'+g.k,g)})));
 /* extra words a person might type for a page (English and Arabic), beside its name and its answer: the menu's box and the search find a page by them too */
  const KW={sim:'title champions champion winner forecast odds probability simulation لقب بطل توقع احتمال محاكاة',stakes:'title relegation top four european places swing لقب هبوط',
-  prices:'market value worth price transfermarkt money سعر قيمة سوقية',career:'last season previous seasons history over the years past تاريخ مواسم سابقة الماضي',race:'title champions top of the table لقب',
+  prices:'market value worth price transfermarkt money سعر قيمة سوقية',career:'last season previous seasons history over the years past تاريخ مواسم سابقة الماضي',race:'title champions top of the table time machine any day back in time لقب آلة الزمن',
   table:'standings positions points ranking ترتيب نقاط',matches:'fixtures schedule results scores نتائج جدول مباريات',h2h:'derby rivalry head to head record rivals',toty:'team of the year best eleven best xi',
-  guess:'wordle daily quiz puzzle لغز يومي',twins:'similar like replacement alternative',looklike:'similar like replacement alternative',keepers:'goalkeeper keeper saves gloves حارس',
+  guess:'wordle daily quiz puzzle لغز يومي',twins:'similar like look like replacement alternative lookalike',keepers:'goalkeeper keeper saves gloves حارس',
   heatmaps:'heat map positions where touches خريطة حرارية',shots:'shot map xg chances تسديدات',elo:'rating power ranking strength تصنيف',stability:'luck skill reliable noise sample',
-  fantasy:'fpl captain transfers team picks',wrapped:'recap review story share instagram',compare:'versus side by side',xi:'lineup line-up predicted starting eleven',ppda:'press pressure intensity ضغط',
+  fantasy:'fpl captain transfers team picks',wrapped:'recap review story share instagram',compare:'versus side by side',xi:'lineup line-up predicted starting eleven',ppda:'press pressure intensity maps statsbomb ضغط خرائط',
   gems:'underrated undervalued hidden',rest:'tired fatigue schedule congestion',value:'money budget spend expensive',fortress:'home advantage away form',heartbeat:'surprises upsets shocks',
-  thrill:'exciting entertaining best matches',settings:'language notifications leagues sync',data:'coverage missing complete'};
+  thrill:'exciting entertaining best matches',settings:'language notifications leagues sync data availability coverage missing complete'};
  Object.entries(KW).forEach(([k,v])=>{const o=ENT.get(k);if(o)o.e[4]=v});
  const landing=r=>'r-'+r.k;
  const href=r=>r.k==='home'?'#/overview':'#/'+landing(r);
  /* where next: a few pages from other rooms that continue the question (curated; a page with none shows none) */
- const NEXT={table:['race','sim','luck'],race:['sim','runin','stakes'],sim:['stakes','timemachine','elo'],luck:['reality','states','table'],matches:['round','thrill','xi'],round:['toty','thrill','stakes'],
+ const NEXT={table:['race','sim','luck'],race:['sim','runin','stakes'],sim:['stakes','race','elo'],luck:['reality','states','table'],matches:['round','thrill','xi'],round:['toty','thrill','stakes'],
   teams:['shape','elo','h2h'],elo:['river','h2h','value'],h2h:['elo','clubtwins','fortress'],fortress:['rest','halves','value'],value:['prices','table','elo'],
-  players:['career','story','twins'],story:['career','cards','twins'],career:['stability','keepsup','story'],rankings:['ratings','gems','toty'],ratings:['toty','gems','cards'],gems:['looklike','stability','prices'],
-  twins:['looklike','compare','career'],stability:['keepsup','keepers','bench'],keepsup:['stability','career','prices'],prices:['value','gems','career'],
-  shots:['reality','heatmaps','passing'],heatmaps:['shape','shots','defense'],defense:['height','keepers','ppda'],passing:['carry','shots','ppda'],ppda:['sbpress','height','defense'],
+  players:['career','story','twins'],story:['career','cards','twins'],career:['stability','keepsup','story'],rankings:['ratings','gems','toty'],ratings:['toty','gems','cards'],gems:['twins','stability','prices'],
+  twins:['compare','career','story'],stability:['keepsup','keepers','bench'],keepsup:['stability','career','prices'],prices:['value','gems','career'],
+  shots:['reality','heatmaps','passing'],heatmaps:['shape','shots','defense'],defense:['height','keepers','ppda'],passing:['carry','shots','ppda'],ppda:['height','defense','keepers'],
   fantasy:['share','beat','ratings'],beat:['lab','reportcard','fantasy'],cards:['builder','battle','story'],builder:['battle','cards','toty'],guess:['wrapped','cards','career'],wrapped:['story','guess','cards']};
  /* ---------- the structure the rest of the site reads ---------- */
  const SEC=ROOMS.map(r=>{const g=r.groups.map(x=>({k:r.k+'-'+x.k,n:x.n[0],p:x.p.map(e=>e[0])}));return {k:r.k,n:r.n[0],g,p:(r.k==='home'?[]:[landing(r)]).concat(g.flatMap(x=>x.p)),
    ic:`<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${M[r.ic]}</g>`}});
  UI_SEC.length=0;UI_SEC.push(...SEC);
  /* pages the other files have added to PAGES but that are not in the table yet go to Home, so none is lost (the menu does the same) */
- const known=new Set(ENT.keys());
- if(typeof UI_ALIAS==='object')Object.assign(UI_ALIAS,{club:'teams',player:'players',match:'matches',recap:'matches',replay:'matches',preview:'matches'});
+ const MERGED={looklike:'twins',sbpress:'ppda',data:'settings',timemachine:'race'};   /* pages that became tabs of another page (assets/merged.js): their addresses still open it */
+ const known=new Set([...ENT.keys(),...Object.keys(MERGED)]);
+ if(typeof UI_ALIAS==='object')Object.assign(UI_ALIAS,{club:'teams',player:'players',match:'matches',recap:'matches',replay:'matches',preview:'matches',looklike:'twins',sbpress:'ppda',data:'settings',timemachine:'race'});
  window.uiGo=function(k){const r=ROOMS.find(x=>x.k===k);if(r)location.hash=href(r)};
  /* ---------- the bar above a page: back to the room, and the pages of the same group ---------- */
  const pgName=k=>{const p=PAGES.find(x=>x[0]===k);return p?p[1]:k};
@@ -266,7 +263,7 @@
  }
  /* the search finds a page by what it answers */
  const pageHit=(k,hit)=>{const t=textOf(k);return hit(t)||false};
- INS.rooms={ROOMS,ENT,GRP,NEXT,PICK,pickOf,utcDay,href,landing,homeBlock,pageHit,svg,label,known:()=>known,bar};
+ INS.rooms={ROOMS,ENT,GRP,NEXT,PICK,MERGED,pickOf,utcDay,href,landing,homeBlock,pageHit,svg,label,known:()=>known,bar};
  if(typeof AR==='object')Object.entries({"Where next?":"وين بعدها؟","Explore":"استكشف","Today's pick":"اختيار اليوم","Value vs points":"القيمة مقابل النقاط","Player career":"مسيرة اللاعب","Rooms":"الأقسام","Find a page":"ابحث عن صفحة"}).forEach(([k,v])=>{if(!(k in AR))AR[k]=v});
  if(typeof uiNav==='function')try{uiNav()}catch(e){}
  if(typeof D==='object'&&D&&typeof route==='function')route();

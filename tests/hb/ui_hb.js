@@ -94,7 +94,7 @@ const sel=pg=>pg.evaluate(()=>({t:document.querySelector('#hbsel .hb-sm').textCo
  ms=season(L2,c2);got=await dots(pg);const by3=new Map(ms.map(m=>[m.id,m]));
  ok(JSON.stringify(await pg.$$eval('#hbs option',a=>a.map(o=>o.textContent)))===JSON.stringify(F.leagues[L2].seasons.map(s=>s.s)),'LaLiga\'s seasons: '+F.leagues[L2].seasons.map(s=>s.s).join(', '));
  ok(got.length===ms.length&&got.every(g=>{const m=by3.get(g.id);return m&&g.o===m.o&&Math.abs(g.bits-m.bits)<2e-4}),'LaLiga '+c2+': '+ms.length+' dots recomputed');
- ok(await pg.evaluate(()=>{const a=[...document.querySelectorAll('#hubbar a')].map(x=>x.getAttribute('href'));return a[a.length-1]==='#/heartbeat'&&a.indexOf('#/timemachine')===a.length-2&&document.querySelector('#hubbar a.on').getAttribute('href')==='#/heartbeat'}),'the page is the last tab of the Season hub, after Time machine, marked open');
+ ok(await pg.evaluate(([k,r])=>{const on=document.querySelector('#secnav button.on'),h=document.getElementById('hubbar'),cur=h.querySelector(':scope > a.on'),back=h.querySelector(':scope > .hb-back');return !!on&&on.dataset.k===r&&(cur?cur.getAttribute('href')==='#/'+k:true)&&(r==='home'||(!!back&&back.getAttribute('href')==='#/r-'+r))},['heartbeat','league']),'the page is in the league room: the room bar marks it, and the bar above it links back to the room and marks the page open');
  ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await ctx.close();
  /* leaving before the data arrives */
  {const c2_=await b.newContext();await c2_.route(/results\.json/,async r=>{await new Promise(z=>setTimeout(z,2500));r.continue()});const p2=await c2_.newPage(),e2=[];p2.on('pageerror',e=>e2.push(e.message));

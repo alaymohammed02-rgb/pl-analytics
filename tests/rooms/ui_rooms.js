@@ -6,11 +6,11 @@
    answers, "Where next?" under a page, Home (the Explore tiles, today's pick the same for everyone on one UTC day), Arabic and 390 px, a failing file, leaving the page early. */
 const T=require('../nf/lib.js');const {ok,J,IDX}=T;
 const PLAN=[
- ['home','Home',[['today',['overview','ask']],['site',['settings','data']]]],
- ['league','League',[['standings',['table','luck']],['matches',['matches','round','xi','stakes','whatif','thrill','states','late']],['race',['race','runin','sim','timemachine']],['stories',['heartbeat','rare']]]],
+ ['home','Home',[['today',['overview','ask']],['site',['settings']]]],
+ ['league','League',[['standings',['table','luck']],['matches',['matches','round','xi','stakes','whatif','thrill','states','late']],['race',['race','runin','sim']],['stories',['heartbeat','rare']]]],
  ['clubs','Clubs',[['profiles',['teams','shape','halves']],['strength',['elo','river','leaguedna','carry']],['compare',['h2h','clubtwins']],['home',['fortress','rest','value']]]],
- ['players','Players',[['find',['players','story','career']],['best',['rankings','ratings','toty','gems']],['compare',['compare','twins','looklike']],['market',['prices']],['repeat',['stability','keepsup','bench']]]],
- ['tactics','Tactics',[['attack',['shots','reality','heatmaps']],['defence',['defense','height','keepers']],['passing',['passing']],['pressing',['ppda','sbpress']]]],
+ ['players','Players',[['find',['players','story','career']],['best',['rankings','ratings','toty','gems']],['compare',['compare','twins']],['market',['prices']],['repeat',['stability','keepsup','bench']]]],
+ ['tactics','Tactics',[['attack',['shots','reality','heatmaps']],['defence',['defense','height','keepers']],['passing',['passing']],['pressing',['ppda']]]],
  ['play','Play',[['fantasy',['fantasy','share']],['games',['guess','cards','builder','battle']],['predict',['beat','lab','reportcard']],['stories',['wrapped']]]]];
 const ALLP=PLAN.flatMap(r=>r[2].flatMap(g=>g[1]));
 const roomOf=k=>PLAN.find(r=>r[2].some(g=>g[1].includes(k)));
@@ -26,8 +26,8 @@ const txt=s=>s.replace(/[⁦-⁩‎‏]/g,'').replace(/\s+/g,' ').trim();
  let {ctx,pg,errs}=await open(b);
  /* every page once */
  const navAll=await pg.$$eval('#nav a',a=>a.map(x=>x.getAttribute('href').slice(2)));
- ok(ALLP.length===new Set(ALLP).size&&ALLP.length===65,'the plan has 65 pages, each once');
- ok(navAll.length===65&&ALLP.every(k=>navAll.includes(k))&&navAll.every(k=>ALLP.includes(k)),'the site\'s page list is exactly the plan\'s 65 pages: none lost, none left out of a room ('+navAll.filter(k=>!ALLP.includes(k)).join(',')+')');
+ ok(ALLP.length===new Set(ALLP).size&&ALLP.length===61,'the plan has 61 pages, each once');
+ ok(navAll.length===61&&ALLP.every(k=>navAll.includes(k))&&navAll.every(k=>ALLP.includes(k)),'the site\'s page list is exactly the plan\'s 61 pages: none lost, none left out of a room ('+navAll.filter(k=>!ALLP.includes(k)).join(',')+')');
  ok(!navAll.includes('tactical'),'the unfinished "Tactical" placeholder is gone');
  /* the room bar */
  const bar=sel=>pg.$$eval(sel+' button',a=>a.map(x=>[x.dataset.k,x.innerText.trim(),x.classList.contains('on')]));
@@ -61,6 +61,13 @@ const txt=s=>s.replace(/[⁦-⁩‎‏]/g,'').replace(/\s+/g,' ').trim();
  {const L=J(IDX.leagues.find(l=>l.id==='l_4WFCIZ').file),pts={};let pl={};for(const m of L.matches){const g=/^(\d+)\s*-\s*(\d+)$/.exec(String(m.s||'').trim());if(!g||!m.d)continue;const h=+g[1],a=+g[2];pts[m.h]=(pts[m.h]||0)+(h>a?3:h===a?1:0);pts[m.a]=(pts[m.a]||0)+(a>h?3:h===a?1:0)}
   const top=Object.entries(pts).sort((a,b)=>b[1]-a[1]||0)[0];ok(live.table.includes(top[0])&&live.table.includes(String(top[1])),'the table line names the club with the most points: '+top[0]+' '+top[1]+' ('+live.table+')');
   const E=J('elo_own.json').leagues.l_4WFCIZ.teams,best=Object.entries(E).sort((a,b)=>b[1].r-a[1].r)[0];ok(live.elo.includes(best[0])&&live.elo.includes(String(Math.round(best[1].r))),'the Elo line names the strongest club: '+live.elo)}
+ /* merged pages: each old address opens the page on its own tab */
+ for(const [old,host,tabs,room] of [['looklike','twins',['twins','looklike'],'players'],['sbpress','ppda',['ppda','sbpress'],'tactics'],['data','settings',['settings','data'],'home'],['timemachine','race',['race','timemachine'],'league']]){
+  await go(pg,'#/'+old,2200);
+  const m=await pg.evaluate(()=>({t:[...document.querySelectorAll('#app .mg-tabs button')].map(b=>[b.dataset.k,b.classList.contains('on')]),pane:!!document.querySelector('#mgp'),h2:(document.querySelector('#mgp h2')||{}).textContent||'',room:[...document.querySelectorAll('#secnav button.on')].map(b=>b.dataset.k).join()}));
+  ok(m.t.map(x=>x[0]).join()===tabs.join()&&m.t.filter(x=>x[1]).map(x=>x[0]).join()===old&&m.pane&&m.h2.length>3&&m.room===room,'#/'+old+' opens the merged page "'+host+'" on its own tab ('+m.h2.trim()+'), in the '+room+' room');
+  await pg.click('#app .mg-tabs button[data-k="'+host+'"]');await pg.waitForTimeout(900);ok(await pg.evaluate(()=>location.hash)==='#/'+host&&await pg.$eval('#app .mg-tabs button.on',b=>b.dataset.k)===host,'its first tab goes to #/'+host)}
+ ok(!(await pg.evaluate(()=>PAGES.some(p=>['looklike','sbpress','data','timemachine'].includes(p[0])))),'the merged-away names are out of the page list');
  /* the menu as a site map */
  await go(pg,'#/table',700);
  const dm=await pg.evaluate(()=>{drwOpen(true);const r=[...document.querySelectorAll('#drw .drw-s')].map(s=>({room:s.dataset.room,href:s.querySelector('h3 a').getAttribute('href'),here:s.querySelector('h3 a').dataset.here==='1',groups:[...s.querySelectorAll('.drw-gh')].length,pages:[...s.querySelectorAll('li[data-k]')].map(l=>l.dataset.k),on:[...s.querySelectorAll('li a.on')].map(a=>a.getAttribute('href').slice(2))}));const o=document.querySelector('#drw a.on');return {r,on:o&&o.getAttribute('href')}});
@@ -68,7 +75,7 @@ const txt=s=>s.replace(/[⁦-⁩‎‏]/g,'').replace(/\s+/g,' ').trim();
  ok(dm.r.filter(x=>x.here).map(x=>x.room).join()==='league'&&dm.on==='#/table','the menu marks the open page ("League table") and its room');
  await pg.fill('#drwq','heat');await pg.waitForTimeout(250);let vis=await pg.$$eval('#drw li[data-k]:not([hidden])',a=>a.map(x=>x.dataset.k));
  ok(vis.includes('heatmaps')&&vis.length<10,'the menu\'s box filters: "heat" keeps Heatmaps ('+vis.join(',')+')');
- await pg.fill('#drwq','');await pg.waitForTimeout(200);ok((await pg.$$eval('#drw li[data-k]:not([hidden])',a=>a.length))===65,'clearing the box lists all 65 pages again');
+ await pg.fill('#drwq','');await pg.waitForTimeout(200);ok((await pg.$$eval('#drw li[data-k]:not([hidden])',a=>a.length))===61,'clearing the box lists all 61 pages again');
  await pg.evaluate(()=>drwOpen(false));await pg.waitForTimeout(400);
  /* search finds a page by what it answers */
  await go(pg,'#/overview',600);
@@ -90,7 +97,7 @@ const txt=s=>s.replace(/[⁦-⁩‎‏]/g,'').replace(/\s+/g,' ').trim();
   ok(await pg.$eval('#secbar',e=>{const s=getComputedStyle(e),r=e.getBoundingClientRect();return s.display!=='none'&&s.position==='fixed'&&Math.abs(r.bottom-innerHeight)<2&&e.querySelectorAll('button').length===6})&&await pg.$eval('#secnav',e=>getComputedStyle(e).display==='none'),lang+' phone: the six rooms are a bar fixed at the bottom; the top bar is hidden');
   ok(await pg.$$eval('#secbar button',a=>a.every(b=>{const r=b.getBoundingClientRect();return r.width>=48&&r.height>=44&&r.left>=0&&r.right<=innerWidth})),lang+' phone: every room button is big enough and inside the screen');
   await pg.click('#secbar button[data-k="players"]');await pg.waitForTimeout(2500);
-  ok(await pg.evaluate(()=>location.hash)==='#/r-players'&&await pg.$$eval('#rmg .rm-c',a=>a.length)===14,lang+' phone: the Players button opens its landing page with 14 cards');
+  ok(await pg.evaluate(()=>location.hash)==='#/r-players'&&await pg.$$eval('#rmg .rm-c',a=>a.length)===13,lang+' phone: the Players button opens its landing page with 13 cards');
   ok(await pg.$$eval('#rmg .rm-c',a=>a.every(c=>{const r=c.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth})),lang+' phone: every card fits the screen');
   ok(await pg.evaluate(()=>{const b=document.querySelector('#secbar').getBoundingClientRect(),l=[...document.querySelectorAll('#rmg .rm-c')].pop().getBoundingClientRect();window.scrollTo(0,document.body.scrollHeight);return true}),'');
   await pg.evaluate(()=>window.scrollTo(0,document.documentElement.scrollHeight));await pg.waitForTimeout(300);

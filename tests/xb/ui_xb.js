@@ -71,7 +71,7 @@ const info=pg=>pg.evaluate(()=>{const t=[...document.querySelectorAll('.xb-pick 
  /* remove, clear */
  await pg.click('.xb-slot.fill');await pg.click('#xbrm');ok(await pg.evaluate(()=>document.querySelectorAll('.xb-slot.fill').length)===before-1,'remove: one fewer');
  await pg.click('#xbc');ok(await pg.evaluate(()=>document.querySelectorAll('.xb-slot.fill').length)===0,'clear: empty pitch');
- ok(await pg.evaluate(()=>{const a=[...document.querySelectorAll('#hubbar a')].map(x=>x.getAttribute('href'));return a.includes('#/builder')&&document.querySelector('#hubbar a.on').getAttribute('href')==='#/builder'}),'the page is a tab of the Compare hub, marked open');
+ ok(await pg.evaluate(([k,r])=>{const on=document.querySelector('#secnav button.on'),h=document.getElementById('hubbar'),cur=h.querySelector(':scope > a.on'),back=h.querySelector(':scope > .hb-back');return !!on&&on.dataset.k===r&&(cur?cur.getAttribute('href')==='#/'+k:true)&&(r==='home'||(!!back&&back.getAttribute('href')==='#/r-'+r))},['builder','play']),'the page is in the play room: the room bar marks it, and the bar above it links back to the room and marks the page open');
  ok(await pg.evaluate(()=>!document.querySelector('#xba,#xbv,#xbs,.xb-tm')),'without data/tm.json: no age, value or order choice and no Transfermarkt note');
  ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await ctx.close();
  /* with ages and values (a made-up data/tm.json) */

@@ -103,7 +103,7 @@ const mdata=pg=>pg.$$eval('.sk-m',a=>a.map(m=>({i:m.dataset.i,swing:+m.dataset.s
   const m2=await mdata(pg);ok(m2.length===f2.length&&f2.every((f,i)=>m2[i].i===f.i),'LaLiga: its '+f2.length+' next matches, by date');
   const c=mc(i2,null,20000,9);let w=0;for(const m of m2.slice(0,3))for(const r of m.rows){const ci=i2.names.indexOf(r.c),t={title:0,top4:1,bot3:2}[r.t];w=Math.max(w,Math.abs(c[ci][t]-r.now))}
   ok(w<0.04,'LaLiga: the "now" figures agree with the independent engine (largest gap '+w.toFixed(4)+')')}
- ok(await pg.evaluate(()=>{const a=[...document.querySelectorAll('#hubbar a')].map(x=>x.getAttribute('href'));return a.indexOf('#/stakes')===a.indexOf('#/late')+1&&document.querySelector('#hubbar a.on').getAttribute('href')==='#/stakes'}),'the page is the Matches hub tab after Late show, marked open');
+ ok(await pg.evaluate(([k,r])=>{const on=document.querySelector('#secnav button.on'),h=document.getElementById('hubbar'),cur=h.querySelector(':scope > a.on'),back=h.querySelector(':scope > .hb-back');return !!on&&on.dataset.k===r&&(cur?cur.getAttribute('href')==='#/'+k:true)&&(r==='home'||(!!back&&back.getAttribute('href')==='#/r-'+r))},['stakes','league']),'the page is in the league room: the room bar marks it, and the bar above it links back to the room and marks the page open');
  ok(!!(await pg.$('#skso .lgx-g')),'the order choice has the glass');
  ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await ctx.close();
  {const c2=await b.newContext();await c2.route(/results\.json/,async r=>{await new Promise(z=>setTimeout(z,2500));r.continue()});const p2=await c2.newPage(),e2=[];p2.on('pageerror',e=>e2.push(e.message));
