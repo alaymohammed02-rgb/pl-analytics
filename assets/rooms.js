@@ -234,7 +234,7 @@
  ROOMS.forEach(r=>{if(r.k==='home')return;
   R[landing(r)]=async function(el){
    const tok=++TOK,live=()=>tok===TOK;let i=0;
-   el.innerHTML=`<h2>${two(esc(r.n[0]),esc(r.n[1]))}</h2><p class="mu rm-lead">${two(esc(r.d[0]),esc(r.d[1]))}</p>
+   el.innerHTML=`<h2>${two(esc(r.n[0]),esc(r.n[1]))}</h2>${svg(r.ic,'rm-wm')}<p class="mu rm-lead">${two(esc(r.d[0]),esc(r.d[1]))}</p>
     <div class="rm-f"><input id="rmq" type="search" autocomplete="off" placeholder="${ar()?'ابحث في '+esc(r.n[1]):'Find a page in '+esc(r.n[0])}" aria-label="${ar()?'ابحث في '+esc(r.n[1]):'Find a page in '+esc(r.n[0])}"><span class="mu" id="rmc"></span></div>
     <div id="rmg">${r.groups.map(g=>`<section class="rm-s" data-g="${g.k}"><h3>${two(esc(g.n[0]),esc(g.n[1]))}</h3><div class="rm-cards">${g.p.map(e=>cardHtml(e[0],i++)).join('')}</div></section>`).join('')}</div>
     <div class="empty rm-none" id="rmnone" hidden>${two('No page matches that. Try another word.','ما فيه صفحة تطابق. جرّب كلمة ثانية.')}</div>`;

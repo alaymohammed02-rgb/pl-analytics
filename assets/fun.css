@@ -813,3 +813,5 @@ html body #secnav button{min-height:40px;padding:6px 16px;font-size:14.5px}
 #drw .drw-s li[hidden],#drw .drw-s section[hidden],#drw .drw-gh[hidden]{display:none}
 /* Merged pages (assets/merged.js) */
 .mg-tabs{margin:12px 0 14px}.mg-pane{min-width:0}
+#app:has(.rm-wm){position:relative}html body #app .rm-wm{position:absolute;inset-inline-end:14px;top:2px;width:132px;height:132px;color:color-mix(in srgb,var(--th-hi) 13%,transparent);pointer-events:none;stroke-width:1.1}
+@media (max-width:520px){html body #app .rm-wm{width:92px;height:92px}}
