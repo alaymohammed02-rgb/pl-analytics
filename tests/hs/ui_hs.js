@@ -26,7 +26,7 @@ function check(got,W,label,flip){
 const wait=pg=>pg.waitForSelector('#hsg[data-done="1"]',{timeout:90000});
 (async()=>{const b=await T.launch();
  let {ctx,pg,errs}=await T.open(b,{vw:1100,league:LG,hash:'#/heatmaps'});await pg.waitForSelector('#hstabs',{timeout:90000});await pg.waitForTimeout(500);
- ok(await pg.$$eval('#hstabs button',a=>a.map(x=>x.dataset.k+':'+x.getAttribute('aria-pressed')).join())==='match:true,season:false','the Match tab opens first');
+ ok(await pg.$$eval('#hstabs button',a=>a.map(x=>x.dataset.k+':'+x.getAttribute('aria-pressed')).join())==='match:true,season:false,compare:false','the Match tab opens first');
  ok(await pg.evaluate(()=>/Heatmaps/.test(document.querySelector('#app h2').textContent)&&document.querySelector('#app').firstElementChild.tagName==='H2'&&document.querySelector('#hstabs').nextElementSibling.id==='hsM'&&!!document.querySelector('#hsM #hm')&&!!document.querySelector('#hsM #hout')&&document.querySelector('#hsS').hidden),'the title stays first and the old page (match choice, map) sits in the Match tab');
  ok(!!(await pg.$('#hstabs .lgx-g')),'the tab bar has the glass');
  await pg.click('#hstabs button[data-k="season"]');await wait(pg);
