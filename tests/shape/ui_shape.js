@@ -61,7 +61,7 @@ function same(got,want){const by=new Map(got.map(g=>[g.id,g]));return got.length
   ok((await dots(pg)).length===agg(CM[t1]).pts.length,'the main club\'s dots are unchanged by the comparison');
   await pg.selectOption('#csp','');await pg.waitForTimeout(150);ok(!(await pg.$('.cs-d.b')),'"None" removes the outlines')}
  /* the Teams hub tab after Tactical */
- ok(await pg.evaluate(()=>{const a=[...document.querySelectorAll('#hubbar a')].map(x=>x.getAttribute('href'));return a.indexOf('#/shape')===a.indexOf('#/tactical')+1&&document.querySelector('#hubbar a.on').getAttribute('href')==='#/shape'}),'the page is the Teams hub tab after Tactical, marked open');
+ ok(await pg.evaluate(([k,r])=>{const on=document.querySelector('#secnav button.on'),h=document.getElementById('hubbar'),cur=h.querySelector(':scope > a.on'),back=h.querySelector(':scope > .hb-back');return !!on&&on.dataset.k===r&&(cur?cur.getAttribute('href')==='#/'+k:true)&&(r==='home'||(!!back&&back.getAttribute('href')==='#/r-'+r))},['shape','clubs']),'the page is in the clubs room: the room bar marks it, and the bar above it links back to the room and marks the page open');
  ok(!!(await pg.$('#csf .lgx-g')),'the formation choice has the glass');
  /* another league */
  {const L2='l_0ErfuF';await pg.evaluate(l=>{localStorage.setItem('league',l)},L2);}

@@ -85,7 +85,7 @@ async function check(pg,id,a,b,label,lang){
  /* another league */
  await pg.selectOption('#h2g',LL);await pg.waitForTimeout(400);
  {const a=await pg.$eval('#h2a',e=>e.value),c=await pg.$eval('#h2b',e=>e.value);ok(clubs(LL).includes(a)&&clubs(LL).includes(c)&&a!==c,'LaLiga: two of its clubs ('+a+', '+c+')');await check(pg,LL,a,c,'LaLiga')}
- ok(await pg.evaluate(()=>{const a=[...document.querySelectorAll('#hubbar a')].map(x=>x.getAttribute('href'));return a.indexOf('#/h2h')===a.indexOf('#/battle')+1&&document.querySelector('#hubbar a.on').getAttribute('href')==='#/h2h'}),'the page is the Compare hub tab after XI Battle, marked open');
+ ok(await pg.evaluate(([k,r])=>{const on=document.querySelector('#secnav button.on'),h=document.getElementById('hubbar'),cur=h.querySelector(':scope > a.on'),back=h.querySelector(':scope > .hb-back');return !!on&&on.dataset.k===r&&(cur?cur.getAttribute('href')==='#/'+k:true)&&(r==='home'||(!!back&&back.getAttribute('href')==='#/r-'+r))},['h2h','clubs']),'the page is in the clubs room: the room bar marks it, and the bar above it links back to the room and marks the page open');
  ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await ctx.close();
  {const c2=await b.newContext();await c2.route(/results\.json/,async r=>{await new Promise(z=>setTimeout(z,2500));r.continue()});const p2=await c2.newPage(),e2=[];p2.on('pageerror',e=>e2.push(e.message));
   await p2.goto('http://127.0.0.1:8765/index.html#/h2h');await p2.waitForSelector('#h2root',{timeout:60000});await p2.evaluate(()=>location.hash='#/table');await p2.waitForSelector('.lt',{timeout:60000});await p2.waitForTimeout(3500);

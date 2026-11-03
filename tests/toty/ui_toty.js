@@ -40,7 +40,7 @@ const LG='l_4WFCIZ';
  await pg.click('#tsf button[data-f="0.5"]');await pg.waitForTimeout(200);
  for(const f of ['4-4-2','3-5-2','5-4-1']){await pg.selectOption('#tsfm',f);await pg.waitForTimeout(250);const Y=xi(W,0.5,f);ok(Y.top&&same(await rowsOf(pg),Y)&&(await head(pg)).includes(f),'formation '+f+' chosen: the XI and the header match');}
  await pg.selectOption('#tsfm','');await pg.waitForTimeout(200);
- ok(await pg.evaluate(()=>{const a=[...document.querySelectorAll('#hubbar a')].map(x=>x.getAttribute('href'));return a.indexOf('#/toty')===a.indexOf('#/ratings')+1&&document.querySelector('#hubbar a.on').getAttribute('href')==='#/toty'}),'the page is the Players hub tab after Ratings, marked open');
+ ok(await pg.evaluate(([k,r])=>{const on=document.querySelector('#secnav button.on'),h=document.getElementById('hubbar'),cur=h.querySelector(':scope > a.on'),back=h.querySelector(':scope > .hb-back');return !!on&&on.dataset.k===r&&(cur?cur.getAttribute('href')==='#/'+k:true)&&(r==='home'||(!!back&&back.getAttribute('href')==='#/r-'+r))},['toty','players']),'the page is in the players room: the room bar marks it, and the bar above it links back to the room and marks the page open');
  ok(!!(await pg.$('#tsf .lgx-g')),'the minimum choice has the glass');
  /* the share image: a real PNG */
  {const [dl]=await Promise.all([pg.waitForEvent('download',{timeout:60000}),pg.click('.shr-btn[data-share="toty"]')]);const path=await dl.path(),fs=require('fs'),buf=fs.readFileSync(path);

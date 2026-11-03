@@ -84,7 +84,7 @@ function checkUp(got,W,club,label){
   ok(await pg.evaluate(()=>!document.querySelector('#cttb').hidden&&document.querySelector('#cttabs button[data-k="table"]').getAttribute('aria-pressed')==='true'),'the address #/club/<name>/table opens the Table tab');await ctx.close()}
  /* the Overview: the matches come first */
  {({ctx,pg,errs}=await open(b,{league:LL,hash:'#/overview'}));await pg.waitForSelector('#ovmb',{timeout:90000});await pg.waitForTimeout(500);
-  ok(await pg.evaluate(()=>{const w=document.querySelector('#ovw');return w.firstElementChild.id==='ovmb'&&w.children[1].id==='ovteams'}),'Overview: the matches board is the first block, "Your teams" comes after it');await ctx.close()}
+  ok(await pg.evaluate(()=>{const w=document.querySelector('#ovw');return w.firstElementChild.id==='ovmb'&&w.children[1].id==='ovx'&&w.children[2].id==='ovteams'}),'Overview: the matches board is the first block, then Explore, then "Your teams"');await ctx.close()}
  /* a club with no European matches */
  {const V='Valencia',Pv=past(V,LL,[]),Uv=upcoming(V,LL,new Set(Pv.map(p=>p.id)));({ctx,pg,errs}=await open(b,{league:LL,hash:'#/club/'+V+'/matches'}));await pg.waitForSelector('.ctm-m',{timeout:90000});await pg.waitForTimeout(500);
   checkPast(await rowsP(pg),Pv.slice(-6),V,V);ok(!(await pg.$('.ctm-tag')),V+': no competition tags');

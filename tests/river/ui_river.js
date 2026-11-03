@@ -44,7 +44,7 @@ const chips=pg=>pg.$$eval('.er-chip',a=>a.map(c=>({t:c.dataset.t,txt:c.textConte
  /* another league */
  const L2='l_0ErfuF';await pg.selectOption('#erg',L2);await pg.waitForTimeout(600);const W2=want(L2,'365'),g2=await lines(pg);
  ok(g2.length===W2.length&&W2.every(w=>{const x=g2.find(y=>y.t===w.t);return x&&x.n===w.n&&x.last===w.last}),'LaLiga, 12 months: '+W2.length+' clubs match the file');
- ok(await pg.evaluate(()=>{const a=[...document.querySelectorAll('#hubbar a')].map(x=>x.getAttribute('href'));return a.indexOf('#/river')===a.indexOf('#/elo')+1&&document.querySelector('#hubbar a.on').getAttribute('href')==='#/river'}),'the page is the tab after Club Elo in the Teams hub, marked open');
+ ok(await pg.evaluate(([k,r])=>{const on=document.querySelector('#secnav button.on'),h=document.getElementById('hubbar'),cur=h.querySelector(':scope > a.on'),back=h.querySelector(':scope > .hb-back');return !!on&&on.dataset.k===r&&(cur?cur.getAttribute('href')==='#/'+k:true)&&(r==='home'||(!!back&&back.getAttribute('href')==='#/r-'+r))},['river','clubs']),'the page is in the clubs room: the room bar marks it, and the bar above it links back to the room and marks the page open');
  ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await ctx.close();
  {const c2_=await b.newContext();await c2_.route(/elo_own\.json/,async r=>{await new Promise(z=>setTimeout(z,2500));r.continue()});const p2=await c2_.newPage(),e2=[];p2.on('pageerror',e=>e2.push(e.message));
   await p2.goto('http://127.0.0.1:8765/index.html#/river');await p2.waitForSelector('#errot',{timeout:60000});await p2.evaluate(()=>location.hash='#/table');await p2.waitForSelector('.lt',{timeout:60000});await p2.waitForTimeout(3500);

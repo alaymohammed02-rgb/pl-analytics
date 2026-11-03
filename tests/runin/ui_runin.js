@@ -62,7 +62,7 @@ const LG='l_4WFCIZ';
   const txt=clean(await pg.innerText('#ritest .ri-r')),bt=RT.check.filter(f=>Math.abs(RT.all[String(f)].d)>=1.96*RT.all[String(f)].se&&RT.all[String(f)].d<0).map(f=>Math.round(f*100)+'%');
   ok(txt.includes('Tested on '+RT.all['0.5'].seasons+' finished seasons')&&txt.includes('about '+RT.all['0.5'].spread.toFixed(1)+' points')&&(bt.length?txt.includes('beyond noise at '+bt.join(' and ')):/within noise/.test(txt)),'the card\'s sentence follows the numbers ("beyond noise at '+bt.join(' and ')+'")')}
  /* the same numbers recomputed from the file by an independent Python-free pass: the test file itself says the schedule helps late, so the page must not claim it early */
- ok(await pg.evaluate(()=>{const a=[...document.querySelectorAll('#hubbar a')].map(x=>x.getAttribute('href'));return a.indexOf('#/runin')===a.indexOf('#/race')+1&&document.querySelector('#hubbar a.on').getAttribute('href')==='#/runin'}),'the page is the Season hub tab after Title race, marked open');
+ ok(await pg.evaluate(([k,r])=>{const on=document.querySelector('#secnav button.on'),h=document.getElementById('hubbar'),cur=h.querySelector(':scope > a.on'),back=h.querySelector(':scope > .hb-back');return !!on&&on.dataset.k===r&&(cur?cur.getAttribute('href')==='#/'+k:true)&&(r==='home'||(!!back&&back.getAttribute('href')==='#/r-'+r))},['runin','league']),'the page is in the league room: the room bar marks it, and the bar above it links back to the room and marks the page open');
  ok(!!(await pg.$('#riso .lgx-g')),'the order choice has the glass');
  ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));
  /* every league */

@@ -51,7 +51,7 @@ function same(got,W){return got.length===W.length&&W.every((w,i)=>{const g=got[i
  /* another league */
  const L2='l_0ErfuF';await pg.selectOption('#ftg',L2);await pg.waitForTimeout(300);const c2=F.leagues[L2].seasons[F.leagues[L2].seasons.length-1].s;S=season(L2,c2);
  ok(same(await rowsOf(pg),want(S,'gap')),'LaLiga '+c2+': '+S.rows.length+' clubs match');
- ok(await pg.evaluate(()=>{const a=[...document.querySelectorAll('#hubbar a')].map(x=>x.getAttribute('href'));return a.indexOf('#/fortress')===a.indexOf('#/halves')+1&&document.querySelector('#hubbar a.on').getAttribute('href')==='#/fortress'}),'the page is the Teams hub tab after Halves, marked open');
+ ok(await pg.evaluate(([k,r])=>{const on=document.querySelector('#secnav button.on'),h=document.getElementById('hubbar'),cur=h.querySelector(':scope > a.on'),back=h.querySelector(':scope > .hb-back');return !!on&&on.dataset.k===r&&(cur?cur.getAttribute('href')==='#/'+k:true)&&(r==='home'||(!!back&&back.getAttribute('href')==='#/r-'+r))},['fortress','clubs']),'the page is in the clubs room: the room bar marks it, and the bar above it links back to the room and marks the page open');
  ok(!!(await pg.$('#ftso .lgx-g')),'the order choice has the glass');
  ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await ctx.close();
  {const c2_=await b.newContext();await c2_.route(/results\.json/,async r=>{await new Promise(z=>setTimeout(z,2500));r.continue()});const p2=await c2_.newPage(),e2=[];p2.on('pageerror',e=>e2.push(e.message));

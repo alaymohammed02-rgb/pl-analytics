@@ -14,7 +14,7 @@ const noScroll=pg=>pg.evaluate(()=>document.scrollingElement.scrollWidth-innerWi
 (async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  /* ---- English, desktop ---- */
  {const {ctx,pg,errs}=await open(b);
-  const nav=await pg.$$eval('#nav a',a=>a.map(x=>x.getAttribute('href'))),old=[...fs.readFileSync((process.env.PLREPO||__dirname+'/../..')+'/index.html','utf8').match(/PAGES=\[(.*?)\];/)[1].matchAll(/\['([a-z]+)'/g)].map(m=>'#/'+m[1]);
+  const nav=await pg.$$eval('#nav a',a=>a.map(x=>x.getAttribute('href'))),old=[...fs.readFileSync((process.env.PLREPO||__dirname+'/../..')+'/index.html','utf8').match(/PAGES=\[(.*?)\];/)[1].matchAll(/\['([a-z]+)'/g)].map(m=>'#/'+m[1]).filter(x=>!['#/looklike','#/data'].includes(x));   /* those two became tabs of Player twins and Settings (assets/merged.js) */
   /* the pages built into index.html (PAGES=[...]) keep their order in the menu; pages added later by the feature files sit between them */
   {const inNav=nav.filter(x=>old.includes(x));ok(JSON.stringify(inNav)===JSON.stringify(old)&&new Set(nav).size===nav.length&&nav.includes('#/whatif')&&nav.indexOf('#/lab')===nav.indexOf('#/fantasy')+1,'menu: Intelligence Lab right after Fantasy; the '+old.length+' built-in items all there, in order, no duplicates')}
   await pg.evaluate(()=>location.hash='#/lab');await pg.waitForSelector('.labtabs');ok(!!await pg.$('.labintro'),'first visit: a short introduction');

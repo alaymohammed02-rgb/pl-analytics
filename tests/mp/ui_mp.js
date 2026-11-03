@@ -36,7 +36,7 @@ function same(got,W,label){
   ok(+await pg.$eval('#mpcount',e=>e.dataset.n)===W.length,club+': the count is '+W.length)}
  await pg.selectOption('#mpc','');await pg.waitForTimeout(200);
  ok(await T.noscroll(pg),'phone: no horizontal scroll');
- ok(await pg.evaluate(()=>{const a=[...document.querySelectorAll('#hubbar a')].map(x=>x.getAttribute('href'));return a[0]==='#/matches'&&document.querySelector('#hubbar a.on').getAttribute('href')==='#/matches'}),'the page is still the first tab of the Matches hub');
+ ok(await pg.evaluate(([k,r])=>{const on=document.querySelector('#secnav button.on'),h=document.getElementById('hubbar'),cur=h.querySelector(':scope > a.on'),back=h.querySelector(':scope > .hb-back');return !!on&&on.dataset.k===r&&(cur?cur.getAttribute('href')==='#/'+k:true)&&(r==='home'||(!!back&&back.getAttribute('href')==='#/r-'+r))},['matches','league']),'the page is in the league room: the room bar marks it, and the bar above it links back to the room and marks the page open');
  ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));
  /* the kept choice: the next visit opens on Results */
  await pg.evaluate(()=>{location.hash='#/table'});await pg.waitForSelector('.lt',{timeout:60000});await pg.evaluate(()=>{location.hash='#/matches'});await pg.waitForSelector('#mptabs',{timeout:60000});await pg.waitForTimeout(300);

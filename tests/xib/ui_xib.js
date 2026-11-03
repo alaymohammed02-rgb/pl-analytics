@@ -59,7 +59,7 @@ const until=(pg,vs,p)=>pg.waitForFunction(([vs,p])=>{const v=[...document.queryS
  await pg.click('.bt-res ~ .card:last-child summary');
  const tb=await pg.evaluate(()=>[...document.querySelectorAll('.bt-lg tbody tr')].map(r=>[...r.cells].slice(1).map(x=>x.textContent.trim())));
  ok(JSON.stringify(tb)===JSON.stringify(Object.values(TS.per_league).map(v=>[String(v.n),v.brier.toFixed(3),v.elo.toFixed(3),v.base.toFixed(3)])),'the per-league table: '+tb.length+' leagues as in the file');
- ok(await pg.evaluate(()=>{const a=[...document.querySelectorAll('#hubbar a')].map(x=>x.getAttribute('href'));return a.includes('#/battle')&&a.includes('#/builder')&&document.querySelector('#hubbar a.on').getAttribute('href')==='#/battle'}),'the page is a tab of the Compare hub, marked open');
+ ok(await pg.evaluate(([k,r])=>{const on=document.querySelector('#secnav button.on'),h=document.getElementById('hubbar'),cur=h.querySelector(':scope > a.on'),back=h.querySelector(':scope > .hb-back');return !!on&&on.dataset.k===r&&(cur?cur.getAttribute('href')==='#/'+k:true)&&(r==='home'||(!!back&&back.getAttribute('href')==='#/r-'+r))},['battle','play']),'the page is in the play room: the room bar marks it, and the bar above it links back to the room and marks the page open');
  /* sharing */
  await pg.click('#btsh');const link=await pg.$eval('#btlk input',x=>x.value);
  ok(!(await pg.$eval('#btlk',x=>x.hidden))&&link.endsWith('#/battle/'+myIds.join('.')),'share: a link with my eleven players ('+link.slice(-40)+')');

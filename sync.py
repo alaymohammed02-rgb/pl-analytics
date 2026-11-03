@@ -1023,9 +1023,8 @@ async function api(p){
 }
 
 /* ---------- الصفحات ---------- */
-const PAGES=[['overview','Overview'],['players','Players'],['teams','Teams'],['matches','Matches'],['compare','Compare'],['tactical','Tactical'],['shots','Shots'],['passing','Passing'],['heatmaps','Heatmaps'],['rankings','Rankings'],['data','Data Availability'],['settings','Settings']];
+const PAGES=[['overview','Overview'],['players','Players'],['teams','Teams'],['matches','Matches'],['compare','Compare'],['shots','Shots'],['passing','Passing'],['heatmaps','Heatmaps'],['rankings','Rankings'],['data','Data Availability'],['settings','Settings']];
 const PLAN={
- tactical:['Tactical Analysis','Formations, starting positions, build-up and defensive activity.','Needs lineup positions and event data. Not inspected yet.'],
  shots:['Shot Analysis','Shot map, shot table, xG per shot and outcome filters.','PitchAPI lists a shots endpoint, but its response has not been inspected in this app yet.'],
  passing:['Passing Analysis','Pass maps and pass completion by zone.','Pass maps need start and end coordinates for each pass. Not confirmed from the provider.'],
  heatmaps:['Heatmaps','Player and team activity maps.','PitchAPI lists heatmap data, but the grid format has not been inspected yet.']};
@@ -7935,7 +7934,7 @@ function uiSearch(raw){
  /* every word you type must start a word of the name ("arsen" finds Arsenal, not Larsen) */
  const words=t.split(' ').filter(Boolean),hit=s=>{const n=' '+uiNz(s);return words.every(w=>n.includes(' '+w))},out=[];
  const lab=n=>(typeof ARL!=='undefined'&&ARL.on&&typeof arT==='function'&&arT(n))||n;
- PAGES.filter(([k,n])=>hit(n)||hit(lab(n))).slice(0,3).forEach(([k,n])=>out.push({g:'Pages',h:'#/'+k,t:esc(lab(n))}));
+ PAGES.filter(([k,n])=>hit(n)||hit(lab(n))||(typeof INS==='object'&&INS.rooms&&INS.rooms.pageHit(k,hit))).slice(0,5).forEach(([k,n])=>out.push({g:'Pages',h:'#/'+k,t:esc(lab(n))}));
  const clubs=[...new Set(D.matches.flatMap(m=>[m.home,m.away]))].filter(hit).sort().slice(0,5);
  clubs.forEach(c=>out.push({g:'Clubs',h:'#/club/'+encodeURIComponent(c),t:`${clubDot(c)}${esc(c)}`}));
  agg().filter(p=>hit(p.player)).sort((a,b)=>(b.minutes||0)-(a.minutes||0)).slice(0,7).forEach(p=>out.push({g:'Players',h:'#/player/'+encodeURIComponent(p.key+'||'+p.club),t:`${esc(p.player)} <span class="mu">${esc(p.club)}${p.pos?' · '+esc(p.pos):''}</span>`}));
@@ -9020,11 +9019,11 @@ INDEX = _x_fpx_index(INDEX)
 # الكود في ملفات مستقلة في المستودع: assets/*.js و assets/features.css و manifest.webmanifest و sw.js و assets/icons/.
 # هذا القسم يضيف روابطها للصفحة فقط (بعد السكربت الرئيسي، فتلقى R و PAGES جاهزة). غيّر FEATURES_V لما تتغير الملفات.
 # ============================================================================
-FEATURES_V = "87"
+FEATURES_V = "102"
 FEATURES_JS = ("pla-data", "share-card", "threat-map", "match-whatif", "player-page", "match-centre", "home-extra", "team-round",
-               "preview", "club-extra", "rankings-extra", "fantasy-extra", "insights-core", "hidden-gems", "player-dna", "team-dna",
+               "preview", "club-extra", "rankings-extra", "fantasy-extra", "insights-core", "rooms", "hidden-gems", "player-dna", "team-dna",
                "reality-check", "matches-board", "match-replay", "match-story", "overview", "press-height",
-               "season-sim", "luck-table", "player-twin", "player-cards", "beat-model", "rare-cases", "attack-share", "drawer", "tap-twice", "line-height", "league-pool", "game-states", "likely-xi", "club-twins", "carry-team", "report-card", "league-dna", "thrill", "defense-card", "press-card", "sb-press", "stat-stability", "keeps-up", "goalkeepers", "xi-builder", "player-prices", "xi-battle", "player-story", "time-machine", "ask", "wrapped", "levels", "club-elo", "title-race", "elo-river", "heartbeat", "club-shape", "fortress", "late-show", "run-in", "team-season", "notify", "team-calendar", "elo-kit", "rest-days", "value-points", "player-career", "head-to-head", "stakes", "guess-player", "bench-impact", "offline-note", "pitch3d", "recap", "stadium3d", "club-matches", "matches-page", "player-heat", "holo", "seasons", "liquid-glass")
+               "season-sim", "luck-table", "player-twin", "player-cards", "beat-model", "rare-cases", "attack-share", "drawer", "tap-twice", "line-height", "league-pool", "game-states", "likely-xi", "club-twins", "carry-team", "report-card", "league-dna", "thrill", "defense-card", "press-card", "sb-press", "stat-stability", "keeps-up", "goalkeepers", "xi-builder", "player-prices", "xi-battle", "player-story", "time-machine", "ask", "wrapped", "levels", "club-elo", "title-race", "elo-river", "heartbeat", "club-shape", "fortress", "late-show", "run-in", "team-season", "notify", "team-calendar", "elo-kit", "rest-days", "value-points", "player-career", "head-to-head", "stakes", "guess-player", "bench-impact", "offline-note", "pitch3d", "recap", "stadium3d", "club-matches", "matches-page", "player-heat", "merged", "holo", "seasons", "liquid-glass")
 
 
 def _x_feat_index(html):
@@ -12782,6 +12781,10 @@ def sync_tmach(hub, now=None):
         seasons = [(lab, el2_matches(hub, [f])) for lab, f in zip(labs, files)]
         if sum(len(ms) for _, ms in seasons) < 50:
             continue
+        if any(not ms for _, ms in seasons[:-1]):
+            # a finished season with no match is a failed read of its file, not a season without matches (3 Nov 2026: Premier League 2022-23 was written empty and the chain broke): keep the last good file
+            log(f"  [آلة الزمن] موسم منتهٍ بدون مباريات في {names.get(lid)} — قراءة فاشلة على الأرجح، أبقيت الملف السابق")
+            return
         chains[lid] = seasons
         key_src[lid] = [[lab, len(ms), max((m[0] for m in ms), default="")] for lab, ms in seasons]
     key = hashlib.sha1(json.dumps([key_src, EL2, TM_CHECK], sort_keys=True).encode()).hexdigest()[:10]
