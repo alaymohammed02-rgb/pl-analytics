@@ -23,6 +23,7 @@
   recap:['The full-time story reads the stories written for this season\'s matches.','قصة المباراة تقرأ القصص المكتوبة لمباريات هذا الموسم.'],
   runin:['The run-in uses today\'s ratings and the matches still to play this season.','باقي الموسم يستخدم تقييمات اليوم والمباريات اللي ما انلعبت بعد هذا الموسم.'],
   battle:['XI Battle uses the players\' numbers as of now.','معركة التشكيلات تستخدم أرقام اللاعبين الحالية.'],
+  value:['Squad values are today\'s dated market values, set against this season\'s table.','قيم التشكيلات هي القيم السوقية المؤرّخة الحالية، مقارنة بجدول هذا الموسم.'],
   rare:['Very rare cases are worked out by the sync for the current season only.','الحالات النادرة تنحسب في المزامنة للموسم الحالي فقط.']};
  function store(s,lid){
   // the choice stays on this device; if storage is blocked, it lasts for this tab only
