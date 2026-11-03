@@ -776,3 +776,13 @@ html[dir=rtl] .mp-hs .ctm-r{direction:rtl}
 .vl-lg{margin:4px 2px 0;font-size:12px}.vl-hd{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.vl-hd h3{margin:0}.vl-ord{margin:0}
 .vl-tw{overflow-x:auto}.vl-tb{width:100%;border-collapse:collapse;font-size:13.5px}.vl-tb th,.vl-tb td{padding:6px 8px;text-align:right;border-top:1px solid var(--ln);white-space:nowrap}.vl-tb th:first-child,.vl-tb td:first-child{text-align:left}html[dir=rtl] .vl-tb th,html[dir=rtl] .vl-tb td{text-align:left}html[dir=rtl] .vl-tb th:first-child,html[dir=rtl] .vl-tb td:first-child{text-align:right}
 .vl-up{color:#3ccf7a;font-weight:700}.vl-dn{color:#ff6b61;font-weight:700}.vl-sum p,.vl-all p{margin:4px 0}.vl-all{margin-top:10px}
+/* Player career (assets/player-career.js) */
+.pc-f{position:relative}.pc-f input{width:100%;min-height:44px;font-size:16px}.pc-sg{display:flex;flex-direction:column;gap:4px;margin-top:6px}.pc-s{display:block;padding:8px 10px;border-radius:10px;border:1px solid var(--ln);color:inherit;text-decoration:none}.pc-s:hover,.pc-s:focus-visible{border-color:var(--th-hi)}.pc-no{padding:6px 2px}
+.pc-ch{display:flex;flex-wrap:wrap;gap:8px}.pc-hd h3{margin:0 0 2px}.pc-pl{margin-top:8px;display:inline-block}.pc-n{font-size:13px}
+.pc-pg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:10px 0}.pc-pn{padding:10px 12px 6px}.pc-svg{width:100%;display:block}
+.pc-ax{stroke:var(--ln);stroke-width:.6}.pc-ln{fill:none;stroke:var(--th-hi);stroke-width:1.2;opacity:.8}.pc-pt circle{fill:var(--th-hi);stroke:var(--sf);stroke-width:.8}.pc-pt.thin circle{fill:none;stroke:var(--mu);stroke-width:1.2}
+.pc-v{font-size:7px;fill:var(--tx)}.pc-pt.thin .pc-v{fill:var(--mu)}.pc-x{font-size:7px;fill:var(--mu)}
+.pc-tw{overflow-x:auto}.pc-tb{width:100%;border-collapse:collapse;font-size:13px}.pc-tb th,.pc-tb td{padding:6px 7px;text-align:right;border-top:1px solid var(--ln);white-space:nowrap}.pc-tb th:nth-child(-n+4),.pc-tb td:nth-child(-n+4){text-align:left}html[dir=rtl] .pc-tb th,html[dir=rtl] .pc-tb td{text-align:left}html[dir=rtl] .pc-tb th:nth-child(-n+4),html[dir=rtl] .pc-tb td:nth-child(-n+4){text-align:right}
+.pc-tb tr.thin td{opacity:.6}.pc-mv{font-size:11px;padding:1px 6px;border-radius:999px;background:rgba(255,255,255,.1)}
+.pp-head .pc-link{display:inline-block;margin-top:8px}
+@media (max-width:860px){.pc-pg{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (max-width:520px){.pc-pg{grid-template-columns:1fr}}
