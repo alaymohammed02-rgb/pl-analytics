@@ -1,4 +1,4 @@
-/* ===== Menu drawer: one ☰ button in the header opens the ten hubs; the top links and the phone's bottom bar go =====
+/* ===== Menu drawer: one ☰ button in the header opens the site map: every room with its groups and pages (assets/rooms.js), and a box that filters them =====
    The hubs and their pages are read when the drawer opens (PAGES and UI_SEC, including pages other files add), so nothing
    is listed twice and no page is lost; the pages of a hub are tabs above the page (uiNav in the inline script). The home page stays the matches overview. The drawer opens from the reading side (left
    in English, right in Arabic), closes with ✕, the dimmed page behind it, Escape or any link, and gives focus back to ☰. */
@@ -30,9 +30,24 @@
    const go=()=>{location.hash='#/overview'};br.addEventListener('click',go);br.addEventListener('keydown',e=>{if(e.key==='Enter')go()})}
  }
  function fill(){
-  const c=cur();
+  const c=cur(),RM=typeof INS==='object'&&INS.rooms?INS.rooms:null;
+  if(RM){
+   /* the site map: every room, its groups and every page in it (nothing is left out: a page the table does not list goes to Home); a box filters the list */
+   const two=(en,ar)=>`<span class="fx-en">${en}</span><span class="fx-ar" dir="rtl">${ar}</span>`,here=RM.ENT.get(c),known=RM.known();
+   const extra=PAGES.filter(p=>!known.has(p[0]));
+   box.innerHTML=`<div class="drw-h"><b>PL Analytics</b><button type="button" class="s drw-x" aria-label="Close menu">✕</button></div>
+    <div class="drw-q"><input id="drwq" type="search" autocomplete="off" placeholder="Find a page" aria-label="Find a page"></div>
+    <nav class="drw-n" aria-label="Pages">${RM.ROOMS.map(r=>`<section class="drw-s" data-room="${r.k}"><h3><a href="${RM.href(r)}" data-hub="${r.k}"${here&&here.room===r?' data-here="1"':''}>${two(esc(r.n[0]),esc(r.n[1]))}</a></h3><ul>${r.groups.map(g=>`<li class="drw-gh">${two(esc(g.n[0]),esc(g.n[1]))}</li>`+g.p.map(e=>`<li data-k="${e[0]}"><a href="#/${e[0]}"${e[0]===c?' class="on" aria-current="page"':''}>${RM.label(e[0])}</a></li>`).join('')).join('')}${r.k==='home'?extra.map(p=>`<li data-k="${esc(p[0])}"><a href="#/${esc(p[0])}">${esc(p[1])}</a></li>`).join(''):''}</ul></section>`).join('')}</nav>`;
+   const q=box.querySelector('#drwq'),fold=x=>String(x||'').toLowerCase();
+   q.addEventListener('input',()=>{const w=fold(q.value).trim().split(/\s+/).filter(Boolean);
+    box.querySelectorAll('.drw-s').forEach(sec=>{let gh=null,ghAny=false,any=false;const flush=()=>{if(gh)gh.hidden=!!w.length&&!ghAny};
+     sec.querySelectorAll('ul > li').forEach(li=>{if(li.classList.contains('drw-gh')){flush();gh=li;ghAny=false;return}
+      const k=li.dataset.k,hit=!w.length||w.every(x=>fold(li.textContent).includes(x))||(RM.ENT.has(k)&&RM.pageHit(k,t=>w.every(y=>fold(t).includes(y))));li.hidden=!hit;if(hit){ghAny=true;any=true}});
+     flush();sec.hidden=!!w.length&&!any})});
+   box.querySelector('.drw-x').addEventListener('click',()=>open(false));
+   return;
+  }
   const S=secs(),hub=S.find(s=>s.p.some(([k])=>k===c))||S[0];
-  /* ten hubs, one link each (to the page last open in it, else its first); the pages of a hub are the tabs above the page */
   box.innerHTML=`<div class="drw-h"><b>PL Analytics</b><button type="button" class="s drw-x" aria-label="Close menu">✕</button></div>
    <nav class="drw-n" aria-label="Pages"><section class="drw-s" data-s="hubs"><ul>${S.filter(s=>s.p.length).map(s=>{const last=typeof UI_LAST==='object'&&UI_LAST?UI_LAST[s.k]:null,t=s.p.some(([k])=>k===last)?last:s.p[0][0];
     return `<li><a href="#/${esc(t)}" data-hub="${esc(s.k)}"${s===hub?' class="on" aria-current="page"':''}>${esc(s.n)}</a></li>`}).join('')}</ul></section></nav>`;
@@ -42,7 +57,7 @@
   if(!box)return;const R=document.documentElement;
   want=!!on;
   if(on){fill();box.hidden=false;ov.hidden=false;requestAnimationFrame(()=>{if(want)R.classList.add('dr-open')});btn.setAttribute('aria-expanded','true');
-   const f=box.querySelector('a.on')||box.querySelector('a');if(f)f.focus({preventScroll:false})}
+   const f=box.querySelector('#drwq')||box.querySelector('a.on')||box.querySelector('a');if(f)f.focus({preventScroll:false})}
   else{if(!R.classList.contains('dr-open')&&box.hidden)return;   /* also when closed again before the opening frame: want is false then */R.classList.remove('dr-open');btn.setAttribute('aria-expanded','false');
    const done=()=>{if(!R.classList.contains('dr-open')){box.hidden=true;ov.hidden=true}};
    if(matchMedia('(prefers-reduced-motion: reduce)').matches)done();else setTimeout(done,220);
