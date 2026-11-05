@@ -77,7 +77,8 @@
     P('sim','crystal','Play the rest of the season thousands of times: who wins?','العب باقي الموسم آلاف المرات: مين يفوز؟')]},
    {k:'stories',n:['Stories of the season','حكايات الموسم'],p:[
     P('heartbeat','line','How surprising was the season, match by match?','كم كان الموسم مفاجئ، مباراة بمباراة؟'),
-    P('rare','diamond','What happens about once a season, or less?','وش اللي يصير مرة بالموسم أو أقل؟')]}]},
+    P('rare','diamond','What happens about once a season, or less?','وش اللي يصير مرة بالموسم أو أقل؟'),
+    P('digest','calendar','The week in numbers: surprises, biggest wins, table movers, best ratings','الأسبوع بالأرقام: مفاجآت، أكبر انتصارات، متحركو الجدول، أفضل التقييمات')]}]},
   {k:'clubs',n:['Clubs','الأندية'],d:['Every club: how it plays, how strong it is, and who it resembles.','كل نادي: كيف يلعب وكم قوته ومين يشبهه.'],ic:'shield',groups:[
    {k:'profiles',n:['Club profiles','ملفات الأندية'],p:[
     P('teams','shield','Open any club: squad, results, table and what is next','افتح أي نادي: التشكيلة والنتائج والجدول والجاي'),
@@ -153,6 +154,7 @@
 /* extra words a person might type for a page (English and Arabic), beside its name and its answer: the menu's box and the search find a page by them too */
  const KW={sim:'title champions champion winner forecast odds probability simulation لقب بطل توقع احتمال محاكاة',stakes:'title relegation top four european places swing لقب هبوط',
   transfers:'transfer planner fantasy FPL wildcard captain price bank free transfer hit تحويلات فانتزي ميزانية',
+  digest:'weekly digest week summary surprises movers best ratings share picture ملخص الأسبوع مفاجآت',
   age:'age curves peak age decline young old ageing ذروة العمر تراجع صغار كبار',
   myclub:'my club favourite team next match form elo players in form ناديي فريقي المباراة القادمة',
   roles:'player roles style clusters playmaker ball winner winger striker how players play map أدوار اللاعبين أسلوب تجميع',

@@ -870,3 +870,7 @@ html[lang=en] body #langbtn{font-family:system-ui,-apple-system,"Segoe UI",Robot
 .ag-ctl{display:flex;flex-wrap:wrap;gap:10px}.ag-ch{width:100%;height:auto;max-height:340px;display:block}
 .ag-w{overflow-x:auto;max-width:100%}.ag-t td,.ag-tt td{white-space:nowrap}.ag-tt td:first-child{white-space:normal;min-width:150px}
 .ag-cav{padding-inline-start:20px;line-height:1.6}.ag-cav li{margin:6px 0}#agroot .card{min-width:0;max-width:100%}
+/* Weekly digest */
+.dg-ctl{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}.dg-k{display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:6px}.dg-k b{font-size:22px}
+.dg-l{list-style:none;margin:6px 0;padding:0}.dg-l li{padding:6px 0;border-bottom:1px solid var(--ln)}.dg-l li:last-child{border-bottom:0}
+.dg-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}#dgroot .card{min-width:0;max-width:100%}.dg-lt td{white-space:nowrap}.dg-lt{display:block;overflow-x:auto;max-width:100%}

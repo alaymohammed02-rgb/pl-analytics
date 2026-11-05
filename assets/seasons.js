@@ -25,6 +25,7 @@
   battle:['XI Battle uses the players\' numbers as of now.','معركة التشكيلات تستخدم أرقام اللاعبين الحالية.'],
   value:['Squad values are today\'s dated market values, set against this season\'s table.','قيم التشكيلات هي القيم السوقية المؤرّخة الحالية، مقارنة بجدول هذا الموسم.'],
   replace:['Replace him uses today\'s dated market values with this season\'s players.','صفحة البديل تستخدم القيم السوقية المؤرّخة الحالية مع لاعبي هذا الموسم.'],
+  digest:['The weekly digest summarises weeks of the season under way.','ملخص الأسبوع يلخص أسابيع الموسم الجاري.'],
   age:['Age curves use the finished seasons of the career file.','منحنيات العمر تستخدم المواسم المنتهية من ملف المسيرة.'],
   myclub:['My club follows the season under way.','صفحة ناديي تتابع الموسم الجاري.'],
   roles:['Player roles has its own two finished seasons.','أدوار اللاعبين فيها موسمين منتهيين خاصين بها.'],

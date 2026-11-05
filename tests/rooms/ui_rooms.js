@@ -7,7 +7,7 @@
 const T=require('../nf/lib.js');const {ok,J,IDX}=T;
 const PLAN=[
  ['home','Home',[['today',['overview','myclub','ask']],['site',['settings']]]],
- ['league','League',[['standings',['table','luck']],['matches',['matches','round','xi','stakes','whatif','thrill','states','late']],['race',['race','runin','sim']],['stories',['heartbeat','rare']]]],
+ ['league','League',[['standings',['table','luck']],['matches',['matches','round','xi','stakes','whatif','thrill','states','late']],['race',['race','runin','sim']],['stories',['heartbeat','rare','digest']]]],
  ['clubs','Clubs',[['profiles',['teams','shape','halves']],['strength',['elo','river','leaguedna','carry']],['compare',['h2h','clubtwins']],['home',['fortress','rest','value']]]],
  ['players','Players',[['find',['players','story','career']],['best',['rankings','ratings','toty','gems']],['compare',['compare','twins','roles']],['market',['prices','replace']],['repeat',['stability','keepsup','bench','age']]]],
  ['tactics','Tactics',[['attack',['shots','reality','heatmaps']],['defence',['defense','height','keepers']],['passing',['passing']],['pressing',['ppda']]]],
@@ -26,8 +26,8 @@ const txt=s=>s.replace(/[⁦-⁩‎‏]/g,'').replace(/\s+/g,' ').trim();
  let {ctx,pg,errs}=await open(b);
  /* every page once */
  const navAll=await pg.$$eval('#nav a',a=>a.map(x=>x.getAttribute('href').slice(2)));
- ok(ALLP.length===new Set(ALLP).size&&ALLP.length===67,'the plan has 67 pages, each once');
- ok(navAll.length===67&&ALLP.every(k=>navAll.includes(k))&&navAll.every(k=>ALLP.includes(k)),'the site\'s page list is exactly the plan\'s 67 pages: none lost, none left out of a room ('+navAll.filter(k=>!ALLP.includes(k)).join(',')+')');
+ ok(ALLP.length===new Set(ALLP).size&&ALLP.length===68,'the plan has 68 pages, each once');
+ ok(navAll.length===68&&ALLP.every(k=>navAll.includes(k))&&navAll.every(k=>ALLP.includes(k)),'the site\'s page list is exactly the plan\'s 68 pages: none lost, none left out of a room ('+navAll.filter(k=>!ALLP.includes(k)).join(',')+')');
  ok(!navAll.includes('tactical'),'the unfinished "Tactical" placeholder is gone');
  /* the room bar */
  const bar=sel=>pg.$$eval(sel+' button',a=>a.map(x=>[x.dataset.k,x.innerText.trim(),x.classList.contains('on')]));
@@ -75,7 +75,7 @@ const txt=s=>s.replace(/[⁦-⁩‎‏]/g,'').replace(/\s+/g,' ').trim();
  ok(dm.r.filter(x=>x.here).map(x=>x.room).join()==='league'&&dm.on==='#/table','the menu marks the open page ("League table") and its room');
  await pg.fill('#drwq','heat');await pg.waitForTimeout(250);let vis=await pg.$$eval('#drw li[data-k]:not([hidden])',a=>a.map(x=>x.dataset.k));
  ok(vis.includes('heatmaps')&&vis.length<10,'the menu\'s box filters: "heat" keeps Heatmaps ('+vis.join(',')+')');
- await pg.fill('#drwq','');await pg.waitForTimeout(200);ok((await pg.$$eval('#drw li[data-k]:not([hidden])',a=>a.length))===67,'clearing the box lists all 67 pages again');
+ await pg.fill('#drwq','');await pg.waitForTimeout(200);ok((await pg.$$eval('#drw li[data-k]:not([hidden])',a=>a.length))===68,'clearing the box lists all 68 pages again');
  await pg.evaluate(()=>drwOpen(false));await pg.waitForTimeout(400);
  /* search finds a page by what it answers */
  await go(pg,'#/overview',600);
