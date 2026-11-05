@@ -130,7 +130,8 @@
   {k:'play',n:['Play','العب'],d:['Fantasy, games, predictions and your season as a story.','الفانتازي والألعاب والتوقعات وموسمك كقصة.'],ic:'pad',groups:[
    {k:'fantasy',n:['Fantasy','الفانتازي'],p:[
     P('fantasy','star','Pick your Fantasy team with the best predictions','اختر فريق الفانتازي بأفضل التوقعات'),
-    P('share','coin','Who carries his team\'s attack, and at what price?','مين يحمل هجوم فريقه وبأي سعر؟')]},
+    P('share','coin','Who carries his team\'s attack, and at what price?','مين يحمل هجوم فريقه وبأي سعر؟'),
+    P('transfers','repeat','Which transfer adds the most Fantasy points over the next gameweeks?','أي تحويل يضيف أكثر نقاط فانتزي في الجولات القادمة؟')]},
    {k:'games',n:['Games','ألعاب'],p:[
     P('guess','question','One mystery player a day: guess in six tries','لاعب غامض كل يوم: خمّن في ست محاولات'),
     P('cards','cards','Player cards from real numbers, head to head','بطاقات لاعبين من أرقام حقيقية، وجهًا لوجه'),
@@ -148,6 +149,7 @@
  ROOMS.forEach(r=>r.groups.forEach(g=>g.p.forEach(e=>{ENT.set(e[0],{room:r,group:g,e});GRP.set(r.k+'-'+g.k,g)})));
 /* extra words a person might type for a page (English and Arabic), beside its name and its answer: the menu's box and the search find a page by them too */
  const KW={sim:'title champions champion winner forecast odds probability simulation لقب بطل توقع احتمال محاكاة',stakes:'title relegation top four european places swing لقب هبوط',
+  transfers:'transfer planner fantasy FPL wildcard captain price bank free transfer hit تحويلات فانتزي ميزانية',
   replace:'replacement alternative cheaper similar scouting transfer budget بديل أرخص شبيه ميزانية انتقال',
   ledger:'track record forecast predictions accuracy who will win odds bookmakers توقعات سجل دقة مين يفوز',
   prices:'market value worth price transfermarkt money سعر قيمة سوقية',career:'last season previous seasons history over the years past تاريخ مواسم سابقة الماضي',race:'title champions top of the table time machine any day back in time لقب آلة الزمن',
@@ -166,7 +168,7 @@
   players:['career','story','twins'],story:['career','cards','twins'],career:['stability','keepsup','story'],rankings:['ratings','gems','toty'],ratings:['toty','gems','cards'],gems:['twins','stability','prices'],
   twins:['compare','career','story'],stability:['keepsup','keepers','bench'],keepsup:['stability','career','prices'],prices:['replace','value','gems'],replace:['twins','prices','career'],
   shots:['reality','heatmaps','passing'],heatmaps:['shape','shots','defense'],defense:['height','keepers','ppda'],passing:['carry','shots','ppda'],ppda:['height','defense','keepers'],
-  fantasy:['share','beat','ratings'],beat:['lab','reportcard','ledger'],ledger:['reportcard','elo','battle'],cards:['builder','battle','story'],builder:['battle','cards','toty'],guess:['wrapped','cards','career'],wrapped:['story','guess','cards']};
+  fantasy:['transfers','share','beat'],transfers:['fantasy','share','ratings'],beat:['lab','reportcard','ledger'],ledger:['reportcard','elo','battle'],cards:['builder','battle','story'],builder:['battle','cards','toty'],guess:['wrapped','cards','career'],wrapped:['story','guess','cards']};
  /* ---------- the structure the rest of the site reads ---------- */
  const SEC=ROOMS.map(r=>{const g=r.groups.map(x=>({k:r.k+'-'+x.k,n:x.n[0],p:x.p.map(e=>e[0])}));return {k:r.k,n:r.n[0],g,p:(r.k==='home'?[]:[landing(r)]).concat(g.flatMap(x=>x.p)),
    ic:`<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${M[r.ic]}</g>`}});

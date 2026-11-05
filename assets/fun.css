@@ -842,3 +842,6 @@ html[lang=en] body #langbtn{font-family:system-ui,-apple-system,"Segoe UI",Robot
 /* Notifications card: how to make them pop up */
 .ntf-pop{margin:8px 0}.ntf-pop summary{cursor:pointer;font-weight:600}
 .ntf-steps{margin:6px 0;padding-inline-start:20px;font-size:13px;line-height:1.55}.ntf-steps li{margin:4px 0}
+/* Transfer planner: tables scroll inside their card on a phone */
+.tr-w{overflow-x:auto;max-width:100%}.tr-w table{min-width:0}.tr-t td,.tr-t th,.tr-tt td,.tr-tt th{white-space:nowrap}.tr-p td{white-space:normal}.tr-w{contain:paint}
+#trroot .card{min-width:0;max-width:100%;overflow-x:auto}
