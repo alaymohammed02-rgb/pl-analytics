@@ -19,7 +19,7 @@ function want(Q,fi){const t=tab(Q,fi),max=Math.max(1,...Q.weeks.map((_,i)=>tab(Q
 const slim=r=>({c:r.c,pos:r.pos,pts:r.pts,tr:r.tr,g:r.g,w:r.w,d:r.d,l:r.l,gd:r.gd,bar:r.bar,rank:r.rank});
 /* the lines: one per club, its points after weeks 0..fi, in the order of the table; end labels never overlap; no club buttons under the chart */
 const linesOf=pg=>pg.$$eval('.rc-svg .er-l',a=>a.map(g=>({c:g.dataset.t,pos:+g.dataset.pos,pts:g.dataset.pts,ly:+g.querySelector('.er-t').getAttribute('y')})));
-async function linesOk(pg,Q,fi){const L=await linesOf(pg),t=tab(Q,fi),want=t.map((x,i)=>({c:x.c,pos:i+1,pts:Q.weeks.slice(0,fi+1).map((_,k)=>tab(Q,k).find(y=>y.c===x.c).p).join(',')}));
+async function linesOk(pg,Q,fi){const L=(await linesOf(pg)).sort((a,b)=>a.pos-b.pos),t=tab(Q,fi),want=t.map((x,i)=>({c:x.c,pos:i+1,pts:Q.weeks.slice(0,fi+1).map((_,k)=>tab(Q,k).find(y=>y.c===x.c).p).join(',')}));
  const ys=L.map(l=>l.ly).sort((a,b)=>a-b),apart=ys.every((y,i)=>!i||y-ys[i-1]>=10.9);
  const chips=await pg.$$('.rc-ln .er-chip, .rc-ln .er-chips');
  return JSON.stringify(L.map(l=>({c:l.c,pos:l.pos,pts:l.pts})))===JSON.stringify(want)&&apart&&!chips.length}

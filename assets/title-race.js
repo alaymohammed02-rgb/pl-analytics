@@ -83,7 +83,7 @@
   root.querySelector('#rce').innerHTML=fin?(full?two(`<b>${esc(lead.t)}</b> are the champions with ${lead.p} points.`,`<b>${nm(lead.t)}</b> أبطال الدوري بـ${nb(lead.p)} نقطة.`):two(`<b>${esc(lead.t)}</b> lead with ${lead.p} points; the season is not over.`,`<b>${nm(lead.t)}</b> في الصدارة بـ${nb(lead.p)} نقطة؛ والموسم ما خلص.`)):'';
   const b=root.querySelector('#rcp');b.textContent=S.timer?'❚❚':(fin?'▶':'▶');b.setAttribute('aria-label',S.timer?(ar()?'إيقاف':'Pause'):(ar()?'تشغيل':'Play'));
  }
- /* the lines: every club's points after each week up to the chosen one, on a fixed axis of the whole season (the Elo river's look: same classes) */
+ /* the lines: every club's points after each week up to the chosen one, on a fixed axis of the whole season (the Elo river's look: same classes); the followed club is drawn last, on top, so its larger name is never under a neighbour's */
  const LW=760,LH=420,LML=34,LMR=154,LMT=12,LMB=26;
  const hue=(i,n)=>Math.round(i*360/n*.92+8);
  function lines(root,Q,fi){
@@ -100,7 +100,7 @@
    ${grid.map(v=>`<g class="er-g"><line x1="${LML}" x2="${LW-LMR}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"/><text x="${LML-6}" y="${(Y(v)+4).toFixed(1)}" text-anchor="end">${v}</text></g>`).join('')}
    ${mk.map(([m,k])=>`<text class="er-m" x="${X(k).toFixed(1)}" y="${LH-8}" text-anchor="middle">${m}</text>`).join('')}
    <line class="rc-now" x1="${X(fi).toFixed(1)}" x2="${X(fi).toFixed(1)}" y1="${LMT}" y2="${LH-LMB}"/>
-   ${T.map((t,i)=>{const c=`hsl(${hue(i,n)} 68% 58%)`,pts=[];for(let k=0;k<=fi;k++)pts.push(Q.fr[k].pm.get(t).p);
+   ${T.map((t,i)=>[t,i]).sort((a,b)=>(a[0]===hi)-(b[0]===hi)||a[1]-b[1]).map(([t,i])=>{const c=`hsl(${hue(i,n)} 68% 58%)`,pts=[];for(let k=0;k<=fi;k++)pts.push(Q.fr[k].pm.get(t).p);
     const d=pts.map((p,k)=>(k?'L':'M')+X(k).toFixed(1)+' '+Y(p).toFixed(1)).join(' '),p=pts[pts.length-1];
     return `<g class="er-l${hi?(hi===t?' hi':' dim'):''}" data-t="${esc(t)}" data-pts="${pts.join(',')}" data-pos="${i+1}" style="--c:${c};--i:${i}"><path class="er-p" d="${d}" pathLength="1"/><path class="er-hit" d="${d}"/>
      <circle cx="${X(fi).toFixed(1)}" cy="${Y(p).toFixed(1)}" r="3"/><text class="er-t" x="${(X(fi)+8).toFixed(1)}" y="${(ly.get(i)+3.5).toFixed(1)}">${esc(t)} ${p}</text></g>`}).join('')}
