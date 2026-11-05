@@ -7,7 +7,7 @@
    from the centres' strongest groups of measures, they are descriptions of numbers and not scouting labels. */
 (function(){
  if(typeof R!=='object'||typeof INS!=='object'||typeof INS.addPage!=='function')return;
- INS.addPage('roles','Player roles','players','compare');
+ INS.addPage('roles','Player roles','players','cards');
  const two=(en,ar)=>`<span class="fx-en">${en}</span><span class="fx-ar" dir="rtl">${ar}</span>`;
  const nb=x=>`<bdi dir="ltr">${x}</bdi>`,nm=x=>`<bdi>${esc(x)}</bdi>`;
  const COL=['#4cc9f0','#ffb703','#90be6d','#f72585','#b388ff','#ff7f50','#2ec4b6','#e9c46a'];
