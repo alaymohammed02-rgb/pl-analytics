@@ -21,7 +21,7 @@ const read=pg=>pg.evaluate(()=>[...document.querySelectorAll('.as-d')].map(g=>({
 (async()=>{const b=await chromium.launch({executablePath:process.env.CHROME||undefined});
  {const {ctx,pg,errs}=await open(b,{league:'l_0ErfuF'});await pg.waitForSelector('.as-t',{timeout:90000});
   ok(await pg.evaluate(()=>/Premier League/.test(D.name)),'opened from LaLiga: the Premier League opens (Fantasy is the Premier League)');
-  const nav=await pg.evaluate(()=>UI_SEC.find(x=>x.k==='play').g.find(g=>/fantasy/.test(g.k)).p.map(k=>'#/'+k));ok(nav.join()==='#/fantasy,#/share','in the Play room, Attack share is in the Fantasy group next to Fantasy');
+  const nav=await pg.evaluate(()=>UI_SEC.find(x=>x.k==='play').g.find(g=>/fantasy/.test(g.k)).p.map(k=>'#/'+k));ok(nav.join()==='#/fantasy,#/share,#/transfers','in the Play room, Attack share is in the Fantasy group next to Fantasy (then the Transfer planner)');
   const link=await pg.evaluate(()=>[...fpLink().map].map(([id,r])=>[id,r.player_id,r.player]));const LM=new Map(link.map(x=>[x[0],x]));
   for(const [pos,lab] of [[3,'Midfielders'],[4,'Forwards'],[2,'Defenders']])for(const win of ['all','4']){
    await pg.click(`[data-pos="${pos}"]`);await pg.selectOption('#aswin',win);await pg.waitForTimeout(250);

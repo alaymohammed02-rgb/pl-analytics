@@ -866,3 +866,7 @@ html[lang=en] body #langbtn{font-family:system-ui,-apple-system,"Segoe UI",Robot
 .mc-f{margin-inline-start:8px;display:inline-flex;gap:3px;vertical-align:middle}
 .mc-er{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px}.mc-rt{font-size:30px}.mc-er .up{color:#90be6d}.mc-er .dn{color:#ff7f50}.mc-sp{width:100%;height:auto;max-height:90px;display:block;margin-top:6px}
 .mc-pg{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}.mc-pg td{white-space:nowrap}
+/* Age curves */
+.ag-ctl{display:flex;flex-wrap:wrap;gap:10px}.ag-ch{width:100%;height:auto;max-height:340px;display:block}
+.ag-w{overflow-x:auto;max-width:100%}.ag-t td,.ag-tt td{white-space:nowrap}.ag-tt td:first-child{white-space:normal;min-width:150px}
+.ag-cav{padding-inline-start:20px;line-height:1.6}.ag-cav li{margin:6px 0}#agroot .card{min-width:0;max-width:100%}

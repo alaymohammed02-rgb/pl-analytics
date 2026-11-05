@@ -115,7 +115,8 @@
    {k:'repeat',n:['Does it repeat?','هل يتكرر؟'],p:[
     P('stability','repeat','Which numbers repeat from season to season, and which are luck?','أي الأرقام تتكرر من موسم لموسم وأيها حظ؟'),
     P('keepsup','line','Who is likely to keep it up next season?','مين المتوقع يحافظ على مستواه الموسم الجاي؟'),
-    P('bench','person','How much do substitutes really add?','كم يضيف البدلاء فعلًا؟')]}]},
+    P('bench','person','How much do substitutes really add?','كم يضيف البدلاء فعلًا؟'),
+    P('age','repeat','Do players peak at a certain age, and does age help predict next season?','هل اللاعبين يبلغون ذروتهم في عمر معين، وهل العمر يساعد في توقع الموسم القادم؟')]}]},
   {k:'tactics',n:['Tactics','التكتيك'],d:['How the game is played: shots, defending, passing and pressing.','كيف تُلعب المباراة: التسديدات والدفاع والتمرير والضغط.'],ic:'pitch',groups:[
    {k:'attack',n:['Attack','الهجوم'],p:[
     P('shots','target','Every shot on the pitch, with its xG','كل تسديدة على الملعب مع xG'),
@@ -152,6 +153,7 @@
 /* extra words a person might type for a page (English and Arabic), beside its name and its answer: the menu's box and the search find a page by them too */
  const KW={sim:'title champions champion winner forecast odds probability simulation لقب بطل توقع احتمال محاكاة',stakes:'title relegation top four european places swing لقب هبوط',
   transfers:'transfer planner fantasy FPL wildcard captain price bank free transfer hit تحويلات فانتزي ميزانية',
+  age:'age curves peak age decline young old ageing ذروة العمر تراجع صغار كبار',
   myclub:'my club favourite team next match form elo players in form ناديي فريقي المباراة القادمة',
   roles:'player roles style clusters playmaker ball winner winger striker how players play map أدوار اللاعبين أسلوب تجميع',
   replace:'replacement alternative cheaper similar scouting transfer budget بديل أرخص شبيه ميزانية انتقال',
