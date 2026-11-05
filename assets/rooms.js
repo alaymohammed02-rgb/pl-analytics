@@ -54,6 +54,7 @@
   {k:'home',n:['Home','الرئيسية'],d:['Today\'s matches, your teams and a way in to everything.','مباريات اليوم وفرقك وبداية لكل شي.'],ic:'home',groups:[
    {k:'today',n:['Today','اليوم'],p:[
     P('overview','calendar','Every match of the day, with your teams first','كل مباريات اليوم، وفريقك أول'),
+    P('myclub','star','My club: next match, chances, form, Elo and players in form on one screen','ناديي: المباراة القادمة، الفرص، الأداء، إيلو واللاعبين في أفضل حالاتهم في شاشة وحدة'),
     P('ask','question','Ask a question in plain words and get the numbers','اسأل بكلامك العادي وخذ الأرقام')]},
    {k:'site',n:['The site','الموقع'],p:[
     P('settings','gear','The leagues the site follows, when its data was updated, and which matches have complete data','الدوريات اللي يتابعها الموقع ووقت آخر تحديث، وأي مباريات بياناتها كاملة')]}]},
@@ -151,6 +152,7 @@
 /* extra words a person might type for a page (English and Arabic), beside its name and its answer: the menu's box and the search find a page by them too */
  const KW={sim:'title champions champion winner forecast odds probability simulation لقب بطل توقع احتمال محاكاة',stakes:'title relegation top four european places swing لقب هبوط',
   transfers:'transfer planner fantasy FPL wildcard captain price bank free transfer hit تحويلات فانتزي ميزانية',
+  myclub:'my club favourite team next match form elo players in form ناديي فريقي المباراة القادمة',
   roles:'player roles style clusters playmaker ball winner winger striker how players play map أدوار اللاعبين أسلوب تجميع',
   replace:'replacement alternative cheaper similar scouting transfer budget بديل أرخص شبيه ميزانية انتقال',
   ledger:'track record forecast predictions accuracy who will win odds bookmakers توقعات سجل دقة مين يفوز',
