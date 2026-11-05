@@ -6,12 +6,12 @@
    answers, "Where next?" under a page, Home (the Explore tiles, today's pick the same for everyone on one UTC day), Arabic and 390 px, a failing file, leaving the page early. */
 const T=require('../nf/lib.js');const {ok,J,IDX}=T;
 const PLAN=[
- ['home','Home',[['today',['overview','ask']],['site',['settings']]]],
- ['league','League',[['standings',['table','luck']],['matches',['matches','round','xi','stakes','whatif','thrill','states','late']],['race',['race','runin','sim']],['stories',['heartbeat','rare']]]],
+ ['home','Home',[['today',['overview','myclub','ask']],['site',['settings']]]],
+ ['league','League',[['standings',['table','luck']],['matches',['matches','round','xi','stakes','whatif','thrill','states','late']],['race',['race','runin','sim']],['stories',['heartbeat','rare','digest']]]],
  ['clubs','Clubs',[['profiles',['teams','shape','halves']],['strength',['elo','river','leaguedna','carry']],['compare',['h2h','clubtwins']],['home',['fortress','rest','value']]]],
- ['players','Players',[['find',['players','story','career']],['best',['rankings','ratings','toty','gems']],['compare',['compare','twins']],['market',['prices','replace']],['repeat',['stability','keepsup','bench']]]],
+ ['players','Players',[['find',['players','story','career']],['best',['rankings','ratings','toty','gems']],['compare',['compare','twins','roles']],['market',['prices','replace']],['repeat',['stability','keepsup','bench','age']]]],
  ['tactics','Tactics',[['attack',['shots','reality','heatmaps']],['defence',['defense','height','keepers']],['passing',['passing']],['pressing',['ppda']]]],
- ['play','Play',[['fantasy',['fantasy','share']],['games',['guess','cards','builder','battle']],['predict',['beat','lab','reportcard','ledger']],['stories',['wrapped']]]]];
+ ['play','Play',[['fantasy',['fantasy','share','transfers']],['games',['guess','cards','builder','battle']],['predict',['beat','lab','reportcard','ledger']],['stories',['wrapped']]]]];
 const ALLP=PLAN.flatMap(r=>r[2].flatMap(g=>g[1]));
 const roomOf=k=>PLAN.find(r=>r[2].some(g=>g[1].includes(k)));
 const grpOf=k=>roomOf(k)[2].find(g=>g[1].includes(k));
@@ -26,8 +26,8 @@ const txt=s=>s.replace(/[⁦-⁩‎‏]/g,'').replace(/\s+/g,' ').trim();
  let {ctx,pg,errs}=await open(b);
  /* every page once */
  const navAll=await pg.$$eval('#nav a',a=>a.map(x=>x.getAttribute('href').slice(2)));
- ok(ALLP.length===new Set(ALLP).size&&ALLP.length===63,'the plan has 63 pages, each once');
- ok(navAll.length===63&&ALLP.every(k=>navAll.includes(k))&&navAll.every(k=>ALLP.includes(k)),'the site\'s page list is exactly the plan\'s 63 pages: none lost, none left out of a room ('+navAll.filter(k=>!ALLP.includes(k)).join(',')+')');
+ ok(ALLP.length===new Set(ALLP).size&&ALLP.length===68,'the plan has 68 pages, each once');
+ ok(navAll.length===68&&ALLP.every(k=>navAll.includes(k))&&navAll.every(k=>ALLP.includes(k)),'the site\'s page list is exactly the plan\'s 68 pages: none lost, none left out of a room ('+navAll.filter(k=>!ALLP.includes(k)).join(',')+')');
  ok(!navAll.includes('tactical'),'the unfinished "Tactical" placeholder is gone');
  /* the room bar */
  const bar=sel=>pg.$$eval(sel+' button',a=>a.map(x=>[x.dataset.k,x.innerText.trim(),x.classList.contains('on')]));
@@ -75,7 +75,7 @@ const txt=s=>s.replace(/[⁦-⁩‎‏]/g,'').replace(/\s+/g,' ').trim();
  ok(dm.r.filter(x=>x.here).map(x=>x.room).join()==='league'&&dm.on==='#/table','the menu marks the open page ("League table") and its room');
  await pg.fill('#drwq','heat');await pg.waitForTimeout(250);let vis=await pg.$$eval('#drw li[data-k]:not([hidden])',a=>a.map(x=>x.dataset.k));
  ok(vis.includes('heatmaps')&&vis.length<10,'the menu\'s box filters: "heat" keeps Heatmaps ('+vis.join(',')+')');
- await pg.fill('#drwq','');await pg.waitForTimeout(200);ok((await pg.$$eval('#drw li[data-k]:not([hidden])',a=>a.length))===63,'clearing the box lists all 63 pages again');
+ await pg.fill('#drwq','');await pg.waitForTimeout(200);ok((await pg.$$eval('#drw li[data-k]:not([hidden])',a=>a.length))===68,'clearing the box lists all 68 pages again');
  await pg.evaluate(()=>drwOpen(false));await pg.waitForTimeout(400);
  /* search finds a page by what it answers */
  await go(pg,'#/overview',600);
@@ -97,7 +97,7 @@ const txt=s=>s.replace(/[⁦-⁩‎‏]/g,'').replace(/\s+/g,' ').trim();
   ok(await pg.$eval('#secbar',e=>{const s=getComputedStyle(e),r=e.getBoundingClientRect();return s.display!=='none'&&s.position==='fixed'&&Math.abs(r.bottom-innerHeight)<2&&e.querySelectorAll('button').length===6})&&await pg.$eval('#secnav',e=>getComputedStyle(e).display==='none'),lang+' phone: the six rooms are a bar fixed at the bottom; the top bar is hidden');
   ok(await pg.$$eval('#secbar button',a=>a.every(b=>{const r=b.getBoundingClientRect();return r.width>=48&&r.height>=44&&r.left>=0&&r.right<=innerWidth})),lang+' phone: every room button is big enough and inside the screen');
   await pg.click('#secbar button[data-k="players"]');await pg.waitForTimeout(2500);
-  ok(await pg.evaluate(()=>location.hash)==='#/r-players'&&await pg.$$eval('#rmg .rm-c',a=>a.length)===14,lang+' phone: the Players button opens its landing page with 14 cards');
+  ok(await pg.evaluate(()=>location.hash)==='#/r-players'&&await pg.$$eval('#rmg .rm-c',a=>a.length)===16,lang+' phone: the Players button opens its landing page with 16 cards');
   ok(await pg.$$eval('#rmg .rm-c',a=>a.every(c=>{const r=c.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth})),lang+' phone: every card fits the screen');
   ok(await pg.evaluate(()=>{const b=document.querySelector('#secbar').getBoundingClientRect(),l=[...document.querySelectorAll('#rmg .rm-c')].pop().getBoundingClientRect();window.scrollTo(0,document.body.scrollHeight);return true}),'');
   await pg.evaluate(()=>window.scrollTo(0,document.documentElement.scrollHeight));await pg.waitForTimeout(300);

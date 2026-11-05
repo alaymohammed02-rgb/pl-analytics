@@ -54,6 +54,7 @@
   {k:'home',n:['Home','الرئيسية'],d:['Today\'s matches, your teams and a way in to everything.','مباريات اليوم وفرقك وبداية لكل شي.'],ic:'home',groups:[
    {k:'today',n:['Today','اليوم'],p:[
     P('overview','calendar','Every match of the day, with your teams first','كل مباريات اليوم، وفريقك أول'),
+    P('myclub','star','My club: next match, chances, form, Elo and players in form on one screen','ناديي: المباراة القادمة، الفرص، الأداء، إيلو واللاعبين في أفضل حالاتهم في شاشة وحدة'),
     P('ask','question','Ask a question in plain words and get the numbers','اسأل بكلامك العادي وخذ الأرقام')]},
    {k:'site',n:['The site','الموقع'],p:[
     P('settings','gear','The leagues the site follows, when its data was updated, and which matches have complete data','الدوريات اللي يتابعها الموقع ووقت آخر تحديث، وأي مباريات بياناتها كاملة')]}]},
@@ -76,7 +77,8 @@
     P('sim','crystal','Play the rest of the season thousands of times: who wins?','العب باقي الموسم آلاف المرات: مين يفوز؟')]},
    {k:'stories',n:['Stories of the season','حكايات الموسم'],p:[
     P('heartbeat','line','How surprising was the season, match by match?','كم كان الموسم مفاجئ، مباراة بمباراة؟'),
-    P('rare','diamond','What happens about once a season, or less?','وش اللي يصير مرة بالموسم أو أقل؟')]}]},
+    P('rare','diamond','What happens about once a season, or less?','وش اللي يصير مرة بالموسم أو أقل؟'),
+    P('digest','calendar','The week in numbers: surprises, biggest wins, table movers, best ratings','الأسبوع بالأرقام: مفاجآت، أكبر انتصارات، متحركو الجدول، أفضل التقييمات')]}]},
   {k:'clubs',n:['Clubs','الأندية'],d:['Every club: how it plays, how strong it is, and who it resembles.','كل نادي: كيف يلعب وكم قوته ومين يشبهه.'],ic:'shield',groups:[
    {k:'profiles',n:['Club profiles','ملفات الأندية'],p:[
     P('teams','shield','Open any club: squad, results, table and what is next','افتح أي نادي: التشكيلة والنتائج والجدول والجاي'),
@@ -106,14 +108,16 @@
     P('gems','diamond','Strong players the goals and assists do not show','لاعبين أقوياء الأهداف والتمريرات الحاسمة ما تبين مستواهم')]},
    {k:'compare',n:['Compare and look-alikes','قارن وشبيه اللاعب'],p:[
     P('compare','scale','Put players or teams side by side on any measures','حط لاعبين أو أندية جنب بعض على أي مقاييس'),
-    P('twins','versus','Who plays most like him? The quick version, or pick the stats you care about','مين يلعب أكثر شي مثله؟ بالنسخة السريعة أو باختيار الإحصائيات اللي تهمك')]},
+    P('twins','versus','Who plays most like him? The quick version, or pick the stats you care about','مين يلعب أكثر شي مثله؟ بالنسخة السريعة أو باختيار الإحصائيات اللي تهمك'),
+    P('roles','versus','How do players really play? Six styles, and whether they stay the same','كيف يلعب اللاعبين فعلًا؟ ستة أساليب، وهل تبقى ثابتة')]},
    {k:'market',n:['Market','السوق'],p:[
     P('prices','coin','What are the players worth?','كم قيمة اللاعبين؟'),
     P('replace','repeat','Who plays most like him, for less money?','مين يلعب مثله بسعر أقل؟')]},
    {k:'repeat',n:['Does it repeat?','هل يتكرر؟'],p:[
     P('stability','repeat','Which numbers repeat from season to season, and which are luck?','أي الأرقام تتكرر من موسم لموسم وأيها حظ؟'),
     P('keepsup','line','Who is likely to keep it up next season?','مين المتوقع يحافظ على مستواه الموسم الجاي؟'),
-    P('bench','person','How much do substitutes really add?','كم يضيف البدلاء فعلًا؟')]}]},
+    P('bench','person','How much do substitutes really add?','كم يضيف البدلاء فعلًا؟'),
+    P('age','repeat','Do players peak at a certain age, and does age help predict next season?','هل اللاعبين يبلغون ذروتهم في عمر معين، وهل العمر يساعد في توقع الموسم القادم؟')]}]},
   {k:'tactics',n:['Tactics','التكتيك'],d:['How the game is played: shots, defending, passing and pressing.','كيف تُلعب المباراة: التسديدات والدفاع والتمرير والضغط.'],ic:'pitch',groups:[
    {k:'attack',n:['Attack','الهجوم'],p:[
     P('shots','target','Every shot on the pitch, with its xG','كل تسديدة على الملعب مع xG'),
@@ -130,7 +134,8 @@
   {k:'play',n:['Play','العب'],d:['Fantasy, games, predictions and your season as a story.','الفانتازي والألعاب والتوقعات وموسمك كقصة.'],ic:'pad',groups:[
    {k:'fantasy',n:['Fantasy','الفانتازي'],p:[
     P('fantasy','star','Pick your Fantasy team with the best predictions','اختر فريق الفانتازي بأفضل التوقعات'),
-    P('share','coin','Who carries his team\'s attack, and at what price?','مين يحمل هجوم فريقه وبأي سعر؟')]},
+    P('share','coin','Who carries his team\'s attack, and at what price?','مين يحمل هجوم فريقه وبأي سعر؟'),
+    P('transfers','repeat','Which transfer adds the most Fantasy points over the next gameweeks?','أي تحويل يضيف أكثر نقاط فانتزي في الجولات القادمة؟')]},
    {k:'games',n:['Games','ألعاب'],p:[
     P('guess','question','One mystery player a day: guess in six tries','لاعب غامض كل يوم: خمّن في ست محاولات'),
     P('cards','cards','Player cards from real numbers, head to head','بطاقات لاعبين من أرقام حقيقية، وجهًا لوجه'),
@@ -148,6 +153,11 @@
  ROOMS.forEach(r=>r.groups.forEach(g=>g.p.forEach(e=>{ENT.set(e[0],{room:r,group:g,e});GRP.set(r.k+'-'+g.k,g)})));
 /* extra words a person might type for a page (English and Arabic), beside its name and its answer: the menu's box and the search find a page by them too */
  const KW={sim:'title champions champion winner forecast odds probability simulation لقب بطل توقع احتمال محاكاة',stakes:'title relegation top four european places swing لقب هبوط',
+  transfers:'transfer planner fantasy FPL wildcard captain price bank free transfer hit تحويلات فانتزي ميزانية',
+  digest:'weekly digest week summary surprises movers best ratings share picture ملخص الأسبوع مفاجآت',
+  age:'age curves peak age decline young old ageing ذروة العمر تراجع صغار كبار',
+  myclub:'my club favourite team next match form elo players in form ناديي فريقي المباراة القادمة',
+  roles:'player roles style clusters playmaker ball winner winger striker how players play map أدوار اللاعبين أسلوب تجميع',
   replace:'replacement alternative cheaper similar scouting transfer budget بديل أرخص شبيه ميزانية انتقال',
   ledger:'track record forecast predictions accuracy who will win odds bookmakers توقعات سجل دقة مين يفوز',
   prices:'market value worth price transfermarkt money سعر قيمة سوقية',career:'last season previous seasons history over the years past تاريخ مواسم سابقة الماضي',race:'title champions top of the table time machine any day back in time لقب آلة الزمن',
@@ -164,9 +174,9 @@
  const NEXT={table:['race','sim','luck'],race:['sim','runin','stakes'],sim:['stakes','race','elo'],luck:['reality','states','table'],matches:['round','thrill','xi'],round:['toty','thrill','stakes'],
   teams:['shape','elo','h2h'],elo:['river','h2h','value'],h2h:['elo','clubtwins','fortress'],fortress:['rest','halves','value'],value:['prices','table','elo'],
   players:['career','story','twins'],story:['career','cards','twins'],career:['stability','keepsup','story'],rankings:['ratings','gems','toty'],ratings:['toty','gems','cards'],gems:['twins','stability','prices'],
-  twins:['compare','career','story'],stability:['keepsup','keepers','bench'],keepsup:['stability','career','prices'],prices:['replace','value','gems'],replace:['twins','prices','career'],
+  twins:['roles','compare','career'],roles:['twins','career','stability'],stability:['keepsup','keepers','bench'],keepsup:['stability','career','prices'],prices:['replace','value','gems'],replace:['twins','prices','career'],
   shots:['reality','heatmaps','passing'],heatmaps:['shape','shots','defense'],defense:['height','keepers','ppda'],passing:['carry','shots','ppda'],ppda:['height','defense','keepers'],
-  fantasy:['share','beat','ratings'],beat:['lab','reportcard','ledger'],ledger:['reportcard','elo','battle'],cards:['builder','battle','story'],builder:['battle','cards','toty'],guess:['wrapped','cards','career'],wrapped:['story','guess','cards']};
+  fantasy:['transfers','share','beat'],transfers:['fantasy','share','ratings'],beat:['lab','reportcard','ledger'],ledger:['reportcard','elo','battle'],cards:['builder','battle','story'],builder:['battle','cards','toty'],guess:['wrapped','cards','career'],wrapped:['story','guess','cards']};
  /* ---------- the structure the rest of the site reads ---------- */
  const SEC=ROOMS.map(r=>{const g=r.groups.map(x=>({k:r.k+'-'+x.k,n:x.n[0],p:x.p.map(e=>e[0])}));return {k:r.k,n:r.n[0],g,p:(r.k==='home'?[]:[landing(r)]).concat(g.flatMap(x=>x.p)),
    ic:`<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${M[r.ic]}</g>`}});

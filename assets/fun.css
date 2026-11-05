@@ -842,3 +842,35 @@ html[lang=en] body #langbtn{font-family:system-ui,-apple-system,"Segoe UI",Robot
 /* Notifications card: how to make them pop up */
 .ntf-pop{margin:8px 0}.ntf-pop summary{cursor:pointer;font-weight:600}
 .ntf-steps{margin:6px 0;padding-inline-start:20px;font-size:13px;line-height:1.55}.ntf-steps li{margin:4px 0}
+/* Transfer planner: tables scroll inside their card on a phone */
+.tr-w{overflow-x:auto;max-width:100%}.tr-w table{min-width:0}.tr-t td,.tr-t th,.tr-tt td,.tr-tt th{white-space:nowrap}.tr-p td{white-space:normal}.tr-w{contain:paint}
+#trroot .card{min-width:0;max-width:100%;overflow-x:auto}
+/* Player roles */
+.rl-ctl{display:flex;flex-wrap:wrap;gap:10px}.rl-q input{min-width:200px;max-width:100%}
+.rl-ch{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px}
+.rl-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--ln);border-radius:999px;background:transparent;color:inherit;font:inherit;font-size:13px;cursor:pointer}
+.rl-chip.on{border-color:var(--ac,#4cc9f0);box-shadow:0 0 0 1px var(--ac,#4cc9f0) inset}.rl-chip i,.rl-rh i,.rl-s i{display:inline-block;width:10px;height:10px;border-radius:50%}
+.rl-sw{display:inline-block;width:9px;height:9px;border-radius:50%;margin-inline-end:6px}
+.rl-map{width:100%;height:auto;max-height:440px;display:block}.rl-d{cursor:pointer}.rl-d.on{stroke:#fff;stroke-width:2}
+.rl-roles{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}.rl-r{border:1px solid var(--ln);border-radius:12px;padding:10px 12px;min-width:0}
+.rl-rh{display:flex;flex-wrap:wrap;align-items:center;gap:6px}.rl-top{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:6px;font-size:13px}.rl-m.up b{color:#90be6d}.rl-m.dn b{color:#ff7f50}
+.rl-ss{display:flex;flex-wrap:wrap;gap:6px 18px;margin:6px 0}.rl-s{display:inline-flex;align-items:center;gap:6px}
+.rl-nn,.rl-tt{display:block;overflow-x:auto;max-width:100%}.rl-nn td,.rl-tt td{white-space:nowrap}.rl-tt td:first-child{white-space:normal;min-width:180px}
+#rlroot .card{min-width:0;max-width:100%}
+/* My club */
+.mc-ctl{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+.mc-h{display:flex;align-items:center;gap:14px}.mc-h h3{margin:0}.mc-c{width:44px;height:44px;object-fit:contain}
+.mc-g{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}.mc-g .card{min-width:0;max-width:100%;overflow-x:auto;margin:0}
+.mc-m{margin:6px 0 10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}.mc-m a{display:inline-flex;align-items:center;gap:6px}.mc-m .mc-c{width:22px;height:22px}
+.mc-tt td,.mc-lr td{white-space:nowrap}.mc-lat{margin-top:8px;font-size:13px;line-height:1.7}
+.mc-f{margin-inline-start:8px;display:inline-flex;gap:3px;vertical-align:middle}
+.mc-er{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px}.mc-rt{font-size:30px}.mc-er .up{color:#90be6d}.mc-er .dn{color:#ff7f50}.mc-sp{width:100%;height:auto;max-height:90px;display:block;margin-top:6px}
+.mc-pg{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}.mc-pg td{white-space:nowrap}
+/* Age curves */
+.ag-ctl{display:flex;flex-wrap:wrap;gap:10px}.ag-ch{width:100%;height:auto;max-height:340px;display:block}
+.ag-w{overflow-x:auto;max-width:100%}.ag-t td,.ag-tt td{white-space:nowrap}.ag-tt td:first-child{white-space:normal;min-width:150px}
+.ag-cav{padding-inline-start:20px;line-height:1.6}.ag-cav li{margin:6px 0}#agroot .card{min-width:0;max-width:100%}
+/* Weekly digest */
+.dg-ctl{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}.dg-k{display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:6px}.dg-k b{font-size:22px}
+.dg-l{list-style:none;margin:6px 0;padding:0}.dg-l li{padding:6px 0;border-bottom:1px solid var(--ln)}.dg-l li:last-child{border-bottom:0}
+.dg-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}#dgroot .card{min-width:0;max-width:100%}.dg-lt td{white-space:nowrap}.dg-lt{display:block;overflow-x:auto;max-width:100%}
