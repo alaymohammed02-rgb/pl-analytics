@@ -17,12 +17,12 @@ const sgn=x=>(x>0?'+':x<0?'−':'')+Math.abs(x);
 const shown=pg=>pg.$$eval('.rc-row',a=>a.map(r=>({c:r.dataset.t,pos:+r.dataset.pos,pts:+r.dataset.pts,tr:r.style.transform,g:r.querySelector('.rc-p').textContent,w:r.querySelector('.rc-w').textContent,d:r.querySelector('.rc-d').textContent,l:r.querySelector('.rc-lo').textContent,gd:r.querySelector('.rc-gd').textContent,bar:parseFloat(r.querySelector('.rc-b i').style.width),mv:r.querySelector('.rc-mv').textContent,rank:r.querySelector('.rc-r').textContent})).sort((x,y)=>x.pos-y.pos));
 function want(Q,fi){const t=tab(Q,fi),max=Math.max(1,...Q.weeks.map((_,i)=>tab(Q,i)[0].p));return t.map((x,i)=>({c:x.c,pos:i+1,pts:x.p,tr:`translateY(${i*40}px)`,g:String(x.g),w:String(x.w),d:String(x.d),l:String(x.l),gd:sgn(x.gf-x.ga),bar:+(x.p/max*100).toFixed(2),rank:String(i+1)}))}
 const slim=r=>({c:r.c,pos:r.pos,pts:r.pts,tr:r.tr,g:r.g,w:r.w,d:r.d,l:r.l,gd:r.gd,bar:r.bar,rank:r.rank});
-/* the lines: one per club, its points after weeks 0..fi, in the order of the table; the chips likewise; end labels never overlap */
+/* the lines: one per club, its points after weeks 0..fi, in the order of the table; end labels never overlap; no club buttons under the chart */
 const linesOf=pg=>pg.$$eval('.rc-svg .er-l',a=>a.map(g=>({c:g.dataset.t,pos:+g.dataset.pos,pts:g.dataset.pts,ly:+g.querySelector('.er-t').getAttribute('y')})));
 async function linesOk(pg,Q,fi){const L=await linesOf(pg),t=tab(Q,fi),want=t.map((x,i)=>({c:x.c,pos:i+1,pts:Q.weeks.slice(0,fi+1).map((_,k)=>tab(Q,k).find(y=>y.c===x.c).p).join(',')}));
  const ys=L.map(l=>l.ly).sort((a,b)=>a-b),apart=ys.every((y,i)=>!i||y-ys[i-1]>=10.9);
- const chips=await pg.$$eval('.rc-chips .er-chip',a=>a.map(c=>c.dataset.t));
- return JSON.stringify(L.map(l=>({c:l.c,pos:l.pos,pts:l.pts})))===JSON.stringify(want)&&apart&&JSON.stringify(chips)===JSON.stringify(t.map(x=>x.c))}
+ const chips=await pg.$$('.rc-ln .er-chip, .rc-ln .er-chips');
+ return JSON.stringify(L.map(l=>({c:l.c,pos:l.pos,pts:l.pts})))===JSON.stringify(want)&&apart&&!chips.length}
 const setWeek=async(pg,i)=>{await pg.$eval('#rcw',(e,v)=>{e.value=String(v);e.dispatchEvent(new Event('input'))},i);await pg.waitForTimeout(200)};
 (async()=>{const b=await T.launch();
  const LG='l_4WFCIZ',cur=F.leagues[LG].seasons[F.leagues[LG].seasons.length-1].s;
@@ -35,7 +35,7 @@ const setWeek=async(pg,i)=>{await pg.$eval('#rcw',(e,v)=>{e.value=String(v);e.di
  await pg.click('#rcvw button[data-v="table"]');await pg.waitForTimeout(300);
  ok(await pg.$$eval('.rc-row',a=>a.every(r=>{const p=+r.dataset.pos;return Math.abs(r.getBoundingClientRect().top-a.find(x=>x.dataset.pos==='1').getBoundingClientRect().top-(p-1)*40)<=1.5})),'every row sits at its place in the list (40 px apart, in order of position)');
  await pg.click('#rcvw button[data-v="lines"]');await pg.waitForTimeout(300);
- ok(await pg.$eval('.rc-card',e=>e.classList.contains('rc-v-lines'))&&await linesOk(pg,Q,last),'Lines (the first view): one line per club ('+Q.teams.length+'), each the club\'s points after every week of '+cur+', in the order of the table, the end labels apart, the clubs under it in order');
+ ok(await pg.$eval('.rc-card',e=>e.classList.contains('rc-v-lines'))&&await linesOk(pg,Q,last),'Lines (the first view): one line per club ('+Q.teams.length+'), each the club\'s points after every week of '+cur+', in the order of the table, the end labels apart, no club buttons under it');
  ok(/Week to \d{4}-\d\d-\d\d · \d+ of \d+ matches/.test(await pg.innerText('#rcl'))&&(await pg.innerText('#rcl')).includes(Q.N+' of '+Q.N+' matches'),'the label names the week and the matches played ('+Q.N+' of '+Q.N+')');
  ok(!/champions/.test(await pg.innerText('#rce'))&&/lead with/.test(await pg.innerText('#rce')),'an unfinished season says who leads, not who won');
  /* a middle week, then the next one: the move marks */
@@ -61,10 +61,10 @@ const setWeek=async(pg,i)=>{await pg.$eval('#rcw',(e,v)=>{e.value=String(v);e.di
  ok(await pg.$eval('#rcp',e=>e.textContent)==='▶'&&+await pg.$eval('#rcw',e=>e.value)===lf,'it stops by itself on the last week and the button shows play again');
  /* views */
  ok(await pg.$eval('.rc-ln',e=>getComputedStyle(e).display!=='none')&&await pg.$eval('#rcl2',e=>getComputedStyle(e).display==='none')&&await pg.$eval('.rc-h',e=>getComputedStyle(e).display==='none'),'Lines: the chart is shown, the table and its header are not');
- /* following a club in the lines: a chip keeps it (the table follows too), hovering a line only previews it */
- {const L0=await linesOf(pg),t2=L0[1].c;await pg.click('.rc-chips .er-chip[data-t="'+t2+'"]');await pg.waitForTimeout(250);
-  ok(await pg.evaluate(t=>[...document.querySelectorAll('.rc-svg .er-l')].every(g=>g.classList.contains('hi')===(g.dataset.t===t)&&g.classList.contains('dim')===(g.dataset.t!==t))&&document.querySelector('.rc-chips .er-chip[data-t="'+CSS.escape(t)+'"]').getAttribute('aria-pressed')==='true'&&[...document.querySelectorAll('.rc-row')].every(r=>r.classList.contains('rc-pin')===(r.dataset.t===t)),t2),'pressing '+t2+' follows it: its line stands out, the others fade, its chip is pressed and the table follows it too');
-  await pg.click('.rc-chips .er-chip[data-t="'+t2+'"]');await pg.mouse.move(2,2);await pg.waitForTimeout(200);ok(await pg.$$eval('.rc-svg .er-l.hi,.rc-svg .er-l.dim,.rc-row.rc-pin',a=>!a.length),'pressing it again lets it go');
+ /* following a club in the lines: clicking its name at the end of its line keeps it (the table follows too), hovering a line only previews it */
+ {const L0=await linesOf(pg),t2=L0[1].c;await pg.click('.rc-svg .er-l[data-t="'+t2+'"] .er-t');await pg.waitForTimeout(250);
+  ok(await pg.evaluate(t=>[...document.querySelectorAll('.rc-svg .er-l')].every(g=>g.classList.contains('hi')===(g.dataset.t===t)&&g.classList.contains('dim')===(g.dataset.t!==t))&&[...document.querySelectorAll('.rc-row')].every(r=>r.classList.contains('rc-pin')===(r.dataset.t===t)),t2),'clicking '+t2+'\'s line follows it: its line stands out, the others fade and the table follows it too');
+  await pg.click('.rc-svg .er-l[data-t="'+t2+'"] .er-t');await pg.mouse.move(2,2);await pg.waitForTimeout(200);ok(await pg.$$eval('.rc-svg .er-l.hi,.rc-svg .er-l.dim,.rc-row.rc-pin',a=>!a.length),'clicking it again lets it go');
   const t4=L0[3].c;await pg.hover('.rc-svg .er-l[data-t="'+t4+'"] .er-t');await pg.waitForTimeout(150);ok(await pg.$eval('.rc-svg .er-l[data-t="'+t4+'"]',g=>g.classList.contains('hi'))&&await pg.$$eval('.rc-row.rc-pin',a=>!a.length),'hovering '+t4+'\'s line previews it without keeping it');
   await pg.mouse.move(2,2);await pg.waitForTimeout(150);ok(await pg.$$eval('.rc-svg .er-l.hi',a=>!a.length),'moving away lets the preview go')}
  await pg.click('#rcvw button[data-v="table"]');await pg.waitForTimeout(400);

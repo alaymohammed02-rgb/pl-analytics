@@ -104,8 +104,7 @@
     const d=pts.map((p,k)=>(k?'L':'M')+X(k).toFixed(1)+' '+Y(p).toFixed(1)).join(' '),p=pts[pts.length-1];
     return `<g class="er-l${hi?(hi===t?' hi':' dim'):''}" data-t="${esc(t)}" data-pts="${pts.join(',')}" data-pos="${i+1}" style="--c:${c};--i:${i}"><path class="er-p" d="${d}" pathLength="1"/><path class="er-hit" d="${d}"/>
      <circle cx="${X(fi).toFixed(1)}" cy="${Y(p).toFixed(1)}" r="3"/><text class="er-t" x="${(X(fi)+8).toFixed(1)}" y="${(ly.get(i)+3.5).toFixed(1)}">${esc(t)} ${p}</text></g>`}).join('')}
-  </svg>
-  <div class="er-chips rc-chips" role="group" aria-label="${ar()?'الأندية':'Clubs'}">${T.map((t,i)=>`<button type="button" class="er-chip${S.pin===t?' on':''}" data-t="${esc(t)}" aria-pressed="${S.pin===t}" style="--c:hsl(${hue(i,n)} 68% 58%)"><i></i><span class="mu">${nb(i+1)}</span> ${nm(t)} <b>${nb(f.pm.get(t).p)}</b></button>`).join('')}</div>`;
+  </svg>`;
  }
  function wire(root,F,Q){
   const q=s=>root.querySelector(s);
@@ -120,14 +119,12 @@
   q('#rcw').oninput=e=>{stop();go(+e.target.value,1)};
   root.querySelectorAll('#rcspd button').forEach(b=>b.onclick=()=>{S.speed=+b.dataset.s;const run=!!S.timer;stop();draw(root,F);if(run)root.querySelector('#rcp').click()});
   root.querySelectorAll('#rcvw button').forEach(b=>b.onclick=()=>{S.view=b.dataset.v;root.querySelector('.rc-card').classList.toggle('rc-v-lines',S.view==='lines');root.querySelectorAll('#rcvw button').forEach(x=>{x.classList.toggle('on',x===b);x.setAttribute('aria-pressed',String(x===b))});if(S.view==='lines'){S.anim=true;lines(root,Q,S.fi)}});
-  /* the lines: hover a line or a club to follow it (only classes change), click to keep it (the table follows too) */
+  /* the lines: hover a line or its name to preview it (only classes change), click to keep it (the table follows too); no club chips under the chart (owner asked 5 Nov 2026: they made the page long for nothing) */
   const ln=q('#rcln');
   const mark=()=>{const h=S.pin||S.hov;ln.querySelectorAll('.er-l').forEach(g=>{g.classList.toggle('hi',!!h&&g.dataset.t===h);g.classList.toggle('dim',!!h&&g.dataset.t!==h)});const sv=ln.querySelector('.er-svg');if(sv)sv.classList.remove('er-draw')};
-  ln.addEventListener('pointerover',e=>{const g=e.target.closest('.er-l,.er-chip');const t=g?g.dataset.t:'';if(t!==S.hov){S.hov=t;mark()}});
+  ln.addEventListener('pointerover',e=>{const g=e.target.closest('.er-l');const t=g?g.dataset.t:'';if(t!==S.hov){S.hov=t;mark()}});
   ln.addEventListener('pointerleave',()=>{S.hov='';mark()});
-  ln.addEventListener('focusin',e=>{const c=e.target.closest('.er-chip');if(c){S.hov=c.dataset.t;mark()}});
-  ln.addEventListener('focusout',()=>{S.hov='';mark()});
-  ln.addEventListener('click',e=>{const g=e.target.closest('.er-l,.er-chip');if(!g)return;const t=g.dataset.t;S.pin=S.pin===t?'':t;show(root,Q,S.fi,0);const c=ln.querySelector(`.er-chip[data-t="${CSS.escape(t)}"]`);if(c&&e.detail===0)c.focus()});
+  ln.addEventListener('click',e=>{const g=e.target.closest('.er-l');if(!g)return;const t=g.dataset.t;S.pin=S.pin===t?'':t;show(root,Q,S.fi,0)});
   const pin=r=>{const t=r.dataset.t;S.pin=S.pin===t?'':t;show(root,Q,S.fi,0)};
   root.querySelectorAll('.rc-row').forEach(r=>{r.onclick=()=>pin(r);r.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pin(r)}}});
   /* leaving the page stops the clock */
