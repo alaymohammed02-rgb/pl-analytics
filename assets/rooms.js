@@ -106,7 +106,8 @@
     P('gems','diamond','Strong players the goals and assists do not show','لاعبين أقوياء الأهداف والتمريرات الحاسمة ما تبين مستواهم')]},
    {k:'compare',n:['Compare and look-alikes','قارن وشبيه اللاعب'],p:[
     P('compare','scale','Put players or teams side by side on any measures','حط لاعبين أو أندية جنب بعض على أي مقاييس'),
-    P('twins','versus','Who plays most like him? The quick version, or pick the stats you care about','مين يلعب أكثر شي مثله؟ بالنسخة السريعة أو باختيار الإحصائيات اللي تهمك')]},
+    P('twins','versus','Who plays most like him? The quick version, or pick the stats you care about','مين يلعب أكثر شي مثله؟ بالنسخة السريعة أو باختيار الإحصائيات اللي تهمك'),
+    P('roles','versus','How do players really play? Six styles, and whether they stay the same','كيف يلعب اللاعبين فعلًا؟ ستة أساليب، وهل تبقى ثابتة')]},
    {k:'market',n:['Market','السوق'],p:[
     P('prices','coin','What are the players worth?','كم قيمة اللاعبين؟'),
     P('replace','repeat','Who plays most like him, for less money?','مين يلعب مثله بسعر أقل؟')]},
@@ -150,6 +151,7 @@
 /* extra words a person might type for a page (English and Arabic), beside its name and its answer: the menu's box and the search find a page by them too */
  const KW={sim:'title champions champion winner forecast odds probability simulation لقب بطل توقع احتمال محاكاة',stakes:'title relegation top four european places swing لقب هبوط',
   transfers:'transfer planner fantasy FPL wildcard captain price bank free transfer hit تحويلات فانتزي ميزانية',
+  roles:'player roles style clusters playmaker ball winner winger striker how players play map أدوار اللاعبين أسلوب تجميع',
   replace:'replacement alternative cheaper similar scouting transfer budget بديل أرخص شبيه ميزانية انتقال',
   ledger:'track record forecast predictions accuracy who will win odds bookmakers توقعات سجل دقة مين يفوز',
   prices:'market value worth price transfermarkt money سعر قيمة سوقية',career:'last season previous seasons history over the years past تاريخ مواسم سابقة الماضي',race:'title champions top of the table time machine any day back in time لقب آلة الزمن',
@@ -166,7 +168,7 @@
  const NEXT={table:['race','sim','luck'],race:['sim','runin','stakes'],sim:['stakes','race','elo'],luck:['reality','states','table'],matches:['round','thrill','xi'],round:['toty','thrill','stakes'],
   teams:['shape','elo','h2h'],elo:['river','h2h','value'],h2h:['elo','clubtwins','fortress'],fortress:['rest','halves','value'],value:['prices','table','elo'],
   players:['career','story','twins'],story:['career','cards','twins'],career:['stability','keepsup','story'],rankings:['ratings','gems','toty'],ratings:['toty','gems','cards'],gems:['twins','stability','prices'],
-  twins:['compare','career','story'],stability:['keepsup','keepers','bench'],keepsup:['stability','career','prices'],prices:['replace','value','gems'],replace:['twins','prices','career'],
+  twins:['roles','compare','career'],roles:['twins','career','stability'],stability:['keepsup','keepers','bench'],keepsup:['stability','career','prices'],prices:['replace','value','gems'],replace:['twins','prices','career'],
   shots:['reality','heatmaps','passing'],heatmaps:['shape','shots','defense'],defense:['height','keepers','ppda'],passing:['carry','shots','ppda'],ppda:['height','defense','keepers'],
   fantasy:['transfers','share','beat'],transfers:['fantasy','share','ratings'],beat:['lab','reportcard','ledger'],ledger:['reportcard','elo','battle'],cards:['builder','battle','story'],builder:['battle','cards','toty'],guess:['wrapped','cards','career'],wrapped:['story','guess','cards']};
  /* ---------- the structure the rest of the site reads ---------- */

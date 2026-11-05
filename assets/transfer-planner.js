@@ -48,7 +48,7 @@
  }
  INS.transfers={plan,build:null};
  if(typeof fpLoad!=='function'||typeof pmPredictAll!=='function')return;
- INS.addPage('transfers','Transfer planner','fpl','fantasy');
+ INS.addPage('transfers','Transfer planner','fpl','lab');
  const two=(en,ar)=>`<span class="fx-en">${en}</span><span class="fx-ar" dir="rtl">${ar}</span>`;
  const nb=x=>`<bdi dir="ltr">${x}</bdi>`,nm=x=>`<bdi>${esc(x)}</bdi>`;
  const ar=()=>typeof ARL==='object'&&!!ARL.on;
