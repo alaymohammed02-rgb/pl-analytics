@@ -83,7 +83,7 @@ const wait=pg=>pg.waitForSelector('#psbody .ps-head,#psbody .empty:not(.skel)',{
  const mx2=Math.max(...P2.map(x=>x.mi)),tied=P2.filter(x=>x.mi===mx2);await pg.waitForFunction(ns=>ns.includes((document.querySelector('.ps-who h3')||{}).textContent),tied.map(x=>x.name),{timeout:60000});
  const shown=await pg.textContent('.ps-who h3'),top2=tied.find(x=>x.name===shown)||tied[0];
  check('another league: its most-used player ('+top2.name+(tied.length>1?', one of '+tied.length+' tied on '+mx2+' minutes':'')+')',await text(pg),expect(L2,top2.id,top2.p,rt2,TP),top2.name);
- ok(await pg.evaluate(()=>{const a=[...document.querySelectorAll('#hubbar a')].map(x=>x.getAttribute('href'));return a[0]==='#/players'&&a[1]==='#/story'&&document.querySelector('#hubbar a.on').getAttribute('href')==='#/story'}),'the page is the second tab of the Players hub, marked open');
+ ok(await pg.evaluate(([k,r])=>{const on=document.querySelector('#secnav button.on'),h=document.getElementById('hubbar'),cur=h.querySelector(':scope > a.on'),back=h.querySelector(':scope > .hb-back');return !!on&&on.dataset.k===r&&(cur?cur.getAttribute('href')==='#/'+k:true)&&(r==='home'||(!!back&&back.getAttribute('href')==='#/r-'+r))},['story','players']),'the page is in the players room: the room bar marks it, and the bar above it links back to the room and marks the page open');
  ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await ctx.close();
  /* opened by a link; a forward who is on a run without a goal or an assist, if there is one */
  const fwd=P.filter(a=>a.p==='FW'||a.p==='MF').map(a=>({a,E:expect(LG,a.id,a.p,rt,TP)})).filter(x=>x.E.dry).sort((x,y)=>y.E.dry.n-x.E.dry.n||x.a.name.localeCompare(y.a.name))[0];

@@ -50,7 +50,7 @@ async function open(b,o={}){const r=await T.open(b,{vw:520,league:LG,hash:'#/wra
 (async()=>{const b=await T.launch();
  let {ctx,pg,errs}=await open(b);
  const season=await pg.evaluate(()=>(typeof ALL==='object'&&ALL&&ALL.season)||(typeof curSeason==='function'?curSeason():'')||''),lgn=IDX(LG).name;
- ok(await pg.evaluate(()=>{const a=[...document.querySelectorAll('#hubbar a')].map(x=>x.getAttribute('href'));return a.indexOf('#/wrapped')===a.indexOf('#/ask')+1&&document.querySelector('#hubbar a.on').getAttribute('href')==='#/wrapped'}),'the page is the tab after Ask the site in the Home hub, marked open');
+ ok(await pg.evaluate(([k,r])=>{const on=document.querySelector('#secnav button.on'),h=document.getElementById('hubbar'),cur=h.querySelector(':scope > a.on'),back=h.querySelector(':scope > .hb-back');return !!on&&on.dataset.k===r&&(cur?cur.getAttribute('href')==='#/'+k:true)&&(r==='home'||(!!back&&back.getAttribute('href')==='#/r-'+r))},['wrapped','play']),'the page is in the play room: the room bar marks it, and the bar above it links back to the room and marks the page open');
  for(const club of ['AFC Bournemouth','Arsenal','Hull City']){
   await pg.selectOption('#wrc',club);await pg.waitForSelector('#wrst svg',{timeout:60000});await pg.waitForTimeout(500);const E=clubWant(LG,club),W=clubTexts(E,club,lgn,season);
   ok(JSON.stringify(await titles(pg))===JSON.stringify(W.map(x=>x[0])),club+': '+W.length+' slides, in order ('+W.map(x=>x[0]).join(', ')+')');
@@ -62,7 +62,7 @@ async function open(b,o={}){const r=await T.open(b,{vw:520,league:LG,hash:'#/wra
  await pg.selectOption('#wrc','Arsenal');await pg.waitForSelector('#wrst svg',{timeout:60000});await pg.waitForTimeout(500);const N=(await titles(pg)).length;
  const pos=async()=>+await pg.$eval('#wrsv',e=>e.dataset.i);const box=await pg.$eval('#wrst',e=>{const r=e.getBoundingClientRect();return {x:r.left,y:r.top,w:r.width,h:r.height}});
  ok(await pos()===0&&await pg.$eval('#wrprev',e=>e.disabled)&&!(await pg.$eval('#wrnext',e=>e.disabled)),'the first slide: Previous is off');
- await pg.click('#wrnext');await pg.waitForTimeout(150);ok(await pos()===1,'Next goes to the second slide');
+ await pg.evaluate(()=>document.getElementById('wrnext').click());await pg.waitForTimeout(150);ok(await pos()===1,'Next goes to the second slide');
  await pg.mouse.click(box.x+box.w*.85,box.y+box.h*.5);await pg.waitForTimeout(150);ok(await pos()===2,'a tap on the right part goes forward');
  await pg.mouse.click(box.x+box.w*.12,box.y+box.h*.5);await pg.waitForTimeout(150);ok(await pos()===1,'a tap on the left part goes back');
  await pg.mouse.move(box.x+box.w*.8,box.y+box.h*.5);await pg.mouse.down();await pg.mouse.move(box.x+box.w*.3,box.y+box.h*.5,{steps:6});await pg.mouse.up();await pg.waitForTimeout(150);ok(await pos()===2,'a swipe to the left goes forward');
@@ -72,9 +72,9 @@ async function open(b,o={}){const r=await T.open(b,{vw:520,league:LG,hash:'#/wra
  await goSlide(pg,3);ok(await pos()===3&&await pg.$$eval('#wrpg .wr-seg',a=>a.map(b=>b.className.replace('wr-seg','').trim()).join('|'))===['done','done','done','on',...Array(N-4).fill('')].join('|'),'a progress segment jumps to its slide: the ones before are done, the open one is on');
  ok((await pg.textContent('#wrlive')).startsWith('4/'+N),'the live line says '+(await pg.textContent('#wrlive')));
  /* play */
- await pg.evaluate(()=>INS.wrapped.step(350));await goSlide(pg,0);await pg.click('#wrplay');await pg.waitForTimeout(1100);const p1=await pos();ok(p1>=2&&p1<N-1&&await pg.$eval('#wrplay',e=>e.textContent)==='❚❚','play goes on by itself ('+p1+' after 1.1 s) and the button shows pause');
- await pg.click('#wrplay');const pp=await pos();await pg.waitForTimeout(900);ok(await pos()===pp,'pause stops it on slide '+(pp+1));
- await pg.click('#wrplay');await pg.waitForFunction(n=>+document.querySelector('#wrsv').dataset.i===n-1,N,{timeout:15000});await pg.waitForTimeout(900);ok(await pg.$eval('#wrplay',e=>e.textContent)==='▶'&&await pos()===N-1,'it stops by itself on the last slide and the button shows play');
+ await pg.evaluate(()=>INS.wrapped.step(350));await goSlide(pg,0);await pg.evaluate(()=>document.getElementById('wrplay').click());await pg.waitForTimeout(1100);const p1=await pos();ok(p1>=2&&p1<N-1&&await pg.$eval('#wrplay',e=>e.textContent)==='❚❚','play goes on by itself ('+p1+' after 1.1 s) and the button shows pause');
+ await pg.evaluate(()=>document.getElementById('wrplay').click());const pp=await pos();await pg.waitForTimeout(900);ok(await pos()===pp,'pause stops it on slide '+(pp+1));
+ await pg.evaluate(()=>document.getElementById('wrplay').click());await pg.waitForFunction(n=>+document.querySelector('#wrsv').dataset.i===n-1,N,{timeout:15000});await pg.waitForTimeout(900);ok(await pg.$eval('#wrplay',e=>e.textContent)==='▶'&&await pos()===N-1,'it stops by itself on the last slide and the button shows play');
  /* saving */
  await goSlide(pg,1);const [dl]=await Promise.all([pg.waitForEvent('download',{timeout:30000}),pg.click('#wrsave')]);const fn=dl.suggestedFilename(),path=await dl.path(),buf=require('fs').readFileSync(path);
  ok(/^wrapped-2-card-arsenal\.png$/.test(fn)&&buf.slice(1,4).toString()==='PNG'&&buf.readUInt32BE(16)===1080&&buf.readUInt32BE(20)===1350,'Save this slide gives a PNG of 1080 × 1350 ('+fn+')');

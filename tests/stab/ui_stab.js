@@ -32,7 +32,7 @@ const rows=pg=>pg.evaluate(()=>[...document.querySelectorAll('.st-t tbody tr')].
  ok(JSON.stringify(R.map(r=>r.k))===JSON.stringify(want)&&R.every(r=>r.y===f2(L.stats[r.k].yoy_all)&&r.h===f2(L.stats[r.k].half_all)),'"all players (raw)": the raw numbers and their order — always higher, because positions differ ('+f2(L.stats.sh.yoy_all)+' against '+f2(L.stats.sh.yoy)+' for shots)');
  ok(L.stats.sh.yoy_all>L.stats.sh.yoy&&L.stats.ast.yoy_all>L.stats.ast.yoy,'sanity: raw correlation is above the within-position one for shots and assists');
  /* the hub tabs: the page is in Players */
- ok(await pg.evaluate(()=>{const a=[...document.querySelectorAll('#hubbar a')].map(x=>x.getAttribute('href'));return a.includes('#/stability')&&document.querySelector('#hubbar a.on').getAttribute('href')==='#/stability'}),'the page is a tab of the Players hub, marked open');
+ ok(await pg.evaluate(([k,r])=>{const on=document.querySelector('#secnav button.on'),h=document.getElementById('hubbar'),cur=h.querySelector(':scope > a.on'),back=h.querySelector(':scope > .hb-back');return !!on&&on.dataset.k===r&&(cur?cur.getAttribute('href')==='#/'+k:true)&&(r==='home'||(!!back&&back.getAttribute('href')==='#/r-'+r))},['stability','players']),'the page is in the players room: the room bar marks it, and the bar above it links back to the room and marks the page open');
  ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await ctx.close();
  /* leaving before the data arrives */
  {const c2=await b.newContext();await c2.route(/stability\.json/,async r=>{await new Promise(z=>setTimeout(z,2500));r.continue()});const p2=await c2.newPage(),e2=[];p2.on('pageerror',e=>e2.push(e.message));

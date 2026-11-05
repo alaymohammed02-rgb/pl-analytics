@@ -69,9 +69,10 @@
  const lgLogo=l=>{const d=typeof LOGO==='object'&&LOGO.d&&LOGO.d[l];return d&&d.league||null};
  R.overview=async function(el){
   el.innerHTML=`<h2>Overview</h2><p class="mu ov-lead"><span>Every league on the site: the matches by day with your teams first, and the strangest numbers of the week.</span></p>
-   <div id="ovw" class="ovw"><div id="ovteams"></div><div id="ovmb"></div><div id="ovfx"></div><div id="ovft"></div></div>`;
+   <div id="ovw" class="ovw"><div id="ovmb"></div><div id="ovx"></div><div id="ovteams"></div><div id="ovfx"></div><div id="ovft"></div></div>`;
   const w=el.querySelector('#ovw');
   teamsBar(w.querySelector('#ovteams'));
+  if(INS.rooms&&INS.rooms.homeBlock)INS.rooms.homeBlock(w.querySelector('#ovx'));
   if(typeof mbMount==='function')mbMount(w.querySelector('#ovmb'));
   const F=await fxLoad();if(!w.isConnected)return;
   week(w.querySelector('#ovfx'),F);teamFacts(w.querySelector('#ovft'),F);
@@ -97,6 +98,7 @@
   box.querySelector('#ovta').onclick=()=>{if(st.value)favToggle(sl.value,st.value)};
   box.querySelectorAll('[data-x]').forEach(b=>b.onclick=()=>favToggle(b.dataset.l,b.dataset.x));
   if(INS.notifyCard)INS.notifyCard(box.querySelector('.ovt'),T);   /* the ntfy card (assets/notify.js) */
+  if(INS.calCard)INS.calCard(box.querySelector('.ovt'),T);   /* the calendar file (assets/team-calendar.js) */
  }
  /* a league's teams: the open league's matches, else its fixtures and the schedule */
  async function teamsOf(l){
