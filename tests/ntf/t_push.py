@@ -130,7 +130,7 @@ by = {}
 for path, h, body in SEEN: by.setdefault(path.split('/')[-1], []).append((h, body))
 ok(sorted((k, len(v)) for k, v in by.items()) == [('a', 1), ('b', 1), ('c', 1)], 'a result goes to the devices that follow one of its teams (a: Arsenal, b: Chelsea), a reminder to the one that follows Leeds (c): 3 pushes, none to d')
 pa, pb, pc = decrypt(DA, by['a'][0][1]), decrypt(DB, by['b'][0][1]), decrypt(DC, by['c'][0][1])
-ok(pa == {'title': 'Arsenal 2–1 Chelsea', 'body': 'انتهت المباراة · Premier League', 'url': BASE + '#/match/m1', 'tag': 'm1|arsenal'}, 'device a (Arabic) gets "Arsenal 2–1 Chelsea", the Arabic body, the match link and a tag')
+ok(pa == {'title': 'Arsenal 2–1 Chelsea', 'body': 'انتهت المباراة · Premier League', 'url': BASE + '#/match/m1', 'tag': 'm1|arsenal', 'crest': [IDX['leagues'][0]['id'], 'Arsenal']}, 'device a (Arabic) gets "Arsenal 2–1 Chelsea", the Arabic body, the match link, a tag and its club\'s crest (league, club) for the worker to show')
 ok(pb['body'] == 'Full time · Premier League' and pb['title'] == pa['title'] and pb['tag'] == 'm1|chelsea', 'device b (English) gets the English body for the same match')
 TXP = {'en': ['A stolen win for Arsenal: Chelsea\'s chances were worth 1.9 goals to 0.4.', None], 'ar': ['فوز مسروق لـArsenal: فرص Chelsea تساوي 1.9 هدف مقابل 0.4.', 'انقلبت المباراة في الدقيقة 70.']}
 KEYS = ('r', 'm1|arsenal', '2026-10-30', 'Premier League', TXP)

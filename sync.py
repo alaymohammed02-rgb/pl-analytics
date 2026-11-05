@@ -9023,7 +9023,7 @@ INDEX = _x_fpx_index(INDEX)
 # الكود في ملفات مستقلة في المستودع: assets/*.js و assets/features.css و manifest.webmanifest و sw.js و assets/icons/.
 # هذا القسم يضيف روابطها للصفحة فقط (بعد السكربت الرئيسي، فتلقى R و PAGES جاهزة). غيّر FEATURES_V لما تتغير الملفات.
 # ============================================================================
-FEATURES_V = "106"
+FEATURES_V = "107"
 FEATURES_JS = ("pla-data", "share-card", "threat-map", "match-whatif", "player-page", "match-centre", "home-extra", "team-round",
                "preview", "club-extra", "rankings-extra", "fantasy-extra", "insights-core", "rooms", "hidden-gems", "player-dna", "team-dna",
                "reality-check", "matches-board", "match-replay", "match-story", "overview", "press-height",
@@ -13491,6 +13491,7 @@ NOTIFY_RESULT_DAYS = 2
 NOTIFY_AHEAD_H = 48
 NOTIFY_BEFORE_MIN = 60
 NOTIFY_MIN_LEAD_MIN = 15
+NOTIFY_GOAL_PRIORITY = 4   # ntfy: a goal is "high", so the app shows it as a pop-up
 PUSH_REMIND_MAX_MIN = 95
 PUSH_MAX_SUBS = 200
 PUSH_MAX_TEAMS = 30
@@ -13523,24 +13524,76 @@ def story_notice(e, score, tone="calm"):
     return None
 
 
-def notify_plan(leagues, fixtures, state, now, base_url, ns, channel="ntfy", story=None):
+def notify_goals(e):
+    """The goals of one match of data/live.json, in order: [(n, minute text, side "h"/"a", scorer, own goal, penalty, home goals, away goals)].
+    The score is counted from the goals themselves (an own goal is already on the side it counts for: checked against the final score of 92 finished
+    matches, all equal); the event's own score fields are the score before the goal and are not used."""
+    out, h, a, n = [], 0, 0, 0
+    for x in (e or {}).get("ev") or []:
+        if not isinstance(x, list) or len(x) < 10 or x[2] != "goal" or x[3] not in ("h", "a"):
+            continue
+        n += 1
+        if x[3] == "h":
+            h += 1
+        else:
+            a += 1
+        mn = f"{x[0]}+{x[1]}'" if x[1] else f"{x[0]}'"
+        out.append((n, mn, x[3], str(x[4] or ""), bool(x[8]), bool(x[9]), h, a))
+    return out
+
+
+def notify_goal_line(hn, an, side, sh, sa):
+    """FotMob's way: the scoring side's number in brackets, "Manchester City [1] - 0 Real Madrid"."""
+    return f"{hn} [{sh}] - {sa} {an}" if side == "h" else f"{hn} {sh} - [{sa}] {an}"
+
+
+def notify_plan(leagues, fixtures, state, now, base_url, ns, channel="ntfy", story=None, live=None):
     """-> (messages, state'). A message is (payload, key) with key = (kind, state key, day, league name, kick-off "HH:MM" or None).
     channel "ntfy": reminders are queued with ntfy's delay; state keys r / m; the first run is a missing state.
     channel "push": reminders go out when the kick-off is 15 to 95 minutes away; state keys pr / pm; the first run is a state without "pv".
+    live = data/live.json["m"]: a goal of a match under way is sent to the followers of both clubs (state keys g / pg, one per score, so a goal is sent once);
+    the first run with goals (no g / pg in the state yet) marks the goals already there and sends none; a finished match's goals are marked, never sent
+    (its result says it). Goals come first, then results, then reminders.
     story = data/story.json["m"]: a result whose match has an entry carries the verdict instead of "Full time", links to #/recap/<id>, and its key's 5th element is the
     sentences {"en": [...], "ar": [...]} (push_text reads it); a match without an entry is announced as before."""
     push = channel == "push"
-    rk, mk = ("pr", "pm") if push else ("r", "m")
+    rk, mk, gk = ("pr", "pm", "pg") if push else ("r", "m", "g")
     first = (not (state or {}).get("pv")) if push else state is None
+    gfirst = gk not in (state or {})
     st = {"v": 1, "pv": 1 if push else (state or {}).get("pv", 0)}
     for k in ("r", "m", "pr", "pm"):
         st[k] = dict((state or {}).get(k) or {})
+    for k in ("g", "pg"):              # created only by its own channel, so the other door still sees its first run
+        if k in (state or {}) or k == gk:
+            st[k] = dict((state or {}).get(k) or {})
     today = now.date()
     keep = (today - datetime.timedelta(days=NOTIFY_KEEP_DAYS)).isoformat()
-    for k in ("r", "m", "pr", "pm"):
-        st[k] = {a: b for a, b in st[k].items() if b >= keep}
+    for k in ("r", "m", "pr", "pm", "g", "pg"):
+        if k in st:
+            st[k] = {a: b for a, b in st[k].items() if b >= keep}
     cutoff = (today - datetime.timedelta(days=NOTIFY_RESULT_DAYS)).isoformat()
-    res, rem = [], []
+    res, rem, gol = [], [], []
+    names = {lid: lname for lid, lname, _ in leagues}
+    for mid, e in sorted((live or {}).items()):
+        if not isinstance(e, dict) or not e.get("h") or not e.get("a") or e.get("l") not in names:
+            continue
+        d = str(e.get("k") or "")[:10] or today.isoformat()
+        done = str(e.get("st") or "").lower() in ("finished", "ended", "ft", "postponed", "cancelled", "abandoned")
+        for n, mn, side, who, og, pen, sh, sa in notify_goals(e):
+            for team in (e["h"], e["a"]):
+                key = f"{mid}|{sh}-{sa}|{notify_slug(team)}"
+                if key in st[gk]:
+                    continue
+                if gfirst or done:
+                    st[gk][key] = d
+                    continue
+                scorer = e["h"] if side == "h" else e["a"]
+                tag = " (OG)" if og else " (pen.)" if pen else ""
+                info = {"sc": who, "mn": mn, "h": e["h"], "a": e["a"], "sh": sh, "sa": sa, "side": side, "og": og, "pen": pen}
+                gol.append((d, mid, n, {"topic": notify_topic(ns, team), "title": f"\u26bd Goal! {who}{tag}".rstrip() if who else "\u26bd Goal!",
+                                        "message": f"{notify_goal_line(e['h'], e['a'], side, sh, sa)} \u00b7 {mn}\n\u0647\u062f\u0641! \u00b7 {names[e['l']]}",
+                                        "tags": ["soccer"], "priority": NOTIFY_GOAL_PRIORITY, "click": f"{base_url}#/preview/{mid}",
+                                        "_crest": [e["l"], scorer]}, (gk[-1], key, d, names[e["l"]], info)))
     for lid, lname, matches in leagues:
         for m in matches:
             sc = re.fullmatch(r"(\d+)-(\d+)", str(m.get("s") or "").strip())
@@ -13559,7 +13612,7 @@ def notify_plan(leagues, fixtures, state, now, base_url, ns, channel="ntfy", sto
                 fx = story_notice(en_, f"{sc.group(1)}-{sc.group(2)}", "fun") if tx else None
                 res.append((d, str(m["i"]), {"topic": notify_topic(ns, team), "title": f"{m['h']} {sc.group(1)}\u2013{sc.group(2)} {m['a']}",
                                            "message": (f"{tx['en'][0]}\n{tx['ar'][0]}\n{lname}" if tx else f"Full time \u00b7 \u0627\u0646\u062a\u0647\u062a \u0627\u0644\u0645\u0628\u0627\u0631\u0627\u0629\n{lname}"),
-                                           "tags": ["soccer"], "click": f"{base_url}#/{'recap' if tx else 'match'}/{m['i']}"}, (rk[-1], key, d, lname, tx, fx)))
+                                           "tags": ["soccer"], "click": f"{base_url}#/{'recap' if tx else 'match'}/{m['i']}", "_crest": [lid, team]}, (rk[-1], key, d, lname, tx, fx)))
     for lid, lname, _ in leagues:
         for f in (fixtures.get(lid) or []):
             try:
@@ -13578,16 +13631,18 @@ def notify_plan(leagues, fixtures, state, now, base_url, ns, channel="ntfy", sto
                 hh = ko.strftime("%H:%M")
                 msg = {"topic": notify_topic(ns, team), "title": f"{f['h']} v {f['a']}",
                        "message": f"Kick-off {hh} UTC \u00b7 \u062a\u0646\u0637\u0644\u0642 {hh} \u0628\u062a\u0648\u0642\u064a\u062a \u063a\u0631\u064a\u0646\u062a\u0634\n{lname}",
-                       "tags": ["alarm_clock"], "click": f"{base_url}#/preview/{f['i']}"}
+                       "tags": ["alarm_clock"], "click": f"{base_url}#/preview/{f['i']}", "_crest": [lid, team]}
                 if not push and send_at - now > datetime.timedelta(seconds=60):
                     msg["delay"] = str(int(send_at.timestamp()))
                 rem.append((f["k"], str(f["i"]), msg, (mk[-1], key, ko.date().isoformat(), lname, hh)))
+    gol.sort(key=lambda x: (x[0], x[1], x[2], x[3]["topic"]))
     res.sort(key=lambda x: (x[0], x[1], x[2]["topic"]))
     rem.sort(key=lambda x: (x[0], x[1], x[2]["topic"]))
-    return [(x[2], x[3]) for x in res + rem], st
+    return [(x[3], x[4]) for x in gol] + [(x[2], x[3]) for x in res + rem], st
 
 
 def notify_post(server, payload, timeout=8):
+    payload = {k: v for k, v in payload.items() if not k.startswith("_")}      # "_crest" is for the browser door only
     req = urllib.request.Request(server.rstrip("/") + "/", data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
                                  headers={"Content-Type": "application/json; charset=utf-8"}, method="POST")
     with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -13667,6 +13722,17 @@ def push_clean(obj):
 def push_text(payload, key, lang, tone="calm"):
     """The title and body of a push in the device's language (and tone: "fun" is the banter version of a story, calm when there is none); the team names stay as they are."""
     kind, lname, hh = key[0], key[3], key[4]
+    crest = payload.get("_crest")
+    if kind == "g":
+        g = hh
+        tag = (" (\u0647\u062f\u0641 \u0639\u0643\u0633\u064a)" if g.get("og") else " (\u0631\u0643\u0644\u0629 \u062c\u0632\u0627\u0621)" if g.get("pen") else "") if lang == "ar" else (" (own goal)" if g.get("og") else " (pen.)" if g.get("pen") else "")
+        word = "\u0647\u062f\u0641!" if lang == "ar" else "Goal!"
+        out = {"title": f"\u26bd {word} {g['sc']}{tag}" if g.get("sc") else f"\u26bd {word}",
+               "body": f"{notify_goal_line(g['h'], g['a'], g['side'], g['sh'], g['sa'])} \u00b7 {g['mn']} \u00b7 {lname}",
+               "url": payload["click"], "tag": "g|" + key[1].split("|")[0] + "|" + key[1].split("|")[-1]}
+        if crest:
+            out["crest"] = crest
+        return out
     if kind == "r" and tone == "fun" and len(key) > 5 and isinstance(key[5], dict):
         hh = key[5]
     if kind == "r" and isinstance(hh, dict):
@@ -13675,7 +13741,10 @@ def push_text(payload, key, lang, tone="calm"):
         body = f"\u0627\u0646\u062a\u0647\u062a \u0627\u0644\u0645\u0628\u0627\u0631\u0627\u0629 \u00b7 {lname}" if lang == "ar" else f"Full time \u00b7 {lname}"
     else:
         body = f"\u062a\u0646\u0637\u0644\u0642 \u0627\u0644\u0633\u0627\u0639\u0629 {hh} \u0628\u062a\u0648\u0642\u064a\u062a \u063a\u0631\u064a\u0646\u062a\u0634 \u00b7 {lname}" if lang == "ar" else f"Kick-off {hh} UTC \u00b7 {lname}"
-    return {"title": payload["title"], "body": body, "url": payload["click"], "tag": key[1]}
+    out = {"title": payload["title"], "body": body, "url": payload["click"], "tag": key[1]}
+    if crest:
+        out["crest"] = crest
+    return out
 
 
 def push_send(sub, data, vapid_raw, sub_claim, timeout=15):
@@ -13694,7 +13763,7 @@ def push_send(sub, data, vapid_raw, sub_claim, timeout=15):
         return "fail"
 
 
-def push_run(hub, cfg, leagues, fixtures, st, now, base, send=None, inbox=None, story=None):
+def push_run(hub, cfg, leagues, fixtures, st, now, base, send=None, inbox=None, story=None, live_m=None):
     """The browser door. Returns the state (a new dict) and writes data/push_status.json and data/push_subs.json. Does nothing without the secret."""
     send = send or push_send
     pub = gh_get_json(hub, PUSH_PATH) or {}
@@ -13744,7 +13813,7 @@ def push_run(hub, cfg, leagues, fixtures, st, now, base, send=None, inbox=None, 
         c = push_clean(push_open(keys["box"], v["s"]))
         if c:
             live[k] = c
-    msgs, st2 = notify_plan(leagues, fixtures, st, now, base, ns, channel="push", story=story)
+    msgs, st2 = notify_plan(leagues, fixtures, st, now, base, ns, channel="push", story=story, live=live_m)
     claim = (re.match(r"https://[\w.-]+", base or "") or [None])[0]   # the VAPID subject: the site's own origin (py_vapid accepts https://host without a path)
     if not claim:
         log("  [إشعارات المتصفح] ما عندي عنوان الموقع — تخطيت")
@@ -13764,7 +13833,7 @@ def push_run(hub, cfg, leagues, fixtures, st, now, base, send=None, inbox=None, 
             else:
                 fails += 1; all_gone = False
         if ok_any or all_gone:
-            st2["pr" if key[0] == "r" else "pm"][key[1]] = key[2]
+            st2[{"r": "pr", "m": "pm", "g": "pg"}[key[0]]][key[1]] = key[2]
     gh_put(hub, PUSH_SUBS, json.dumps({"v": 1, "subs": subs}, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8"), "Update push subscriptions")
     log(f"  [إشعارات المتصفح] {len(subs)} جهاز، وصل صندوق الوارد {got}" + (f" وإلغاء {rem}" if rem else "") + f"، أُرسل {sent}" + (f"، فشل {fails}" if fails else "") + (f"، اشتراك انتهى {gone}" if gone else ""))
     return st2
@@ -13790,7 +13859,8 @@ def sync_notify(hub, now=None, post=None, send=None, inbox=None):
     base = hub.get("url") or (f"https://{hub['repo'].split('/')[0]}.github.io/{hub['repo'].split('/')[1]}/" if "/" in str(hub.get("repo")) else "")
     story = gh_get_json(hub, "data/story.json")
     story = story.get("m") if isinstance(story, dict) and isinstance(story.get("m"), dict) else {}
-    msgs, st = notify_plan(leagues, fixtures, old, now, base, ns, story=story)
+    live_m = (gh_get_json(hub, "data/live.json") or {}).get("m") or {}
+    msgs, st = notify_plan(leagues, fixtures, old, now, base, ns, story=story, live=live_m)
     sent = fails = streak = 0
     for payload, key in msgs[:NOTIFY_MAX_POSTS]:
         try:
@@ -13809,7 +13879,7 @@ def sync_notify(hub, now=None, post=None, send=None, inbox=None):
     log(f"  [إشعارات] أُرسل {sent} إشعار" + (f"، فشل {fails}" if fails else "") + ("، أول تشغيل: النتائج الحالية اتعلّمت بدون إرسال" if old is None else "")
         + (f"، تبقّى {len(msgs) - sent - fails} للمرة الجاية" if len(msgs) > sent + fails else ""))
     try:
-        st = push_run(hub, {"ns": ns, "server": server}, leagues, fixtures, st, now, base, send=send, inbox=inbox, story=story)
+        st = push_run(hub, {"ns": ns, "server": server}, leagues, fixtures, st, now, base, send=send, inbox=inbox, story=story, live_m=live_m)
     except Exception as e:      # the browser door never stops the ntfy door's state from being saved
         log(f"  [إشعارات المتصفح] خطأ ({type(e).__name__}: {e})")
     gh_put(hub, NOTIFY_STATE, json.dumps(st, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8"), "Update notification state")

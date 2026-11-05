@@ -839,3 +839,6 @@ html[lang=en] body #langbtn{font-family:system-ui,-apple-system,"Segoe UI",Robot
 .rc-card:not(.rc-v-lines) .rc-ln{display:none}
 .rc-ln{margin-top:6px}
 .rc-now{stroke:var(--mu);stroke-width:1;stroke-dasharray:3 4;opacity:.6}
+/* Notifications card: how to make them pop up */
+.ntf-pop{margin:8px 0}.ntf-pop summary{cursor:pointer;font-weight:600}
+.ntf-steps{margin:6px 0;padding-inline-start:20px;font-size:13px;line-height:1.55}.ntf-steps li{margin:4px 0}

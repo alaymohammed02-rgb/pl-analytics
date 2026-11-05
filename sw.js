@@ -37,8 +37,20 @@ self.addEventListener('push',e=>{
  const title=String(d.title||'PL Analytics').slice(0,120),body=String(d.body||'').slice(0,240);
  /* the link is kept only if it is inside this site: a message cannot send the tap anywhere else */
  let url=self.registration.scope;try{const u=new URL(String(d.url||url),self.registration.scope);if(u.href.startsWith(self.registration.scope))url=u.href}catch(x){}
- e.waitUntil(self.registration.showNotification(title,{body,icon:'assets/icons/icon-192.png',badge:'assets/icons/favicon-32.png',tag:d.tag?String(d.tag).slice(0,120):undefined,lang:/[؀-ۿ]/.test(title+body)?'ar':'en',data:{url}}));
+ const tag=d.tag?String(d.tag).slice(0,120):undefined;
+ /* vibrate and alert again when a newer message of the same match replaces the shown one (renotify needs a tag); the club's crest as the picture when the
+    message names one, else the site's icon */
+ const opts={body,icon:'assets/icons/icon-192.png',badge:'assets/icons/favicon-32.png',tag,renotify:!!tag,vibrate:[200,100,200],lang:/[؀-ۿ]/.test(title+body)?'ar':'en',data:{url}};
+ e.waitUntil(crestOf(d.crest).then(ic=>{if(ic)opts.icon=ic;return self.registration.showNotification(title,opts)}));
 });
+/* the crest of [league id, club] from the site's own logo file (data/logos_<league>.json: a data: image per club); 3 s at most, any failure keeps the site's icon */
+function crestOf(c){
+ if(!Array.isArray(c)||c.length!==2||!/^l_[A-Za-z0-9]{1,20}$/.test(String(c[0]))||!c[1])return Promise.resolve(null);
+ const get=fetch('data/logos_'+c[0]+'.json').then(r=>r.ok?r.json():null).catch(()=>null)
+  .then(j=>caches.match('data/logos_'+c[0]+'.json',{ignoreSearch:true}).then(m=>j||(m?m.json():null)).catch(()=>j))
+  .then(j=>{const v=j&&j.teams&&j.teams[String(c[1])];return typeof v==='string'&&/^data:image\/(png|webp|jpeg);base64,/.test(v)?v:null}).catch(()=>null);
+ return Promise.race([get,new Promise(z=>setTimeout(()=>z(null),3000))]);
+}
 self.addEventListener('notificationclick',e=>{
  e.notification.close();
  const url=(e.notification.data&&e.notification.data.url)||self.registration.scope;
