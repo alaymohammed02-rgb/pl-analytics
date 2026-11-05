@@ -52,6 +52,7 @@ async function ctxFor(b,{vw=1100,lang='en',ready=true,perm=true,inbox=200,favs=[
  ok(m1&&m1.v===1&&m1.sub.endpoint==='https://push.test/endpoint-1'&&m1.sub.keys.p256dh.startsWith('BPtest')&&JSON.stringify(m1.teams)===JSON.stringify(['Arsenal','Chelsea'])&&m1.lang==='en','the Python side opens it with the private key: the subscription, the two starred teams and the language');
  ok(!/endpoint|push\.test|Arsenal|BPtest/.test(posts[0].body),'and the text that travels holds none of it in the clear');
  ok(/on\b/.test(await pg.innerText('.ntf-on'))&&/2 teams/.test(await pg.innerText('.ntf-on')),'the card now says notifications are on for 2 teams');
+ ok(await pg.$$eval('.ntf-pop .ntf-steps li',a=>a.length)===3&&!(await pg.$eval('.ntf-pop',d=>d.open))&&/Pop on screen/.test(await pg.$eval('.ntf-pop',d=>d.textContent))&&/drawn by the phone itself/.test(await pg.$eval('.ntf-pop',d=>d.textContent)),'when on, a folded "Make them pop up" part gives the steps for Android, Samsung and iPhone and says the look is drawn by the phone');
  const welcome=await pg.evaluate(()=>window.__calls.filter(x=>x[0]==='show').map(x=>x[1]));
  ok(welcome.length===1&&/Notifications are on/.test(welcome[0]),'a welcome notification is shown, so you see at once that it works ('+welcome[0]+')');
  ok(await pg.evaluate(async()=>{const r=await navigator.serviceWorker.getRegistration();return !!r&&/sw\.js$/.test(r.active?r.active.scriptURL:(r.installing||r.waiting||{scriptURL:''}).scriptURL)}),'the service worker sw.js is registered');
@@ -91,8 +92,8 @@ async function ctxFor(b,{vw=1100,lang='en',ready=true,perm=true,inbox=200,favs=[
  ({c,pg,errs}=await ctxFor(b,{favs:[]}));await pg.waitForSelector('.ovt',{timeout:90000});await pg.waitForTimeout(800);ok(!(await pg.$('#ntfcard')),'no starred team: no card');await c.close();
  /* ---- sw.js, the real file, in a sandbox */
  const code=fs.readFileSync(path.join(ROOT,'sw.js'),'utf8');
- function sw(scope){const H={},shown=[],wins=[];const self={addEventListener:(t,f)=>H[t]=f,registration:{scope,showNotification:(t,o)=>{shown.push([t,o]);return Promise.resolve()}},skipWaiting(){},clients:{async matchAll(){return wins},async openWindow(u){wins.opened=u;return {}}}};
-  vm.runInNewContext(code,{self,caches:{open:async()=>({addAll:async()=>0})},fetch:async()=>({}),URL,Response:function(){},Promise,console,JSON,String,Array},{filename:'sw.js'});return {H,shown,wins}}
+ function sw(scope,fetchImpl){const H={},shown=[],wins=[];const self={addEventListener:(t,f)=>H[t]=f,registration:{scope,showNotification:(t,o)=>{shown.push([t,o]);return Promise.resolve()}},skipWaiting(){},clients:{async matchAll(){return wins},async openWindow(u){wins.opened=u;return {}}}};
+  vm.runInNewContext(code,{self,caches:{open:async()=>({addAll:async()=>0}),match:async()=>undefined},fetch:fetchImpl||(async()=>({})),URL,Response:function(){},Promise,console,JSON,String,Array,setTimeout},{filename:'sw.js'});return {H,shown,wins}}
  const run=async(S,type,ev)=>{let p;ev.waitUntil=x=>{p=x};S.H[type](ev);await p};
  const SC='https://me.github.io/pla/';let S=sw(SC);
  await run(S,'push',{data:{json:()=>({title:'Arsenal 2–1 Chelsea',body:'Full time · Premier League',url:SC+'#/match/m1',tag:'m1|arsenal'})}});
@@ -103,6 +104,20 @@ async function ctxFor(b,{vw=1100,lang='en',ready=true,perm=true,inbox=200,favs=[
  ok(S.shown.length===4&&S.shown[2][0]==='PL Analytics'&&S.shown[3][0]==='PL Analytics','push: a message that is not JSON, or has no data, still shows a notification (so the browser never shows its own "this site updated in the background")');
  await run(S,'push',{data:{json:()=>({title:'x'.repeat(500),body:'y'.repeat(900)})}});
  ok(S.shown[4][0].length<=120&&S.shown[4][1].body.length<=240,'push: very long texts are cut');
+ /* the club's crest, vibration, a new alert when a newer message of the same match replaces the shown one */
+ {const CR='data:image/webp;base64,UklGRgAAAA==',asked=[];const S2=sw(SC,async u=>{asked.push(u);return {ok:true,json:async()=>({teams:{'Manchester City':CR}})}});
+  await run(S2,'push',{data:{json:()=>({title:'⚽ Goal! Erling Haaland',body:"RB Leipzig 2 - [3] Manchester City · 90+3' · Champions League",url:SC+'#/preview/m1',tag:'g|m1|manchester-city',crest:['l_0bfbkO','Manchester City']})}});
+  const o=S2.shown[0][1];
+  ok(o.icon===CR&&asked[0]==='data/logos_l_0bfbkO.json','push with a crest: the club\'s crest from the site\'s own logo file is the notification\'s picture');
+  ok(o.renotify===true&&JSON.stringify(o.vibrate)==='[200,100,200]'&&o.tag==='g|m1|manchester-city','it vibrates, and with a tag a newer message of the same match alerts again (renotify)');
+  await run(S2,'push',{data:{json:()=>({title:'x',body:'y',crest:['l_0bfbkO','Nobody FC']})}});
+  ok(/icon-192/.test(S2.shown[1][1].icon)&&S2.shown[1][1].renotify===false,'a club missing from the logo file keeps the site\'s icon; no tag, no renotify (it would throw)');
+  const S3=sw(SC,async()=>{throw new Error('offline')});await run(S3,'push',{data:{json:()=>({title:'x',crest:['l_0bfbkO','Manchester City']})}});
+  ok(S3.shown.length===1&&/icon-192/.test(S3.shown[0][1].icon),'the logo file cannot be fetched: the notification still shows, with the site\'s icon');
+  const S4=sw(SC,async u=>{asked.push(u);return {ok:true,json:async()=>({teams:{X:CR}})}});await run(S4,'push',{data:{json:()=>({title:'x',crest:['../evil','X']})}});
+  ok(/icon-192/.test(S4.shown[0][1].icon)&&!asked.some(u=>/evil/.test(u)),'a crest field with a strange league id is ignored (no request is made)');
+  const S5=sw(SC,async()=>({ok:true,json:async()=>({teams:{X:'javascript:alert(1)'}})}));await run(S5,'push',{data:{json:()=>({title:'x',crest:['l_1','X']})}});
+  ok(/icon-192/.test(S5.shown[0][1].icon),'only a data: image (png, webp, jpeg) is used as the picture')}
  let closed=0,navTo='',focused=0;S.wins.push({url:SC+'#/table',navigate:async u=>{navTo=u},focus:async()=>{focused++}});
  await run(S,'notificationclick',{notification:{close:()=>closed++,data:{url:SC+'#/match/m1'}}});
  ok(closed===1&&navTo===SC+'#/match/m1'&&focused===1,'a tap closes the notification, goes to its link in the window that is open and focuses it');

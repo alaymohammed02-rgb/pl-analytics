@@ -163,7 +163,7 @@ ok(G['notify_post']('http://127.0.0.1:%d' % srv.server_port, pl) is True, 'a rea
 path, ctype, body = GOT[0]
 ok(path == '/' and ctype.startswith('application/json') and json.loads(body.decode('utf-8')) == pl, 'it is a POST to the server root with a UTF-8 JSON body that holds exactly the message (the Arabic survives)')
 pl2 = r1s[0][0]
-ok(G['notify_post']('http://127.0.0.1:%d' % srv.server_port, pl2) is True and json.loads(GOT[1][2].decode('utf-8')) == pl2, 'the story message also goes out as UTF-8 JSON with the Arabic intact')
+ok(G['notify_post']('http://127.0.0.1:%d' % srv.server_port, pl2) is True and json.loads(GOT[1][2].decode('utf-8')) == {k: v for k, v in pl2.items() if not k.startswith('_')} and '_crest' in pl2, 'the story message also goes out as UTF-8 JSON with the Arabic intact (the browser door\'s own "_crest" is not sent to ntfy)')
 srv.shutdown()
 try:
     G['notify_post']('http://127.0.0.1:1', pl, timeout=1); bad_ok = False
