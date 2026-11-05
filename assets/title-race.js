@@ -124,7 +124,9 @@
   const mark=()=>{const h=S.pin||S.hov;ln.querySelectorAll('.er-l').forEach(g=>{g.classList.toggle('hi',!!h&&g.dataset.t===h);g.classList.toggle('dim',!!h&&g.dataset.t!==h)});const sv=ln.querySelector('.er-svg');if(sv)sv.classList.remove('er-draw')};
   ln.addEventListener('pointerover',e=>{const g=e.target.closest('.er-l');const t=g?g.dataset.t:'';if(t!==S.hov){S.hov=t;mark()}});
   ln.addEventListener('pointerleave',()=>{S.hov='';mark()});
-  ln.addEventListener('click',e=>{const g=e.target.closest('.er-l');if(!g)return;const t=g.dataset.t;S.pin=S.pin===t?'':t;show(root,Q,S.fi,0)});
+  /* a click redraws the chart, so the element under the pointer is replaced and the browser may not send "pointer left" for it (slow machines): the preview is
+     cleared here and the pin alone marks the club */
+  ln.addEventListener('click',e=>{const g=e.target.closest('.er-l');if(!g)return;const t=g.dataset.t;S.pin=S.pin===t?'':t;S.hov='';show(root,Q,S.fi,0)});
   const pin=r=>{const t=r.dataset.t;S.pin=S.pin===t?'':t;show(root,Q,S.fi,0)};
   root.querySelectorAll('.rc-row').forEach(r=>{r.onclick=()=>pin(r);r.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pin(r)}}});
   /* leaving the page stops the clock */

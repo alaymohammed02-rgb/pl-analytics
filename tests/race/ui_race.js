@@ -64,7 +64,10 @@ const setWeek=async(pg,i)=>{await pg.$eval('#rcw',(e,v)=>{e.value=String(v);e.di
  /* following a club in the lines: clicking its name at the end of its line keeps it (the table follows too), hovering a line only previews it */
  {const L0=await linesOf(pg),t2=L0[1].c;await pg.click('.rc-svg .er-l[data-t="'+t2+'"] .er-t');await pg.waitForTimeout(250);
   ok(await pg.evaluate(t=>[...document.querySelectorAll('.rc-svg .er-l')].every(g=>g.classList.contains('hi')===(g.dataset.t===t)&&g.classList.contains('dim')===(g.dataset.t!==t))&&[...document.querySelectorAll('.rc-row')].every(r=>r.classList.contains('rc-pin')===(r.dataset.t===t)),t2),'clicking '+t2+'\'s line follows it: its line stands out, the others fade and the table follows it too');
-  await pg.click('.rc-svg .er-l[data-t="'+t2+'"] .er-t');await pg.mouse.move(2,2);await pg.waitForTimeout(200);ok(await pg.$$eval('.rc-svg .er-l.hi,.rc-svg .er-l.dim,.rc-row.rc-pin',a=>!a.length),'clicking it again lets it go');
+  await pg.click('.rc-svg .er-l[data-t="'+t2+'"] .er-t');await pg.mouse.move(2,2);
+  const freed=await pg.waitForFunction(()=>!document.querySelector('.rc-svg .er-l.hi,.rc-svg .er-l.dim,.rc-row.rc-pin'),null,{timeout:2000}).then(()=>true,()=>false);
+  const left=freed?'':await pg.evaluate(()=>JSON.stringify({hi:[...document.querySelectorAll('.rc-svg .er-l.hi')].map(g=>g.dataset.t),dim:document.querySelectorAll('.rc-svg .er-l.dim').length,pin:[...document.querySelectorAll('.rc-row.rc-pin')].map(r=>r.dataset.t),hovered:[...document.querySelectorAll(':hover')].map(e=>e.tagName+'.'+e.getAttribute('class')).slice(-3)}));
+  ok(freed,'clicking it again lets it go'+(left?' — still marked: '+left:''));
   const t4=L0[3].c;await pg.hover('.rc-svg .er-l[data-t="'+t4+'"] .er-t');await pg.waitForTimeout(150);ok(await pg.$eval('.rc-svg .er-l[data-t="'+t4+'"]',g=>g.classList.contains('hi'))&&await pg.$$eval('.rc-row.rc-pin',a=>!a.length),'hovering '+t4+'\'s line previews it without keeping it');
   await pg.mouse.move(2,2);await pg.waitForTimeout(150);ok(await pg.$$eval('.rc-svg .er-l.hi',a=>!a.length),'moving away lets the preview go')}
  await pg.click('#rcvw button[data-v="table"]');await pg.waitForTimeout(400);
