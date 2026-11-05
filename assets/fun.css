@@ -827,3 +827,8 @@ html body #secnav button{min-height:40px;padding:6px 16px;font-size:14.5px}
 .ldg-more{margin-top:8px}
 .ldg-lg{flex-wrap:wrap}
 .ldg-w{overflow-x:auto;max-width:100%}
+/* Replace him (assets/replace-him.js) */
+.rh-l{margin:8px 0 2px;font-size:12px}.rh-seg{flex-wrap:wrap}
+.rh-n{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}.rh-n .mu{font-size:12px}
+.rh-save{font-size:12px;color:var(--th-hi);white-space:nowrap}
+.rh-nv{font-size:12px}
