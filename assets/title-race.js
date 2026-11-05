@@ -1,4 +1,4 @@
-/* ===== Title race (#/race, in the Season hub after the table): the league table, week by week, as moving bars or as a moving table =====
+/* ===== Title race (#/race, in the Season hub after the table): the league table, week by week, as lines (each club's points after every week, drawn like the Elo river) or as a moving table =====
    Uses data/results.json (every finished result of each league's Elo chain, written by sync.py "TMACH"). A season is cut into weeks (Monday to
    Sunday, by the match date); the table after a week is worked out from the matches played up to the end of that week (points, then goal
    difference, then goals scored, then the name). Clubs may have played different numbers of matches in a week (a postponed match): the "P" column
@@ -11,7 +11,7 @@
  const nb=x=>`<bdi dir="ltr">${x}</bdi>`,nm=x=>`<bdi>${esc(x)}</bdi>`;
  const ar=()=>typeof ARL==='object'&&!!ARL.on;
  const cmp=(a,b)=>a<b?-1:a>b?1:0;
- const S={lg:'',si:-1,view:'bars',speed:1,fi:-1,pin:'',tok:0,timer:0};
+ const S={lg:'',si:-1,view:'lines',speed:1,fi:-1,pin:'',hov:'',tok:0,timer:0,anim:true};
  let CF=null,CK='';
  function load(){
   if(CF&&CK===INS.poolKey())return CF;
@@ -31,6 +31,7 @@
   const L=F.leagues[id],T=L.teams,s=L.seasons[si],ms=s.m.map(x=>({d:x[0],h:T[x[1]],a:T[x[2]],hg:x[3],ag:x[4]})).sort((a,b)=>cmp(a.d,b.d)),
    teams=[...new Set(ms.flatMap(m=>[m.h,m.a]))].sort(cmp),weeks=[...new Set(ms.map(m=>monday(m.d)))].sort();
   const fr=weeks.map(w=>{const end=sunday(w),up=ms.filter(m=>m.d<=end);return {w,end,n:up.length,tab:table(up,teams)}});
+  fr.forEach(f=>{f.pm=new Map(f.tab.map((x,i)=>[x.t,{p:x.p,i}]))});
   const o={s:s.s,ms,teams,fr,max:Math.max(1,...fr.map(f=>f.tab[0].p)),N:ms.length};built.set(k,o);return o}
  R.race=async function(el){
   el.innerHTML='<h2>Title race</h2><div id="rcroot" class="ins lk rc"><div class="empty skel">Loading…</div></div>';
@@ -38,7 +39,7 @@
   let F;try{F=await load()}catch(e){if(!root.isConnected||tok!==S.tok)return;root.innerHTML=`<div class="empty">${two('The title race is not available right now.','سباق اللقب مو متوفر الحين.')}</div>`;return}
   if(!root.isConnected||tok!==S.tok||D.id!==lg)return;
   if(!F.leagues[S.lg]){S.lg=F.leagues[lg]?lg:Object.keys(F.leagues)[0];S.si=-1;S.fi=-1}
-  draw(root,F);
+  S.anim=true;draw(root,F);
  };
  function stop(){if(S.timer){clearInterval(S.timer);S.timer=0}}
  const ROW=40;
@@ -48,18 +49,19 @@
   const Q=frames(F,S.lg,S.si),n=Q.teams.length;
   if(!Q.fr.length){root.innerHTML=head(F)+`<div class="card"><div class="empty">${two('No matches in this season yet.','ما فيه مباريات في هالموسم للحين.')}</div></div>`;wire(root,F,Q);return}
   if(S.fi<0||S.fi>=Q.fr.length)S.fi=Q.fr.length-1;
-  root.innerHTML=head(F)+`<div class="card rc-card"><div class="rc-bar2"><button type="button" id="rcp" class="rc-play" aria-label="${ar()?'تشغيل':'Play'}">▶</button><button type="button" id="rcr" class="s" aria-label="${ar()?'من البداية':'Restart'}">⟲</button>
+  root.innerHTML=head(F)+`<div class="card rc-card${S.view==='lines'?' rc-v-lines':''}"><div class="rc-bar2"><button type="button" id="rcp" class="rc-play" aria-label="${ar()?'تشغيل':'Play'}">▶</button><button type="button" id="rcr" class="s" aria-label="${ar()?'من البداية':'Restart'}">⟲</button>
     <div class="seg" id="rcspd" role="group" aria-label="${ar()?'السرعة':'Speed'}">${[1,2,4].map(x=>`<button type="button" data-s="${x}" aria-pressed="${S.speed===x}" class="${S.speed===x?'on':''}">${x}×</button>`).join('')}</div>
-    <div class="seg" id="rcvw" role="group" aria-label="${ar()?'العرض':'View'}">${[['bars','Bars','أشرطة'],['table','Table','جدول']].map(([k,e,a])=>`<button type="button" data-v="${k}" aria-pressed="${S.view===k}" class="${S.view===k?'on':''}">${two(e,a)}</button>`).join('')}</div></div>
+    <div class="seg" id="rcvw" role="group" aria-label="${ar()?'العرض':'View'}">${[['lines','Lines','خطوط'],['table','Table','جدول']].map(([k,e,a])=>`<button type="button" data-v="${k}" aria-pressed="${S.view===k}" class="${S.view===k?'on':''}">${two(e,a)}</button>`).join('')}</div></div>
     <label class="rc-sl"><span class="mu" id="rcl"></span><input id="rcw" type="range" min="0" max="${Q.fr.length-1}" value="${S.fi}" aria-label="${ar()?'الأسبوع':'Week'}"></label>
+    <div class="rc-ln" id="rcln"></div>
     <div class="rc-h" aria-hidden="true"><span class="rc-hr"></span><span class="rc-hn"></span><span class="rc-hb"></span><span class="rc-hs"><b>${two('P','ل')}</b><b class="rc-x">${two('W','ف')}</b><b class="rc-x">${two('D','ت')}</b><b class="rc-x">${two('L','خ')}</b><b>${two('GD','فر')}</b><b>${two('Pts','ن')}</b></span></div>
-    <div class="rc-list ${S.view==='table'?'rc-tab':'rc-bars'}" id="rcl2" role="table" aria-label="${ar()?'الترتيب':'Table'}" style="height:${n*ROW}px">${Q.teams.map(t=>`<div class="rc-row" role="row" tabindex="0" data-t="${esc(t)}"><span class="rc-r"></span><span class="rc-n">${typeof hCrest==='function'?hCrest(t):''}<span class="rc-nm">${nm(t)}</span><span class="rc-mv"></span></span><span class="rc-b"><i></i></span><span class="rc-s"><b class="rc-p"></b><b class="rc-x rc-w"></b><b class="rc-x rc-d"></b><b class="rc-x rc-lo"></b><b class="rc-gd"></b><b class="rc-pts"></b></span></div>`).join('')}</div>
+    <div class="rc-list rc-tab" id="rcl2" role="table" aria-label="${ar()?'الترتيب':'Table'}" style="height:${n*ROW}px">${Q.teams.map(t=>`<div class="rc-row" role="row" tabindex="0" data-t="${esc(t)}"><span class="rc-r"></span><span class="rc-n">${typeof hCrest==='function'?hCrest(t):''}<span class="rc-nm">${nm(t)}</span><span class="rc-mv"></span></span><span class="rc-b"><i></i></span><span class="rc-s"><b class="rc-p"></b><b class="rc-x rc-w"></b><b class="rc-x rc-d"></b><b class="rc-x rc-lo"></b><b class="rc-gd"></b><b class="rc-pts"></b></span></div>`).join('')}</div>
     <p class="rc-end mu" id="rce"></p>
     <p class="mu ins-note">${two('Each week is Monday to Sunday by the match date. The table after a week counts the matches played up to its Sunday (points, then goal difference, then goals scored). A postponed match leaves a club one game behind for a while: the P column shows it. The last week of a finished season is the real final table.','كل أسبوع من الإثنين للأحد حسب تاريخ المباراة. الترتيب بعد أسبوع يحسب المباريات اللي انلعبت لين أحده (النقاط، بعدين فرق الأهداف، بعدين الأهداف المسجلة). المباراة المؤجلة تخلي النادي متأخر مباراة لفترة: عمود ل يبيّنها. وآخر أسبوع في موسم منتهي هو الترتيب النهائي الحقيقي.')}</p></div>`;
   wire(root,F,Q);show(root,Q,S.fi,0);
  }
  function head(F){const ids=Object.keys(F.leagues),L=F.leagues[S.lg];
-  return `<div class="card lk-intro"><p>${two('<b>Watch a season unfold.</b> The league table, week by week: bars that grow and clubs that overtake each other, or the table itself with its rows sliding to their new places. Click a club to follow it.','<b>شوف الموسم وهو يتحرك.</b> ترتيب الدوري أسبوع بأسبوع: أشرطة تكبر وأندية تتخطى بعض، أو الجدول نفسه وصفوفه تنزلق لمكانها الجديد. اضغط على نادي عشان تتابعه.')}</p></div>
+  return `<div class="card lk-intro"><p>${two('<b>Watch a season unfold.</b> The league table, week by week: a line for every club that climbs with its points, or the table itself with its rows sliding to their new places. Click a club to follow it.','<b>شوف الموسم وهو يتحرك.</b> ترتيب الدوري أسبوع بأسبوع: أشرطة تكبر وأندية تتخطى بعض، أو الجدول نفسه وصفوفه تنزلق لمكانها الجديد. اضغط على نادي عشان تتابعه.')}</p></div>
    <div class="card tmc-pick"><div class="ctl"><select id="rcg" aria-label="${ar()?'الدوري':'League'}">${ids.map(i=>`<option value="${esc(i)}"${i===S.lg?' selected':''}>${esc(F.leagues[i].name||i)}</option>`).join('')}</select>
     <select id="rcs" aria-label="${ar()?'الموسم':'Season'}">${L.seasons.map((s,i)=>`<option value="${i}"${i===S.si?' selected':''}>${esc(s.s)}</option>`).join('')}</select></div></div>`}
  /* put every row where the week says: a transform, so the row slides; the bars and numbers follow */
@@ -75,10 +77,34 @@
    r.querySelector('.rc-gd').textContent=(x.gf-x.ga>0?'+':x.gf-x.ga<0?'−':'')+Math.abs(x.gf-x.ga);r.querySelector('.rc-pts').textContent=x.p;
    const m=r.querySelector('.rc-mv');m.textContent=mv>0?'▲'+mv:mv<0?'▼'+(-mv):'';m.className='rc-mv'+(mv>0?' up':mv<0?' dn':'')});
   root.querySelector('#rcw').value=fi;
+  if(S.view==='lines')lines(root,Q,fi);
   root.querySelector('#rcl').innerHTML=`${two('Week to','الأسبوع لين')} <b>${nb(esc(f.end))}</b> · ${two(`${f.n} of ${Q.N} matches`,`${nb(f.n)} من ${nb(Q.N)} مباراة`)}`;
   const fin=fi===Q.fr.length-1,full=Q.N===Q.teams.length*(Q.teams.length-1),lead=f.tab[0];
   root.querySelector('#rce').innerHTML=fin?(full?two(`<b>${esc(lead.t)}</b> are the champions with ${lead.p} points.`,`<b>${nm(lead.t)}</b> أبطال الدوري بـ${nb(lead.p)} نقطة.`):two(`<b>${esc(lead.t)}</b> lead with ${lead.p} points; the season is not over.`,`<b>${nm(lead.t)}</b> في الصدارة بـ${nb(lead.p)} نقطة؛ والموسم ما خلص.`)):'';
   const b=root.querySelector('#rcp');b.textContent=S.timer?'❚❚':(fin?'▶':'▶');b.setAttribute('aria-label',S.timer?(ar()?'إيقاف':'Pause'):(ar()?'تشغيل':'Play'));
+ }
+ /* the lines: every club's points after each week up to the chosen one, on a fixed axis of the whole season (the Elo river's look: same classes); the followed club is drawn last, on top, so its larger name is never under a neighbour's */
+ const LW=760,LH=420,LML=34,LMR=154,LMT=12,LMB=26;
+ const hue=(i,n)=>Math.round(i*360/n*.92+8);
+ function lines(root,Q,fi){
+  const box=root.querySelector('#rcln');if(!box)return;
+  const nW=Q.fr.length,f=Q.fr[fi],top=Math.max(5,Math.ceil(Q.max/5)*5),n=Q.teams.length;
+  const X=k=>LML+(nW===1?.5:k/(nW-1))*(LW-LML-LMR),Y=p=>LMT+(1-p/top)*(LH-LMT-LMB);
+  const step=top>60?20:top>25?10:5,grid=[];for(let v=0;v<=top;v+=step)grid.push(v);
+  const mk=[];Q.fr.forEach((w,k)=>{const m=w.w.slice(0,7);if(!k||m!==Q.fr[k-1].w.slice(0,7))mk.push([m,k])});
+  const T=f.tab.map(x=>x.t),hi=S.pin||S.hov;
+  const lab=T.map((t,i)=>({i,y:Y(f.pm.get(t).p)})).sort((a,b)=>a.y-b.y||a.i-b.i);for(let k=1;k<lab.length;k++)if(lab[k].y<lab[k-1].y+11)lab[k].y=lab[k-1].y+11;
+  const ly=new Map(lab.map(l=>[l.i,l.y]));
+  const anim=S.anim&&!(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches);S.anim=false;
+  box.innerHTML=`<svg class="er-svg rc-svg${anim&&!hi?' er-draw':''}" viewBox="0 0 ${LW} ${LH}" role="img" aria-label="${ar()?'نقاط الأندية أسبوع بأسبوع':'The clubs\' points, week by week'}" preserveAspectRatio="xMidYMid meet" direction="ltr">
+   ${grid.map(v=>`<g class="er-g"><line x1="${LML}" x2="${LW-LMR}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}"/><text x="${LML-6}" y="${(Y(v)+4).toFixed(1)}" text-anchor="end">${v}</text></g>`).join('')}
+   ${mk.map(([m,k])=>`<text class="er-m" x="${X(k).toFixed(1)}" y="${LH-8}" text-anchor="middle">${m}</text>`).join('')}
+   <line class="rc-now" x1="${X(fi).toFixed(1)}" x2="${X(fi).toFixed(1)}" y1="${LMT}" y2="${LH-LMB}"/>
+   ${T.map((t,i)=>[t,i]).sort((a,b)=>(a[0]===hi)-(b[0]===hi)||a[1]-b[1]).map(([t,i])=>{const c=`hsl(${hue(i,n)} 68% 58%)`,pts=[];for(let k=0;k<=fi;k++)pts.push(Q.fr[k].pm.get(t).p);
+    const d=pts.map((p,k)=>(k?'L':'M')+X(k).toFixed(1)+' '+Y(p).toFixed(1)).join(' '),p=pts[pts.length-1];
+    return `<g class="er-l${hi?(hi===t?' hi':' dim'):''}" data-t="${esc(t)}" data-pts="${pts.join(',')}" data-pos="${i+1}" style="--c:${c};--i:${i}"><path class="er-p" d="${d}" pathLength="1"/><path class="er-hit" d="${d}"/>
+     <circle cx="${X(fi).toFixed(1)}" cy="${Y(p).toFixed(1)}" r="3"/><text class="er-t" x="${(X(fi)+8).toFixed(1)}" y="${(ly.get(i)+3.5).toFixed(1)}">${esc(t)} ${p}</text></g>`}).join('')}
+  </svg>`;
  }
  function wire(root,F,Q){
   const q=s=>root.querySelector(s);
@@ -92,7 +118,13 @@
   q('#rcr').onclick=()=>{stop();go(0,0)};
   q('#rcw').oninput=e=>{stop();go(+e.target.value,1)};
   root.querySelectorAll('#rcspd button').forEach(b=>b.onclick=()=>{S.speed=+b.dataset.s;const run=!!S.timer;stop();draw(root,F);if(run)root.querySelector('#rcp').click()});
-  root.querySelectorAll('#rcvw button').forEach(b=>b.onclick=()=>{S.view=b.dataset.v;root.querySelector('#rcl2').className='rc-list '+(S.view==='table'?'rc-tab':'rc-bars');root.querySelectorAll('#rcvw button').forEach(x=>{x.classList.toggle('on',x===b);x.setAttribute('aria-pressed',String(x===b))})});
+  root.querySelectorAll('#rcvw button').forEach(b=>b.onclick=()=>{S.view=b.dataset.v;root.querySelector('.rc-card').classList.toggle('rc-v-lines',S.view==='lines');root.querySelectorAll('#rcvw button').forEach(x=>{x.classList.toggle('on',x===b);x.setAttribute('aria-pressed',String(x===b))});if(S.view==='lines'){S.anim=true;lines(root,Q,S.fi)}});
+  /* the lines: hover a line or its name to preview it (only classes change), click to keep it (the table follows too); no club chips under the chart (owner asked 5 Nov 2026: they made the page long for nothing) */
+  const ln=q('#rcln');
+  const mark=()=>{const h=S.pin||S.hov;ln.querySelectorAll('.er-l').forEach(g=>{g.classList.toggle('hi',!!h&&g.dataset.t===h);g.classList.toggle('dim',!!h&&g.dataset.t!==h)});const sv=ln.querySelector('.er-svg');if(sv)sv.classList.remove('er-draw')};
+  ln.addEventListener('pointerover',e=>{const g=e.target.closest('.er-l');const t=g?g.dataset.t:'';if(t!==S.hov){S.hov=t;mark()}});
+  ln.addEventListener('pointerleave',()=>{S.hov='';mark()});
+  ln.addEventListener('click',e=>{const g=e.target.closest('.er-l');if(!g)return;const t=g.dataset.t;S.pin=S.pin===t?'':t;show(root,Q,S.fi,0)});
   const pin=r=>{const t=r.dataset.t;S.pin=S.pin===t?'':t;show(root,Q,S.fi,0)};
   root.querySelectorAll('.rc-row').forEach(r=>{r.onclick=()=>pin(r);r.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pin(r)}}});
   /* leaving the page stops the clock */

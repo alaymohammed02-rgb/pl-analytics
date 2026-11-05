@@ -2,7 +2,7 @@
    (weeks cut by day number, the table as of the end of each week: points, goal difference, goals scored, name): position, points, played / won / drawn /
    lost, goal difference, bar width, for the first, a middle and the last week, a finished season (its last week is the real final table and the champion),
    another league; the rows sit where the transform says; the move marks between two weeks; play (4×) goes forward and stops at the end, pause stops it;
-   Bars and Table views; following a club (click and Enter); the Season hub tab; Arabic, 390 px, leaving early, a failing file, reduced motion. */
+   Lines (one line per club, its points after every week up to the chosen one, the Elo river's look) and Table views; following a club (click and Enter); the Season hub tab; Arabic, 390 px, leaving early, a failing file, reduced motion. */
 const T=require('../nf/lib.js');const {ok,J}=T;
 const F=J('results.json'),cmp=(a,b)=>a<b?-1:a>b?1:0;
 const dayNo=d=>Date.UTC(+d.slice(0,4),+d.slice(5,7)-1,+d.slice(8,10))/864e5;
@@ -17,26 +17,37 @@ const sgn=x=>(x>0?'+':x<0?'−':'')+Math.abs(x);
 const shown=pg=>pg.$$eval('.rc-row',a=>a.map(r=>({c:r.dataset.t,pos:+r.dataset.pos,pts:+r.dataset.pts,tr:r.style.transform,g:r.querySelector('.rc-p').textContent,w:r.querySelector('.rc-w').textContent,d:r.querySelector('.rc-d').textContent,l:r.querySelector('.rc-lo').textContent,gd:r.querySelector('.rc-gd').textContent,bar:parseFloat(r.querySelector('.rc-b i').style.width),mv:r.querySelector('.rc-mv').textContent,rank:r.querySelector('.rc-r').textContent})).sort((x,y)=>x.pos-y.pos));
 function want(Q,fi){const t=tab(Q,fi),max=Math.max(1,...Q.weeks.map((_,i)=>tab(Q,i)[0].p));return t.map((x,i)=>({c:x.c,pos:i+1,pts:x.p,tr:`translateY(${i*40}px)`,g:String(x.g),w:String(x.w),d:String(x.d),l:String(x.l),gd:sgn(x.gf-x.ga),bar:+(x.p/max*100).toFixed(2),rank:String(i+1)}))}
 const slim=r=>({c:r.c,pos:r.pos,pts:r.pts,tr:r.tr,g:r.g,w:r.w,d:r.d,l:r.l,gd:r.gd,bar:r.bar,rank:r.rank});
+/* the lines: one per club, its points after weeks 0..fi, in the order of the table; end labels never overlap; no club buttons under the chart */
+const linesOf=pg=>pg.$$eval('.rc-svg .er-l',a=>a.map(g=>({c:g.dataset.t,pos:+g.dataset.pos,pts:g.dataset.pts,ly:+g.querySelector('.er-t').getAttribute('y')})));
+async function linesOk(pg,Q,fi){const L=(await linesOf(pg)).sort((a,b)=>a.pos-b.pos),t=tab(Q,fi),want=t.map((x,i)=>({c:x.c,pos:i+1,pts:Q.weeks.slice(0,fi+1).map((_,k)=>tab(Q,k).find(y=>y.c===x.c).p).join(',')}));
+ const ys=L.map(l=>l.ly).sort((a,b)=>a-b),apart=ys.every((y,i)=>!i||y-ys[i-1]>=10.9);
+ const chips=await pg.$$('.rc-ln .er-chip, .rc-ln .er-chips');
+ return JSON.stringify(L.map(l=>({c:l.c,pos:l.pos,pts:l.pts})))===JSON.stringify(want)&&apart&&!chips.length}
 const setWeek=async(pg,i)=>{await pg.$eval('#rcw',(e,v)=>{e.value=String(v);e.dispatchEvent(new Event('input'))},i);await pg.waitForTimeout(200)};
 (async()=>{const b=await T.launch();
  const LG='l_4WFCIZ',cur=F.leagues[LG].seasons[F.leagues[LG].seasons.length-1].s;
- let {ctx,pg,errs}=await T.open(b,{vw:1000,league:LG,hash:'#/race'});await pg.waitForSelector('.rc-row',{timeout:90000});await pg.waitForTimeout(900);
+ let {ctx,pg,errs}=await T.open(b,{vw:1000,league:LG,hash:'#/race'});await pg.waitForSelector('.rc-row',{state:'attached',timeout:90000});await pg.waitForTimeout(900);
  /* the current season, last week */
  let Q=season(LG,cur),last=Q.weeks.length-1;
  ok(+await pg.$eval('#rcw',e=>e.max)===last&&+await pg.$eval('#rcw',e=>e.value)===last,'the slider has one step per week ('+(last+1)+' weeks of '+cur+'), on the last');
  let got=(await shown(pg)).map(slim),exp=want(Q,last);
  ok(JSON.stringify(got)===JSON.stringify(exp),'last week of '+cur+': position, points, played, won, drawn, lost, goal difference and bar of every club match ('+exp[0].c+' '+exp[0].pts+')');
+ await pg.click('#rcvw button[data-v="table"]');await pg.waitForTimeout(300);
  ok(await pg.$$eval('.rc-row',a=>a.every(r=>{const p=+r.dataset.pos;return Math.abs(r.getBoundingClientRect().top-a.find(x=>x.dataset.pos==='1').getBoundingClientRect().top-(p-1)*40)<=1.5})),'every row sits at its place in the list (40 px apart, in order of position)');
+ await pg.click('#rcvw button[data-v="lines"]');await pg.waitForTimeout(300);
+ ok(await pg.$eval('.rc-card',e=>e.classList.contains('rc-v-lines'))&&await linesOk(pg,Q,last),'Lines (the first view): one line per club ('+Q.teams.length+'), each the club\'s points after every week of '+cur+', in the order of the table, the end labels apart, no club buttons under it');
  ok(/Week to \d{4}-\d\d-\d\d · \d+ of \d+ matches/.test(await pg.innerText('#rcl'))&&(await pg.innerText('#rcl')).includes(Q.N+' of '+Q.N+' matches'),'the label names the week and the matches played ('+Q.N+' of '+Q.N+')');
  ok(!/champions/.test(await pg.innerText('#rce'))&&/lead with/.test(await pg.innerText('#rce')),'an unfinished season says who leads, not who won');
  /* a middle week, then the next one: the move marks */
  const mid=Math.floor(last/2);await setWeek(pg,mid);got=(await shown(pg)).map(slim);exp=want(Q,mid);
  ok(JSON.stringify(got)===JSON.stringify(exp),'week '+(mid+1)+': every row matches');
+ ok(await linesOk(pg,Q,mid),'week '+(mid+1)+': the lines stop at that week ('+(mid+1)+' points each) and the order follows that week\'s table');
  await setWeek(pg,mid+1);const before=want(Q,mid),after=want(Q,mid+1),sh=await shown(pg),mvOk=sh.every(r=>{const d=before.find(x=>x.c===r.c).pos-after.find(x=>x.c===r.c).pos;return r.mv===(d>0?'▲'+d:d<0?'▼'+(-d):'')});
  ok(mvOk&&sh.some(r=>r.mv),'move marks between week '+(mid+1)+' and '+(mid+2)+': ▲ n / ▼ n equals the places gained or lost ('+sh.filter(r=>r.mv).length+' clubs moved)');
  /* a finished season ends in its real final table, with the champion */
  const fin='2025-26',Qf=season(LG,fin),lf=Qf.weeks.length-1;await pg.selectOption('#rcs',String(F.leagues[LG].seasons.findIndex(s=>s.s===fin)));await pg.waitForTimeout(500);
  got=(await shown(pg)).map(slim);exp=want(Qf,lf);ok(JSON.stringify(got)===JSON.stringify(exp),fin+' (finished): the last of '+(lf+1)+' weeks matches, '+exp[0].c+' on '+exp[0].pts);
+ ok(await linesOk(pg,Qf,lf),fin+': the lines of the whole finished season ('+(lf+1)+' weeks) match');
  ok(Qf.N===Qf.teams.length*(Qf.teams.length-1),fin+': all '+Qf.N+' matches are in the last week, so it is the real final table');
  {const fl=(()=>{const t={};Qf.teams.forEach(c=>t[c]={c,p:0,gd:0,gf:0});for(const m of Qf.ms){const h=t[m.h],a=t[m.a];h.gf+=m.hg;a.gf+=m.ag;h.gd+=m.hg-m.ag;a.gd+=m.ag-m.hg;h.p+=m.hg>m.ag?3:m.hg===m.ag?1:0;a.p+=m.ag>m.hg?3:m.hg===m.ag?1:0}return Object.values(t).sort((x,y)=>y.p-x.p||y.gd-x.gd||y.gf-x.gf||cmp(x.c,y.c))})();
   ok(JSON.stringify(got.map(r=>r.c))===JSON.stringify(fl.map(x=>x.c)),'the last week lists the clubs in the order of the final table worked out from every match ('+fl[0].c+' first)');
@@ -49,7 +60,13 @@ const setWeek=async(pg,i)=>{await pg.$eval('#rcw',(e,v)=>{e.value=String(v);e.di
  await pg.click('#rcp');await pg.waitForFunction(l=>+document.querySelector('#rcw').value===l,lf,{timeout:30000});await pg.waitForTimeout(500);
  ok(await pg.$eval('#rcp',e=>e.textContent)==='▶'&&+await pg.$eval('#rcw',e=>e.value)===lf,'it stops by itself on the last week and the button shows play again');
  /* views */
- ok(await pg.$eval('#rcl2',e=>e.classList.contains('rc-bars'))&&await pg.$eval('.rc-row .rc-b',e=>getComputedStyle(e).display!=='none')&&await pg.$eval('.rc-row .rc-w',e=>getComputedStyle(e).display==='none'),'Bars: the bar is shown, the won / drawn / lost columns are not');
+ ok(await pg.$eval('.rc-ln',e=>getComputedStyle(e).display!=='none')&&await pg.$eval('#rcl2',e=>getComputedStyle(e).display==='none')&&await pg.$eval('.rc-h',e=>getComputedStyle(e).display==='none'),'Lines: the chart is shown, the table and its header are not');
+ /* following a club in the lines: clicking its name at the end of its line keeps it (the table follows too), hovering a line only previews it */
+ {const L0=await linesOf(pg),t2=L0[1].c;await pg.click('.rc-svg .er-l[data-t="'+t2+'"] .er-t');await pg.waitForTimeout(250);
+  ok(await pg.evaluate(t=>[...document.querySelectorAll('.rc-svg .er-l')].every(g=>g.classList.contains('hi')===(g.dataset.t===t)&&g.classList.contains('dim')===(g.dataset.t!==t))&&[...document.querySelectorAll('.rc-row')].every(r=>r.classList.contains('rc-pin')===(r.dataset.t===t)),t2),'clicking '+t2+'\'s line follows it: its line stands out, the others fade and the table follows it too');
+  await pg.click('.rc-svg .er-l[data-t="'+t2+'"] .er-t');await pg.mouse.move(2,2);await pg.waitForTimeout(200);ok(await pg.$$eval('.rc-svg .er-l.hi,.rc-svg .er-l.dim,.rc-row.rc-pin',a=>!a.length),'clicking it again lets it go');
+  const t4=L0[3].c;await pg.hover('.rc-svg .er-l[data-t="'+t4+'"] .er-t');await pg.waitForTimeout(150);ok(await pg.$eval('.rc-svg .er-l[data-t="'+t4+'"]',g=>g.classList.contains('hi'))&&await pg.$$eval('.rc-row.rc-pin',a=>!a.length),'hovering '+t4+'\'s line previews it without keeping it');
+  await pg.mouse.move(2,2);await pg.waitForTimeout(150);ok(await pg.$$eval('.rc-svg .er-l.hi',a=>!a.length),'moving away lets the preview go')}
  await pg.click('#rcvw button[data-v="table"]');await pg.waitForTimeout(400);
  ok(await pg.$eval('#rcl2',e=>e.classList.contains('rc-tab'))&&await pg.$eval('.rc-row .rc-b',e=>getComputedStyle(e).display==='none')&&await pg.$eval('.rc-row .rc-w',e=>getComputedStyle(e).display!=='none')&&await pg.$eval('.rc-h',e=>getComputedStyle(e).display!=='none'),'Table: the columns and their header are shown, the bar is not');
  ok(await pg.$eval('#rcvw button[data-v="table"]',e=>e.getAttribute('aria-pressed')==='true'&&e.classList.contains('on'))&&!!(await pg.$('#rcvw .lgx-g')),'the view choice is marked and has the glass');
@@ -66,23 +83,23 @@ const setWeek=async(pg,i)=>{await pg.$eval('#rcw',(e,v)=>{e.value=String(v);e.di
  ok(await pg.evaluate(([k,r])=>{const on=document.querySelector('#secnav button.on'),h=document.getElementById('hubbar'),cur=h.querySelector(':scope > a.on'),back=h.querySelector(':scope > .hb-back');return !!on&&on.dataset.k===r&&(cur?cur.getAttribute('href')==='#/'+k:true)&&(r==='home'||(!!back&&back.getAttribute('href')==='#/r-'+r))},['race','league']),'the page is in the league room: the room bar marks it, and the bar above it links back to the room and marks the page open');
  ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));await ctx.close();
  /* leaving while it plays stops the clock */
- ({ctx,pg,errs}=await T.open(b,{vw:1000,league:LG,hash:'#/race'}));await pg.waitForSelector('.rc-row',{timeout:90000});await pg.click('#rcr');await pg.click('#rcspd button[data-s="4"]');await pg.click('#rcp');await pg.waitForTimeout(500);
+ ({ctx,pg,errs}=await T.open(b,{vw:1000,league:LG,hash:'#/race'}));await pg.waitForSelector('.rc-row',{state:'attached',timeout:90000});await pg.click('#rcr');await pg.click('#rcspd button[data-s="4"]');await pg.click('#rcp');await pg.waitForTimeout(500);
  await pg.evaluate(()=>location.hash='#/table');await pg.waitForSelector('.lt',{timeout:60000});await pg.waitForTimeout(1500);ok(!(await pg.$('#rcroot'))&&!errs.length,'leaving the page while it plays: the table is shown, no error ('+errs.slice(0,1)+')');await ctx.close();
  {const c2_=await b.newContext();await c2_.route(/results\.json/,async r=>{await new Promise(z=>setTimeout(z,2500));r.continue()});const p2=await c2_.newPage(),e2=[];p2.on('pageerror',e=>e2.push(e.message));
   await p2.goto('http://127.0.0.1:8765/index.html#/race');await p2.waitForSelector('#rcroot',{timeout:60000});await p2.evaluate(()=>location.hash='#/table');await p2.waitForSelector('.lt',{timeout:60000});await p2.waitForTimeout(3500);
   ok(!(await p2.$('#rcroot'))&&await p2.$('.lt')&&!e2.length,'leaving before the data arrives: the table stays, no error');await c2_.close()}
  {const c3=await b.newContext();let fail=true;await c3.route(/results\.json/,r=>{if(fail)r.fulfill({status:500,body:''});else r.continue()});const p3=await c3.newPage();await p3.goto('http://127.0.0.1:8765/index.html#/race');
-  await p3.waitForSelector('#rcroot .empty:not(.skel)',{timeout:90000});const msg=await p3.textContent('#rcroot');fail=false;await p3.evaluate(()=>{location.hash='#/table'});await p3.waitForSelector('.lt',{timeout:60000});await p3.evaluate(()=>{location.hash='#/race'});await p3.waitForSelector('.rc-row',{timeout:90000});
+  await p3.waitForSelector('#rcroot .empty:not(.skel)',{timeout:90000});const msg=await p3.textContent('#rcroot');fail=false;await p3.evaluate(()=>{location.hash='#/table'});await p3.waitForSelector('.lt',{timeout:60000});await p3.evaluate(()=>{location.hash='#/race'});await p3.waitForSelector('.rc-row',{state:'attached',timeout:90000});
   ok(/not available right now/.test(msg)&&!!(await p3.$('.rc-row')),'a failing file shows a message and is loaded again on the next visit');await c3.close()}
  /* reduced motion: nothing slides, the page still plays */
- ({ctx,pg,errs}=await T.open(b,{vw:1000,league:LG,hash:'#/race'}));await pg.emulateMedia({reducedMotion:'reduce'});await pg.waitForSelector('.rc-row',{timeout:90000});await pg.waitForTimeout(500);
+ ({ctx,pg,errs}=await T.open(b,{vw:1000,league:LG,hash:'#/race'}));await pg.emulateMedia({reducedMotion:'reduce'});await pg.waitForSelector('.rc-row',{state:'attached',timeout:90000});await pg.waitForTimeout(500);
  ok(await pg.$eval('.rc-row',e=>parseFloat(getComputedStyle(e).transitionDuration)===0)&&await pg.$eval('.rc-b i',e=>parseFloat(getComputedStyle(e).transitionDuration)===0),'reduced motion: rows and bars move at once, no slide');
  await setWeek(pg,3);Q=season(LG,cur);ok(JSON.stringify((await shown(pg)).map(slim))===JSON.stringify(want(Q,3)),'reduced motion: the week still changes the table correctly');await ctx.close();
  /* Arabic and a phone */
- for(const lang of ['ar','en']){({ctx,pg,errs}=await T.open(b,{vw:390,lang,league:LG,hash:'#/race'}));await pg.waitForSelector('.rc-row',{timeout:90000});await pg.waitForTimeout(600);
-  ok(await T.noscroll(pg),lang+' phone: no horizontal scroll');
+ for(const lang of ['ar','en']){({ctx,pg,errs}=await T.open(b,{vw:390,lang,league:LG,hash:'#/race'}));await pg.waitForSelector('.rc-row',{state:'attached',timeout:90000});await pg.waitForTimeout(600);
+  ok(await T.noscroll(pg)&&await pg.$eval('.rc-svg',e=>{const r=e.getBoundingClientRect();return r.width>300&&r.right<=innerWidth+1}),lang+' phone: the lines fit, no horizontal scroll');
   await pg.click('#rcvw button[data-v="table"]');await pg.waitForTimeout(300);ok(await T.noscroll(pg)&&await pg.$$eval('.rc-row',a=>a.every(r=>r.scrollWidth<=r.clientWidth+1)),lang+' phone: the Table view fits without scrolling');
-  if(lang==='ar'){const u=await pg.evaluate(T.untr,'#app');ok(!u.length,'Arabic: page translated '+u.slice(0,5).join(' | '));ok(/سباق اللقب/.test(await pg.textContent('#app h2')),'Arabic title');
+  if(lang==='ar'){const u=await pg.evaluate(`(${T.untr})('#app','select,option,.fx-en,bdi,.lx-t,.ph-lt,svg')`);ok(!u.length,'Arabic: page translated '+u.slice(0,5).join(' | '));ok(/سباق اللقب/.test(await pg.textContent('#app h2')),'Arabic title');
    ok(/الأسبوع لين/.test(await pg.textContent('#rcl'))&&/من/.test(await pg.textContent('#rcl')),'Arabic: the week label');ok(!/\$\{|NaN|undefined/.test(await pg.innerText('#app')),'no template text, NaN or undefined')}
   ok(!errs.length,lang+' phone: no page errors '+errs.slice(0,2).join(' ; '));await pg.screenshot({path:__dirname+'/race_390_'+lang+'.png',fullPage:false});await ctx.close()}
  await T.done(b)})();
