@@ -108,7 +108,8 @@
     P('compare','scale','Put players or teams side by side on any measures','حط لاعبين أو أندية جنب بعض على أي مقاييس'),
     P('twins','versus','Who plays most like him? The quick version, or pick the stats you care about','مين يلعب أكثر شي مثله؟ بالنسخة السريعة أو باختيار الإحصائيات اللي تهمك')]},
    {k:'market',n:['Market','السوق'],p:[
-    P('prices','coin','What are the players worth?','كم قيمة اللاعبين؟')]},
+    P('prices','coin','What are the players worth?','كم قيمة اللاعبين؟'),
+    P('replace','repeat','Who plays most like him, for less money?','مين يلعب مثله بسعر أقل؟')]},
    {k:'repeat',n:['Does it repeat?','هل يتكرر؟'],p:[
     P('stability','repeat','Which numbers repeat from season to season, and which are luck?','أي الأرقام تتكرر من موسم لموسم وأيها حظ؟'),
     P('keepsup','line','Who is likely to keep it up next season?','مين المتوقع يحافظ على مستواه الموسم الجاي؟'),
@@ -138,7 +139,8 @@
    {k:'predict',n:['Predict','توقّع'],p:[
     P('beat','crystal','Predict scores and try to beat the model','توقّع النتائج وحاول تغلب النموذج'),
     P('lab','flask','Your predictions against the model, fixture by fixture','توقعاتك ضد النموذج، مباراة بمباراة'),
-    P('reportcard','gear','How accurate is the model, honestly?','كم دقة النموذج، بصراحة؟')]},
+    P('reportcard','gear','How accurate is the model, honestly?','كم دقة النموذج، بصراحة؟'),
+    P('ledger','target','The models asked before every match, scored after it','النماذج تتوقع قبل كل مباراة وتنقيّم بعدها')]},
    {k:'stories',n:['Stories','قصص'],p:[
     P('wrapped','slides','Your club\'s or a player\'s season as story slides','موسم ناديك أو لاعب كشرائح قصة')]}]}];
  /* the room tiles and the landing cards need these */
@@ -146,6 +148,8 @@
  ROOMS.forEach(r=>r.groups.forEach(g=>g.p.forEach(e=>{ENT.set(e[0],{room:r,group:g,e});GRP.set(r.k+'-'+g.k,g)})));
 /* extra words a person might type for a page (English and Arabic), beside its name and its answer: the menu's box and the search find a page by them too */
  const KW={sim:'title champions champion winner forecast odds probability simulation لقب بطل توقع احتمال محاكاة',stakes:'title relegation top four european places swing لقب هبوط',
+  replace:'replacement alternative cheaper similar scouting transfer budget بديل أرخص شبيه ميزانية انتقال',
+  ledger:'track record forecast predictions accuracy who will win odds bookmakers توقعات سجل دقة مين يفوز',
   prices:'market value worth price transfermarkt money سعر قيمة سوقية',career:'last season previous seasons history over the years past تاريخ مواسم سابقة الماضي',race:'title champions top of the table time machine any day back in time لقب آلة الزمن',
   table:'standings positions points ranking ترتيب نقاط',matches:'fixtures schedule results scores نتائج جدول مباريات',h2h:'derby rivalry head to head record rivals',toty:'team of the year best eleven best xi',
   guess:'wordle daily quiz puzzle لغز يومي',twins:'similar like look like replacement alternative lookalike',keepers:'goalkeeper keeper saves gloves حارس',
@@ -160,9 +164,9 @@
  const NEXT={table:['race','sim','luck'],race:['sim','runin','stakes'],sim:['stakes','race','elo'],luck:['reality','states','table'],matches:['round','thrill','xi'],round:['toty','thrill','stakes'],
   teams:['shape','elo','h2h'],elo:['river','h2h','value'],h2h:['elo','clubtwins','fortress'],fortress:['rest','halves','value'],value:['prices','table','elo'],
   players:['career','story','twins'],story:['career','cards','twins'],career:['stability','keepsup','story'],rankings:['ratings','gems','toty'],ratings:['toty','gems','cards'],gems:['twins','stability','prices'],
-  twins:['compare','career','story'],stability:['keepsup','keepers','bench'],keepsup:['stability','career','prices'],prices:['value','gems','career'],
+  twins:['compare','career','story'],stability:['keepsup','keepers','bench'],keepsup:['stability','career','prices'],prices:['replace','value','gems'],replace:['twins','prices','career'],
   shots:['reality','heatmaps','passing'],heatmaps:['shape','shots','defense'],defense:['height','keepers','ppda'],passing:['carry','shots','ppda'],ppda:['height','defense','keepers'],
-  fantasy:['share','beat','ratings'],beat:['lab','reportcard','fantasy'],cards:['builder','battle','story'],builder:['battle','cards','toty'],guess:['wrapped','cards','career'],wrapped:['story','guess','cards']};
+  fantasy:['share','beat','ratings'],beat:['lab','reportcard','ledger'],ledger:['reportcard','elo','battle'],cards:['builder','battle','story'],builder:['battle','cards','toty'],guess:['wrapped','cards','career'],wrapped:['story','guess','cards']};
  /* ---------- the structure the rest of the site reads ---------- */
  const SEC=ROOMS.map(r=>{const g=r.groups.map(x=>({k:r.k+'-'+x.k,n:x.n[0],p:x.p.map(e=>e[0])}));return {k:r.k,n:r.n[0],g,p:(r.k==='home'?[]:[landing(r)]).concat(g.flatMap(x=>x.p)),
    ic:`<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${M[r.ic]}</g>`}});

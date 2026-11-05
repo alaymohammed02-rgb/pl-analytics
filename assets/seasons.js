@@ -24,6 +24,8 @@
   runin:['The run-in uses today\'s ratings and the matches still to play this season.','باقي الموسم يستخدم تقييمات اليوم والمباريات اللي ما انلعبت بعد هذا الموسم.'],
   battle:['XI Battle uses the players\' numbers as of now.','معركة التشكيلات تستخدم أرقام اللاعبين الحالية.'],
   value:['Squad values are today\'s dated market values, set against this season\'s table.','قيم التشكيلات هي القيم السوقية المؤرّخة الحالية، مقارنة بجدول هذا الموسم.'],
+  replace:['Replace him uses today\'s dated market values with this season\'s players.','صفحة البديل تستخدم القيم السوقية المؤرّخة الحالية مع لاعبي هذا الموسم.'],
+  ledger:['The prediction ledger follows the season under way, match by match.','سجل التوقعات يتابع الموسم الجاري، مباراة بمباراة.'],
   career:['The career page adds the season under way to the finished seasons.','صفحة المسيرة تضيف الموسم الجاري إلى المواسم المنتهية.'],
   rare:['Very rare cases are worked out by the sync for the current season only.','الحالات النادرة تنحسب في المزامنة للموسم الحالي فقط.']};
  function store(s,lid){

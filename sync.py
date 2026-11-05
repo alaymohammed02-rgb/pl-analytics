@@ -2120,7 +2120,11 @@ _X_CSS = (".pitch{width:100%;max-width:840px;display:block;border-radius:8px;mar
 _X_JS = r'''/* ===== Addon: Passing network / Heatmaps / PPDA (reads data/*_adv.json and data/*_heat.json) ===== */
 let ADV=null,HEAT=null;
 const lgMeta=()=>ALL.leagues.find(l=>l.id===D.id)||{};
-async function loadJson(file,v){const r=await fetch('data/'+file+'?v='+encodeURIComponent(v||ALL.generated||''));if(!r.ok)throw new Error(file+' (HTTP '+r.status+')');return r.json()}
+/* the same file asked again while it is still downloading shares that one download (the Overview asked data/elo_own.json three times at once); each caller parses its own copy, so one cannot change another's */
+const LJQ=new Map();
+async function loadJson(file,v){const u='data/'+file+'?v='+encodeURIComponent(v||ALL.generated||'');let p=LJQ.get(u);
+ if(!p){p=fetch(u).then(r=>{if(!r.ok)throw new Error(file+' (HTTP '+r.status+')');return r.text()});LJQ.set(u,p);const done=()=>{if(LJQ.get(u)===p)LJQ.delete(u)};p.then(done,done)}
+ return JSON.parse(await p)}
 async function loadAdv(){if(ADV)return ADV;const m=lgMeta();if(!m.adv_file)return null;const a=await loadJson(m.adv_file,m.adv_v);a.exm=new Map((a.ex||[]).map(e=>[e.i,e]));ADV=a;return a}
 async function loadHeat(){if(HEAT)return HEAT;const m=lgMeta();if(!m.heat_file)return null;HEAT=await loadJson(m.heat_file,m.adv_v);return HEAT}
 const exTag=(m,k)=>{if(!ADV)return tag('ni');const e=ADV.exm.get(m.match_id);return tag(e&&e[k]>0?'available':'missing')};
@@ -9019,11 +9023,11 @@ INDEX = _x_fpx_index(INDEX)
 # الكود في ملفات مستقلة في المستودع: assets/*.js و assets/features.css و manifest.webmanifest و sw.js و assets/icons/.
 # هذا القسم يضيف روابطها للصفحة فقط (بعد السكربت الرئيسي، فتلقى R و PAGES جاهزة). غيّر FEATURES_V لما تتغير الملفات.
 # ============================================================================
-FEATURES_V = "103"
+FEATURES_V = "105"
 FEATURES_JS = ("pla-data", "share-card", "threat-map", "match-whatif", "player-page", "match-centre", "home-extra", "team-round",
                "preview", "club-extra", "rankings-extra", "fantasy-extra", "insights-core", "rooms", "hidden-gems", "player-dna", "team-dna",
                "reality-check", "matches-board", "match-replay", "match-story", "overview", "press-height",
-               "season-sim", "luck-table", "player-twin", "player-cards", "beat-model", "rare-cases", "attack-share", "drawer", "tap-twice", "line-height", "league-pool", "game-states", "likely-xi", "club-twins", "carry-team", "report-card", "league-dna", "thrill", "defense-card", "press-card", "sb-press", "stat-stability", "keeps-up", "goalkeepers", "xi-builder", "player-prices", "xi-battle", "player-story", "time-machine", "ask", "wrapped", "levels", "club-elo", "title-race", "elo-river", "heartbeat", "club-shape", "fortress", "late-show", "run-in", "team-season", "notify", "team-calendar", "elo-kit", "rest-days", "value-points", "player-career", "head-to-head", "stakes", "guess-player", "bench-impact", "offline-note", "pitch3d", "recap", "stadium3d", "club-matches", "matches-page", "player-heat", "merged", "holo", "seasons", "liquid-glass")
+               "season-sim", "luck-table", "player-twin", "player-cards", "beat-model", "rare-cases", "attack-share", "drawer", "tap-twice", "line-height", "league-pool", "game-states", "likely-xi", "club-twins", "carry-team", "report-card", "ledger", "league-dna", "thrill", "defense-card", "press-card", "sb-press", "stat-stability", "keeps-up", "goalkeepers", "xi-builder", "player-prices", "replace-him", "xi-battle", "player-story", "time-machine", "ask", "wrapped", "levels", "club-elo", "title-race", "elo-river", "heartbeat", "club-shape", "fortress", "late-show", "run-in", "team-season", "notify", "team-calendar", "elo-kit", "rest-days", "value-points", "player-career", "head-to-head", "stakes", "guess-player", "bench-impact", "offline-note", "pitch3d", "recap", "stadium3d", "club-matches", "matches-page", "player-heat", "merged", "holo", "seasons", "liquid-glass")
 
 
 def _x_feat_index(html):
@@ -9050,7 +9054,33 @@ def _x_feat_index(html):
                                   '<link rel="preload" as="font" type="font/woff2" href="assets/fonts/plex-sans-latin-600.woff2" crossorigin>', 1)
     else:
         log("  تنبيه (ملفات الميزات): ما لقيت عنوان الصفحة، تخطيت ملف التطبيق")
-    js = "".join(f'<script src="assets/{n}.js?v={v}"></script>' for n in FEATURES_JS)
+    # fetchpriority="low": the page scripts (about 500 KB gzipped) download after the data the page needs first; measured on a slowed phone (tests/perf), the
+    # league file arrived at 3.3 s instead of 6.4 s. They still run in this order, so nothing about how they load into each other changes.
+    js = "".join(f'<script fetchpriority="low" src="assets/{n}.js?v={v}"></script>' for n in FEATURES_JS)
+    # while the page scripts are still downloading, a script that calls route() redraws the open page only when it brought that page's own renderer (or a new
+    # one); otherwise the page would be drawn once per script (85 times) as soon as the data came first. One more draw when they have all run.
+    boot = "/* ---------- التشغيل ---------- */"
+    # which page script is the last to set each page's renderer (R.<page> = …): while loading, a page waits for it instead of being drawn by an earlier version
+    lastr = {}
+    for i, n in enumerate(FEATURES_JS):
+        try:
+            fsrc = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", n + ".js"), encoding="utf-8").read()
+        except OSError:
+            continue
+        for k in re.findall(r"\bR\.([A-Za-z_]\w*)\s*=(?!=)", fsrc) + re.findall(r"\bR\[['\"]([\w-]+)['\"]\]\s*=(?!=)", fsrc):
+            lastr[k] = i
+    if html.count(boot) == 1:
+        html = html.replace(boot, ("/* while the page scripts load: the open page is drawn once the last script that sets its renderer has run (not once per script);"
+                                   " once more when all have run */\n"
+                                   f"const RT_ORD={json.dumps(list(FEATURES_JS))},RT_LAST={json.dumps(lastr, sort_keys=True)};let RT_HI=-1,RT_FN=null,RT_PG='';const route0=route;\n"
+                                   "route=function(){if(document.readyState!=='loading')return route0();"
+                                   "const cs=document.currentScript,m=cs&&cs.src&&/assets\\/([\\w-]+)\\.js/.exec(cs.src);if(m){const i=RT_ORD.indexOf(m[1]);if(i>RT_HI)RT_HI=i}"
+                                   "const pg=((location.hash||'#/overview').split('/')[1])||'overview',fn=R[pg]||null,need=RT_LAST[pg]!=null?RT_LAST[pg]:-1;"
+                                   "if((!fn&&!(typeof PLAN==='object'&&PLAN[pg]))||RT_HI<need){const el=$('#app');if(el&&!el.querySelector('.skel'))el.innerHTML='<div class=\"empty skel\">Loading…</div>';return Promise.resolve()}"
+                                   "if(fn===RT_FN&&pg===RT_PG)return Promise.resolve();RT_FN=fn;RT_PG=pg;return route0()};\n"
+                                   "document.addEventListener('DOMContentLoaded',()=>{if(typeof D==='object'&&D)route0()});\n") + boot, 1)
+    else:
+        log("  تنبيه (ملفات الميزات): ما لقيت بداية التشغيل، تخطيت تجميع الرسم")
     sw = ("<script>if('serviceWorker' in navigator&&location.protocol==='https:')addEventListener('load',()=>"
           "navigator.serviceWorker.register('sw.js').catch(()=>null))</script>")
     return html.replace(old, f'</script><link rel="stylesheet" href="assets/features.css?v={v}"><link rel="stylesheet" href="assets/insights.css?v={v}"><link rel="stylesheet" href="assets/replay.css?v={v}"><link rel="stylesheet" href="assets/overview.css?v={v}"><link rel="stylesheet" href="assets/press-height.css?v={v}"><link rel="stylesheet" href="assets/fun.css?v={v}"><link rel="stylesheet" href="assets/identity.css?v={v}">{js}{sw}</body></html>')
@@ -11506,7 +11536,7 @@ function psSaved(){for(const st of [()=>localStorage,()=>sessionStorage])try{con
 /* files that only describe the current season (today's matches, coming fixtures, live scores, season facts, rare cases):
    in a past season they answer "not found", so the widgets that use them stay out instead of mixing in this season */
 function psCurOnly(){if(window.__psF)return;const f0=window.fetch;window.__psF=1;
- window.fetch=function(u){const s=String(u&&u.url||u);if(/(^|\/)data\/(live|fixtures|schedule|facts|rare|fpl|fpl_track|market|elo|elo_own|priors|xib|xib_test|story)\.json/.test(s))return Promise.resolve(new Response('{}',{status:404}));return f0.apply(this,arguments)}}
+ window.fetch=function(u){const s=String(u&&u.url||u);if(/(^|\/)data\/(live|fixtures|schedule|facts|rare|fpl|fpl_track|market|elo|elo_own|priors|xib|xib_test|story|ledger)\.json/.test(s))return Promise.resolve(new Response('{}',{status:404}));return f0.apply(this,arguments)}}
 function psView(x){
  ALL0=x;const s=psSaved();if(!s||!x||!x.seasons||!x.leagues)return x;
  let lid=null;for(const st of [()=>localStorage,()=>sessionStorage])try{lid=st().getItem('league');if(lid)break}catch(e){}
@@ -13178,6 +13208,255 @@ def run_pipeline(hub, pit_key):
         log(f"  [القصة] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
     return out
 # ===== STORY END =====
+
+# ===== LEDGER START =====
+# سجل التوقعات (data/ledger.json): قبل كل مباراة من الدوريات الستة (خلال 8 أيام من الحين) نثبّت توقعات النماذج الموجودة في الموقع، وبعد النتيجة نقيّمها.
+# الهدف تجربة صادقة على مباريات ما شافها أي نموذج: كل توقع مكتوب قبل صافرة البداية (ووقته في الملف وفي تاريخ git)، وما يتغيّر بعد البداية أبدًا.
+#   e  = Elo من نتائج PitchAPI (data/elo_own.json: التقييم الحالي + أفضلية الأرض، نفس ordered logit)
+#   m2 = نموذج xG Poisson 2 (نفس حساب صفحة المختبر: xG الموسم + بداية من الموسم الماضي data/priors.json بوزن 12 مباراة)
+#   xi = نموذج معركة التشكيلات (data/xib.json) بآخر تشكيلة رسمية لكل نادي (التشكيلة الحقيقية تنعرف قبل المباراة بساعة بس، فهذا تقريب)
+#   bl = متوسط Elo ونموذج التشكيلات: الفكرة اللي سجّلت 0.585 مقابل 0.590 لـ Elo لكن انشافت بعد الاختبار، فهنا تنجرّب على مباريات جديدة
+#   b  = نسب فوز الأرض / التعادل / الفوز خارجها في كل مباريات سلسلة الدوري قبل التثبيت (data/results.json): المقياس الأدنى
+# بعد المباراة: النتيجة من ملف الدوري (نفس رقم المباراة ونفس الفريقين)، واحتمالات إغلاق المراهنات من data/market.json إذا توفرت (للمقارنة فقط،
+# مو توقع مثبّت). ما نكتب الملف إلا إذا تغيّر شي. اختياري: الخطأ ما يوقف المزامنة.
+LEDGER_PATH = "data/ledger.json"
+LEDGER_DAYS = 8
+LEDGER_MK_DAYS = 14
+LEDGER_LEAGUES = ("l_4WFCIZ", "l_0ErfuF", "l_1Isor4", "l_3FJFUl", "l_0ALvwF", "l_4QexZg")
+LEDGER_MODELS = ("e", "m2", "xi", "bl")
+
+
+def ldg_iso(t):
+    return t.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def ldg_when(s):
+    s = str(s or "")
+    if len(s) == 10:
+        s += "T00:00:00Z"
+    return datetime.datetime.strptime(s[:19], "%Y-%m-%dT%H:%M:%S").replace(tzinfo=datetime.timezone.utc)
+
+
+def ldg_pois(l):
+    o, p = [], math.exp(-l)
+    for k in range(11):
+        o.append(p)
+        p *= l / (k + 1)
+    return o
+
+
+def ldg_grid(lh, la):
+    ph, pa = ldg_pois(lh), ldg_pois(la)
+    w = dr = lo = 0.0
+    for i in range(11):
+        for j in range(11):
+            q = ph[i] * pa[j]
+            if i > j:
+                w += q
+            elif i == j:
+                dr += q
+            else:
+                lo += q
+    s = w + dr + lo
+    return [w / s, dr / s, lo / s]
+
+
+def ldg_score(s):
+    m = re.fullmatch(r"\s*(\d+)\s*[-–:]\s*(\d+)\s*", str(s or ""))
+    return (int(m.group(1)), int(m.group(2))) if m else None
+
+
+def ldg_m2(L, SH, prior):
+    """the Intelligence Lab's match model (labMatchModel in the page), the same sums: returns f(home, away) → [p home, p draw, p away] or None"""
+    tx = {}
+    if SH and SH.get("cols"):
+        c = {n: i for i, n in enumerate(SH["cols"])}
+        for r in SH.get("rows") or []:
+            if r[c["og"]]:
+                continue
+            x = r[c["xg"]]
+            k = (r[c["m"]], r[c["c"]])
+            tx[k] = tx.get(k, 0.0) + (x if isinstance(x, (int, float)) and math.isfinite(x) else 0.0)
+    T, hs, as_, n = {}, 0.0, 0.0, 0
+    for m in (L or {}).get("matches") or []:
+        if not ldg_score(m.get("s")) or not m.get("d"):
+            continue
+        xh, xa = tx.get((m["i"], m["h"])), tx.get((m["i"], m["a"]))
+        if xh is None or xa is None:
+            continue
+        n += 1
+        hs += xh
+        as_ += xa
+        for t, f, a in ((m["h"], xh, xa), (m["a"], xa, xh)):
+            r = T.setdefault(t, [0, 0.0, 0.0])
+            r[0] += 1
+            r[1] += f
+            r[2] += a
+    if n < 10:
+        return None
+    pri = {}
+    if prior and (prior.get("mu") or 0) > 0 and prior.get("teams"):
+        mu0 = prior["mu"]
+        for t, r in prior["teams"].items():
+            if r[0] >= 10:
+                pri[t] = [(r[1] + 3 * mu0) / (r[0] + 3) / mu0, (r[2] + 3 * mu0) / (r[0] + 3) / mu0]
+    v2 = bool(pri)
+    H, A = hs / n, as_ / n
+    mu = (H + A) / 2
+    N0 = 12 if v2 else 3
+
+    def st(t):
+        r, p = T.get(t), pri.get(t, [1, 1])
+        if not v2 and not (r and r[0] >= 3):
+            return None
+        k = r[0] if r else 0
+        return (((r[1] if r else 0) + N0 * mu * p[0]) / (k + N0) / mu, ((r[2] if r else 0) + N0 * mu * p[1]) / (k + N0) / mu)
+
+    def f(h, a):
+        x, y = st(h), st(a)
+        if not x or not y:
+            return None
+        return ldg_grid(H * x[0] * y[1], A * y[0] * x[1])
+    return f
+
+
+def ldg_xis(L, MX):
+    """each club's latest official XI (as XI Battle takes it): club → (date, [(player id, slot)])"""
+    out = {}
+    mm = (MX or {}).get("m") or {}
+    ms = sorted([m for m in (L or {}).get("matches") or [] if m.get("d")], key=lambda m: (str(m["d"]), str(m["i"])), reverse=True)
+    for m in ms:
+        lu = (mm.get(m["i"]) or {}).get("lu") or {}
+        for s, club in (("h", m.get("h")), ("a", m.get("a"))):
+            if not club or club in out:
+                continue
+            xi = (lu.get(s) or {}).get("xi")
+            if isinstance(xi, list) and len(xi) == 11:
+                out[club] = (str(m["d"])[:10], [(e[0], int(e[3])) for e in xi])
+    return out
+
+
+def ldg_slot(s):
+    return "GK" if s == 11 else "DF" if s < 50 else "MF" if s < 100 else "FW"
+
+
+def ldg_xi_probs(X, xh, xa):
+    """XI Battle's model (xib_probs) for two elevens, home side first; a player without minutes counts as his position's mean in a mean team"""
+    mu = X.get("mu") or {}
+
+    def rate(p, s):
+        r = (X.get("p") or {}).get(p)
+        if r:
+            return (r[0], r[1], r[2])
+        g = ldg_slot(s)
+        att = (mu.get("att") or {}).get(g)
+        return (att if att is not None else 0.15, mu.get("team"), mu.get("team"))
+    a = xib_side([rate(p, s) for p, s in xh])
+    b = xib_side([rate(p, s) for p, s in xa])
+    return xib_probs(a, b, 1.0, {"b": (X.get("params") or {}).get("b") or XIB["b"]})[0]
+
+
+def ldg_base(R, lid, before):
+    """home / draw / away shares of every finished match of the league's chain before `before` (YYYY-MM-DD)"""
+    c = [0, 0, 0]
+    for s in ((R or {}).get("leagues") or {}).get(lid, {}).get("seasons") or []:
+        for m in s.get("m") or []:
+            if m[0] < before:
+                c[0 if m[3] > m[4] else 1 if m[3] == m[4] else 2] += 1
+    n = sum(c)
+    return [x / n for x in c] if n >= 100 else None
+
+
+def ldg_r(p):
+    return [round(x, 4) for x in p] if p else None
+
+
+def ldg_step(get, now, old):
+    """the new ledger from the old one: predictions for coming fixtures (re-made while the kick-off is ahead, never after it), results and closing odds."""
+    old = old if isinstance(old, dict) and isinstance(old.get("p"), dict) else {}
+    P = {k: dict(v) for k, v in (old.get("p") or {}).items()}
+    idx = get("data/index.json") or {}
+    have = {l.get("id"): l for l in idx.get("leagues") or []}
+    fx = (get("data/fixtures.json") or {}).get("leagues") or {}
+    E = (get("data/elo_own.json") or {})
+    EP = E.get("params") or EL2
+    X = get("data/xib.json") or {}
+    PR = (get("data/priors.json") or {}).get("leagues") or {}
+    R = get("data/results.json") or {}
+    MK = (get("data/market.json") or {}).get("leagues") or {}
+    stamp, today = ldg_iso(now), now.strftime("%Y-%m-%d")
+    horizon = now + datetime.timedelta(days=LEDGER_DAYS)
+    for lid in LEDGER_LEAGUES:
+        meta = have.get(lid)
+        if not meta or not meta.get("file"):
+            continue
+        L = get("data/" + meta["file"]) or {}
+        ids = {m.get("i"): m for m in L.get("matches") or []}
+        coming = [f for f in fx.get(lid) or [] if f.get("i") and f.get("k") and now < ldg_when(f["k"]) <= horizon and f["i"] not in ids]
+        if coming:
+            SH = get("data/" + meta["sh_file"]) if meta.get("sh_file") else None
+            MX = get("data/" + meta["mx_file"]) if meta.get("mx_file") else None
+            m2 = ldg_m2(L, SH, PR.get(lid))
+            xis = ldg_xis(L, MX) if X.get("p") else {}
+            teams = ((E.get("leagues") or {}).get(lid) or {}).get("teams") or {}
+            base = ldg_r(ldg_base(R, lid, today))
+            for f in coming:
+                h, a = f["h"], f["a"]
+                e = el2_probs(teams[h]["r"] - teams[a]["r"] + EP["H"], EP) if h in teams and a in teams else None
+                p2 = m2(h, a) if m2 else None
+                xi = ldg_xi_probs(X, xis[h][1], xis[a][1]) if h in xis and a in xis else None
+                bl = [(x + y) / 2 for x, y in zip(e, xi)] if e and xi else None
+                new = {"lg": lid, "k": f["k"], "h": h, "a": a, "e": ldg_r(e), "m2": ldg_r(p2), "xi": ldg_r(xi), "bl": ldg_r(bl), "b": base,
+                       "xd": [xis[h][0], xis[a][0]] if xi else None}
+                cur = P.get(f["i"])
+                same = cur and all(cur.get(k) == v for k, v in new.items())
+                if not same:
+                    new["t"] = stamp
+                    P[f["i"]] = new
+        # results and closing odds of the predictions already locked (kick-off passed)
+        mk = {r.get("m"): r for r in (MK.get(lid) or {}).get("rows") or []}
+        for mid, v in P.items():
+            if v.get("lg") != lid or ldg_when(v["k"]) > now:
+                continue
+            if "o" not in v:
+                m = ids.get(mid)
+                sc = ldg_score(m.get("s")) if m else None
+                if sc and m.get("h") == v["h"] and m.get("a") == v["a"]:
+                    v["s"] = f"{sc[0]}-{sc[1]}"
+                    v["o"] = 0 if sc[0] > sc[1] else 1 if sc[0] == sc[1] else 2
+            if "mk" not in v and now - ldg_when(v["k"]) <= datetime.timedelta(days=LEDGER_MK_DAYS):
+                r = mk.get(mid)
+                if r and r.get("p") and r.get("h") == v["h"] and r.get("a") == v["a"]:
+                    v["mk"] = ldg_r(r["p"])
+    # a prediction whose kick-off is still ahead but whose fixture left the list (moved beyond the window or removed) is dropped: it was never locked
+    live = {f.get("i") for lid in LEDGER_LEAGUES for f in fx.get(lid) or []}
+    P = {k: v for k, v in P.items() if ldg_when(v["k"]) <= now or k in live}
+    return {"v": 1, "since": old.get("since") or today, "models": list(LEDGER_MODELS), "p": dict(sorted(P.items(), key=lambda kv: (kv[1]["k"], kv[0])))}
+
+
+def sync_ledger(hub, now=None):
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    old = gh_get_json(hub, LEDGER_PATH) or {}
+    new = ldg_step(lambda p: gh_get_json(hub, p), now, old)
+    if new.get("p") == old.get("p") and new.get("since") == old.get("since"):
+        return
+    new["t"] = ldg_iso(now)
+    gh_put(hub, LEDGER_PATH, json.dumps(new, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), "Update prediction ledger")
+    locked = sum(1 for v in new["p"].values() if ldg_when(v["k"]) <= now)
+    log(f"  [سجل التوقعات] {len(new['p'])} توقع، {locked} بعد البداية، {sum(1 for v in new['p'].values() if 'o' in v)} مقيّم")
+
+
+_orig_run_pipeline_ldg = run_pipeline
+
+
+def run_pipeline(hub, pit_key):
+    out = _orig_run_pipeline_ldg(hub, pit_key)
+    try:
+        sync_ledger(hub)
+    except Exception as e:      # optional: never stops the sync
+        log(f"  [سجل التوقعات] خطأ ({type(e).__name__}: {e}) — بقية المزامنة ما تأثرت")
+    return out
+# ===== LEDGER END =====
 
 # ===== NOTIFY START =====
 # Notifications for the teams you star (owner asked 30 Oct 2026). The site is static, so it cannot push by itself; this step is the sender, and it has two doors:

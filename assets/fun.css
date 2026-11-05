@@ -816,3 +816,21 @@ html body #secnav button{min-height:40px;padding:6px 16px;font-size:14.5px}
 #app:has(.rm-wm){position:relative}html body #app .rm-wm{position:absolute;inset-inline-end:14px;top:2px;width:132px;height:132px;color:color-mix(in srgb,var(--th-hi) 13%,transparent);pointer-events:none;stroke-width:1.1}
 @media (max-width:520px){html body #app .rm-wm{width:92px;height:92px}}
 .cs-p tr.cs-o td{opacity:.65}
+/* Prediction ledger (assets/ledger.js) */
+.ldg-l{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.ldg-m{border:1px solid var(--ln);border-radius:12px;padding:10px 12px}
+.ldg-h{display:flex;flex-direction:column;gap:2px;margin-bottom:6px}.ldg-h .mu{font-size:12px}
+.ldg-pt{width:100%;border-collapse:collapse;font-size:13px}.ldg-pt th{font-weight:600;font-size:11px;color:var(--mu)}.ldg-pt td,.ldg-pt th{padding:2px 4px}
+.ldg-pt tr[data-k="bl"] td{font-weight:700}.ldg-pt tr[data-k="b"] td{color:var(--mu)}
+.ldg-at{font-size:11px;margin:6px 0 0}
+.ldg-y{text-decoration:underline;text-underline-offset:3px;font-weight:700}
+.ldg-more{margin-top:8px}
+.ldg-lg{flex-wrap:wrap}
+.ldg-w{overflow-x:auto;max-width:100%}
+/* Replace him (assets/replace-him.js) */
+.rh-l{margin:8px 0 2px;font-size:12px}.rh-seg{flex-wrap:wrap}
+.rh-n{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}.rh-n .mu{font-size:12px}
+.rh-save{font-size:12px;color:var(--th-hi);white-space:nowrap}
+.rh-nv{font-size:12px}
+/* the language button reads "عربي" on the English page: the system font draws it, so the Arabic web font (45 KB) is not downloaded for one word */
+html[lang=en] body #langbtn{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Arabic",Tahoma,sans-serif}

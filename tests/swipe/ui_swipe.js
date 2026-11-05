@@ -28,8 +28,12 @@ async function pressDay(pg,d){await pg.click('.mb-days button[data-d="'+d+'"]');
 const listY=pg=>pg.$eval('.mb-g,.mb-empty',e=>{const r=e.getBoundingClientRect();return r.y+Math.min(r.height-6,60)});
 (async()=>{const b=await T.launch();
  let {ctx,pg,cdp,errs}=await phone(b,'en');
- const ds=await days(pg),d0=await day(pg),i0=ds.indexOf(d0);
- ok(ds.length>=3&&i0>0&&i0<ds.length-1,'the board opens on today ('+d0+') with a day before and a day after, '+ds.length+' days in the strip');
+ const ds=await days(pg),d0=await day(pg),it=ds.indexOf(d0);
+ ok(ds.length>=3&&it>0&&it<ds.length-1,'the board opens on today ('+d0+') with a day before and a day after, '+ds.length+' days in the strip');
+ /* the rest needs a day with matches and a day on each side: today, or the nearest such day (a day without a match, e.g. midweek, has an empty list) */
+ let i0=it;{const cand=ds.map((d,i)=>i).filter(i=>i>0&&i<ds.length-1).sort((a,b)=>Math.abs(a-it)-Math.abs(b-it)||a-b);
+  for(const i of cand){await pg.click('.mb-days button[data-d="'+ds[i]+'"]');await pg.waitForTimeout(250);if(await pg.$('.mb-pg a.mb-r')){i0=i;break}}
+  ok(!!(await pg.$('.mb-pg a.mb-r')),'the swipes start on '+ds[i0]+(i0===it?' (today)':' (the nearest day with matches; today has none)'))}
  const X=195,Y=await listY(pg);let nbText='';
  /* the list follows the finger */
  {const up=await down(cdp,pg,X+90,Y,X-10,Y,200);const m=await mv(pg);
