@@ -2120,7 +2120,11 @@ _X_CSS = (".pitch{width:100%;max-width:840px;display:block;border-radius:8px;mar
 _X_JS = r'''/* ===== Addon: Passing network / Heatmaps / PPDA (reads data/*_adv.json and data/*_heat.json) ===== */
 let ADV=null,HEAT=null;
 const lgMeta=()=>ALL.leagues.find(l=>l.id===D.id)||{};
-async function loadJson(file,v){const r=await fetch('data/'+file+'?v='+encodeURIComponent(v||ALL.generated||''));if(!r.ok)throw new Error(file+' (HTTP '+r.status+')');return r.json()}
+/* the same file asked again while it is still downloading shares that one download (the Overview asked data/elo_own.json three times at once); each caller parses its own copy, so one cannot change another's */
+const LJQ=new Map();
+async function loadJson(file,v){const u='data/'+file+'?v='+encodeURIComponent(v||ALL.generated||'');let p=LJQ.get(u);
+ if(!p){p=fetch(u).then(r=>{if(!r.ok)throw new Error(file+' (HTTP '+r.status+')');return r.text()});LJQ.set(u,p);const done=()=>{if(LJQ.get(u)===p)LJQ.delete(u)};p.then(done,done)}
+ return JSON.parse(await p)}
 async function loadAdv(){if(ADV)return ADV;const m=lgMeta();if(!m.adv_file)return null;const a=await loadJson(m.adv_file,m.adv_v);a.exm=new Map((a.ex||[]).map(e=>[e.i,e]));ADV=a;return a}
 async function loadHeat(){if(HEAT)return HEAT;const m=lgMeta();if(!m.heat_file)return null;HEAT=await loadJson(m.heat_file,m.adv_v);return HEAT}
 const exTag=(m,k)=>{if(!ADV)return tag('ni');const e=ADV.exm.get(m.match_id);return tag(e&&e[k]>0?'available':'missing')};
@@ -9019,7 +9023,7 @@ INDEX = _x_fpx_index(INDEX)
 # الكود في ملفات مستقلة في المستودع: assets/*.js و assets/features.css و manifest.webmanifest و sw.js و assets/icons/.
 # هذا القسم يضيف روابطها للصفحة فقط (بعد السكربت الرئيسي، فتلقى R و PAGES جاهزة). غيّر FEATURES_V لما تتغير الملفات.
 # ============================================================================
-FEATURES_V = "104"
+FEATURES_V = "105"
 FEATURES_JS = ("pla-data", "share-card", "threat-map", "match-whatif", "player-page", "match-centre", "home-extra", "team-round",
                "preview", "club-extra", "rankings-extra", "fantasy-extra", "insights-core", "rooms", "hidden-gems", "player-dna", "team-dna",
                "reality-check", "matches-board", "match-replay", "match-story", "overview", "press-height",
@@ -9050,7 +9054,33 @@ def _x_feat_index(html):
                                   '<link rel="preload" as="font" type="font/woff2" href="assets/fonts/plex-sans-latin-600.woff2" crossorigin>', 1)
     else:
         log("  تنبيه (ملفات الميزات): ما لقيت عنوان الصفحة، تخطيت ملف التطبيق")
-    js = "".join(f'<script src="assets/{n}.js?v={v}"></script>' for n in FEATURES_JS)
+    # fetchpriority="low": the page scripts (about 500 KB gzipped) download after the data the page needs first; measured on a slowed phone (tests/perf), the
+    # league file arrived at 3.3 s instead of 6.4 s. They still run in this order, so nothing about how they load into each other changes.
+    js = "".join(f'<script fetchpriority="low" src="assets/{n}.js?v={v}"></script>' for n in FEATURES_JS)
+    # while the page scripts are still downloading, a script that calls route() redraws the open page only when it brought that page's own renderer (or a new
+    # one); otherwise the page would be drawn once per script (85 times) as soon as the data came first. One more draw when they have all run.
+    boot = "/* ---------- التشغيل ---------- */"
+    # which page script is the last to set each page's renderer (R.<page> = …): while loading, a page waits for it instead of being drawn by an earlier version
+    lastr = {}
+    for i, n in enumerate(FEATURES_JS):
+        try:
+            fsrc = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", n + ".js"), encoding="utf-8").read()
+        except OSError:
+            continue
+        for k in re.findall(r"\bR\.([A-Za-z_]\w*)\s*=(?!=)", fsrc) + re.findall(r"\bR\[['\"]([\w-]+)['\"]\]\s*=(?!=)", fsrc):
+            lastr[k] = i
+    if html.count(boot) == 1:
+        html = html.replace(boot, ("/* while the page scripts load: the open page is drawn once the last script that sets its renderer has run (not once per script);"
+                                   " once more when all have run */\n"
+                                   f"const RT_ORD={json.dumps(list(FEATURES_JS))},RT_LAST={json.dumps(lastr, sort_keys=True)};let RT_HI=-1,RT_FN=null,RT_PG='';const route0=route;\n"
+                                   "route=function(){if(document.readyState!=='loading')return route0();"
+                                   "const cs=document.currentScript,m=cs&&cs.src&&/assets\\/([\\w-]+)\\.js/.exec(cs.src);if(m){const i=RT_ORD.indexOf(m[1]);if(i>RT_HI)RT_HI=i}"
+                                   "const pg=((location.hash||'#/overview').split('/')[1])||'overview',fn=R[pg]||null,need=RT_LAST[pg]!=null?RT_LAST[pg]:-1;"
+                                   "if((!fn&&!(typeof PLAN==='object'&&PLAN[pg]))||RT_HI<need){const el=$('#app');if(el&&!el.querySelector('.skel'))el.innerHTML='<div class=\"empty skel\">Loading…</div>';return Promise.resolve()}"
+                                   "if(fn===RT_FN&&pg===RT_PG)return Promise.resolve();RT_FN=fn;RT_PG=pg;return route0()};\n"
+                                   "document.addEventListener('DOMContentLoaded',()=>{if(typeof D==='object'&&D)route0()});\n") + boot, 1)
+    else:
+        log("  تنبيه (ملفات الميزات): ما لقيت بداية التشغيل، تخطيت تجميع الرسم")
     sw = ("<script>if('serviceWorker' in navigator&&location.protocol==='https:')addEventListener('load',()=>"
           "navigator.serviceWorker.register('sw.js').catch(()=>null))</script>")
     return html.replace(old, f'</script><link rel="stylesheet" href="assets/features.css?v={v}"><link rel="stylesheet" href="assets/insights.css?v={v}"><link rel="stylesheet" href="assets/replay.css?v={v}"><link rel="stylesheet" href="assets/overview.css?v={v}"><link rel="stylesheet" href="assets/press-height.css?v={v}"><link rel="stylesheet" href="assets/fun.css?v={v}"><link rel="stylesheet" href="assets/identity.css?v={v}">{js}{sw}</body></html>')
