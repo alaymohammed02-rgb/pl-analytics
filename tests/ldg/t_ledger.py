@@ -257,7 +257,7 @@ ok(set(L6['p']) == locked, 'fixtures gone from the list: the locked predictions 
 ok(L6['since'] == L0['since'] == NOW.strftime('%Y-%m-%d'), 'the start date is kept from the first run')
 
 # ---- the step writes only on change; failures never stop the sync
-STORE = {}
+STORE = {'data/ledger.json': {'v': 1, 'since': '', 'models': [], 'p': {}}}   # start from the placeholder, whatever the live file holds
 G['gh_get_json'] = lambda hub, p: copy.deepcopy(STORE[p]) if p in STORE else get(p)
 G['gh_put'] = lambda hub, p, c, m: (PUT.append(p), STORE.__setitem__(p, json.loads(c)))
 G['sync_ledger'](None, NOW)
