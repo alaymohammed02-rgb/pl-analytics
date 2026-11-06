@@ -31,6 +31,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FORCE_SYNC: ${{ github.event.inputs.force }}
           PUSH_KEYS: ${{ secrets.PUSH_KEYS }}
+          LIVE_KEY: ${{ secrets.LIVE_KEY }}
         run: |
           python3 -m venv .venv
           . .venv/bin/activate
