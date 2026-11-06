@@ -9030,6 +9030,25 @@ FEATURES_JS = ("pla-data", "share-card", "threat-map", "match-whatif", "player-p
                "season-sim", "luck-table", "player-twin", "player-cards", "beat-model", "rare-cases", "attack-share", "drawer", "tap-twice", "line-height", "league-pool", "game-states", "likely-xi", "club-twins", "carry-team", "report-card", "ledger", "league-dna", "thrill", "defense-card", "press-card", "sb-press", "stat-stability", "keeps-up", "goalkeepers", "xi-builder", "player-prices", "replace-him", "transfer-planner", "player-roles", "my-club", "age-curves", "weekly-digest", "xi-battle", "player-story", "time-machine", "ask", "wrapped", "levels", "club-elo", "title-race", "elo-river", "heartbeat", "club-shape", "fortress", "late-show", "run-in", "team-season", "notify", "team-calendar", "elo-kit", "rest-days", "value-points", "player-career", "head-to-head", "stakes", "guess-player", "bench-impact", "offline-note", "pitch3d", "recap", "stadium3d", "club-matches", "matches-page", "player-heat", "merged", "holo", "seasons", "liquid-glass")
 
 
+def rt_last_compute(base=None):
+    """{page: index in FEATURES_JS of the last script that sets R.<page>}; {} when the assets folder is not next to sync.py (the sync runner)."""
+    out = {}
+    base = base or os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
+    for i, n in enumerate(FEATURES_JS):
+        try:
+            fsrc = open(os.path.join(base, n + ".js"), encoding="utf-8").read()
+        except OSError:
+            continue
+        for k in re.findall(r"\bR\.([A-Za-z_]\w*)\s*=(?!=)", fsrc) + re.findall(r"\bR\[['\"]([\w-]+)['\"]\]\s*=(?!=)", fsrc):
+            out[k] = i
+    return out
+
+
+# ===== RTLAST START =====
+RT_LAST_BAKED = {"age": 54, "ask": 59, "battle": 56, "beat": 27, "bench": 80, "builder": 48, "cards": 26, "career": 76, "carry": 37, "club": 85, "clubtwins": 36, "digest": 55, "elo": 62, "fortress": 67, "gems": 14, "guess": 79, "h2h": 77, "halves": 10, "heartbeat": 65, "heatmaps": 87, "height": 32, "keepers": 47, "keepsup": 46, "late": 68, "leaguedna": 40, "ledger": 39, "luck": 24, "match": 83, "matches": 86, "myclub": 53, "overview": 21, "player": 76, "ppda": 43, "pressline": 22, "preview": 8, "prices": 49, "race": 63, "rare": 28, "ratings": 10, "reality": 17, "recap": 83, "replace": 50, "replay": 20, "reportcard": 38, "rest": 74, "river": 64, "roles": 52, "round": 21, "runin": 69, "sbpress": 44, "shape": 66, "share": 29, "sim": 23, "stability": 45, "stakes": 78, "states": 34, "story": 57, "thrill": 41, "timemachine": 58, "toty": 70, "transfers": 51, "twins": 25, "value": 75, "whatif": 3, "wrapped": 60, "xi": 35}
+# ===== RTLAST END =====
+
+
 def _x_feat_index(html):
     old = "</script></body></html>"
     if html.count(old) != 1:
@@ -9061,14 +9080,7 @@ def _x_feat_index(html):
     # one); otherwise the page would be drawn once per script (85 times) as soon as the data came first. One more draw when they have all run.
     boot = "/* ---------- التشغيل ---------- */"
     # which page script is the last to set each page's renderer (R.<page> = …): while loading, a page waits for it instead of being drawn by an earlier version
-    lastr = {}
-    for i, n in enumerate(FEATURES_JS):
-        try:
-            fsrc = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", n + ".js"), encoding="utf-8").read()
-        except OSError:
-            continue
-        for k in re.findall(r"\bR\.([A-Za-z_]\w*)\s*=(?!=)", fsrc) + re.findall(r"\bR\[['\"]([\w-]+)['\"]\]\s*=(?!=)", fsrc):
-            lastr[k] = i
+    lastr = rt_last_compute() or dict(RT_LAST_BAKED)      # on the runner only sync.py is downloaded (no assets/): the baked copy keeps the loading order, tests/live-style check keeps it fresh
     if html.count(boot) == 1:
         html = html.replace(boot, ("/* while the page scripts load: the open page is drawn once the last script that sets its renderer has run (not once per script);"
                                    " once more when all have run */\n"
@@ -9485,11 +9497,189 @@ def sync_live(client, hub, lids, t_now=None):
                 ev_n += 1
     if seen:
         log("  [Live] قيم status من PitchAPI للمباريات القريبة: " + ", ".join(f"{k or '—'} ({v})" for k, v in sorted(seen.items())))
+    lf_new = lf_apply(M, win, t_now, old.get("lf"), os.environ.get("LIVE_KEY"))   # live goals (api-football), only while a match is under way and only with the secret
     out = dict(t=now(), m=M)
-    if json.dumps(M, sort_keys=True) != before:
+    if lf_new and (lf_new.get("n") or old.get("lf")):
+        out["lf"] = lf_new
+    if json.dumps(M, sort_keys=True) != before or out.get("lf") != old.get("lf"):
         gh_put(hub, LV_PATH, json.dumps(out, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), "Update live")
         LV_HAVE["live"] = 1
         log(f"  [Live] {len(win)} مباراة قريبة: {lu_n} تشكيلة رسمية جديدة، أحداث {ev_n} مباراة")
+
+# ===== LIVEFEED START =====
+# Live goals from api-football (owner chose it 6 Nov 2026; the key is the GitHub secret LIVE_KEY, never in the repository or the browser). PitchAPI gives nothing while a match is
+# on (measured), so while a match of data/fixtures.json is under way ONE request, fixtures?live=all, returns every live match with its events; each is matched to ours by kick-off
+# time (+-20 minutes) and both team names, and its goals are written into data/live.json in the same format PitchAPI's events use, so notify_goals / notify_plan send them as before.
+# Budget: at most LF_DAILY_MAX requests a UTC day, one every 9 minutes after LF_SLOW_AT, none once the API says LF_MIN_REMAINING are left, and none when no match is under way.
+# A match whose goals do not add up to the API's score is left as it was (the score shown is always counted from the goals). Not tried against the real API from the sandbox.
+import urllib.request, urllib.error
+
+LF_HOST = "https://v3.football.api-sports.io"
+LF_DAILY_MAX = 90
+LF_SLOW_AT = 60
+LF_MIN_REMAINING = 8
+LF_LIVE = ("1H", "2H", "HT", "ET", "BT", "P", "LIVE", "INT", "SUSP")
+LF_DONE = ("FT", "AET", "PEN")
+LF_GENERIC = {"fc", "afc", "cf", "sc", "ac", "as", "us", "ss", "ssc", "fk", "sv", "vfb", "vfl", "rb", "de", "of", "the", "and", "04", "05", "09", "96", "98", "1899", "1846", "1860", "1893", "1"}
+
+
+def lf_tokens(name):
+    s = unicodedata.normalize("NFKD", str(name or "").lower())
+    s = "".join(c for c in s if not unicodedata.combining(c)).replace("ø", "o").replace("ł", "l").replace("ß", "ss")
+    t = [x for x in re.split(r"[^a-z0-9]+", s) if x]
+    return [x for x in t if x not in LF_GENERIC] or t
+
+
+def _lf_rel(a, b):
+    return a == b or (min(len(a), len(b)) >= 3 and (a.startswith(b) or b.startswith(a)))
+
+
+def lf_same(a, b):
+    """The same club under two spellings: every word of the shorter name appears (or starts) in the longer, or the first words agree and the second words start alike."""
+    ta, tb = lf_tokens(a), lf_tokens(b)
+    if not ta or not tb:
+        return False
+    sh, lo = (ta, tb) if len(ta) <= len(tb) else (tb, ta)
+    if all(any(_lf_rel(x, y) for y in lo) for x in sh):
+        return True
+    if len(ta[0]) < 4 or ta[0] != tb[0]:
+        return False
+    return len(ta) < 2 or len(tb) < 2 or ta[1][:3] == tb[1][:3]      # same first word and, when both have one, a second word that starts alike ("Bayern Munich" / "Bayern München")
+
+
+def lf_goals(item):
+    """The goals of one live item as PitchAPI-style events [minute, added, "goal", side, scorer, "", home before, away before, own goal, penalty], or None when they do not add up
+    to the API's own score (an own goal's team is read both ways and the way that adds up is kept)."""
+    tm = item.get("teams") or {}
+    hid = (tm.get("home") or {}).get("id")
+    gl = item.get("goals") or {}
+    gh, ga = gl.get("home"), gl.get("away")
+    if gh is None or ga is None:
+        return None
+    raw = []
+    for x in item.get("events") or []:
+        if x.get("type") != "Goal":
+            continue
+        d = str(x.get("detail") or "").lower()
+        if "missed" in d or str(x.get("comment") or "").lower().startswith("penalty shootout"):
+            continue
+        t = x.get("time") or {}
+        raw.append((t.get("elapsed") or 0, t.get("extra") or 0, "h" if (x.get("team") or {}).get("id") == hid else "a", (x.get("player") or {}).get("name") or "", "own" in d, "penalty" in d))
+    raw.sort(key=lambda r: (r[0], r[1]))
+    for flip in (True, False):
+        h = a = 0
+        out = []
+        for el, ex, side, who, og, pen in raw:
+            s = ("a" if side == "h" else "h") if (og and flip) else side
+            out.append([el, ex, "goal", s, who, "", h, a, 1 if og else 0, 1 if pen else 0])
+            if s == "h":
+                h += 1
+            else:
+                a += 1
+        if (h, a) == (gh, ga):
+            return out
+    return None
+
+
+def lf_match(f, items):
+    """The live item that is this fixture: kick-off within 20 minutes and both names agree; None when there is none or more than one."""
+    k = _parse_ts(str(f.get("k") or "").replace("Z", ""))
+    if k is None:
+        return None
+    hit = []
+    for it in items:
+        ts = _parse_ts(str(((it.get("fixture") or {}).get("date")) or "")[:19])
+        if ts is None or abs((ts - k).total_seconds()) > 1200:
+            continue
+        tm = it.get("teams") or {}
+        if lf_same(f.get("h"), (tm.get("home") or {}).get("name")) and lf_same(f.get("a"), (tm.get("away") or {}).get("name")):
+            hit.append(it)
+    return hit[0] if len(hit) == 1 else None
+
+
+def lf_fetch(key, path="/fixtures?live=all", timeout=10):
+    """(body, requests left today or None, error text or None). The key is only ever sent in the header and never logged."""
+    req = urllib.request.Request(LF_HOST + path, headers={"x-apisports-key": key, "Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            body = json.loads(r.read().decode("utf-8"))
+            rem = r.headers.get("x-ratelimit-requests-remaining")
+            return body, (int(rem) if rem and str(rem).isdigit() else None), None
+    except urllib.error.HTTPError as e:
+        return None, None, f"HTTP {e.code}"
+    except Exception as e:
+        return None, None, type(e).__name__
+
+
+def lf_apply(M, win, t_now, state, key, fetch=None, stamp=None):
+    """Put the live goals of the matches under way into M (the entries of data/live.json) and return the new budget state {d, n, t, rem}. Never raises."""
+    fetch = fetch or lf_fetch
+    st = dict(state or {})
+    today = t_now.strftime("%Y-%m-%d")
+    if st.get("d") != today:
+        st = {"d": today, "n": 0, "t": st.get("t"), "rem": None}
+    try:
+        act = [(lid, f, mins) for lid, f, mins in win if -LIVE_AFTER_MIN_LF <= mins <= 2 and not (M.get(str(f.get("i"))) or {}).get("lfd")]
+        if not key or not act:
+            return st
+        last = _parse_ts(st.get("t")) if st.get("t") else None
+        gap = (t_now - last).total_seconds() if last else 1e9
+        if st["n"] >= LF_DAILY_MAX:
+            log(f"  [LiveFeed] daily budget of {LF_DAILY_MAX} requests used: no more calls today")
+            return st
+        if gap < 240 or (st["n"] >= LF_SLOW_AT and gap < 540):
+            return st
+        if st.get("rem") is not None and st["rem"] <= LF_MIN_REMAINING:
+            log(f"  [LiveFeed] the API says {st['rem']} requests are left today: stopping")
+            return st
+        body, rem, err = fetch(key)
+        st["n"] += 1
+        st["t"] = stamp or t_now.strftime("%Y-%m-%dT%H:%M:%SZ")
+        if rem is not None:
+            st["rem"] = rem
+        if body is None:
+            log(f"  [LiveFeed] request failed ({err}); {st['n']} used today")
+            return st
+        errs = body.get("errors")
+        if errs:
+            log(f"  [LiveFeed] the API refused: {json.dumps(errs, ensure_ascii=False)[:300]}")
+            return st
+        items = body.get("response") or []
+        log(f"  [LiveFeed] {len(items)} live matches, {len(act)} of ours under way; {st['n']} requests used today, {st.get('rem')} left")
+        for lid, f, mins in act:
+            mid = str(f.get("i"))
+            e = M.get(mid)
+            if e is None:
+                continue
+            it = lf_match(f, items)
+            if it is None:
+                if e.get("lf") and mins <= -105:
+                    e["lfd"] = 1
+                elif not e.get("lfx") and mins <= -3:
+                    e["lfx"] = 1
+                    log(f"  [LiveFeed] no live match found for {f.get('h')} - {f.get('a')} (names or kick-off differ?)")
+                continue
+            s = str(((it.get("fixture") or {}).get("status") or {}).get("short") or "")
+            ev = lf_goals(it)
+            gl = it.get("goals") or {}
+            e["lf"] = 1
+            e["lfs"] = s
+            if s in LF_LIVE or s in LF_DONE:
+                e["st"] = "inprogress" if s in LF_LIVE else "finished"
+            if gl.get("home") is not None and gl.get("away") is not None:
+                e["sh"], e["sa"] = gl.get("home"), gl.get("away")
+            if ev is None:
+                log(f"  [LiveFeed] goals of {f.get('h')} - {f.get('a')} do not add up to the score: events left as they were")
+            else:
+                e["ev"] = ev
+                e["evt"] = st["t"]
+    except Exception as ex:
+        log(f"  [LiveFeed] error ({type(ex).__name__}: {ex}): the rest of the sync is not affected")
+    return st
+
+
+LIVE_AFTER_MIN_LF = 150
+# ===== LIVEFEED END =====
 
 
 # ---------- إحصائيات الشوطين ----------

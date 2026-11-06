@@ -3,6 +3,7 @@
 set -e
 cd "$(dirname "$0")"
 R="${PLREPO:-$(cd .. && pwd)}"; export R
+python3 "$R/tools/rt/bake.py"
 python3 gen_index.py "$R/sync.py" "$R/index.html" | tail -1
 python3 - <<'PY'
 import os,sys,importlib.util
