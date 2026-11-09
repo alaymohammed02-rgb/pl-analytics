@@ -6,7 +6,7 @@
    goals, assists), then more clues as the guesses go: per-90 shots, key passes and tackles, how he plays (progressive passes, take-ons, aerials, clearances, share of actions in the
    opponent's half), starts against substitute appearances and his usual shirt number (line-ups), goals against xG, PitchAPI ratings (average, best, worst), position and age, the
    month, weekday and star sign of his birthday (Transfermarkt's date of birth), league, nationality, a band for his market value, club and the shape of his name. A clue whose data is
-   missing is left out. The clues open in steps, so that all of them are open at the last guess (ceil(clues x guesses so far / 6)). Six guesses. A name typed in the box is matched against every player of the pool (accents and case ignored) and picked from a
+   missing is left out. The clues open in steps, so that all of them are open at the last guess (ceil(clues x guesses so far / 6)). Six guesses. A name typed in the box is matched against every player of the pool (accents and case ignored; Arabic letters by sound, INS.nameSound) and picked from a
    list, or, for someone who does not know names, picked with three steps (league, club, then the club's players); the same player cannot be guessed twice. The result is kept in this browser (plx_gp), with the streak of days won in a row; "Share" copies a short result with squares and no
    names. "Play another" gives a random player, outside the streak. Nothing is sent anywhere. */
 (function(){
@@ -124,8 +124,10 @@
   return out.map((c,i)=>({...c,k:i+1,shown:i<open}));
  }
  function sug(P){
-  const q=fold(S.q);if(q.length<2)return [];
   const taken=new Set(S.st.g.map(k=>P.by.get(k).id)),out=[];
+  /* a name typed in Arabic letters is matched by sound (INS.nameSound), nearest first */
+  if(INS.nameSound&&INS.nameSound.isArabic(S.q))return INS.nameSound.search(S.q,uniq(P).filter(p=>!taken.has(p.id)),p=>p.name,(a,b)=>b.mi-a.mi||(a.key<b.key?-1:1),2).slice(0,8);
+  const q=fold(S.q);if(q.length<2)return [];
   for(const p of uniq(P)){if(taken.has(p.id))continue;if(fold(p.name).includes(q))out.push(p);if(out.length>=60)break}
   return out.sort((a,b)=>(fold(a.name).startsWith(q)?0:1)-(fold(b.name).startsWith(q)?0:1)||b.mi-a.mi||(a.key<b.key?-1:1)).slice(0,8);
  }
@@ -157,7 +159,7 @@
     <ol class="gp-cl">${cl.map(c=>`<li class="gp-c${c.shown?' on':''}" data-k="${c.k}" data-c="${c.id}">${c.shown?`<b>${c.h}</b><span>${c.b}</span>`:`<span class="mu">${two('Clue '+c.k+' (locked)','التلميح '+nb(c.k)+' (مقفل)')}</span>`}</li>`).join('')}</ol>
     ${S.st.g.length?`<div class="gp-gs" id="gpgs">${S.st.g.map((k,i)=>{const p=P.by.get(k),right=isA(P,k);return `<span class="gp-g ${right?'ok':'no'}" data-k="${esc(k)}">${i+1}. ${nm(p?p.name:'?')} <i>${right?'✓':'✗'}</i></span>`}).join('')}</div>`:''}
     ${done?'':`<div class="gp-in"><div class="seg gp-ui" id="gpui" role="group" aria-label="${ar()?'طريقة الاختيار':'How to pick'}">${[['type','Type a name','اكتب الاسم'],['list','Pick from a list','اختر من قائمة']].map(([k,e,r])=>`<button type="button" data-k="${k}" aria-pressed="${S.ui===k}" class="${S.ui===k?'on':''}">${two(e,r)}</button>`).join('')}</div>
-     ${S.ui==='list'?pickHtml(P):`<input id="gpq" type="search" autocomplete="off" placeholder="${ar()?'اكتب اسم لاعب (بالإنجليزي)':'Type a player\'s name'}" value="${esc(S.q)}" aria-label="${ar()?'اسم اللاعب':'Player name'}"><ul class="gp-sg" id="gpsg" role="listbox">${list.map(sbtn).join('')}</ul>`}
+     ${S.ui==='list'?pickHtml(P):`<input id="gpq" type="search" autocomplete="off" placeholder="${ar()?'اكتب اسم لاعب (عربي أو إنجليزي)':'Type a player\'s name'}" value="${esc(S.q)}" aria-label="${ar()?'اسم اللاعب':'Player name'}"><ul class="gp-sg" id="gpsg" role="listbox">${list.map(sbtn).join('')}</ul>`}
      <p class="mu gp-l">${two(`${guessesLeft()} ${guessesLeft()===1?'guess':'guesses'} left`,`باقي ${nb(guessesLeft())} ${guessesLeft()===1?'محاولة':'محاولات'}`)}</p></div>`}
     ${done?`<div class="gp-end" id="gpend" data-won="${S.st.won?1:0}"><h3>${S.st.won?two(`Yes! It is ${esc(a.name)}`,`صح! هو ${nm(a.name)}`):two(`It was ${esc(a.name)}`,`كان ${nm(a.name)}`)}</h3>
      <p class="mu">${nm(a.club||'?')} · ${nm(a.lgn)}${a.age!=null?' · '+nb(a.age):''}</p>

@@ -6,7 +6,9 @@
 const T=require('../nf/lib.js');const {ok,J}=T;const {execFileSync}=require('child_process');
 const FX=J('fixtures.json').leagues,E=J('elo_own.json');
 const LGS=['l_4WFCIZ','l_0ErfuF','l_1Isor4','l_3FJFUl','l_0ALvwF','l_4QexZg'];
-const first=LGS.flatMap(l=>(FX[l]||[]).map(f=>f.k)).filter(k=>k>=E.leagues.l_4WFCIZ.last).sort()[0];
+/* "now" = six hours before a full round: the first coming fixture with 30 or more fixtures in its 8 days (a lone rearranged match in an international break has not) */
+const KS=LGS.flatMap(l=>(FX[l]||[]).map(f=>f.k)).filter(k=>k>=E.leagues.l_4WFCIZ.last).sort();
+const first=KS.find(k=>KS.filter(x=>x>=k&&Date.parse(x)-Date.parse(k)<8*864e5-6*36e5).length>=30)||KS[0];
 const NOW=new Date(Date.parse(first)-6*36e5).toISOString().slice(0,19)+'Z';
 const RAW=JSON.parse(execFileSync('python3',[__dirname+'/fixture.py',NOW],{maxBuffer:1<<26}).toString());
 const ids=Object.keys(RAW.p).sort((a,b)=>RAW.p[a].k<RAW.p[b].k?-1:RAW.p[a].k>RAW.p[b].k?1:(a<b?-1:1));

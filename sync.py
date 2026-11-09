@@ -6011,25 +6011,32 @@ function ltTable(M,tx){
 }
 R.table=async function(el){
  el.innerHTML='<h2>League table</h2><div id="ltroot"><div class="empty">Loading…</div></div>';
- const sh=await loadSh().catch(()=>null),tx=wkTeamXg(sh?sh.rows:[]),M=D.matches.filter(m=>wkSc(m.score)&&m.date),root=$('#ltroot');
+ /* the table is drawn at once from the results. The xGD column needs the shots file (the page's biggest) and the crests, champion and Europe marks need three more
+    files: each is added when it arrives. Until all are in, the rows carry data-e instead of data-t (code and tests that read a finished table wait for data-t). */
+ const did=D.id,shp=loadSh().catch(()=>null),decp=(typeof champReady==='function'?champReady():Promise.resolve()).catch(()=>null),M=D.matches.filter(m=>wkSc(m.score)&&m.date),root=$('#ltroot');
  if(!M.length){root.innerHTML='<div class="empty">No results in the data yet.</div>';return}
+ /* a tournament's group tables are drawn in one go, so they wait for the shots and the crests as before */
+ const tour=!ltOk(M),tx=tour?wkTeamXg(((await shp)||{}).rows||[]):null;if(tour){await decp;if(!root.isConnected||D.id!==did)return}
  if(!ltOk(M)){root.innerHTML=`<div class="empty">${esc(D.name)} is a tournament (groups and knockout rounds), so it has no single league table.</div>`;return}
  const dates=[...new Set(M.map(m=>m.date.slice(0,10)))].sort(),key=D.id+'|'+dates.length;
  if(LT.key!==key){LT.key=key;LT.step=dates.length-1;ltStop()}
  root.innerHTML=`<div class="mu" style="font-size:12px;margin-bottom:8px"><b>${esc(D.name)}</b><span>, results in the data (${M.length} matches). Ordered by points, then goal difference, then goals scored; a competition's own tiebreakers (such as head-to-head) can differ. xGD = xG for − xG against, from the shot data.</span></div>
  <div class="ctl" style="align-items:center"><button id="ltplay" class="s" onclick="ltToggle()">▶ Replay the season</button><input id="ltrng" type="range" min="0" max="${dates.length-1}" value="${LT.step}" style="flex:1;min-width:140px" aria-label="Date"><span id="ltlab" class="mu" style="min-width:150px"></span></div>
  <div id="lt" class="lt"></div>`;
- LT.M=M;LT.dates=dates;LT.tx=tx;
+ LT.M=M;LT.dates=dates;LT.tx=new Map();LT.xg=false;LT.dec=false;
  $('#ltrng').oninput=e=>{ltStop();ltGo(+e.target.value,true)};
  ltGo(LT.step,false);
+ const still=()=>root.isConnected&&D.id===did&&LT.key===key&&LT.M===M;
+ await Promise.all([shp.then(sh=>{if(!still())return;LT.tx=wkTeamXg(sh?sh.rows:[]);LT.xg=true;ltGo(LT.step,false)}),decp.then(()=>{if(!still())return;LT.dec=true;ltGo(LT.step,false)})]);
 };
 function ltGo(step,anim){
  const el=$('#lt');if(!el)return;LT.step=step;const d=LT.dates[step],M=LT.M.filter(m=>m.date.slice(0,10)<=d),prev=step>0?ltTable(LT.M.filter(m=>m.date.slice(0,10)<=LT.dates[step-1]),LT.tx):null;
  const rows=ltTable(M,LT.tx),pp=new Map((prev||[]).map((r,i)=>[r.t,i])),old=new Map();
  el.querySelectorAll('.ltr[data-t]').forEach(x=>old.set(x.dataset.t,x.getBoundingClientRect().top));
- const nGames=M.length,fm=f=>f.slice(-5).map(r=>`<i class="ltf ${r}" title="${r==='W'?'Win':r==='D'?'Draw':'Loss'}"></i>`).join('');
+ const nGames=M.length,full=LT.xg!==false&&LT.dec!==false,fm=f=>f.slice(-5).map(r=>`<i class="ltf ${r}" title="${r==='W'?'Win':r==='D'?'Draw':'Loss'}"></i>`).join('');
  el.innerHTML=`<div class="ltr lth"><span>#</span><span>Team</span><span class="ltl" data-en="P" data-ar="لعب" title="Played"></span><span class="ltx ltl" data-en="W" data-ar="ف" title="Win"></span><span class="ltx ltl" data-en="D" data-ar="ت" title="Draw"></span><span class="ltx ltl" data-en="L" data-ar="خ" title="Loss"></span><span>GD</span><span>Pts</span><span class="ltx">xGD</span><span class="ltfm">Form</span></div>`+
-  rows.map((r,i)=>{const mv=prev&&pp.has(r.t)?pp.get(r.t)-i:0;return `<div class="ltr" data-t="${esc(r.t)}"><span>${i+1}${mv?`<em class="ltm ${mv>0?'up':'dn'}">${mv>0?'▲':'▼'}${Math.abs(mv)}</em>`:''}</span><span class="ltt">${esc(r.t)}</span><span>${r.p}</span><span class="ltx">${r.w}</span><span class="ltx">${r.d}</span><span class="ltx">${r.l}</span><span>${r.f-r.a>0?'+':''}${r.f-r.a}</span><b>${r.pts}</b><span class="ltx">${r.nx?((r.xf-r.xa>0?'+':'')+(r.xf-r.xa).toFixed(1)):'N/A'}</span><span class="ltfm">${fm(r.form)}</span></div>`}).join('');
+  rows.map((r,i)=>{const mv=prev&&pp.has(r.t)?pp.get(r.t)-i:0;return `<div class="ltr" ${full?'data-t':'data-e'}="${esc(r.t)}"><span>${i+1}${mv?`<em class="ltm ${mv>0?'up':'dn'}">${mv>0?'▲':'▼'}${Math.abs(mv)}</em>`:''}</span><span class="ltt">${esc(r.t)}</span><span>${r.p}</span><span class="ltx">${r.w}</span><span class="ltx">${r.d}</span><span class="ltx">${r.l}</span><span>${r.f-r.a>0?'+':''}${r.f-r.a}</span><b>${r.pts}</b><span class="ltx">${r.nx?((r.xf-r.xa>0?'+':'')+(r.xf-r.xa).toFixed(1)):LT.xg?'N/A':'…'}</span><span class="ltfm">${fm(r.form)}</span></div>`}).join('');
+ el.dataset.full=full?'1':'0';
  $('#ltlab').textContent=`After ${d} (${nGames} matches)`;const rg=$('#ltrng');if(rg&&+rg.value!==step)rg.value=step;
  /* FLIP: each row slides from where it was to its new place (transform only, so it stays smooth on phones) */
  if(anim&&old.size&&!matchMedia('(prefers-reduced-motion: reduce)').matches)el.querySelectorAll('.ltr[data-t]').forEach(x=>{const o=old.get(x.dataset.t);if(o==null)return;const dy=o-x.getBoundingClientRect().top;if(Math.abs(dy)>1)x.animate([{transform:`translateY(${dy}px)`},{transform:'translateY(0)'}],{duration:560,easing:'cubic-bezier(.2,.8,.2,1)'})});
@@ -6555,7 +6562,6 @@ def _x_theme_index(html):
     h = sub(h, "async teams(el){\n  const r=await api('/api/teams');", "async teams(el){\n  await champReady();const r=await api('/api/teams');")
     h = sub(h, "r.rows.map(x=>[esc(x.club),x.matches,x.players,f(x.xt),f(x.xg)])", "r.rows.map(x=>[clubLink(x.club),x.matches,x.players,f(x.xt),f(x.xg)])")
     h = sub(h, "<span class=\"ltt\">${esc(r.t)}</span>", "<span class=\"ltt\"><a href=\"#/club/${encodeURIComponent(r.t)}\">${clubDot(r.t)}${esc(r.t)}</a>${champMark(r.t)}${euroMarks(r.t)}</span>")
-    h = sub(h, "R.table=async function(el){\n", "R.table=async function(el){\n await champReady();\n")
     h = sub(h, "async player(el,arg){\n  const [key,club]=decodeURIComponent(arg).split('||');", "async player(el,arg){\n  await champReady();const [key,club]=decodeURIComponent(arg).split('||');")
     h = sub(h, "<h2>${esc(r.rows[0].player)}</h2><div class=\"mu\">${esc(club)} · ${r.rows[0].pos||'position N/A'}</div>",
             "<h2>${esc(r.rows[0].player)}</h2><div class=\"mu\" style=\"${clubVars(club)}\">${clubLink(club)} · ${r.rows[0].pos||'position N/A'}</div>${champBadge(club)?`<div style=\"margin:8px 0\">${champBadge(club)}</div>`:''}")
@@ -7003,7 +7009,7 @@ def _x_cmp_index(html):
             "el.innerHTML='<h2>Matches</h2>'+await fxSection(D.id)+'<h3>Results</h3>'+tbl([['Date'],['Match'],['Data']],")
     h = sub(h, " if(!ltOk(M)){root.innerHTML=`<div class=\"empty\">${esc(D.name)} is a tournament (groups and knockout rounds), so it has no single league table.</div>`;return}\n",
             " if(!ltOk(M)){if(ltTournament(M,tx,root))return;root.innerHTML=`<div class=\"empty\">${esc(D.name)} is a tournament (groups and knockout rounds), so it has no single league table.</div>`;return}\n")
-    h = sub(h, " $('#ltrng').oninput=e=>{ltStop();ltGo(+e.target.value,true)};\n", " $('#ltrng').oninput=e=>{ltStop();ltGo(+e.target.value,true)};\n root.insertAdjacentHTML('beforeend',euroLegend(LT.M));\n")
+    h = sub(h, " $('#ltrng').oninput=e=>{ltStop();ltGo(+e.target.value,true)};\n", " $('#ltrng').oninput=e=>{ltStop();ltGo(+e.target.value,true)};\n root.insertAdjacentHTML('beforeend','<div id=\"ltleg\"></div>');decp.then(()=>{const g=$('#ltleg');if(g&&root.isConnected&&D.id===did&&LT.M===M)g.innerHTML=euroLegend(LT.M)});\n")
     return h
 
 
@@ -7352,7 +7358,7 @@ const labBrier3=(p,o)=>p.reduce((s,x,i)=>s+Math.pow(x-(i===o?1:0),2),0);
 async function labMatchCard(){
  await fixLoad();const L=((FIX.d&&FIX.d.leagues)||{})[D.id]||[],now=Date.now(),soon=now+10*864e5;
  const fx=L.filter(x=>{const t=Date.parse(x.k||x.d);return t>now&&t<soon}).slice(0,40),mine=new Set(labRead().recs.filter(r=>r.type==='match').map(r=>r.mid));
- if(!fx.length)return `<div class="card"><h3>Who will win?</h3><div class="empty">No ${esc(D.name)} fixtures in the next 10 days in the data.</div></div>`;
+ if(!fx.length)return `<div class="card"><h3>Who will win?</h3><div class="empty"><span>No fixtures in the next 10 days in the data</span> <span class="mu">(<bdi>${esc(D.name)}</bdi>)</span></div></div>`;
  const lc=document.documentElement.lang==='ar'?'ar-u-ca-gregory-nu-latn':'en-GB';
  return `<div class="card"><h3>Who will win? <span class="mu" style="font-weight:400">· <span>${esc(D.name)}</span></span></h3>
   <label class="labf"><span>Match</span><select id="labmx">${fx.map(x=>`<option value="${esc(x.i)}"${mine.has(x.i)?' disabled':''}>${esc(new Date(x.k||x.d).toLocaleString(lc,{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))} · ${esc(x.h)} – ${esc(x.a)}</option>`).join('')}</select></label>
@@ -7726,6 +7732,7 @@ _AR_SEASON.update({
     "From your next visit, this page starts with what changed since this one.": "من زيارتك الجاية، هذه الصفحة تبدأ باللي تغيّر من هذي الزيارة.",
     "Your Analytical DNA appears after # evaluated predictions. Evaluated so far:": "بصمتك التحليلية تظهر بعد # توقعاً مقيّماً. المقيّم حتى الآن:",
     "Who will win?": "مين بيفوز؟",
+    "No fixtures in the next # days in the data": "ما فيه مباريات في الـ# أيام القادمة في البيانات",
     "Match": "المباراة",
     "Home win": "فوز صاحب الأرض",
     "Draw": "تعادل",
@@ -7939,9 +7946,12 @@ function uiSearch(raw){
  const words=t.split(' ').filter(Boolean),hit=s=>{const n=' '+uiNz(s);return words.every(w=>n.includes(' '+w))},out=[];
  const lab=n=>(typeof ARL!=='undefined'&&ARL.on&&typeof arT==='function'&&arT(n))||n;
  PAGES.filter(([k,n])=>hit(n)||hit(lab(n))||(typeof INS==='object'&&INS.rooms&&INS.rooms.pageHit(k,hit))).slice(0,5).forEach(([k,n])=>out.push({g:'Pages',h:'#/'+k,t:esc(lab(n))}));
- const clubs=[...new Set(D.matches.flatMap(m=>[m.home,m.away]))].filter(hit).sort().slice(0,5);
+ /* a name typed in Arabic letters: clubs and players by sound (assets/name-sound.js), near spellings only */
+ const NS=typeof INS==='object'&&INS.nameSound&&INS.nameSound.isArabic(raw)?INS.nameSound:null,allClubs=[...new Set(D.matches.flatMap(m=>[m.home,m.away]))];
+ let clubs=allClubs.filter(hit).sort().slice(0,5);if(NS&&!clubs.length)clubs=NS.search(raw,allClubs,c=>c,(a,b)=>a<b?-1:1,1).slice(0,3);
  clubs.forEach(c=>out.push({g:'Clubs',h:'#/club/'+encodeURIComponent(c),t:`${clubDot(c)}${esc(c)}`}));
- agg().filter(p=>hit(p.player)).sort((a,b)=>(b.minutes||0)-(a.minutes||0)).slice(0,7).forEach(p=>out.push({g:'Players',h:'#/player/'+encodeURIComponent(p.key+'||'+p.club),t:`${esc(p.player)} <span class="mu">${esc(p.club)}${p.pos?' · '+esc(p.pos):''}</span>`}));
+ let pls=agg().filter(p=>hit(p.player)).sort((a,b)=>(b.minutes||0)-(a.minutes||0));if(NS&&!pls.length)pls=NS.search(raw,agg(),p=>p.player,(a,b)=>(b.minutes||0)-(a.minutes||0),1);
+ pls.slice(0,7).forEach(p=>out.push({g:'Players',h:'#/player/'+encodeURIComponent(p.key+'||'+p.club),t:`${esc(p.player)} <span class="mu">${esc(p.club)}${p.pos?' · '+esc(p.pos):''}</span>`}));
  if(words.length)D.matches.filter(m=>wkSc(m.score)&&hit(m.home+' '+m.away)).sort(byDate).slice(0,clubs.length?4:6).forEach(m=>out.push({g:'Matches',h:'#/match/'+encodeURIComponent(m.match_id),t:`${esc(m.home)} <b>${esc(m.score)}</b> ${esc(m.away)} <span class="mu nw">${esc(String(m.date).slice(0,10))}</span>`}));
  UI_Q.items=out;let g='';
  r.innerHTML=out.length?out.map((x,i)=>(x.g!==g?`<div class="qg">${(g=x.g)}</div>`:'')+`<a role="option" aria-selected="false" href="${x.h}" onclick="event.preventDefault();uiQGo('${x.h.replace(/'/g,'%27')}')">${x.t}</a>`).join(''):`<div class="qg">No results in ${esc(D.name)}</div>`;
@@ -8754,6 +8764,103 @@ def dq_apply_positions(L):
     return n
 
 
+# SLOTPOS START
+# PitchAPI's position id is coarse: it puts most strikers and front-three wingers with the midfielders (Haaland and Isak were "MF"),
+# and some attacking midfielders with the forwards. The official line-ups say where a player really started: slot 11 = goalkeeper,
+# 30-39 = the defensive line, other slots below 100 = midfield, 100+ = the front line. From a player's starts this season:
+#   - mostly in the front line (DQ_SLOT_MIN starts, DQ_SLOT_SHARE of them) and labelled MF or nothing -> FW;
+#   - labelled FW but mostly in midfield slots -> MF;
+#   - no label at all -> the line he started in most.
+# Defenders and goalkeepers keep PitchAPI's label (a wing-back's slot is in the midfield band, and he is still a defender).
+# Current season only: finished seasons keep the labels their fitted files (stability, roles, age curves...) were made with.
+DQ_SLOT_MIN = 3
+DQ_SLOT_SHARE = 0.6
+
+
+def dq_slot_line(slot):
+    try:
+        s = int(slot)
+    except Exception:
+        return None
+    return "GK" if s == 11 else "DF" if 30 <= s <= 39 else "MF" if s < 100 else "FW"
+
+
+def dq_slot_starts(mx_m):
+    """{player_id: {line: starts}} from the line-ups of a league's mx file (its "m" part)."""
+    out = {}
+    for m in (mx_m or {}).values():
+        lu = (m or {}).get("lu") or {}
+        for side in ("h", "a"):
+            for x in ((lu.get(side) or {}).get("xi")) or []:
+                if not x or len(x) < 4:
+                    continue
+                ln = dq_slot_line(x[3])
+                if ln:
+                    e = out.setdefault(x[0], {})
+                    e[ln] = e.get(ln, 0) + 1
+    return out
+
+
+def dq_slot_fix(cur, lines):
+    """The corrected label for one player, or None when his label stays. cur: 'GK'/'DF'/'MF'/'FW'/None."""
+    n = sum((lines or {}).values())
+    if n < DQ_SLOT_MIN:
+        return None
+    top, c = sorted(lines.items(), key=lambda x: (-x[1], x[0]))[0]
+    if c / n < DQ_SLOT_SHARE:
+        return None
+    cur = cur or None
+    if cur is None:
+        return top
+    if top == "FW" and cur == "MF":
+        return "FW"
+    if top == "MF" and cur == "FW":
+        return "MF"
+    return None
+
+
+def dq_slot_changes(cur, mx_m):
+    """cur: {player_id: label or None}. Returns {player_id: new label} for the players whose label changes."""
+    st = dq_slot_starts(mx_m)
+    out = {}
+    for p, lines in st.items():
+        if p not in cur:
+            continue
+        g = dq_slot_fix(cur.get(p), lines)
+        if g and g != cur.get(p):
+            out[p] = g
+    return out
+
+
+def dq_apply_slot_positions(L):
+    """Writes the line-up based label into the stats table (once per league per run). Never raises to the caller's caller."""
+    if ("slot", L) in DQ["done"] or DQ["hub"] is None or re.search(r"_\d{4}-\d\d$", str(L)):
+        return 0
+    DQ["done"].add(("slot", L))
+    mx = gh_get_json(DQ["hub"], f"data/{safe_name(L)}_mx.json")
+    if not mx or not mx.get("m"):
+        return 0
+    cnt = {}
+    for r in q("SELECT player_id p, pos o, COUNT(*) n FROM stats WHERE league_id=? GROUP BY player_id, pos", (L,)):
+        cnt.setdefault(r["p"], {})[r["o"] or None] = r["n"]
+    cur = {}
+    for p, e in cnt.items():
+        lab = sorted(((k, v) for k, v in e.items() if k), key=lambda x: (-x[1], x[0]))
+        cur[p] = lab[0][0] if lab else None
+    ch = dq_slot_changes(cur, mx["m"])
+    if not ch:
+        return 0
+    c = db()
+    c.executemany("UPDATE stats SET pos=? WHERE league_id=? AND player_id=?", [(g, L, p) for p, g in ch.items()])
+    c.commit()
+    c.close()
+    log(f"  [المراكز] {L}: {len(ch)} لاعب تصحّح مركزه من التشكيلات الرسمية "
+        f"({sum(1 for g in ch.values() if g == 'FW')} مهاجم، {sum(1 for g in ch.values() if g == 'MF')} وسط، "
+        f"{sum(1 for g in ch.values() if g in ('DF', 'GK'))} دفاع/حارس)")
+    return len(ch)
+# SLOTPOS END
+
+
 _orig_build_league_payload_dq = build_league_payload
 
 
@@ -8762,6 +8869,10 @@ def build_league_payload(lg):
         dq_apply_positions(lg["id"])
     except Exception as e:
         log(f"  [المراكز] تعذر تطبيقها ({type(e).__name__}: {e})")
+    try:
+        dq_apply_slot_positions(lg["id"])
+    except Exception as e:
+        log(f"  [المراكز] تعذر تصحيحها من التشكيلات ({type(e).__name__}: {e})")
     return _orig_build_league_payload_dq(lg)
 
 
@@ -8773,6 +8884,10 @@ def build_pl_payload(L):
         dq_apply_positions(L)
     except Exception as e:
         log(f"  [المراكز] تعذر تطبيقها ({type(e).__name__}: {e})")
+    try:
+        dq_apply_slot_positions(L)
+    except Exception as e:
+        log(f"  [المراكز] تعذر تصحيحها من التشكيلات ({type(e).__name__}: {e})")
     return _orig_build_pl_payload_dq(L)
 
 
@@ -9023,9 +9138,9 @@ INDEX = _x_fpx_index(INDEX)
 # الكود في ملفات مستقلة في المستودع: assets/*.js و assets/features.css و manifest.webmanifest و sw.js و assets/icons/.
 # هذا القسم يضيف روابطها للصفحة فقط (بعد السكربت الرئيسي، فتلقى R و PAGES جاهزة). غيّر FEATURES_V لما تتغير الملفات.
 # ============================================================================
-FEATURES_V = "120"
+FEATURES_V = "121"
 FEATURES_JS = ("pla-data", "share-card", "threat-map", "match-whatif", "player-page", "match-centre", "home-extra", "team-round",
-               "preview", "club-extra", "rankings-extra", "fantasy-extra", "insights-core", "rooms", "hidden-gems", "player-dna", "team-dna",
+               "preview", "club-extra", "rankings-extra", "fantasy-extra", "insights-core", "name-sound", "rooms", "hidden-gems", "player-dna", "team-dna",
                "reality-check", "matches-board", "match-replay", "match-story", "overview", "press-height",
                "season-sim", "luck-table", "player-twin", "player-cards", "beat-model", "rare-cases", "attack-share", "drawer", "tap-twice", "line-height", "league-pool", "game-states", "likely-xi", "club-twins", "carry-team", "report-card", "ledger", "league-dna", "thrill", "defense-card", "press-card", "sb-press", "stat-stability", "keeps-up", "goalkeepers", "xi-builder", "player-prices", "replace-him", "transfer-planner", "player-roles", "my-club", "age-curves", "weekly-digest", "xi-battle", "player-story", "time-machine", "ask", "wrapped", "levels", "club-elo", "title-race", "elo-river", "heartbeat", "club-shape", "fortress", "late-show", "run-in", "team-season", "notify", "team-calendar", "elo-kit", "rest-days", "value-points", "player-career", "head-to-head", "stakes", "guess-player", "bench-impact", "offline-note", "pitch3d", "recap", "stadium3d", "club-matches", "matches-page", "player-heat", "merged", "holo", "seasons", "liquid-glass")
 
@@ -9045,7 +9160,7 @@ def rt_last_compute(base=None):
 
 
 # ===== RTLAST START =====
-RT_LAST_BAKED = {"age": 54, "ask": 59, "battle": 56, "beat": 27, "bench": 80, "builder": 48, "cards": 26, "career": 76, "carry": 37, "club": 85, "clubtwins": 36, "digest": 55, "elo": 62, "fortress": 67, "gems": 14, "guess": 79, "h2h": 77, "halves": 10, "heartbeat": 65, "heatmaps": 87, "height": 32, "keepers": 47, "keepsup": 46, "late": 68, "leaguedna": 40, "ledger": 39, "luck": 24, "match": 83, "matches": 86, "myclub": 53, "overview": 21, "player": 76, "ppda": 43, "pressline": 22, "preview": 8, "prices": 49, "race": 63, "rare": 28, "ratings": 10, "reality": 17, "recap": 83, "replace": 50, "replay": 20, "reportcard": 38, "rest": 74, "river": 64, "roles": 52, "round": 21, "runin": 69, "sbpress": 44, "shape": 66, "share": 29, "sim": 23, "stability": 45, "stakes": 78, "states": 34, "story": 57, "thrill": 41, "timemachine": 58, "toty": 70, "transfers": 51, "twins": 25, "value": 75, "whatif": 3, "wrapped": 60, "xi": 35}
+RT_LAST_BAKED = {"age": 55, "ask": 60, "battle": 57, "beat": 28, "bench": 81, "builder": 49, "cards": 27, "career": 77, "carry": 38, "club": 86, "clubtwins": 37, "digest": 56, "elo": 63, "fortress": 68, "gems": 15, "guess": 80, "h2h": 78, "halves": 10, "heartbeat": 66, "heatmaps": 88, "height": 33, "keepers": 48, "keepsup": 47, "late": 69, "leaguedna": 41, "ledger": 40, "luck": 25, "match": 84, "matches": 87, "myclub": 54, "overview": 22, "player": 77, "ppda": 44, "pressline": 23, "preview": 8, "prices": 50, "race": 64, "rare": 29, "ratings": 10, "reality": 18, "recap": 84, "replace": 51, "replay": 21, "reportcard": 39, "rest": 75, "river": 65, "roles": 53, "round": 22, "runin": 70, "sbpress": 45, "shape": 67, "share": 30, "sim": 24, "stability": 46, "stakes": 79, "states": 35, "story": 58, "thrill": 42, "timemachine": 59, "toty": 71, "transfers": 52, "twins": 26, "value": 76, "whatif": 3, "wrapped": 61, "xi": 36}
 # ===== RTLAST END =====
 
 

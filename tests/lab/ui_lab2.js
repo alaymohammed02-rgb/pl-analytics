@@ -24,8 +24,14 @@ const store=pg=>pg.evaluate(()=>JSON.parse(localStorage.getItem('plx_lab_v1')||'
   const tabs=await pg.$$eval('.labtabs button',a=>a.map(x=>x.innerText.replace(/\d+$/,'').trim()));
   ok(tabs.join('|')==='For you|Decision Arena|Review and progress|Analytical DNA|Weekly review|Hidden patterns|Case file|Discovery|Your data'&&await pg.$eval('.labtabs button.on',e=>e.innerText)==='For you','9 tabs; "For you" opens first');
   ok(/From your next visit/.test(await pg.innerText('#app'))&&!(await pg.$('.labfeed.new')),'first visit: no "new since your last visit" items, and it says so');
-  /* match result */
-  await tab(pg,'arena');const sel=await pg.$eval('#labmx',s=>s.value);await pg.selectOption('#labmp','A');await pg.$eval('#labmc',e=>{e.value=60;e.dispatchEvent(new Event('input'))});await pg.evaluate(()=>labSaveMatch());await pg.waitForTimeout(900);
+  /* match result. The Arena offers the fixtures of the next 10 days; in an international break there are none, the page says so, and the rest of this test
+     (which starts from a saved match prediction) cannot run: it is left out for those days and says so. */
+  await tab(pg,'arena');
+  if(!(await pg.$('#labmx'))){const soon=FX.leagues.l_4WFCIZ.some(x=>Date.parse(x.k)>Date.now()&&Date.parse(x.k)<Date.now()+10*864e5);
+   ok(!soon&&/No fixtures in the next 10 days in the data/.test(await pg.innerText('#app')),'no Premier League fixture in the next 10 days: the Arena says so instead of the match form');
+   console.log('     international break: the match-prediction checks are left out today');ok(!errs.length,'no page errors '+errs.slice(0,2).join(' ; '));
+   await b.close();console.log(fails?fails+' FAILED':'all passed');process.exit(fails?1:0)}
+  const sel=await pg.$eval('#labmx',s=>s.value);await pg.selectOption('#labmp','A');await pg.$eval('#labmc',e=>{e.value=60;e.dispatchEvent(new Event('input'))});await pg.evaluate(()=>labSaveMatch());await pg.waitForTimeout(900);
   let S=await store(pg),r=S.recs.find(x=>x.type==='match');const fx=FX.leagues.l_4WFCIZ.find(x=>x.i===sel),mm=model(fx.h,fx.a);
   ok(r&&r.mid===sel&&r.h===fx.h&&r.dl===new Date(fx.k).toISOString()&&r.pick==='A'&&r.pr.map(x=>+x.toFixed(2)).join()==='0.2,0.2,0.6','match saved: kick-off as the deadline, 60% on the away win, 20% on each other result');
   ok(r.model&&r.model.p.every((x,i)=>Math.abs(x-mm[i])<1e-9)&&Math.abs(r.model.p.reduce((a,x)=>a+x,0)-1)<1e-9,'model probabilities saved with it, equal to an independent computation from the league and shot files ('+mm.map(x=>(x*100).toFixed(1)+'%').join(' / ')+')');

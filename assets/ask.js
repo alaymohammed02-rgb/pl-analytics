@@ -2,7 +2,7 @@
    No AI and no key: INS.askParse reads the question with fixed rules and says how it understood it, so a wrong reading is visible.
    It finds:
    - a league (names and Arabic names; none = the six domestic leagues), a club (the clubs' own names, short English forms and Arabic names of the
-     bigger clubs), a player (his name in Latin letters: the full name, or a surname that only one player has);
+     bigger clubs), a player (his name in Latin letters: the full name, or a surname that only one player has; or his name in Arabic letters, matched by sound through INS.nameSound, whole words only);
    - a measure (goals, assists, xG, non-penalty xG, xAG, shots, on target, key passes, shot-creating actions, passes, progressive passes,
      progressive carries, take-ons won, tackles, interceptions, blocks, clearances, duels won, aerials won, minutes; for clubs also points);
    - "per 90" (then only players with 450+ minutes, or the minutes asked for), "least" instead of "most", how many (top 5…), a position
@@ -62,6 +62,7 @@
   FW:['forward','forwards','striker','strikers','attacker','attackers','مهاجم','مهاجمين','المهاجمين','مهاجمي'],GK:['goalkeeper','goalkeepers','keeper','keepers','حارس','حراس','الحراس']};
  const LEAST=['least','fewest','lowest','worst','bottom','اقل','الاقل','اسوا'];
  const P90=['per 90','/90','p90','per game','per match','لكل 90','كل 90','في 90','لكل مباراه','بالمباراه'];
+ const AR_STOP=new Set(['كم','من','هو','هي','في','على','عن','ما','هل','اللي','الي','لاعب','لاعبين','سجل','سجلوا','هدف','اهداف','موسم','الموسم','هذا','هذي','هالموسم','اكثر','اقل','افضل','احسن','مين','منو','وش','ايش','كيف','عدد','مع','ضد','نادي','فريق','دوري','الدوري','اعطني','عطني','ابغى','ابي','وين','متى','ليش','كان','صار','عنده','عندهم','لكل','دقيقه','تحت','فوق']);
  const STOP=new Set(['who','has','have','the','most','best','top','which','what','how','many','much','this','season','with','and','for','per','player','players','in','of','is','are','a','an','by','from','league','scored','under','over','least','fewest','show','me','list','give']);
  /* does the question contain this phrase as whole words (an Arabic word may carry و / ب / ل / ف / ال / لل in front)? */
  function has(q,ph){const p=norm(ph);if(!p)return -1;if(/^[a-z0-9 /+-]+$/.test(p)){const re=new RegExp('(^|[^a-z0-9])'+p.replace(/[.*+?^${}()|[\]\\/]/g,'\\$&')+'(?=$|[^a-z0-9])');const m=re.exec(q);return m?m.index+m[1].length:-1}
@@ -88,6 +89,14 @@
   if(words.length){const full=ctx.players.filter(p=>{const n=norm(p.name);return n.length>3&&has(q,n)>=0});
    if(full.length)o.cands=full;else{const last=ctx.players.filter(p=>{const t=norm(p.name).split(' ');return t.some(x=>x.length>=4&&words.includes(x))});o.cands=last}
    const ids=new Set(o.cands.map(p=>p.id));if(ids.size===1)o.player=o.cands[0];if(!o.cands.length)o.unknown=words}
+  /* a player's name typed in Arabic letters: the Arabic words nothing else used, matched by sound (INS.nameSound), whole words and a near spelling only */
+  if(!o.cands.length&&!words.length&&INS.nameSound){
+   const aw=q.split(' ').filter(w=>/^[\u0621-\u064a]{3,}$/.test(w)&&!used.has(w)&&!AR_STOP.has(w));
+   const tryq=t=>INS.nameSound.search(t,ctx.players.filter(p=>INS.nameSound.match(t,p.name)===2),p=>p.name,(a,b)=>(b.mi||0)-(a.mi||0),.45);
+   let r=aw.length>1?tryq(aw.join(' ')):[];
+   if(!r.length)for(const w of aw){r=tryq(w);if(!r.length&&/^[وبلف]/.test(w)&&w.length>3)r=tryq(w.slice(1));if(r.length)break}
+   if(r.length){const d0=INS.nameSound.dist(aw.join(' '),r[0].name);o.cands=r.filter(p=>INS.nameSound.dist(aw.join(' '),p.name)<=d0+.01);const ids=new Set(o.cands.map(p=>p.id));if(ids.size===1)o.player=o.cands[0]}
+  }
   return o;
  };
  const MI=450;
