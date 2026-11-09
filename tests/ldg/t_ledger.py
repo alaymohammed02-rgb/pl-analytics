@@ -42,7 +42,11 @@ FX = J('data/fixtures.json')['leagues']
 LGS = ("l_4WFCIZ", "l_0ErfuF", "l_1Isor4", "l_3FJFUl", "l_0ALvwF", "l_4QexZg")
 # "now" = a moment before the first coming fixture, so the test does not depend on the day it runs
 ks = sorted(f['k'] for l in LGS for f in FX.get(l) or [])
-first = min(k for k in ks if k >= J('data/elo_own.json')['leagues']['l_4WFCIZ']['last'])
+last = J('data/elo_own.json')['leagues']['l_4WFCIZ']['last']
+_ts = lambda k: datetime.datetime.strptime(k[:19], '%Y-%m-%dT%H:%M:%S')
+# ... and before a full round: the first coming fixture that has 30 or more fixtures in its 8 days (a lone rearranged match in an international break has not)
+_busy = [k for k in ks if k >= last and sum(1 for x in ks if x >= k and _ts(x) - _ts(k) < datetime.timedelta(days=8) - datetime.timedelta(hours=6)) >= 30]
+first = min(_busy) if _busy else min(k for k in ks if k >= last)
 NOW = datetime.datetime.strptime(first[:19], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=utc) - datetime.timedelta(hours=6)
 L0 = G['ldg_step'](get, NOW, {})
 P = L0['p']

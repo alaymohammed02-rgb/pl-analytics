@@ -98,10 +98,17 @@ const untranslated=sel=>{const o=[];document.querySelectorAll(sel).forEach(r=>{c
    const g=await pg.$$eval('#mb .mb-g',G=>G.map(x=>[x.querySelector('.mb-lh b').textContent,x.querySelectorAll('.mb-r').length]));
    ok(g.length>=2&&g.reduce((s,x)=>s+x[1],0)>0,'a day with several leagues: grouped by league ('+g.map(x=>x.join(' ')).join(', ')+')')}
   const fx=FX.leagues.l_4WFCIZ.find(f=>Date.parse(f.k)>Date.now());
+  /* the board's day strip holds a few days around today: when the next match is further away (an international break) there is no day to open, and the check is left out */
+  const fxDay=fx&&new Date(Date.parse(fx.k)).toLocaleDateString('sv-SE'),fxOn=fx&&await pg.evaluate(dd=>!!document.querySelector(`#mb .mb-days button[data-d="${dd}"]`),fxDay);
+  if(!fxOn)console.log('     the board: the next Premier League match ('+fxDay+') is beyond the days the board shows; its kick-off time not checked today');
+  if(fxOn){
   await pg.evaluate(dd=>{const b=document.querySelector(`#mb .mb-days button[data-d="${dd}"]`);if(b)b.click()},new Date(Date.parse(fx.k)).toLocaleDateString('sv-SE'));await pg.waitForTimeout(300);
   const r=await pg.evaluate(id=>{const a=document.querySelector(`#mb a.mb-r[href="#/preview/${encodeURIComponent(id)}"]`);return a&&a.querySelector('.mb-t').textContent},fx.i);
   const lt=await pg.evaluate(k=>new Date(Date.parse(k)).toLocaleTimeString('en-GB',{hour:'numeric',minute:'2-digit'}),fx.k);
   ok(r===lt,'an upcoming match: kick-off in the viewer\'s own time ('+r+'), linking to its preview');
+  }
+  if(!fxOn)console.log('     the board: folding a league needs a day with matches on the strip; not checked today');
+  if(fxOn){
   /* fold a league, reload: still folded; hide all */
   await pg.click('#mb .mb-lh');await pg.waitForTimeout(200);const f1=await pg.$$eval('#mb .mb-g.f',a=>a.length);
   await pg.reload();await pg.waitForSelector('#mb .mb-days',{timeout:60000});await pg.waitForTimeout(400);
@@ -109,6 +116,7 @@ const untranslated=sel=>{const o=[];document.querySelectorAll(sel).forEach(r=>{c
   ok(f1===1&&await pg.$$eval('#mb .mb-g.f',a=>a.length)===1,'a folded league stays folded on this device');
   await pg.click('#mb [data-all]');await pg.waitForTimeout(200);ok(await pg.evaluate(()=>[...document.querySelectorAll('#mb .mb-g')].every(g=>g.classList.contains('f'))&&/Show all/.test(document.querySelector('#mb [data-all]').textContent)),'"Hide all" folds every league, then offers "Show all"');
   await pg.click('#mb [data-all]');await pg.waitForTimeout(200);
+  }
   /* a result of another league: the board opens that league, then its match page */
   const la=Object.entries(SCHED.d).flatMap(([d,L])=>L.map(r=>[d,r])).filter(([d,r])=>r[0]==='l_0ErfuF'&&r[5]!=null).sort((x,y)=>x[1][2]<y[1][2]?1:-1)[0];
   await pg.evaluate(dd=>{const b=document.querySelector(`#mb .mb-days button[data-d="${dd}"]`);if(b)b.click()},new Date(Date.parse(la[1][2])).toLocaleDateString('sv-SE'));await pg.waitForTimeout(300);
@@ -122,7 +130,9 @@ const untranslated=sel=>{const o=[];document.querySelectorAll(sel).forEach(r=>{c
   ok(await pg.$$eval('#mb',a=>a.length)===1,'one board on the overview');
   await pg.evaluate(dd=>{const b=document.querySelector(`#mb .mb-days button[data-d="${dd}"]`);if(b)b.click()},new Date(Date.parse(f0.k)).toLocaleDateString('sv-SE'));await pg.waitForTimeout(300);
   const xi=await pg.evaluate(([a,c])=>{const q=i=>document.querySelector(`#mb a.mb-r[href="#/preview/${encodeURIComponent(i)}"]`);return [!!(q(a)&&q(a).querySelector('.md-xi')),c?!!(q(c)&&q(c).querySelector('.md-xi')):false]},[f0.i,f1&&f1.i]);
-  ok(xi[0]&&!xi[1],'official lineups out: the XI badge on that match only ('+f0.h+' – '+f0.a+')');
+  /* the match must be on a day the board shows (not so in an international break): then the badge is checked */
+  if(await pg.evaluate(dd=>!!document.querySelector(`#mb .mb-days button[data-d="${dd}"]`),new Date(Date.parse(f0.k)).toLocaleDateString('sv-SE')))ok(xi[0]&&!xi[1],'official lineups out: the XI badge on that match only ('+f0.h+' – '+f0.a+')');
+  else console.log('     the board: the next match ('+f0.k.slice(0,10)+') is beyond the days the board shows; the XI badge not checked today');
   /* Hidden Gems: a club picked in one league does not filter another league */
   await go(pg,'#/gems','#gmout');const club=await pg.$eval('#gmteam option:nth-child(2)',o=>o.value);await pg.selectOption('#gmteam',club);await pg.waitForTimeout(400);
   await pg.evaluate(async()=>{await setLeague('l_0ErfuF');head();location.hash='#/overview'});await pg.waitForTimeout(800);await go(pg,'#/gems','#gmout');

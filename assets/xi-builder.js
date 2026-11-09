@@ -60,12 +60,12 @@
  function setForm(f){const old=slots(S.f),pk=S.pick.map((k,i)=>({k,g:old[i].g})).filter(x=>x.k),res=Array(11).fill(null),nw=slots(f);
   nw.forEach((s,i)=>{const j=pk.findIndex(x=>x.g===s.g);if(j>=0){res[i]=pk[j].k;pk.splice(j,1)}});S.f=f;S.pick=res;S.sel=null;save()}
  function filtered(P){
-  const need=S.sel!=null?slots(S.f)[S.sel].g:null,q=S.q.trim().toLowerCase(),out=[];
+  const need=S.sel!=null?slots(S.f)[S.sel].g:null,q=S.q.trim().toLowerCase(),out=[],NS=INS.nameSound,arq=NS&&NS.isArabic(q)?Object.assign(NS.arKeys(q),{long:true}):null;
   for(const p of P.all){
    if(S.only&&need&&p.pos!==need)continue;if(S.lg&&p.lg!==S.lg)continue;if(S.club&&p.club!==S.club)continue;if(S.nat&&p.nat!==S.nat)continue;
    if(S.age){if(p.age==null)continue;const b=AGE[S.age];if(p.age<b[0]||p.age>b[1])continue}
    if(S.val){if(p.val==null)continue;const b=VAL[S.val];if(p.val<b[0]||p.val>=b[1])continue}
-   if(q&&!(p.name.toLowerCase().includes(q)||p.club.toLowerCase().includes(q)))continue;out.push(p)}
+   if(q&&!(arq?(NS.match(arq,p.name)&&NS.dist(S.q,p.name)<=2*arq.length)||NS.match(arq,p.club)===2:(p.name.toLowerCase().includes(q)||p.club.toLowerCase().includes(q))))continue;out.push(p)}
   if(S.sort==='val')out.sort((a,b)=>(a.val==null)-(b.val==null)||(b.val||0)-(a.val||0)||b.mi-a.mi||a.name.localeCompare(b.name));
   else if(S.sort==='age')out.sort((a,b)=>(a.age==null)-(b.age==null)||(a.age||0)-(b.age||0)||b.mi-a.mi||a.name.localeCompare(b.name));
   return out;

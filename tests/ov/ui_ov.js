@@ -42,7 +42,10 @@ const th=pg=>pg.evaluate(()=>({lg:document.documentElement.dataset.league,club:d
   ok(tf.map(t=>t.n).sort().join()==='Chelsea,Real Madrid'&&tf.every(t=>t.c===Math.min(4,exp(t.n).length)),'your teams\' facts: one block per team, up to 4 each, from every competition ('+tf.map(t=>t.n+' '+t.c).join(', ')+')');
   /* the board: your teams first on a day they play */
   const rm=Object.entries(FIX.leagues).flatMap(([l,L])=>L.map(f=>({...f,l}))).filter(f=>(f.h==='Real Madrid'||f.a==='Real Madrid')&&Date.parse(f.k)>Date.now()).sort((a,b)=>Date.parse(a.k)-Date.parse(b.k))[0];
-  if(rm){const day=new Date(Date.parse(rm.k)).toLocaleDateString('sv-SE');await pg.evaluate(d=>{const x=document.querySelector(`#mb [data-d="${d}"]`);if(x)x.click()},day);await pg.waitForTimeout(300);
+  /* the board's day strip holds a few days around today: when the next match is further away (an international break) there is no day to open, and the check is left out */
+  const rmDay=rm&&new Date(Date.parse(rm.k)).toLocaleDateString('sv-SE'),rmOn=rm&&await pg.evaluate(d=>!!document.querySelector(`#mb [data-d="${d}"]`),rmDay);
+  if(rm&&!rmOn)console.log('     the board: Real Madrid\'s next match ('+rmDay+') is beyond the days the board shows; "Your teams first" not checked today');
+  if(rm&&rmOn){const day=rmDay;await pg.evaluate(d=>{const x=document.querySelector(`#mb [data-d="${d}"]`);if(x)x.click()},day);await pg.waitForTimeout(300);
    const g=await pg.evaluate(()=>{const f=document.querySelector('#mb .mb-g.mb-fav');return f&&{first:document.querySelector('#mb .mb-g')===f,rows:[...f.querySelectorAll('.mb-r')].map(r=>r.textContent)}});
    ok(g&&g.first&&g.rows.some(t=>t.includes('Real Madrid'))&&await pg.$$eval('#mb .mb-g:not(.mb-fav) .mb-r.mine',a=>a.length)>=1,'the board: "Your teams" first on '+day+' ('+(g?g.rows[0].replace(/\s+/g,' ').trim():'none')+'), and the match stays in its league')}
   /* add and remove a team from any league */

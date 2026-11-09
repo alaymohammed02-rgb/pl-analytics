@@ -1,11 +1,12 @@
-// Usage: node tools/perf/serve-gzip.js . 8790 &  then  node tools/perf/measure.js 8790 3
+// Usage: node tools/perf/serve-gzip.js . 8790 &  then  node tools/perf/measure.js 8790 3 [page name, e.g. table]
 // load a page on a throttled phone (CPU x4, ~1.6 Mbps down, 150 ms RTT), cold cache; report FCP, the time the page's main block is drawn, requests, bytes, long tasks
 const {chromium}=require('playwright');
 const PORT=+process.argv[2]||8790,RUNS=+process.argv[3]||3;
 const PAGES=[['overview','#/overview','#ovmb .mb-pg, #ovmb .empty:not(.skel)'],['table','#/table','.lt'],['r-players','#/r-players','#rmg .rm-c'],['ledger','#/ledger','.ldg-t, #ldgroot .empty:not(.skel)']];
+const ONLY=process.argv[4]||'';
 const med=a=>{const s=a.slice().sort((x,y)=>x-y);return s[s.length>>1]};
 (async()=>{const b=await chromium.launch();const out={};
- for(const [name,hash,sel] of PAGES){const R=[];
+ for(const [name,hash,sel] of PAGES){if(ONLY&&name!==ONLY)continue;const R=[];
   for(let i=0;i<RUNS;i++){const ctx=await b.newContext({viewport:{width:390,height:844},deviceScaleFactor:1,isMobile:true,hasTouch:true});
    await ctx.addInitScript(()=>{try{localStorage.setItem('league','l_4WFCIZ')}catch(e){};window.__lt=0;try{new PerformanceObserver(l=>{for(const e of l.getEntries())window.__lt+=e.duration}).observe({type:'longtask',buffered:true})}catch(e){}});
    const pg=await ctx.newPage(),cdp=await ctx.newCDPSession(pg);

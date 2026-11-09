@@ -64,6 +64,8 @@
     <td>${nb(short(r.s))}${r.cur?`<span class="mu"> ${two('so far','لحد الحين')}</span>`:''}</td><td>${nm(lgName(r.lg))}${moved?` <span class="pc-mv">${two('moved','انتقل')}</span>`:''}</td><td>${nm(r.c||'–')}${club?` <span class="pc-mv">${two('new club','نادي جديد')}</span>`:''}</td><td>${esc(r.pos||'–')}</td><td>${nb(r.g)}</td><td>${nb(r.mi)}</td><td>${nb(r.gl)}</td><td>${nb(r.ast)}</td><td>${nb(f2(r.xg))}</td><td>${r.xagmi>0?nb(f2(r.xag)):'–'}</td><td>${nb(p90(r,'npxg'))}</td><td>${nb(xa(r))}</td><td>${nb(p90(r,'sh'))}</td><td>${nb(p90(r,'kp'))}</td><td>${nb(p90(r,'tkic'))}</td></tr>`}).join('')}</tbody></table></div>`;
  }
  function search(D0,q){
+  if(INS.nameSound&&INS.nameSound.isArabic(q)){const all=[];D0.names.forEach((n,id)=>{const rs=D0.seasons.get(id)||[];if(rs.length)all.push({id,name:n,rank:0,last:rs[rs.length-1],n:rs.length,mi:rs.reduce((s,r)=>s+r.mi,0)})});
+   return INS.nameSound.search(q,all,x=>x.name,(a,b)=>b.mi-a.mi||cmp(a.name,b.name)||cmp(a.id,b.id),2).slice(0,8)}
   const t=fold(q).trim();if(t.length<2)return [];
   const out=[];D0.names.forEach((n,id)=>{const f=fold(n);const i=f.indexOf(t);if(i>=0){const rs=D0.seasons.get(id)||[];if(rs.length)out.push({id,name:n,rank:(i===0?0:f.includes(' '+t)?1:2),last:rs[rs.length-1],n:rs.length,mi:rs.reduce((s,r)=>s+r.mi,0)})}});
   return out.sort((a,b)=>a.rank-b.rank||b.mi-a.mi||cmp(a.name,b.name)||cmp(a.id,b.id)).slice(0,8);
