@@ -876,3 +876,24 @@ html[lang=en] body #langbtn{font-family:system-ui,-apple-system,"Segoe UI",Robot
 .dg-ctl{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}.dg-k{display:flex;flex-wrap:wrap;gap:8px 22px;margin-top:6px}.dg-k b{font-size:22px}
 .dg-l{list-style:none;margin:6px 0;padding:0}.dg-l li{padding:6px 0;border-bottom:1px solid var(--ln)}.dg-l li:last-child{border-bottom:0}
 .dg-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}#dgroot .card{min-width:0;max-width:100%}.dg-lt td{white-space:nowrap}.dg-lt{display:block;overflow-x:auto;max-width:100%}
+/* ===== League switch: the kick-off (assets/league-switch.js). One fixed picture above the page: it takes no clicks and moves nothing. ===== */
+#lgsw{position:fixed;inset:0;z-index:2147483000;pointer-events:none;overflow:hidden;contain:strict}
+#lgsw .sw-veil{position:absolute;inset:0;background:#02080a;opacity:0;transition:opacity .2s ease-out}
+#lgsw.in .sw-veil{opacity:.74}
+#lgsw .sw-ring{position:absolute;left:var(--sw-x);top:var(--sw-y);width:calc(var(--sw-r)*2);height:calc(var(--sw-r)*2);margin:calc(var(--sw-r)*-1) 0 0 calc(var(--sw-r)*-1);border-radius:50%;
+ border:2px solid rgba(237,242,232,.55);box-shadow:0 0 0 1px color-mix(in srgb,var(--sw-c) 60%,transparent),0 0 60px 6px color-mix(in srgb,var(--sw-c) 55%,transparent),inset 0 0 120px 10px color-mix(in srgb,var(--sw-c) 30%,transparent);
+ background:radial-gradient(circle,color-mix(in srgb,var(--sw-c) 30%,transparent) 0,color-mix(in srgb,var(--sw-c) 16%,transparent) 55%,color-mix(in srgb,var(--sw-c) 7%,transparent) 100%);
+ transform:scale(.02);opacity:0;transition:transform .78s cubic-bezier(.16,.84,.24,1),opacity .18s ease-out;will-change:transform}
+#lgsw.in .sw-ring{transform:scale(1);opacity:1}
+#lgsw .sw-card{position:absolute;left:50%;top:46%;transform:translate(-50%,-50%) scale(.94);display:flex;flex-direction:column;align-items:center;gap:14px;max-width:92vw;opacity:0;
+ transition:opacity .3s ease-out .16s,transform .6s cubic-bezier(.16,.84,.24,1) .16s}
+#lgsw.in .sw-card{opacity:1;transform:translate(-50%,-50%)}
+#lgsw .sw-name{font-family:var(--font-d,system-ui);font-weight:800;font-size:clamp(38px,10.5vw,86px);line-height:1.05;letter-spacing:-.01em;color:#fff;text-align:center;overflow-wrap:anywhere;
+ text-shadow:0 0 42px var(--sw-c),0 0 12px color-mix(in srgb,var(--sw-c) 70%,transparent),0 3px 0 rgba(0,0,0,.45)}
+html[lang=ar] #lgsw .sw-name{letter-spacing:0}
+#lgsw .sw-mark{display:block;width:min(240px,52vw);height:22px;
+ background:radial-gradient(circle at 50% 50%,transparent 0 6.4px,var(--sw-c) 7px 9.4px,transparent 10px),linear-gradient(var(--sw-c),var(--sw-c)) left center/calc(50% - 15px) 2.5px no-repeat,linear-gradient(var(--sw-c),var(--sw-c)) right center/calc(50% - 15px) 2.5px no-repeat;
+ filter:drop-shadow(0 0 10px var(--sw-c));transform:scaleX(.1);transition:transform .7s cubic-bezier(.16,.84,.24,1) .26s}
+#lgsw.in .sw-mark{transform:none}
+#lgsw.out{opacity:0;transition:opacity .42s ease-in}
+@media (prefers-reduced-motion:reduce){#lgsw{display:none}}
