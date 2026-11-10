@@ -32,7 +32,10 @@ const list=pg=>pg.$$eval('.tw-list button',a=>a.map(x=>({k:x.dataset.k,p:parseIn
    const rows=await pg.$$eval('.tw-t tbody tr',a=>a.map(r=>[...r.querySelectorAll('td')].map(c=>c.textContent.trim())));
    const Q=t.p?x=>x.q:x=>x.qo;ok(rows.length===16&&rows.every((r,i)=>{const k=KEYS[i],f=v=>v==null?'N/A':v.toFixed(2),g=Q(t)[k]!=null&&Q(o)[k]!=null?String(Math.round(Math.abs(Q(t)[k]-Q(o)[k]))):'N/A';return r[1]===f(t.v[k])&&r[2]===f(o.v[k])&&r[3]===g}),`${name} & ${o.n}: 16 per-90 numbers and percentile gaps`)};
   await checkOne('Raphinha');await checkOne('Bukayo Saka');await checkOne('Virgil van Dijk');await checkOne('Pedri','l_0ALvwF');
-  const unk=pool.find(x=>!x.p&&x.lid==='l_0ErfuF');await checkOne(unk.n,'');ok(/every outfield player \(his position is not known\)/.test(await pg.textContent('.tw-intro')),unk.n+': no position in the data, compared with every outfield player');
+  /* a player with no position in the data (the line-up step of the sync now gives most of them one, so there may be none) */
+  const unk=pool.find(x=>!x.p&&x.lid==='l_0ErfuF');
+  if(!unk)console.log('     no LaLiga player of the pool is without a position today: the no-position case is not checked');
+  else{await checkOne(unk.n,'');ok(/every outfield player \(his position is not known\)/.test(await pg.textContent('.tw-intro')),unk.n+': no position in the data, compared with every outfield player');}
   await pg.selectOption('#twlg','');await pg.waitForTimeout(200);
   /* a twin in another league: its player page opens in that league */
   const cur=await pg.evaluate(()=>D.id),ot=(await list(pg)).map(x=>x.k).find(k=>!k.startsWith(cur+'|'));
